@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atoms & the Atom Table</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .atomgrid { display:grid; grid-template-columns:1fr 1fr 1.1fr; gap:16px; align-items:start; }
+  @media(max-width:720px){ .atomgrid{ grid-template-columns:1fr; } }
+  .proc { border:1px solid var(--line); border-radius:8px; background:var(--bg-2); padding:12px; }
+  .proc h4 { margin:0 0 8px; font-family:var(--mono); font-size:12px; color:var(--accent-2); }
+  .word2 { font-family:var(--mono); font-size:12px; border:1px solid var(--line); border-radius:6px;
+           padding:6px 9px; margin:6px 0; display:flex; gap:8px; align-items:center; background:var(--bg-3); transition:all .25s; }
+  .word2 .tg { color:var(--tag); } .word2 .ix { color:var(--imm); }
+  .word2.flash { box-shadow:0 0 0 2px var(--accent); }
+  .table { border:1px solid var(--accent); border-radius:8px; background:#14110b; padding:12px; }
+  .table h4 { margin:0 0 8px; font-family:var(--mono); font-size:12px; color:var(--accent); }
+  .arow { font-family:var(--mono); font-size:12.5px; display:flex; justify-content:space-between;
+          padding:5px 8px; border-bottom:1px dashed var(--line-soft); }
+  .arow:last-child{border-bottom:none;}
+  .arow .si { color:var(--ink-faint); } .arow .nm { color:var(--imm); }
+  .arow.new { animation:flashrow .8s ease; }
+  .arow.hit { background:rgba(143,206,134,.12); }
+  @keyframes flashrow { from{background:rgba(201,138,75,.35);} to{background:transparent;} }
+  .meter { height:8px; background:var(--bg-3); border-radius:4px; overflow:hidden; margin-top:10px; }
+  .meter > div { height:100%; background:var(--accent); width:0; transition:width .3s; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 5 · data structures</p>
+    <h1>Atoms &amp; the Atom Table</h1>
+    <p class="lede">
+      An atom is the strangest of the immediates: a value that <em>is</em> its own identity. <code>:ok</code>
+      isn't a pointer to the string "ok", and it isn't a small integer. It's a name, interned exactly once
+      into a table the whole VM shares. Understanding that unlocks why atom comparison is nearly free — and
+      why atoms are a footgun.
+    </p>
+
+    <h2>The word holds an index, not the name</h2>
+    <p>
+      Recall from <a href="machine-word-and-tags.html">rung 2</a>: an atom is an <strong>immediate</strong>.
+      Its word's low six bits are the tag <code>00&nbsp;10&nbsp;11</code> ("atom"), and the remaining bits are
+      an <strong>index into the global atom table</strong> <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.2</a>.
+      There's no "following memory" to dereference for the identity — the word <em>is</em> the atom. The table,
+      elsewhere in VM memory, stores the actual definition (name, length, an ordinal for fast ordering):
+    </p>
+    <pre><code><span class="tok-kw">typedef struct</span> atom {
+    IndexSlot slot;   <span class="tok-com">// position in the table</span>
+    <span class="tok-kw">int</span> len;          <span class="tok-com">// length of the name</span>
+    <span class="tok-kw">int</span> ord0;         <span class="tok-com">// first bytes, for cheap ordering</span>
+    byte* name;       <span class="tok-com">// "ok"</span>
+} Atom;</code></pre>
+
+    <h2>Interned once, shared by everyone</h2>
+    <p>
+      The table is <strong>VM-wide</strong>, and atoms are <strong>interned</strong>: every occurrence of
+      <code>:ok</code> anywhere, in any process, resolves to the <em>same</em> index. Try it — intern the same
+      name from two different processes and watch them land on one table slot.
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">interning · two processes, one table</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <input type="text" id="atomIn" value=":ok" style="width:120px">
+          <button class="btn" id="internA">use in Process A</button>
+          <button class="btn" id="internB">use in Process B</button>
+          <button class="btn" id="rstA">reset</button>
+        </div>
+        <div class="atomgrid">
+          <div class="proc"><h4>Process A — heap</h4><div id="procA"></div></div>
+          <div class="proc"><h4>Process B — heap</h4><div id="procB"></div></div>
+          <div class="table">
+            <h4>Global atom table</h4>
+            <div id="tableRows"></div>
+            <div class="meter"><div id="meterFill"></div></div>
+            <div style="font-size:11px;color:var(--ink-faint);margin-top:6px" id="tableStat"></div>
+          </div>
+        </div>
+        <div class="readout" id="atomOut">Intern <code>:ok</code> in both processes — they reference the same table slot. Then try a brand-new name.</div>
+      </div>
+      <div class="viz-foot">Table starts pre-seeded with common atoms (as the real VM does). Max size shown scaled; the real default ceiling is ~1,048,576 (Ch.4.2).</div>
+    </div>
+
+    <div class="callout aha">
+      <span class="label">Global identity, not a global variable</span>
+      Because two atoms are equal iff their <em>indices</em> are equal, comparing <code>:ok == :ok</code> is a
+      single integer comparison — no string walk. But that's the only sense in which atoms are "global." An
+      atom carries <strong>no mutable state</strong>; you can't set it or read a value out of it. It's a
+      globally-shared <em>constant/symbol</em>, not a variable. Processes don't communicate through atoms —
+      they merely all agree that <code>:ok</code> means the same symbol.
+    </div>
+
+    <h2>The footgun</h2>
+    <p>
+      Two facts combine into a real hazard: the atom table is <strong>never garbage-collected</strong> (atoms
+      live forever once created), and it has a <strong>fixed maximum size</strong> (~1,048,576 by default).
+      So:
+    </p>
+    <div class="callout warn">
+      <span class="label">Never create atoms from untrusted input</span>
+      <code>String.to_atom/1</code> on user-supplied data (request params, file contents, message fields) can
+      exhaust the table and <strong>crash the entire VM</strong> — every process, not just yours. When you must
+      convert a string you expect to already be a known atom, use
+      <code>String.to_existing_atom/1</code>, which raises instead of minting a new permanent entry.
+    </div>
+
+    <p>
+      This is the flip side of interning's elegance: the thing that makes atoms cheap to compare (a permanent,
+      shared, integer-indexed identity) is exactly what makes uncontrolled creation dangerous.
+    </p>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.4.2 (Immediates / atoms, the <code>Atom</code> struct).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('atoms-and-atom-table');
+
+const SEED = [':ok', ':error', ':true', ':false', ':undefined'];
+let table = SEED.slice();         // index = position
+const MAXVIS = 14;                // visual ceiling for the meter
+const procA = document.getElementById('procA');
+const procB = document.getElementById('procB');
+const tableRows = document.getElementById('tableRows');
+
+function normalize(s){ s=s.trim(); if(!s) return null; if(s[0]!==':') s=':'+s; return s; }
+function indexOf(name){ return table.indexOf(name); }
+
+function renderTable(hitIdx, isNew){
+  tableRows.innerHTML='';
+  table.forEach((nm,i)=>{
+    const cls = i===hitIdx ? (isNew?'arow new':'arow hit') : 'arow';
+    tableRows.innerHTML += `<div class="${cls}"><span class="si">[${i}]</span><span class="nm">"${nm.slice(1)}"</span></div>`;
+  });
+  const pct = Math.min(100, table.length/MAXVIS*100);
+  document.getElementById('meterFill').style.width = pct+'%';
+  document.getElementById('tableStat').textContent = `${table.length} atoms interned · never reclaimed`;
+}
+function addWord(proc, name, idx){
+  const w=document.createElement('div'); w.className='word2 flash';
+  w.innerHTML=`<span>${name}</span><span>=</span><span class="tg">[atom·</span><span class="ix">idx ${idx}</span><span class="tg">]</span>`;
+  proc.appendChild(w);
+  setTimeout(()=>w.classList.remove('flash'), 600);
+}
+function intern(proc, label){
+  const name=normalize(document.getElementById('atomIn').value);
+  if(!name) return;
+  let idx=indexOf(name), isNew=false;
+  if(idx<0){ table.push(name); idx=table.length-1; isNew=true; }
+  addWord(proc, name, idx);
+  renderTable(idx, isNew);
+  const out=document.getElementById('atomOut');
+  out.innerHTML = isNew
+    ? `<b>${label}:</b> <code>${name}</code> was new — interned at fresh slot <b>${idx}</b>. It now lives forever.`
+    : `<b>${label}:</b> <code>${name}</code> already existed → reused slot <b>${idx}</b>. No new memory, no copy of the name. Any process referencing <code>${name}</code> gets this same index.`;
+}
+
+document.getElementById('internA').onclick=()=>intern(procA,'Process A');
+document.getElementById('internB').onclick=()=>intern(procB,'Process B');
+document.getElementById('rstA').onclick=()=>{ table=SEED.slice(); procA.innerHTML=''; procB.innerHTML='';
+  renderTable(-1,false); document.getElementById('atomOut').innerHTML='Reset. Try interning the same name in both processes.'; };
+renderTable(-1,false);
+</script>
+</body>
+</html>

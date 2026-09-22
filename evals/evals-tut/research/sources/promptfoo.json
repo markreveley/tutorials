@@ -1,0 +1,94 @@
+{
+  "id": "promptfoo",
+  "citation": {
+    "authors": "promptfoo",
+    "title": "promptfoo documentation",
+    "venue": "promptfoo.dev",
+    "year": "accessed 2026-06-10",
+    "url": "https://www.promptfoo.dev/docs/intro/"
+  },
+  "fetched_urls": [
+    "https://www.promptfoo.dev/docs/intro/",
+    "https://www.promptfoo.dev/docs/configuration/expected-outputs/",
+    "https://www.promptfoo.dev/docs/red-team/",
+    "https://www.promptfoo.dev/docs/configuration/guide/"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Declarative config (YAML) of prompts x providers x test cases with assertions",
+      "verdict": "confirmed",
+      "finding": "The docs explicitly describe a YAML configuration format that runs prompts × providers × test cases as a matrix. The 'x' (cross-product) framing is used directly.",
+      "quote": "The YAML configuration format runs each prompt through a series of example inputs (aka 'test case') and checks if they meet requirements (aka 'assertions').",
+      "location": "https://www.promptfoo.dev/docs/configuration/guide/"
+    },
+    {
+      "planned": "Running prompts x providers produces a matrix view",
+      "verdict": "confirmed",
+      "finding": "The docs use 'matrix view' explicitly for comparing prompts across providers.",
+      "quote": "Running `promptfoo eval` over this config will result in a _matrix view_ that you can use to evaluate GPT vs Gemini.",
+      "location": "https://www.promptfoo.dev/docs/configuration/guide/"
+    },
+    {
+      "planned": "Deterministic + model-graded assertion types",
+      "verdict": "confirmed",
+      "finding": "The docs split assertion types into two named categories: 'Deterministic Eval Metrics' (programmatic, run directly on output) and 'Model-Assisted Eval Metrics' (leverage language models). Both categories are explicitly documented with full lists.",
+      "quote": "Assertions are used to compare the LLM output against expected values or conditions.",
+      "location": "https://www.promptfoo.dev/docs/configuration/expected-outputs/"
+    },
+    {
+      "planned": "Confirm assertion types taxonomy",
+      "verdict": "confirmed",
+      "finding": "The taxonomy is extensive. Deterministic types include string matching (equals, contains, regex, starts-with), structured data (is-json, is-sql, is-xml, is-html), custom logic (javascript, python, ruby, webhook), text quality metrics (rouge-n, bleu, levenshtein), performance (latency, cost), function call validation, agent tracing (trajectory:tool-used, trace-span-count), safety (guardrails), and refusal detection (is-refusal). Model-graded types include: similar (embeddings), llm-rubric, g-eval, factuality, answer-relevance, context-faithfulness, context-recall, select-best, and trajectory:goal-success. All deterministic types support 'not-' prefix negation.",
+      "quote": "All deterministic types support negation: prepend 'not-' to create inverse assertions (e.g., `not-equals`).",
+      "location": "https://www.promptfoo.dev/docs/configuration/expected-outputs/"
+    },
+    {
+      "planned": "Red-teaming features",
+      "verdict": "confirmed",
+      "finding": "Red-teaming is a first-class feature. The docs describe three attack categories (privacy/PII leakage, prompt injection, jailbreaking), black-box and white-box testing modes, and a plugin system covering harmful content, authorization flaws (BOLA/BFLA), competitor endorsement, and more. Output is a quantified risk report.",
+      "quote": "Promptfoo identifies vulnerabilities in AI systems through 'simulated adversarial inputs' before deployment, enabling teams to 'produce a report that quantifies the risk of misuse.'",
+      "location": "https://www.promptfoo.dev/docs/red-team/"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "promptfoo is described as an open-source CLI and library, not just a GUI tool. It integrates with CI/CD (GitHub Actions mentioned) for automated evaluation on every change.",
+      "quote": "an open-source CLI and library for evaluating and red-teaming LLM apps",
+      "numbers": "Supports CI/CD integration; GitHub Actions named explicitly"
+    },
+    {
+      "point": "The cross-product (matrix) evaluation is a core design primitive. Test variables defined as arrays produce all combinations automatically.",
+      "quote": "Evaluates each `language` x `input` combination",
+      "numbers": "N prompts × M providers × K test cases = N×M×K evaluations"
+    },
+    {
+      "point": "Performance features — caching, concurrency, and live reloading — are built in to speed up the eval loop.",
+      "quote": "Speed up evaluations with caching, concurrency, and live reloading",
+      "numbers": "Not quantified in docs"
+    },
+    {
+      "point": "Red-teaming distinguishes black-box testing (only inputs/outputs observable, simulates real-world attacks) from white-box testing (full access to architecture, training data, weights).",
+      "quote": "Black Box Testing: treats 'the LLM as a closed system, where only inputs and outputs are observable,' simulating real-world attack scenarios.",
+      "numbers": "Not quantified"
+    },
+    {
+      "point": "Agent and tracing assertions are a modern addition enabling evaluation of multi-step agentic behavior: tool usage order, argument matching, step counts, trace span duration.",
+      "quote": "trajectory:tool-used, trajectory:tool-args-match, trajectory:tool-sequence, trajectory:step-count, trace-span-count, trace-span-duration, trace-error-spans",
+      "numbers": "7 distinct trajectory/trace assertion types listed"
+    },
+    {
+      "point": "Model-graded assertions include embeddings-based similarity (not just LLM-as-judge rubrics) and RAG-specific metrics: context-faithfulness, context-recall, context-relevance, answer-relevance.",
+      "quote": "similar (embeddings-based) ... answer-relevance, context-faithfulness, context-recall, context-relevance",
+      "numbers": "4 dedicated RAG evaluation assertion types"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "promptfoo is not only for prompt testing — red-teaming/security scanning is an equal first-class feature described on the intro page.",
+    "Not all assertions invoke an LLM. The majority of built-in types are fully deterministic (string ops, JSON validation, regex, latency, cost checks).",
+    "The config format is not just a list of test cases — it defines a full cross-product matrix of prompts × providers × test cases, producing a 'matrix view' output.",
+    "Model-graded assertions are not synonymous with 'LLM-as-judge rubrics' — the category also includes embeddings-based similarity (similar) and RAG-specific retrieval metrics.",
+    "Red-teaming 'prompt injection' and 'jailbreaking' are defined as distinct attack types: prompt injection chains untrusted input with trusted prompts; jailbreaking subverts foundational safety filters."
+  ],
+  "notes_for_authors": "All core claims confirmed from live docs. The assertion taxonomy is more extensive than a simple deterministic/model-graded split suggests — consider calling out the agent tracing assertions as evidence that eval tooling has evolved for agentic systems. The 'not-' prefix negation for all deterministic types is a clean pedagogical point. The YAML matrix view quote is the sharpest illustration of the cross-product concept and worth using verbatim."
+}

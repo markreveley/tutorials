@@ -1,0 +1,85 @@
+{
+  "id": "self-preference",
+  "citation": {
+    "authors": "Arjun Panickssery, Samuel R. Bowman, Shi Feng",
+    "title": "LLM Evaluators Recognize and Favor Their Own Generations",
+    "venue": "NeurIPS 2024 (Advances in Neural Information Processing Systems 37, Main Conference Track)",
+    "year": "2024",
+    "url": "https://arxiv.org/abs/2404.13076"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2404.13076",
+    "https://arxiv.org/pdf/2404.13076",
+    "https://proceedings.neurips.cc/paper_files/paper/2024/hash/7f1f0218e45f5414c79c0679633e47bc-Abstract-Conference.html"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "LLMs show self-preference: rating their own outputs higher than others' of equal quality",
+      "verdict": "confirmed",
+      "finding": "The paper defines and observes exactly this bias. On two summarization tasks (XSUM, CNN/DailyMail), GPT-3.5 Turbo, GPT-4, and Llama 2 disproportionately favor their own summaries over those of other LLMs and humans. Caveat: the 'human annotators consider them of equal quality' framing comes from the abstract's definition; the authors note in Limitations that they did not directly control for ground-truth generation quality, offering instead indirect evidence (pairwise self-preference scores of a model pair summing to more than 1, so both models cannot be right).",
+      "quote": "One such bias is self-preference, where an LLM evaluator scores its own outputs higher than others' while human annotators consider them of equal quality. ... Frontier LLMs exhibit self-preference in self-evaluation. On two summarization tasks, LLMs (GPT-3.5 Turbo, GPT-4, and Llama 2) disproportionately favor summaries written by themselves over those by other LLMs and from humans.",
+      "location": "Abstract; Section 1 main findings list, p.2"
+    },
+    {
+      "planned": "Causal link between self-recognition capability and self-preference strength — confirm the fine-tuning experiment design",
+      "verdict": "confirmed",
+      "finding": "Design confirmed: supervised fine-tuning on pairwise examples (own summary vs. summary by another LLM or human), training the evaluator to predict the final token representing the correct choice with cross-entropy loss; 500 training articles, remaining 500 for evaluation; trained on each dataset separately, evaluated both in- and out-of-domain. GPT-3.5 fine-tuned via API; Llama 2 quantized to 8 bits, one epoch, Adam, lr 5.0e-5. Two supporting checks: (1) invalidating the inverse causal direction (Section 3.3), and (2) confounder controls — fine-tuning on length, vowel count, Flesch-Kincaid readability, always answering '1', and answering randomly all land on the same linear trend (Section 3.4). IMPORTANT NUANCE: the authors explicitly state this provides evidence toward, not proof of, the causal hypothesis.",
+      "quote": "We finetune LLMs to alter their self-recognition capability, and measure how the strength of self-preference changes accordingly. The correlation doesn't by itself prove the causal hypothesis ... But we take two approaches to provide more evidence for the hypothesis: 1. We invalidate the inverse causal relationship that self-preference causes self-recognition (Section 3.3). 2. We control for confounders by fine-tuning LLMs on tasks unrelated to self-recognition (Section 3.4).",
+      "location": "Section 3 (3.1 Fine-tuning for Self-Recognition, 3.3, 3.4), pp.4-5"
+    },
+    {
+      "planned": "Models can recognize their own generations above chance; fine-tuning to improve recognition increases self-preference — confirm numbers",
+      "verdict": "confirmed",
+      "finding": "Out of the box, all three LLMs exceed 50% accuracy at distinguishing their own outputs (pairwise prompting, no fine-tuning); GPT-4 reaches 73.5% accuracy distinguishing itself from two other LLMs and humans. Fine-tuning on 500 examples brings GPT-3.5 and Llama 2 to over 90% self-recognition accuracy, and fine-tuned models show a linear correlation between self-recognition score and self-preference score (Figures 1 and 7). Note: the 73.5% figure is GPT-4 specifically, and GPT-4 was NOT fine-tuned (only GPT-3.5 via API and Llama 2 in the authors' own implementation).",
+      "quote": "LLMs have non-trivial self-recognition capability out of the box. All three LLMs we evaluate achieve over 50% accuracy at distinguishing their own outputs from other sources using simple prompts without fine-tuning. GPT-4 is 73.5% accurate distinguishing itself from two other LLMs and humans. ... Fine-tuning leads to near-perfect self-recognition. GPT-3.5 and Llama 2 both achieve over 90% accuracy at self-recognition after fine-tuning on 500 examples. ... Self-preference strength is linearly correlated with self-recognition.",
+      "location": "Section 1 main findings list, p.2; Figures 1 and 7"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Ordering bias is rampant in pairwise LLM judging and must be controlled: all three evaluators reverse their pairwise preference when option order is flipped. The paper's mitigation is to prompt twice with options swapped and average the logit-based confidence scores.",
+      "quote": "GPT-4, GPT-3.5, and Llama reverse their pairwise preferences when the ordering of options is reversed at rates of 25%, 58%, and 89% respectively, averaged across tasks and datasets.",
+      "numbers": "Preference reversal rates: GPT-4 25%, GPT-3.5 58%, Llama 2 89%"
+    },
+    {
+      "point": "Measurement format matters: self-recognition largely collapses in the individual (single-text yes/no) setting versus pairwise. GPT-4 is the only model with non-trivial individual-setting accuracy, yet its raw confidences show it is strongly biased AGAINST claiming any text as its own, while GPT-3.5 and Llama 2 show the opposite bias.",
+      "quote": "GPT-4 stands out as the only discerning model under this setting, but it is also extremely unwilling to predict any text as having been generated by itself, including those actually generated by itself.",
+      "numbers": "Figure 3 raw individual self-recognition confidence: GPT-4 row 0.195/0.030/0.039/0.013; GPT-3.5 row 0.860/0.878/0.885/0.769; Llama 2 row 0.715-0.730"
+    },
+    {
+      "point": "Self-recognition is asymmetric by model strength: models most easily distinguish themselves from human-written text, and weaker models cannot distinguish themselves from stronger ones.",
+      "quote": "Weaker LLMs struggle to distinguish themselves from stronger LLMs: Llama 2 is completely incapable of distinguishing itself from GPT-3.5 and GPT-4, and GPT-3 struggles to distinguish itself from GPT-4.",
+      "numbers": "Human text is the only alternative Llama 2 can effectively distinguish itself from (pairwise, Figure 2); all models show greatest self-preference against the human summary (Section 2.4)"
+    },
+    {
+      "point": "Control-task fine-tuning is the paper's key methodological move for ruling out confounds: eight fine-tuned models per dataset (self-recognition plus five control conditions) all fall on the same linear recognition-preference trend, arguing the link is not a fine-tuning artifact.",
+      "quote": "Together with the three fine-tuned models trained on the self-recognition task, this gives eight fine-tuned models for each of the two datasets. We find that these models can be placed in the same linear trend that we see in the models fine-tuned on the self-recognition task (Figure 1).",
+      "numbers": "Control tasks: length, vowel count, Flesch-Kincaid readability score, always output '1', answer randomly; 8 fine-tuned models per dataset"
+    },
+    {
+      "point": "The inverse causal direction (fine-tuning made outputs objectively better, causing both recognition and preference) is tested and rejected: evaluators do not systematically favor summaries generated by the fine-tuned models.",
+      "quote": "The remainder show an average preference for the fine-tuned model's generations of 0.46, reflecting a slight preference against the new generations. Only 22% of the evaluator-domain pairs show a preference greater than 0.51 for the fine-tuned model's generations.",
+      "numbers": "Average evaluator preference for fine-tuned models' generations: 0.46; only 22% of pairs exceed 0.51"
+    },
+    {
+      "point": "The correlation also holds at the example level and generalizes out-of-domain: self-recognition fine-tuning on one dataset transfers to the other (XSUM <-> CNN/DailyMail), and per-example recognition confidence correlates with per-example preference.",
+      "quote": "For GPT-3.5 on the XSUM dataset, the evaluator prior to fine-tuning has a correlation of 0.41 (Kendall's tau) between correctly recognizing its summary from a pair and preferring its summary from that same pair. Every fine-tuning configuration we employ results in a model with a positive correlation on this metric.",
+      "numbers": "Kendall's tau = 0.41 (GPT-3.5, XSUM, no fine-tuning); Table 1 shows tau 0.37-0.82 across GPT-3.5 runs and 0.50-0.73 across Llama 2 runs"
+    },
+    {
+      "point": "Safety framing: self-preference threatens model-based benchmarks, reward modeling, and constitutional AI; it can amplify if a model is updated with self-generated feedback, and enables 'free and unbounded' reward hacking when similar LLMs serve as optimizer and reward model. Proposed countermeasure: authorship obfuscation.",
+      "quote": "If future evaluation confirms self-preference to be as pervasive as other biases such as ordering bias, countermeasures such as authorship obfuscation should be incorporated into standard prompting practice.",
+      "numbers": "Setup: 1,000 news articles each from XSUM and CNN/DailyMail; models Llama-2-7b-chat, GPT-3.5, GPT-4; summaries sampled at temperature 0 with punctuation and capitalization standardized to match human summaries"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say the paper PROVES self-recognition causes self-preference. The authors are explicit: 'our experiments can only provide evidence towards the causal hypothesis without fully validating it' (Section 5.2). Teach it as a fine-tuning intervention plus controls that make the causal story credible, not proven.",
+    "Do not attribute the >90% post-fine-tuning self-recognition figure to GPT-4. Only GPT-3.5 and Llama 2 were fine-tuned; GPT-4's number is 73.5% out of the box (pairwise).",
+    "Do not claim the paper directly verified 'equal quality' with human annotators on its own data. That phrasing is the bias definition (drawing on prior work); the paper's own evidence for disproportionate preference is indirect — pairwise self-preference scores of a model pair sum to more than 1 (Section 5.2, 'Controlling for groundtruth generation quality').",
+    "Do not generalize 'models recognize their own outputs' too broadly: Llama 2 is completely unable to distinguish itself from GPT-3.5/GPT-4; above-chance recognition is driven largely by distinguishing model text from human text.",
+    "Do not present individual (single-text) measurement numbers as equivalent to pairwise: recognition capability 'drops across the board' in the individual setting, and raw confidences reveal strong yes/no response biases (GPT-4 says 'not mine' almost always; GPT-3.5 and Llama 2 say 'mine' almost always).",
+    "Out-of-the-box self-preference findings conflict across papers: Koo et al. (2023) found GPT-4 showing LOWER self-preference than GPT-3.5, and Hoelscher-Obermaier et al. (2023) found GPT-3.5 better than GPT-4 at self-recognition on fables. The authors use these conflicts to argue multi-dataset evaluation is necessary for generalizable conclusions (Section 4)."
+  ],
+  "notes_for_authors": "Verified against the arXiv v1 PDF (full text, all 10 pages read) on 2026-06-10; NeurIPS 2024 main-track acceptance confirmed via proceedings.neurips.cc (hash 7f1f0218e45f5414c79c0679633e47bc) and neurips.cc/virtual/2024/poster/96672 — note the arXiv abstract page itself lists no venue. All three planned claims hold with the exact numbers above. Strongest course material: (1) headline numbers (>50% out-of-box recognition for all three models, GPT-4 73.5%, >90% after 500-example fine-tuning, linear recognition-preference correlation in Figure 1); (2) the control-task design (Section 3.4) and inverse-causality check (Section 3.3) as a worked example of ruling out confounds — a natural fit for a measurement-validity course; (3) ordering-bias rates (25%/58%/89%) and the swap-and-average mitigation, which generalize to any LLM-judge pipeline. Frame causality carefully ('evidence toward', per Section 5.2). Scope caveat: results are on news summarization (XSUM, CNN/DailyMail) with 2023-era models, and the authors flag the limited experiment conditions themselves. The label-swap experiment (Section 3.5: GPT-4 and GPT-3.5 reverse preference when authorship labels are swapped on XSUM, preferring whichever summary is LABELED as their own) is a vivid, teachable demonstration that the preference attaches to perceived authorship rather than text quality."
+}

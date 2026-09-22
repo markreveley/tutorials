@@ -1,0 +1,101 @@
+{
+  "id": "error-bars",
+  "citation": {
+    "authors": "Evan Miller",
+    "title": "Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations",
+    "venue": "Anthropic / arXiv preprint arXiv:2411.00640 [stat.AP]",
+    "year": "2024 (v1 submitted 1 Nov 2024)",
+    "url": "https://arxiv.org/abs/2411.00640"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2411.00640",
+    "https://arxiv.org/pdf/2411.00640"
+  ],
+  "access": "full",
+  "verification_method": "Full PDF downloaded and text extracted with pdftotext; all quotes below are from the extracted v1 text. An intermediate WebFetch summarization of the PDF confabulated numbers (e.g. '2.5x', 'rho=0.70-0.85', '40-60% variance reduction') and was discarded; do not trust those figures.",
+  "claims": [
+    {
+      "planned": "Eval questions are drawn from an underlying distribution; report SEM via CLT — confirm framing",
+      "verdict": "confirmed",
+      "finding": "The paper's core framing is exactly this: questions are modeled as random draws from a hypothetical, infinite, unseen 'super-population', and the standard error of the mean score is computed via the Central Limit Theorem as SE = sqrt(Var(s)/n) (Eq. 1), with the Bernoulli special case sqrt(s_bar(1-s_bar)/n) (Eq. 2). It recommends reporting the SE in parentheses beneath the mean, plus the question count, and computing 95% CIs as s_bar +/- 1.96 x SE.",
+      "quote": "Suppose that the questions in an eval do not represent all possible questions, but instead were drawn at random from a (hypothetical, infinite, unseen) super-population of questions. ... It follows from the Law of Large Numbers that mu may be estimated using mu_hat = s_bar, and from the Central Limit Theorem (C.L.T.) that the standard error of mu_hat can be estimated as SE_C.L.T. = sqrt(Var(s)/n)",
+      "location": "Abstract; Section 2 'Analysis framework', Section 2.1 'Independent questions', Equations 1-3, Table 2"
+    },
+    {
+      "planned": "Clustered standard errors when questions are grouped (e.g., reading passages) — confirm recommendation and example of how much SEs grow",
+      "verdict": "confirmed",
+      "finding": "Confirmed. When questions are drawn in related groups (reading-comprehension evals DROP, QuAC, RACE, SQuAD with multiple questions per passage; multilingual evals like MGSM with the same question translated into many languages), naive CLT/bootstrap SEs are inconsistent and the paper recommends clustered standard errors (a social-science technique, Eq. 4). Real numbers from Anthropic models (Table 4): DROP clustered SE 1.34 vs naive 0.44, ratio 3.05x; RACE-H 0.51% vs 0.46%, ratio 1.10x; MGSM 1.62% vs 0.86%, ratio 1.88x. So 'up to 3X' larger, not 'orders of magnitude'.",
+      "quote": "Analyzing the same data, clustered standard errors can be over 3X larger than naive standard errors. ... We note that the cluster adjustment in our real-world example is far from trivial (up to 3X). Failure to adjust standard errors for clustered sampling may lead an unsuspecting analyst to suppose that the measurement of the overall eval score is much more precise than it actually is.",
+      "location": "Section 2.2 'Clustered questions', Equation 4, Tables 3-4, Appendix A"
+    },
+    {
+      "planned": "Paired-difference analysis for model comparisons reduces variance — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed. When two models answer the same questions, conduct inference on question-level paired differences s_{A-B,i} = s_{A,i} - s_{B,i} (Eq. 7) rather than comparing population-level summary stats. Var(paired) = Var(unpaired) - 2Cov(x_A, x_B)/n, so variance shrinks whenever model scores are positively correlated (models agree on which questions are easy/hard). Worked example: with correlation 0.5 and uniform [0,1] scores, paired differences reduce estimator variance by 1/3 in relative terms (from 1/6 to 1/9 absolute). The paper calls this a 'free' reduction and recommends reporting pairwise differences, pairwise SEs, and score correlations.",
+      "quote": "Because eval question scores are likely to be positively correlated, even across unrelated models, paired differences represent a \"free\" reduction in estimator variance when comparing two models. We therefore recommend using the paired version of the standard error estimate wherever practicable.",
+      "location": "Section 4.2 'Paired analysis', Equations 7-8, Table 5"
+    },
+    {
+      "planned": "Resample/average per-question (e.g., K samples per question) to reduce variance — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Variance decomposes (law of total variance) as Var(mu_hat) = (Var(x) + E[sigma_i^2])/n: variance of conditional means (immutable property of the super-population) plus mean conditional variance (reducible). Answering each question K times and using the question-level mean score gives Var(s_i) = sigma_i^2/K; choose K such that E[sigma_i^2]/K << Var(x), beyond which more resampling barely helps. Worked example (binary scores, uniform difficulty): K=2 cuts total variance by 1/3, K=4 by 1/2, K=6 by 5/9, with an upper limit of 2/3. Crucially, the SE must be computed across question-level mean scores; pooling all KN answers into one SE is inconsistent.",
+      "quote": "Suppose each question is sampled (answered) K times, and the score si is the mean of these K answer scores. ... Var(si) = sigma_i^2/K ... Once E[sigma_i^2]/K << Var(x), increasing K further will have little effect on the standard error of mu_hat. ... Note that computing a pooled standard error across all KN answers will be inconsistent, as multiple answers to the same question would violate the assumption of independent draws.",
+      "location": "Section 3 'Variance reduction', Section 3.1 'Resampling'"
+    },
+    {
+      "planned": "Power analysis for detecting model differences — confirm recommendation",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Section 5 gives a sample-size formula for a paired two-model comparison: n = (z_{alpha/2} + z_beta)^2 (omega^2 + sigma_A^2/K_A + sigma_B^2/K_B) / delta^2 (Eq. 9), where delta is the Minimum Detectable Effect. Worked example: to detect an absolute difference of delta = 0.03 with 80% power (beta=0.20) at alpha=0.05 (with omega^2=1/9, zero conditional variance), n ~ 969 questions — leading to the suggestion that new evals contain at least 1,000 questions. Inverted form (Eq. 10) gives the MDE for fixed n; e.g., with n=198, raising K from 1 to 10 reduces the MDE from 13.2% to 7.5%.",
+      "quote": "n = (z_0.025 + z_0.20)^2 (1/9)/(0.03)^2 ~ 969 independent questions. Although these parameters are fictional, they are reasonable, and suggest that new evals should contain at least 1,000 questions in order to have good signaling ability.",
+      "location": "Section 5 'Power analysis', Equations 9-10, Appendices B-C"
+    },
+    {
+      "planned": "Extract the five-ish concrete recommendations the paper makes",
+      "verdict": "confirmed",
+      "finding": "The paper enumerates exactly five recommendations in the Introduction: (1) Computing standard errors of the mean using the Central Limit Theorem; (2) When questions are drawn in related groups, computing clustered standard errors; (3) Reducing variance by resampling answers and by analyzing next-token probabilities; (4) When two models are being compared, conducting statistical inference on the question-level paired differences, rather than the population-level summary statistics; (5) Using power analysis to determine whether an eval (or a random subsample) is capable of testing a hypothesis of interest. The Conclusion adds reporting practices (include SEs in technical reports; include pairwise differences, pairwise SEs, and score correlations when comparing models) and advises against adjusting sampling temperature for variance reduction.",
+      "quote": "Our specific recommendations to researchers include: 1. Computing standard errors of the mean using the Central Limit Theorem 2. When questions are drawn in related groups, computing clustered standard errors 3. Reducing variance by resampling answers and by analyzing next-token probabilities 4. When two models are being compared, conducting statistical inference on the question-level paired differences, rather than the population-level summary statistics 5. Using power analysis to determine whether an eval (or a random subsample) is capable of testing a hypothesis of interest",
+      "location": "Section 1 'Introduction' (numbered list); reiterated in Section 6 'Conclusion'"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "'Don't touch the thermostat': lowering sampling temperature to reduce score variance is a trap. It can shift conditional variance into the (irreducible) variance of conditional means, or inject bias.",
+      "quote": "In this case, reducing the sampling temperature, and thereby eliminating the conditional variance, has inadvertently tripled the minimum variance in the score data from 1/12 to 1/4. ... not only has the temperature change shifted the expected score, but the variance of the conditional means has increased approximately five-fold.",
+      "numbers": "T=0 example: minimum variance triples from 1/12 to 1/4; second example: expected score shifts from 2/3 to 3/4 and variance of conditional means increases ~5x (1/27 -> 3/16). (Section 3.3)"
+    },
+    {
+      "point": "Analyzing next-token probabilities (when no chain-of-thought is needed) eliminates conditional variance entirely (s_i = x_i = p_i, epsilon_i = 0) and achieves the upper limit of what infinite resampling could ever buy.",
+      "quote": "next-token probabilities will reduce the variance of the estimator by 2/3 (the upper limit achievable via resampling) compared to grading a single sample from each question.",
+      "numbers": "2/3 variance reduction in the uniform-difficulty example, equal to resampling's K->infinity limit. (Section 3.2)"
+    },
+    {
+      "point": "Bootstrapping is usually unnecessary: the CLT applies directly to any eval with finite-variance scores and many questions. The paper also catches a real-world error: the Llama 3 report uses the Bernoulli SE formula even for fractional scores like F1 (too conservative), while its reading-comprehension CIs are likely anti-conservative for lack of clustering.",
+      "quote": "We also note that [7] incorrectly estimates all of its standard errors using SE_Bernoulli, even when si takes fractional values, such as with an F1 score. In these cases, SE_Bernoulli will tend to be conservative (too wide) compared to SE_C.L.T. ... we advise that the confidence intervals for reading-comprehension evals reported in [7] are likely anti-conservative (too narrow).",
+      "numbers": "Llama 3 ([7], Dubey et al. 2024) CIs 'likely too narrow in some cases and too wide in other cases'. The Inspect framework's built-in stderr() computes SE_C.L.T. correctly. (Sections 1, 2.1, 2.2)"
+    },
+    {
+      "point": "Motivating example with a punchline: fictional models Galleon vs Dreadnought across MATH/HumanEval/MGSM. Naively Dreadnought wins 2 of 3 evals; with paired, clustered analysis only the MATH difference is statistically significant — and it favors Galleon. Proper statistics reverses the naive conclusion.",
+      "quote": "while a superficial reading of the eval data might have originally tempted us to conclude that Dreadnought was the overall better-performing model, a closer examination of the data would tend to lead the careful analyst to the opposite conclusion.",
+      "numbers": "Table 5: MATH +2.5% (SE 0.7%), 95% CI (+1.2%, +3.8%), corr 0.50 — significant; HumanEval -3.1% (2.1%), CI (-7.2%, +1.0%), corr 0.64 — not significant; MGSM -2.7% (1.7%), CI (-6.1%, +0.7%), corr 0.37 — not significant. (Sections 1, 4.2)"
+    },
+    {
+      "point": "Concrete reporting standards: report the number of questions and the SE in parentheses beneath each score (Table 2); add cluster counts when SEs are cluster-adjusted (Table 3); for comparisons, report pairwise difference, paired SE, 95% CI, and score correlation (Table 5).",
+      "quote": "We suggest two new reporting practices: including the number of questions in each eval, and the standard error of each estimate in parentheses.",
+      "numbers": "Example sizes used: MATH n=5,000; HumanEval n=164; MGSM n=2,500 (250 clusters); DROP n=9,622 (588 clusters); RACE-H n=3,498 (1,045 clusters). (Tables 2-3)"
+    },
+    {
+      "point": "Rule of thumb from power analysis: an eval needs roughly 1,000 questions to reliably detect a ~3-percentage-point difference between models at conventional alpha=0.05 / 80% power.",
+      "quote": "suggest that new evals should contain at least 1,000 questions in order to have good signaling ability.",
+      "numbers": "n ~ 969 for delta=0.03, alpha=0.05, beta=0.20, omega^2=1/9. HumanEval's n=164 illustrates why small evals yield non-significant differences. (Section 5)"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not cite numbers like 'clustering increases SE by ~2.5x', 'rho = 0.70-0.85', 'paired tests give 40-60% variance reduction', or 'n ~ 600-1000 for d > 0.3' — these appear in AI-generated summaries of this paper but are NOT in it. The real figures: clustering ratios 3.05x (DROP), 1.10x (RACE-H), 1.88x (MGSM); paired-analysis example uses correlation 0.5 yielding 1/3 relative variance reduction; power example yields n ~ 969 for a 3% MDE.",
+    "The paper does NOT recommend bootstrapping as the default — it explicitly calls bootstrap 'unnecessary' when the CLT applies, contrary to common eval-framework practice (e.g., OpenAI evals).",
+    "Resampling K answers per question does NOT reduce SE by 1/sqrt(K) overall — it only shrinks the conditional-variance component (sigma_i^2/K); the variance of conditional means Var(x) is an irreducible floor. In the worked example the maximum achievable reduction is 2/3.",
+    "Do not pool all K x N answers into a single SE computation — that violates independence and is inconsistent; compute the SE across question-level mean scores.",
+    "Do not lower sampling temperature to reduce eval noise — the paper devotes Section 3.3 ('Don't touch the thermostat!') to why this backfires (can triple variance and bias the estimate).",
+    "MGSM clusters by question-translated-into-languages, not by reading passage — clustering is about any non-independent group draws, not only passages."
+  ],
+  "notes_for_authors": "All six planned claims verified against the full v1 PDF text. The paper is short (14 pages), self-contained, and structured exactly as the course plans to teach it: Section 2 (super-population framing + CLT SEs + clustered SEs), Section 3 (variance reduction: resampling, next-token probabilities, temperature warning), Section 4 (unpaired vs paired comparison), Section 5 (power analysis / sample-size formula), with the five recommendations enumerated verbatim in the Introduction. The 'five-ish recommendations' are exactly five — quote them verbatim. Strongest teaching assets: the Galleon/Dreadnought running example whose naive conclusion reverses under proper analysis; Table 4's real Anthropic-model clustering ratios (3.05x for DROP); and the n~969 power calculation behind the 'at least 1,000 questions' rule of thumb. One minor internal inconsistency in the paper: Table 1 lists Dreadnought's HumanEval score as 87.7% while Table 2 shows 86.7% (fictional numbers either way; don't build on them). Author is Evan Miller at Anthropic (evanmiller@anthropic.com); cite as arXiv:2411.00640 [stat.AP], Nov 2024. Note also the companion Anthropic blog post exists ('A statistical approach to model evaluations') but arXiv is the canonical source."
+}

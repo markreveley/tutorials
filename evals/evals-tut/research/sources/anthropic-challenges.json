@@ -1,0 +1,78 @@
+{
+  "id": "anthropic-challenges",
+  "citation": {
+    "authors": "Anthropic",
+    "title": "Challenges in Evaluating AI Systems",
+    "venue": "anthropic.com (company blog / policy post)",
+    "year": "2023 (Oct 4, 2023)",
+    "url": "https://www.anthropic.com/news/evaluating-ai-systems"
+  },
+  "fetched_urls": [
+    "https://www.anthropic.com/news/evaluating-ai-systems"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "A lab's own accounting of why robust evals are hard — extract the catalogued challenges (MCQ evals like MMLU have errors/sensitivity; third-party frameworks like BIG-bench had engineering hurdles; human evals are expensive/slow; red-teaming subjectivity)",
+      "verdict": "confirmed",
+      "finding": "The post catalogs exactly these challenge categories, framed as first-hand experience: (a) multiple-choice evals (MMLU, BBQ) have label errors, ~5% accuracy swings from trivial formatting changes, and training-data contamination; (b) third-party frameworks: BIG-bench required heavy engineering effort and contained bugs (Anthropic dropped it after one experiment), HELM has slow iteration ('months') and prompts Claude without its Human/Assistant format; (c) human evaluations are 'expensive and time-consuming' and vary with evaluator characteristics; (d) red teaming is 'more art than science' and not standardized. The post also covers a category the plan missed: model-generated evaluations ('The ouroboros of model-generated evaluations').",
+      "quote": "But what many people working inside and outside of AI don't fully appreciate is how difficult it is to build robust and reliable model evaluations. Many of today's existing evaluation suites are limited in their ability to serve as accurate indicators of model capabilities or safety. ... Red teaming AI systems is presently more art than science; red teamers attempt to elicit concerning behaviors by probing models, but this process is not yet standardized.",
+      "location": "Opening paragraph; sections on multiple-choice evals, third-party frameworks, human evaluations, red teaming"
+    },
+    {
+      "planned": "Confirm specific anecdotes: implementation difficulties with BIG-bench, formatting sensitivity, etc.",
+      "verdict": "confirmed",
+      "finding": "All key anecdotes verified. (1) MMLU formatting sensitivity: changing option labels from (A) to (1), changing (A) to [A], or adding an extra space causes a ~5% change in accuracy. (2) MMLU quality: Anthropic found mislabeled or unanswerable examples. (3) MMLU contamination: widely-used benchmark likely appears in training data — 'comparable to students seeing the questions before the test—it's cheating.' (4) BIG-bench: not 'plug and play', harder to implement than BBQ, contained bugs, dropped after the experiment. (5) BBQ anecdote (bonus, stronger than planned): some models scored bias = 0, which looked like progress until a BBQ developer at Anthropic suggested a control check — the models weren't answering questions at all.",
+      "quote": "Simple formatting changes to the evaluation, such as changing the options from (A) to (1) or changing the parentheses from (A) to [A], or adding an extra space between the option and the answer can lead to a ~5% change in accuracy on the evaluation. ... BIG-bench is not 'plug and play' in the way MMLU is—it requires even more effort than BBQ to implement. ... During implementation, we found bugs in some of the evaluations. ... we found it sufficiently unwieldy that we dropped it after this experiment.",
+      "location": "Multiple-choice evaluation section (MMLU, BBQ); third-party frameworks section (BIG-bench)"
+    },
+    {
+      "planned": "Policy recommendations the post makes (funding for evals, etc.)",
+      "verdict": "confirmed",
+      "finding": "The post's policy recommendations: (1) fund the science of repeatable and useful evaluations; (2) fund the implementation of existing evaluations (e.g., as easy-to-install-and-run software packages) and analysis of the robustness of existing evaluations; (3) increase funding for government agencies focused on evaluations, such as NIST; (4) create a legal safe harbor allowing companies to work with governments and third parties to rigorously evaluate models for national security risks (e.g., CBRN domains).",
+      "quote": "Increase funding for government agencies focused on evaluations, such as the National Institute of Standards and Technology ... Create a legal safe harbor allowing companies to work with governments and third-parties to rigorously evaluate models for national security risks—such as those in the chemical, biological, radiological and nuclear defense (CBRN) domains.",
+      "location": "Policy recommendations section (end of post)"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Trivial formatting changes to a multiple-choice benchmark swing measured accuracy by about 5 percentage points — measurement is not robust to surface form.",
+      "quote": "Simple formatting changes to the evaluation, such as changing the options from (A) to (1) or changing the parentheses from (A) to [A], or adding an extra space between the option and the answer can lead to a ~5% change in accuracy on the evaluation.",
+      "numbers": "~5% accuracy change from formatting alone (MMLU)"
+    },
+    {
+      "point": "The BBQ bias-score-zero anecdote: a perfect-looking score was an artifact of non-answers. Always run a control to check that the model is actually doing the task before celebrating a metric.",
+      "quote": "our results showed that some of our models were achieving a bias score of 0, which made us feel optimistic that we had made progress on reducing biased model outputs. When we shared our results internally, one of the main BBQ developers (who works at Anthropic) asked if we had checked a simple control to verify whether our models were answering questions at all. We found that they weren't.",
+      "numbers": "bias score = 0 (spurious)"
+    },
+    {
+      "point": "Benchmark contamination: because MMLU is so widely used, it leaks into training data, invalidating it as a measure.",
+      "quote": "Because MMLU is so widely used, models are more likely to encounter MMLU questions during training. This is comparable to students seeing the questions before the test—it's cheating.",
+      "numbers": ""
+    },
+    {
+      "point": "Benchmark datasets themselves contain errors: Anthropic found mislabeled and unanswerable items in MMLU — ground truth is not guaranteed to be true.",
+      "quote": "MMLU may not have been carefully proofread—we have found examples in MMLU that are mislabeled or unanswerable.",
+      "numbers": ""
+    },
+    {
+      "point": "Third-party framework trade-off: implementing it yourself (BIG-bench) costs engineering effort and exposes you to bugs; outsourcing (HELM) costs control over prompting and iteration speed — HELM did not use Claude's Human/Assistant format, making results misleading, and evaluation could take months.",
+      "quote": "Because HELM needs to maintain consistency with how it prompts other models, it does not use the Human/Assistant format when evaluating our models. ... we found it sufficiently unwieldy that we dropped it after this experiment.",
+      "numbers": "BIG-bench: 204 tasks; HELM iteration: months"
+    },
+    {
+      "point": "Human-evaluation tension: harmlessness can be gamed by unhelpfulness — a single-axis metric hides this trade-off.",
+      "quote": "There is an inherent tension between helpfulness and harmlessness. A system could avoid harm simply by providing unhelpful responses like 'sorry, I can't help you with that'.",
+      "numbers": ""
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not cite an exact dollar/time figure for human evaluations — the post says they are 'expensive and time-consuming' but gives no specific numbers in the passages retrieved.",
+    "The formatting-sensitivity figure is '~5%' on MMLU, stated as approximate — do not harden it into a precise number or attribute it to all benchmarks.",
+    "The post is from Oct 4, 2023 — pre-dates later eval infrastructure (e.g., UK/US AI Safety Institutes' tooling); do not present its BIG-bench/HELM complaints as current state.",
+    "Anthropic dropped BIG-bench 'after this experiment' — do not claim they never ran it or that it was unusable; they implemented it, found bugs, and judged it unwieldy.",
+    "The bias-score-0 anecdote is about BBQ (Bias Benchmark for QA), not MMLU — keep the benchmarks straight.",
+    "Elo scores for human A/B evals are not mentioned in the retrieved text — describe the human evals as A/B preference tests on crowdsourcing/contracting platforms."
+  ],
+  "notes_for_authors": "All three planned claims confirmed against the live page (fetched 2026-06-10, three independent fetches with consistent text). This is a contamination-tier source: a lab's self-report, useful precisely because it is first-person ('we found bugs', 'we dropped it'). The strongest classroom material is the BBQ bias-score-0 control-check anecdote and the ~5% formatting-sensitivity figure — both are concrete, quotable, and map directly onto measurement-validity lessons. The post also has a section on model-generated evaluations ('The ouroboros of model-generated evaluations') not in the planned claims — worth mining if the course covers LLM-as-judge. Note the post's framing is partly a policy pitch (it ends with funding/safe-harbor recommendations), so treat its anecdotes as advocacy-adjacent evidence, not neutral measurement."
+}

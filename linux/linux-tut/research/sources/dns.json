@@ -1,0 +1,209 @@
+{
+ "id": "dns",
+ "tag": "[resolv.conf(5)]",
+ "citation": {
+  "authors": "Linux man-pages project; ISC (BIND 9); systemd project; Docker Inc.; IETF (Mockapetris, P.); MITRE",
+  "title": "resolv.conf(5), hosts(5), nsswitch.conf(5), getent(1); dig(1) (BIND 9 ARM); systemd-resolved.service(8); Docker Engine networking overview (DNS services); RFC 1035; RFC 7766; MITRE ATT&CK T1071.004",
+  "venue": "man7.org / bind9.readthedocs.io / docs.docker.com / rfc-editor.org / attack.mitre.org",
+  "year": "2026",
+  "url": "https://man7.org/linux/man-pages/man5/resolv.conf.5.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man5/resolv.conf.5.html",
+  "https://man7.org/linux/man-pages/man5/hosts.5.html",
+  "https://man7.org/linux/man-pages/man5/nsswitch.conf.5.html",
+  "https://man7.org/linux/man-pages/man1/getent.1.html",
+  "https://bind9.readthedocs.io/en/latest/manpages.html",
+  "https://man7.org/linux/man-pages/man8/systemd-resolved.service.8.html",
+  "https://www.freedesktop.org/software/systemd/man/latest/systemd-resolved.service.html (anti-bot wall; man7 mirror used)",
+  "https://docs.docker.com/engine/network/",
+  "https://docs.docker.com/engine/network/drivers/bridge/",
+  "https://www.rfc-editor.org/rfc/rfc1035.txt",
+  "https://www.rfc-editor.org/rfc/rfc7766.txt",
+  "https://attack.mitre.org/techniques/T1071/004/",
+  "https://attack.mitre.org/techniques/T1048/",
+  "https://wiki.ubuntu.com/BionicBeaver/ReleaseNotes"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "resolv.conf: nameserver (max 3), search, options ndots; nsswitch 'hosts: files dns' order means /etc/hosts wins before DNS",
+   "verdict": "confirmed",
+   "finding": "nameserver: up to MAXNS (currently 3), queried in listed order. search: names with fewer than ndots dots (default 1) are tried with each search domain. options: ndots default 1 (capped 15), timeout default 5 s (capped 30), attempts default 2 (capped 5). nsswitch.conf(5): service order on the line is the query order \"until a result is found\". Executed: ubuntu:24.04 ships `hosts:          files dns`. CAVEAT from execution: \"hosts file wins\" is per address family - see the getent finding below.",
+   "quote": "Up to MAXNS (currently 3, see <res_state.h>) name servers may be listed, one per keyword. If there are multiple servers, the resolver library queries them in the order listed.",
+   "location": "resolv.conf(5), nameserver",
+   "cite_url": "https://man7.org/linux/man-pages/man5/resolv.conf.5.html"
+  },
+  {
+   "planned": "dig output sections (QUESTION, ANSWER, status NOERROR/NXDOMAIN/SERVFAIL, SERVER line); dig +short; dig bypasses nsswitch//etc/hosts (queries DNS directly) while getent hosts uses the system resolver path",
+   "verdict": "confirmed",
+   "finding": "dig man: dig \"tries each of the servers listed in /etc/resolv.conf\" and does DNS lookups only - it never mentions /etc/hosts or NSS; +short gives a terse answer; +search is OFF by default (\"The search list is not used by default\"). getent(1): `hosts` goes through gethostbyaddr(3)/gethostbyname2(3), `ahosts` through getaddrinfo(3) - i.e. the NSS path. Executed with `203.0.113.8 sandbox-only.test` in /etc/hosts: getent hosts -> 203.0.113.8; dig -> status: NXDOMAIN. dig exit code is 0 even on NXDOMAIN.",
+   "quote": "Unless it is told to query a specific name server, dig tries each of the servers listed in /etc/resolv.conf. If no usable server addresses are found, dig sends the query to the local host.",
+   "location": "dig(1) Description (BIND 9 manual pages)",
+   "cite_url": "https://bind9.readthedocs.io/en/latest/manpages.html#dig-dns-lookup-utility"
+  },
+  {
+   "planned": "DNS uses UDP and TCP port 53; record types A, AAAA, CNAME, MX, TXT, NS",
+   "verdict": "confirmed",
+   "finding": "RFC 1035 s4.2: TCP and UDP on server port 53; UDP messages limited to 512 bytes, longer are truncated with TC bit (then retried over TCP). RFC 7766 makes TCP support REQUIRED. RFC 1035 s3.2.2 defines A(1), NS(2), CNAME(5), SOA(6), PTR(12), MX(15), TXT(16). AAAA is NOT in RFC 1035 (it is RFC 3596, not fetched) - do not cite RFC 1035 for AAAA. RCODEs: 0 No error, 2 Server failure, 3 Name Error (= dig's NOERROR / SERVFAIL / NXDOMAIN).",
+   "quote": "The Internet supports name server access using TCP [RFC-793] on server port 53 (decimal) as well as datagram access using UDP [RFC-768] on UDP port 53 (decimal).",
+   "location": "RFC 1035 section 4.2, Transport",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc1035#section-4.2"
+  },
+  {
+   "planned": "Ubuntu uses systemd-resolved stub at 127.0.0.53",
+   "verdict": "confirmed",
+   "finding": "systemd-resolved listens on 127.0.0.53 (full stub) AND 127.0.0.54 (proxy-mode stub); /run/systemd/resolve/stub-resolv.conf lists 127.0.0.53 as the only server and is meant to be symlinked from /etc/resolv.conf; the real upstream servers are in /run/systemd/resolve/resolv.conf. Ubuntu release notes (18.04): \"The default DNS resolver is systemd-resolved.\" Not verifiable in a container (no systemd there); the executed container resolv.conf files never show 127.0.0.53.",
+   "quote": "Additionally, systemd-resolved provides a local DNS stub listener on the IP addresses 127.0.0.53 and 127.0.0.54 on the local loopback interface. Programs issuing DNS requests directly, bypassing any local API may be directed to this stub, in order to connect them to systemd-resolved.",
+   "location": "systemd-resolved.service(8) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man8/systemd-resolved.service.8.html"
+  },
+  {
+   "planned": "Docker: containers on user-defined networks use embedded DNS server at 127.0.0.11; default bridge copies host resolv.conf; containers resolve each other by name only on user-defined networks",
+   "verdict": "confirmed",
+   "finding": "All three confirmed by Docker docs and by execution. Default bridge: resolv.conf \"Generated by Docker Engine ... Based on host file\" with the host's upstream nameserver (192.168.65.7 on Docker Desktop). User-defined network: `nameserver 127.0.0.11` + `options ndots:0`, with comment `# ExtServers: [host(192.168.65.7)]`. Name lookup of another container: works on user-defined network (getent hosts lt-R4-peer -> 172.18.0.2; dig SERVER: 127.0.0.11#53, TTL 600), fails on default bridge (getent exit 2) although ping by IP works.",
+   "quote": "Containers that attach to the default bridge network receive a copy of this file. Containers that attach to a custom network use Docker's embedded DNS server. The embedded DNS server forwards external DNS lookups to the DNS servers configured on the host. The embedded DNS server address is 127.0.0.11.",
+   "location": "Docker Docs: Networking overview > DNS services",
+   "cite_url": "https://docs.docker.com/engine/network/#dns-services"
+  },
+  {
+   "planned": "DNS as an egress channel: DNS queries leave the sandbox even when HTTP is blocked unless resolver access is also controlled (framing; primary source on DNS tunnelling e.g. MITRE ATT&CK T1071.004)",
+   "verdict": "confirmed",
+   "finding": "MITRE ATT&CK T1071.004 (Application Layer Protocol: DNS) documents DNS tunnelling: data concealed in DNS fields, DNS often allowed when other traffic is not. Docker docs confirm the mechanism that makes it relevant: the embedded resolver \"forwards external DNS lookups to the DNS servers configured on the host\", i.e. lookups are made on the container's behalf from outside its network namespace. The sentence \"even when HTTP is blocked\" is the course's framing, not a quote. Executed counter-example worth knowing: on this Docker version an --internal network's embedded DNS returned SERVFAIL for external names (no forwarding), and under a default-drop nft OUTPUT policy DNS is dropped too (curl exit 6).",
+   "quote": "The DNS protocol serves an administrative function in computer networking and thus may be very common in environments. DNS traffic may also be allowed even before network authentication is completed. DNS packets contain many fields and headers in which data can be concealed. Often known as DNS tunneling, adversaries may abuse DNS to communicate with systems under their control",
+   "location": "MITRE ATT&CK T1071.004, Application Layer Protocol: DNS",
+   "cite_url": "https://attack.mitre.org/techniques/T1071/004/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "SURPRISE (executed): `getent hosts NAME` does not always show an /etc/hosts override. With only an IPv4 line `203.0.113.7 example.com` in /etc/hosts, `getent hosts example.com` printed the real AAAA records from DNS, because getent hosts tries an IPv6 lookup first and the files source has no IPv6 entry for the name. `getent ahosts` / `getent ahostsv4` (getaddrinfo path, what curl uses) returned 203.0.113.7, and curl connected to 203.0.113.7. For names that do not exist in DNS, getent hosts returns the hosts entry as expected. Teach `getent ahosts` as the faithful \"what will my program get\" check.",
+   "quote": "# echo \"203.0.113.7 example.com\" >> /etc/hosts\n# getent hosts example.com\n2606:4700:10::ac42:93f3 example.com\n2606:4700:10::6814:179a example.com\n# getent ahostsv4 example.com\n203.0.113.7     STREAM example.com\n# dig +short example.com\n172.66.147.243\n104.20.23.154\n# curl -sv --connect-timeout 2 http://example.com/ 2>&1 | grep Trying\n*   Trying 203.0.113.7:80...",
+   "location": "executed lt-r4-tools:local = ubuntu:24.04 (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; dig 9.18.39)"
+  },
+  {
+   "finding": "Executed: hosts-only name, getent vs dig.",
+   "quote": "# echo \"203.0.113.8 sandbox-only.test\" >> /etc/hosts\n# getent hosts sandbox-only.test\n203.0.113.8     sandbox-only.test\n# dig +short sandbox-only.test        (prints nothing, exit 0)\n# dig sandbox-only.test | grep status\n;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 8269",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; dig 9.18.39)"
+  },
+  {
+   "finding": "getent(1) documents which libc calls each database uses.",
+   "quote": "hosts: ... When one or more key arguments are provided, pass each key to gethostbyaddr(3) or gethostbyname2(3), depending on whether a call to inet_pton(3) indicates that the key is an IPv6 or IPv4 address or not, and display the result.",
+   "location": "getent(1) DESCRIPTION, hosts",
+   "cite_url": "https://man7.org/linux/man-pages/man1/getent.1.html"
+  },
+  {
+   "finding": "getent ahosts uses getaddrinfo(3) with AF_UNSPEC; ahostsv4 = AF_INET.",
+   "quote": "pass each key in succession to getaddrinfo(3) with the address family AF_UNSPEC, enumerating each socket address structure returned.",
+   "location": "getent(1) DESCRIPTION, ahosts"
+  },
+  {
+   "finding": "Executed: /etc/resolv.conf on the default bridge.",
+   "quote": "# Generated by Docker Engine.\n# This file can be edited; Docker Engine will not make further changes once it\n# has been modified.\n\nnameserver 192.168.65.7\n\n# Based on host file: '/etc/resolv.conf' (legacy)\n# Overrides: []",
+   "location": "executed ubuntu:24.04, default bridge (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; dig 9.18.39; 192.168.65.7 is Docker Desktop's VM resolver - on a Linux host this is the host's upstream nameserver)"
+  },
+  {
+   "finding": "Executed: /etc/resolv.conf on a user-defined bridge network.",
+   "quote": "nameserver 127.0.0.11\noptions ndots:0\n\n# Based on host file: '/etc/resolv.conf' (internal resolver)\n# ExtServers: [host(192.168.65.7)]\n# Overrides: []\n# Option ndots from: internal",
+   "location": "executed ubuntu:24.04, docker network create lt-R4-net (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; dig 9.18.39)"
+  },
+  {
+   "finding": "Executed: full dig output against the embedded resolver (sections to teach: HEADER status, flags, QUESTION, ANSWER, Query time, SERVER, MSG SIZE).",
+   "quote": ";; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 29148\n;; flags: qr rd ra; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 0\n;; QUESTION SECTION:\n;lt-R4-peer.\t\t\tIN\tA\n;; ANSWER SECTION:\nlt-R4-peer.\t\t600\tIN\tA\t172.18.0.2\n;; Query time: 0 msec\n;; SERVER: 127.0.0.11#53(127.0.0.11) (UDP)\n;; MSG SIZE  rcvd: 54",
+   "location": "executed ubuntu:24.04 on user-defined network (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; dig 9.18.39)"
+  },
+  {
+   "finding": "Executed: under --network none Docker still writes a resolv.conf naming the host resolver, but nothing can reach it; curl prints \"curl: (6) Could not resolve host: example.com\" (exit 6). On an --internal network: resolv.conf has 127.0.0.11, dig example.com -> status: SERVFAIL, curl exit 6.",
+   "quote": "$ docker run --rm --network none lt-r4-tools:local curl https://example.com\ncurl: (6) Could not resolve host: example.com      (exit=6)\n$ (on --internal network) dig example.com | grep status\n;; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 32353",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; dig 9.18.39)"
+  },
+  {
+   "finding": "Docker docs: default-bridge vs user-defined name resolution.",
+   "quote": "User-defined bridges provide automatic DNS resolution between containers. Containers on the default bridge network can only access each other by IP addresses, unless you use the --link option, which is considered legacy.",
+   "location": "Docker Docs: Bridge network driver > Differences between user-defined bridges and the default bridge",
+   "cite_url": "https://docs.docker.com/engine/network/drivers/bridge/"
+  },
+  {
+   "finding": "Docker docs: host /etc/hosts is NOT inherited; container /etc/hosts holds its own hostname + localhost. Executed: last line of /etc/hosts is `172.17.0.2\t649b0486a726` (container IP + ID-hostname); under --network none that line is absent.",
+   "quote": "Custom hosts, defined in /etc/hosts on the host machine, aren't inherited by containers. To pass additional hosts into a container, refer to add entries to container hosts file in the docker run reference documentation.",
+   "location": "Docker Docs: Networking overview > Custom hosts",
+   "cite_url": "https://docs.docker.com/engine/network/#custom-hosts"
+  },
+  {
+   "finding": "Docker --dns flag semantics: --dns=127.0.0.1 means the container's own loopback.",
+   "quote": "DNS requests will be forwarded from the container's network namespace so, for example, --dns=127.0.0.1 refers to the container's own loopback address.",
+   "location": "Docker Docs: Networking overview > DNS services (flag table)"
+  },
+  {
+   "finding": "Embedded DNS has no IPv6 address.",
+   "quote": "There is no IPv6 equivalent; the IPv4 address works even in IPv6-only containers. If an application requires an explicit DNS server address, use 127.0.0.11.",
+   "location": "Docker Docs: Networking overview > DNS services"
+  },
+  {
+   "finding": "search/ndots behaviour.",
+   "quote": "Resolver queries having fewer than ndots dots (default is 1) in them will be attempted using each component of the search path in turn until a match is found.",
+   "location": "resolv.conf(5), search"
+  },
+  {
+   "finding": "resolv.conf timeout/attempts defaults (why a dead resolver makes every lookup take ~10 s).",
+   "quote": "timeout:n ... Measured in seconds, the default is RES_TIMEOUT (currently 5, see <resolv.h>). ... attempts:n ... The default is RES_DFLRETRY (currently 2, see <resolv.h>).",
+   "location": "resolv.conf(5), options"
+  },
+  {
+   "finding": "If resolv.conf has no nameserver line, the local machine is used.",
+   "quote": "If no nameserver entries are present, the default is to use the name server on the local machine.",
+   "location": "resolv.conf(5), nameserver"
+  },
+  {
+   "finding": "hosts(5) format.",
+   "quote": "IP_address canonical_hostname [aliases...] ... Fields of the entry are separated by any number of blanks and/or tab characters. Text from a \"#\" character until the end of the line is a comment, and is ignored.",
+   "location": "hosts(5) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man5/hosts.5.html"
+  },
+  {
+   "finding": "nsswitch.conf semantics.",
+   "quote": "The order of the services on the line determines the order in which those services will be queried, in turn, until a result is found.",
+   "location": "nsswitch.conf(5) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man5/nsswitch.conf.5.html"
+  },
+  {
+   "finding": "dig defaults: query type A; UDP unless truncated; +short; return codes (0 includes NXDOMAIN, 9 = no reply from server).",
+   "quote": "dig return codes are: 0 DNS response received, including NXDOMAIN status; 1 Usage error; 8 Couldn't open batch file; 9 No reply from server; 10 Internal error",
+   "location": "dig(1) Return Codes"
+  },
+  {
+   "finding": "dig ignores the resolv.conf search list by default, unlike libc.",
+   "quote": "This option uses [or does not use] the search list defined by the searchlist or domain directive in resolv.conf, if any. The search list is not used by default.",
+   "location": "dig(1) Query Options, +search"
+  },
+  {
+   "finding": "DNS over UDP is limited to 512 bytes in RFC 1035; TCP support is mandatory per RFC 7766 - a firewall allowing only UDP/53 is incomplete.",
+   "quote": "Messages carried by UDP are restricted to 512 bytes (not counting the IP or UDP headers). Longer messages are truncated and the TC bit is set in the header.",
+   "location": "RFC 1035 section 4.2.1"
+  },
+  {
+   "finding": "RFC 7766 requirement.",
+   "quote": "This document therefore updates the core DNS protocol specifications such that support for TCP is henceforth a REQUIRED part of a full DNS protocol implementation.",
+   "location": "RFC 7766 section 1, Introduction",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc7766"
+  },
+  {
+   "finding": "systemd-resolved stub-resolv.conf.",
+   "quote": "This file lists the 127.0.0.53 DNS stub (see above) as the only DNS server. It also contains a list of search domains that are in use by systemd-resolved.",
+   "location": "systemd-resolved.service(8), /ETC/RESOLV.CONF"
+  },
+  {
+   "finding": "Ubuntu statement.",
+   "quote": "The default DNS resolver is systemd-resolved.",
+   "location": "Ubuntu 18.04 (Bionic Beaver) Release Notes, Network configuration",
+   "cite_url": "https://wiki.ubuntu.com/BionicBeaver/ReleaseNotes"
+  },
+  {
+   "finding": "MITRE: commands/data embedded in DNS records.",
+   "quote": "The commands may be embedded into different DNS records, for example, TXT or A records.",
+   "location": "MITRE ATT&CK T1071.004"
+  }
+ ],
+ "teaching_notes": "Unique value: the executed resolv.conf files for the three Docker cases, and the getent-hosts gotcha (IPv6-first lookup can bypass an IPv4-only /etc/hosts override; use `getent ahosts`). Note Docker adds `options ndots:0` on user-defined networks. The embedded resolver listens on 127.0.0.11 at random high ports (see iproute2 note) and Docker's iptables page says rules for DNS are created inside the container's network namespace (quote: \"For bridge and other network types, iptables rules for DNS are also created in the container's network namespace.\"). AAAA is RFC 3596 - not in any fetched source, so cite only the record name without an RFC. The freedesktop.org man page is behind an anti-bot wall; man7.org mirror of systemd-resolved.service(8) was used. DNS egress claim: MITRE supports the technique; \"leaves the sandbox even when HTTP is blocked\" depends on the setup - with Docker --internal (this version) and with default-drop nft output rules DNS was blocked in execution; it is proxy-only egress setups that leave the resolver open."
+}

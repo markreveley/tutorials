@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exit Codes and Signals · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix B</p>
+    <h1>Exit codes and signals</h1>
+    <p class="lede">
+      The lookup tables behind <a href="../pages/10-signals-exit-codes.html">page 10</a>: what each
+      number in a log means, which layer produced it, and how the same death is spelled by the shell,
+      by Python, and by Docker. Every value here was either produced in an Ubuntu 24.04 container or is
+      cited to its documentation.
+    </p>
+
+    <h2 id="who-wrote-the-number">First question: which layer wrote this number?</h2>
+    <p>
+      An <span class="term" data-g="exit-status">exit status</span> is 8 bits, 0–255, because only
+      the low byte of what a program passes to <code>exit</code> reaches its
+      parent.<a class="cite" href="https://man7.org/linux/man-pages/man3/exit.3.html" title="exit(3): status &amp; 0xFF">[exit(3)]</a>
+      Several layers share that small space, and each wraps the one inside it:
+    </p>
+    <div class="diagram">  harness  ──▶  docker run/exec  ──▶  timeout  ──▶  bash -c  ──▶  the program
+                125 126 127          124 125        126 127          0, 1, 2, …
+                                     126 127 137    128+N            (its own meanings)
+
+  A number is passed outward unchanged unless a wrapper has something of
+  its own to report. Read a code from the outside in: could the outermost
+  layer have produced it? If not, move one layer in.</div>
+
+    <h2 id="shell-codes">Codes the shell defines</h2>
+    <table>
+      <tr><th>Code</th><th>Meaning</th><th>Seen with</th></tr>
+      <tr><td>0</td><td>Success. For a script or <code>bash -c</code>, the status of the <em>last command executed</em><a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a></td><td><code>true</code>; a pipeline whose last stage succeeded</td></tr>
+      <tr><td>1–125</td><td>Failure, meaning defined by the program. Conventions, not rules: 1 general failure, 2 usage error or "could not do it". Bash builtins return 2 for incorrect usage<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a></td><td><code>false</code> → 1; <code>grep</code> no match → 1, error → 2; <code>ls /nope</code> → 2; uncaught Python exception → 1; <code>sys.exit(2)</code> → 2</td></tr>
+      <tr><td>126</td><td>Command found but not executable<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html" title="POSIX.1-2024, XCU 2.8.2 Exit Status for Commands">[POSIX]</a></td><td><code>bash: /tmp/notexec: Permission denied</code>; <code>bash: /tmp: Is a directory</code></td></tr>
+      <tr><td>127</td><td>Command not found<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html" title="POSIX.1-2024, XCU 2.8.2 Exit Status for Commands">[POSIX]</a></td><td><code>bash: nosuchcmd: command not found</code></td></tr>
+      <tr><td>128+N</td><td>Killed by signal N. POSIX requires only "greater than 128"; 128+N is bash's encoding<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a></td><td>Table below</td></tr>
+      <tr><td>255 and wrap-around</td><td>Out-of-range values are taken modulo 256</td><td><code>exit -1</code> → 255; <code>exit 256</code> → 0; <code>exit 257</code> → 1</td></tr>
+    </table>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><code>exit 256</code> is <em>success</em>. A test script that exits with "the number of failed
+      tests" reports 0 when exactly 256 fail. Exit with 0 or 1 and put counts in the output.</p>
+    </div>
+
+    <h2 id="signal-table">Signals and their 128+N codes</h2>
+    <p>
+      Numbers are for x86 and ARM; a few architectures differ. Default actions are from
+      signal(7).<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7): Standard signals; Signal numbering for standard signals">[signal(7)]</a>
+      The Python column was produced by sending each signal to a child <code>sleep</code> and reading
+      <code>returncode</code>; the shell column by having a foreground child signal itself and reading
+      <code>$?</code> (141 from <code>PIPESTATUS</code>, 153 from a real <code>ulimit -f</code>
+      overrun). "Core" means terminate and dump core; "Term" terminate; "Ign" ignore.
+    </p>
+    <table>
+      <tr><th>Signal</th><th>N</th><th>Default</th><th>Shell <code>$?</code></th><th>Python <code>returncode</code></th><th>Typical sender</th></tr>
+      <tr><td>SIGHUP</td><td>1</td><td>Term</td><td>129</td><td>−1</td><td>Terminal closed</td></tr>
+      <tr><td>SIGINT</td><td>2</td><td>Term</td><td>130</td><td>−2</td><td><kbd>Ctrl</kbd>+<kbd>C</kbd></td></tr>
+      <tr><td>SIGQUIT</td><td>3</td><td>Core</td><td>131</td><td>−3</td><td>"Quit from keyboard"</td></tr>
+      <tr><td>SIGABRT</td><td>6</td><td>Core</td><td>134</td><td>−6</td><td>"Abort signal from abort(3)": the program gave up on itself</td></tr>
+      <tr><td>SIGKILL</td><td>9</td><td>Term (uncatchable)</td><td><strong>137</strong></td><td>−9</td><td><span class="term" data-g="oom-killer">OOM killer</span>; <code>docker kill</code>; <code>docker stop</code> after its grace period; <code>timeout -k</code>/<code>-s KILL</code>; CPU rlimit hard limit; a harness deadline</td></tr>
+      <tr><td>SIGUSR1</td><td>10</td><td>Term</td><td>138</td><td>−10</td><td>"User-defined signal 1": whatever the application decides</td></tr>
+      <tr><td>SIGSEGV</td><td>11</td><td>Core</td><td><strong>139</strong></td><td>−11</td><td>Kernel: invalid memory reference</td></tr>
+      <tr><td>SIGPIPE</td><td>13</td><td>Term</td><td>141</td><td>−13</td><td>Kernel: write to a pipe with no reader (<code>yes | head -1</code> → <code>PIPESTATUS</code> 141 0)</td></tr>
+      <tr><td>SIGALRM</td><td>14</td><td>Term</td><td>142</td><td>−14</td><td>"Timer signal from alarm(2)"</td></tr>
+      <tr><td>SIGTERM</td><td>15</td><td>Term</td><td><strong>143</strong></td><td>−15</td><td><code>kill</code>, <code>pkill</code>, <code>timeout</code>, <code>docker stop</code>, systemd: the first, polite signal</td></tr>
+      <tr><td>SIGCHLD</td><td>17</td><td>Ign</td><td>—</td><td>—</td><td>Kernel, to a parent whose child changed state</td></tr>
+      <tr><td>SIGCONT</td><td>18</td><td>Cont</td><td>—</td><td>—</td><td><code>fg</code>, <code>bg</code>, <code>kill -CONT</code></td></tr>
+      <tr><td>SIGSTOP</td><td>19</td><td>Stop (uncatchable)</td><td>—</td><td>—</td><td><code>kill -STOP</code></td></tr>
+      <tr><td>SIGTSTP</td><td>20</td><td>Stop</td><td>—</td><td>—</td><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td></tr>
+      <tr><td>SIGXCPU</td><td>24</td><td>Core</td><td>152</td><td>−24</td><td>Kernel: CPU-time soft <span class="term" data-g="rlimit">rlimit</span> reached (<code>ulimit -St</code>)<a class="cite" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" title="getrlimit(2): RLIMIT_CPU">[getrlimit(2)]</a></td></tr>
+      <tr><td>SIGXFSZ</td><td>25</td><td>Core</td><td>153</td><td>−25</td><td>Kernel: file-size rlimit exceeded (<code>ulimit -f</code>)<a class="cite" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" title="getrlimit(2): RLIMIT_FSIZE">[getrlimit(2)]</a></td></tr>
+      <tr><td>SIGSYS</td><td>31</td><td>Core</td><td>159</td><td>−31</td><td>"Bad system call"; see seccomp, <a href="../pages/21-cgroups-capabilities-seccomp.html">page 21</a> (159 and −31 by arithmetic, not run)</td></tr>
+    </table>
+    <p>
+      Going the other way, bash does the subtraction for you: <code>kill -l 137</code> prints
+      <code>KILL</code> and <code>kill -l 143</code> prints <code>TERM</code>. SIGKILL and SIGSTOP are
+      the only signals that cannot be caught, blocked, or
+      ignored.<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7): Standard signals">[signal(7)]</a>
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — a signal sent is not a signal that kills</span>
+      <p>The table shows what happens when the default action applies. Three real cases where it did
+      not, all met while building this appendix. (1) A process may <em>ignore</em> a <span class="term" data-g="signal">signal</span>, and
+      ignored signals stay ignored across
+      exec:<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7): Signal dispositions">[signal(7)]</a>
+      Python ignores SIGPIPE and SIGXFSZ at start-up (<code>SigIgn: 0000000001001000</code> in its
+      <code>/proc/self/status</code>), so a Python process sent SIGPIPE simply carried on and exited 0.
+      (2) Background jobs started with <code>&amp;</code> by a non-interactive bash — every
+      <code>bash -c</code> tool call — ignore SIGINT and
+      SIGQUIT;<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Signals" title="GNU Bash Reference Manual, 3.7.6 Signals">[Bash Manual]</a>
+      we read <code>SigIgn: 0000000000000006</code> on such a job, and <code>kill -INT</code> will not
+      stop it. (3) <span class="term" data-g="pid-1">PID 1</span> of a container receives only signals it has handlers for: under
+      <code>docker run ubuntu:24.04 bash -c 'kill -SEGV $$; echo still here'</code> the shell printed
+      <code>still here</code> and exited 0; with <code>--init</code> the same command exited 139.
+      In each mask, bit N−1 stands for signal N.</p>
+    </div>
+
+    <h2 id="wrappers">Codes added by wrappers</h2>
+    <table>
+      <tr><th>Wrapper</th><th>Code</th><th>Meaning</th></tr>
+      <tr><td rowspan="5">GNU <code>timeout</code><a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation" title="GNU Coreutils manual, 23.6 timeout: Exit status">[Coreutils]</a></td><td>124</td><td>The command timed out (and <code>--preserve-status</code> was not given). Reported even if the command ignored TERM and later finished its work</td></tr>
+      <tr><td>125</td><td><code>timeout</code> itself failed (e.g. a bad option)</td></tr>
+      <tr><td>126 / 127</td><td>Command found but not invocable / not found</td></tr>
+      <tr><td>137</td><td>KILL was sent — to the command <em>or to <code>timeout</code> itself</em>; the manual says the two cannot be distinguished</td></tr>
+      <tr><td>143</td><td>With <code>--preserve-status</code>: the command's own death by TERM</td></tr>
+      <tr><td>BusyBox <code>timeout</code> (Alpine)</td><td>143</td><td>What <code>timeout 1 sleep 3</code> returned in <code>alpine:3.20</code>: no 124. Detect timeouts by duration as well as by code</td></tr>
+      <tr><td><code>env</code>, <code>nohup</code><a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html" title="GNU Coreutils manual, 23.2 env: Exit status">[Coreutils]</a></td><td>125 / 126 / 127</td><td>Same convention: the wrapper failed / command not invocable / not found</td></tr>
+      <tr><td rowspan="4"><code>docker run</code><a class="cite" href="https://docs.docker.com/engine/containers/run/#exit-status" title="Docker Docs, Running containers: Exit status">[Docker: run]</a></td><td>125</td><td>"The error is with Docker daemon itself" — in practice also CLI errors: <code>unknown flag: --nosuchflag</code> → 125. The container never ran</td></tr>
+      <tr><td>126</td><td>The contained command cannot be invoked (<code>docker run ubuntu:24.04 /etc/passwd</code>)</td></tr>
+      <tr><td>127</td><td>The contained command cannot be found (<code>executable file not found in $PATH</code>)</td></tr>
+      <tr><td>other</td><td>The contained command's own exit code, including 128+N: a PID 1 that dies of SIGKILL gives 137</td></tr>
+    </table>
+
+    <h2 id="same-death">The same death, four spellings</h2>
+    <p>One event — a process killed by <span class="term" data-g="sigkill">SIGKILL</span> — as each layer reports it:</p>
+    <table>
+      <tr><th>Observer</th><th>What you see</th></tr>
+      <tr><td>bash, in <code>$?</code></td><td><code>137</code>, and <code>Killed</code> on stderr</td></tr>
+      <tr><td>Python <code>subprocess</code>, direct child</td><td><code>returncode == -9</code> (negative signal number)</td></tr>
+      <tr><td>Python <code>subprocess</code>, when a shell sat in between and reported on its own child</td><td><code>returncode == 137</code> (we got 137 from <code>shell=True</code> with <code>sleep 30 &amp; kill -9 $!; wait $!</code>)</td></tr>
+      <tr><td><code>docker run</code> / <code>docker exec</code> exit status; <code>docker inspect</code> <code>State.ExitCode</code></td><td><code>137</code>. <code>State.OOMKilled</code> is a separate boolean and the two are independent: we observed 137/false (a <code>docker stop</code> timeout, a <code>docker kill</code>), 137/true (PID 1 OOM-killed) and <strong>0/true</strong> (a child OOM-killed while PID 1 carried on)</td></tr>
+      <tr><td>Inspect <code>ExecResult</code></td><td><code>returncode</code> (int) and <code>success</code> (bool), with stdout and stderr; a tool timeout is not a return code at all but a <code>TimeoutError</code> reported to the model<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect docs, Sandboxing: exec(), ExecResult">[Inspect]</a></td></tr>
+    </table>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>A <span class="term" data-g="harness">harness</span> written in Python that checks <code>returncode == 137</code> to count kills will
+      miss every direct child that died of SIGKILL (those are <code>-9</code>), and one that checks
+      <code>returncode &lt; 0</code> will miss every kill that happened behind <code>bash -c</code> or
+      <code>docker exec</code> (those are 137). Normalise once, at ingestion — <code>if rc &lt; 0:
+      sig = -rc; elif rc &gt; 128: sig = rc - 128</code> — and store the signal, the raw code, the
+      duration and the layer that reported it. Then count by cause, as in
+      <a href="../pages/10-signals-exit-codes.html#failure-accounting">page 10's failure
+      accounting</a>.</p>
+    </div>
+
+    <h2 id="curl-codes">curl's exit codes (network layer decoder)</h2>
+    <p>
+      <code>curl</code> is the one ordinary program whose codes are worth knowing by heart, because
+      each names the network layer that failed (<a href="../pages/18-dns-http-tls.html">page 18</a>).
+      From its man page:<a class="cite" href="https://curl.se/docs/manpage.html" title="curl(1): EXIT CODES">[curl(1)]</a>
+    </p>
+    <table>
+      <tr><th>Code</th><th>curl's words</th><th>Layer</th></tr>
+      <tr><td>5</td><td>Could not resolve proxy</td><td>DNS, for the proxy's name</td></tr>
+      <tr><td>6</td><td>Could not resolve host</td><td>DNS</td></tr>
+      <tr><td>7</td><td>Failed to connect to host</td><td>TCP: port closed, or no route. With a proxy configured, it is the <em>proxy</em> that was unreachable</td></tr>
+      <tr><td>22</td><td>HTTP response code 400 or greater — only with <code>-f</code>/<code>--fail</code>; without it a 404 exits 0</td><td>HTTP</td></tr>
+      <tr><td>28</td><td>Operation timeout</td><td>Packets dropped (firewall), or a slow transfer hitting <code>--max-time</code></td></tr>
+      <tr><td>35</td><td>SSL connect error; the handshake failed</td><td>TLS</td></tr>
+      <tr><td>60</td><td>Peer certificate cannot be authenticated with known CA certificates</td><td>TLS trust</td></tr>
+      <tr><td>77</td><td>Problem reading the SSL CA cert</td><td>TLS trust store missing: a minimal image without <code>ca-certificates</code></td></tr>
+    </table>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>signal(7), exit(3), getrlimit(2), Linux man-pages project (man-pages 6.19). <a href="https://man7.org/linux/man-pages/man7/signal.7.html">man7.org/…/signal.7.html</a>, <a href="https://man7.org/linux/man-pages/man3/exit.3.html">exit.3.html</a>, <a href="https://man7.org/linux/man-pages/man2/getrlimit.2.html">getrlimit.2.html</a></li>
+        <li>Chet Ramey and Brian Fox, <em>GNU Bash Reference Manual</em>, §3.7.5 Exit Status, §3.7.6 Signals. <a href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status">gnu.org/software/bash/manual/bash.html</a></li>
+        <li>The Open Group, POSIX.1-2024 (IEEE Std 1003.1-2024), Shell &amp; Utilities §2.8.2 "Exit Status for Commands". <a href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html">pubs.opengroup.org/…/V3_chap02.html</a></li>
+        <li>Free Software Foundation, <em>GNU Coreutils manual</em>, §23.6 timeout, §23.2 env. <a href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation">gnu.org/software/coreutils/manual/coreutils.html</a></li>
+        <li>Docker Inc., "Running containers: Exit status". <a href="https://docs.docker.com/engine/containers/run/#exit-status">docs.docker.com/engine/containers/run/#exit-status</a></li>
+        <li>Daniel Stenberg and the curl project, curl(1) man page, "EXIT CODES". <a href="https://curl.se/docs/manpage.html">curl.se/docs/manpage.html</a></li>
+        <li>UK AI Security Institute, Inspect AI documentation, "Sandboxing". <a href="https://inspect.aisi.org.uk/sandboxing.html">inspect.aisi.org.uk/sandboxing.html</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

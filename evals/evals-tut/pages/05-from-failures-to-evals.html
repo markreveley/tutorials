@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From Failure Modes to Evals · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 2 · The Eval Process</p>
+    <h1>From failure modes to evals</h1>
+    <p class="lede">
+      Error analysis left you holding a failure taxonomy with counts. This page turns it into eval
+      machinery: a structured test dataset, a grading scheme (binary, with critiques), and a decision
+      about which failure modes deserve automated graders at all.
+    </p>
+
+    <h2 id="from-category-to-cases">Each failure mode becomes a set of test cases</h2>
+    <p>
+      A <span class="term" data-g="failure-mode">failure mode</span> like "dietary constraint ignored"
+      from <a href="04-error-analysis.html">the previous page</a> becomes an eval the moment you collect
+      inputs that probe it and define what passing looks like. The inputs come from two sources, used
+      together:
+    </p>
+    <ul>
+      <li><strong>Real traces</strong> — the actual failures you found. These are gold: verified-real
+        user behavior, already labeled by your own analysis.</li>
+      <li><strong><span class="term" data-g="synthetic-data">Synthetic data</span></strong> — LLM-generated
+        inputs that extend coverage to cases you haven't seen yet. Husain bootstrapped Lucy's eval suite
+        this way before launch, prompting a model to "write 50 different instructions that a real estate
+        agent can give to his assistant" per feature.<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a></li>
+    </ul>
+    <p>
+      The mistake with synthetic data is asking for it unstructured. The FAQ's verified method is a
+      two-step recipe: first define <em>dimensions</em> along which inputs vary (feature, scenario,
+      persona), hand-write ~20 example tuples, have the LLM generate more <em>tuples</em> — then a
+      separate prompt converts each tuple into a natural-language query. Prompting an LLM to just "give
+      me test queries" produces "generic, repetitive
+      outputs."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      The same source lists where synthetic data is <em>unreliable</em>: complex domain-specific
+      content, low-resource languages, unverifiable claims, high-stakes domains like medicine and law,
+      and underrepresented user groups.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+    </p>
+    <div class="card">
+      <p><strong>Worked example — the dimension/tuple recipe for the recipe-bot:</strong></p>
+      <pre style="margin:0"><code>dimensions:  feature   × scenario          × persona
+hand-write:  (substitution, allergy-driven,  anxious first-timer)
+             (meal plan,    vegan household,  busy parent)
+             (unit convert, metric request,   precise baker)
+             … ~20 such tuples, then LLM generates more tuples …
+
+convert:     (substitution, allergy-driven, anxious first-timer)
+             → "My kid is allergic to peanuts — is it safe to swap
+                almond butter into this cookie recipe??"</code></pre>
+      <p style="margin-bottom:0">Structure first, language second. The variation you get is the
+      variation you designed.</p>
+    </div>
+    <p>
+      How big should the dataset be? Husain's heuristic for judge-building datasets: "start with around
+      30 examples and keep going until I do not see any new failure modes. From there, I keep going
+      until I'm not learning anything new" — with examples deliberately spread across the
+      dimensions.<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024, Using LLM-as-a-Judge For Evaluation">[Husain, Judge]</a>
+      Note the shape of the rule: it's the saturation logic from error analysis again, applied to
+      dataset construction.
+    </p>
+
+    <h2 id="binary">Grade binary, capture nuance in critiques</h2>
+    <p>
+      Now the grading scheme. The unanimous position across this course's spine sources is to make
+      every judgment a <span class="term" data-g="binary-judgment">binary judgment</span> — pass or
+      fail — rather than a <span class="term" data-g="likert-scale">Likert scale</span> (1–5 rating).
+      The reasoning, assembled from its three independent sources:
+    </p>
+    <table>
+      <tr><th>Problem with 1–5 scales</th><th>Verified statement</th></tr>
+      <tr><td>Adjacent points are meaningless</td><td>"The difference between adjacent points (like 3 vs 4) is subjective and inconsistent across annotators"<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a></td></tr>
+      <tr><td>Not actionable</td><td>"People don't know what to do with a 3 or 4"<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024">[Husain, Judge]</a></td></tr>
+      <tr><td>Statistically weaker</td><td>"Detecting statistical differences requires larger sample sizes"<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a></td></tr>
+      <tr><td>Annotators dodge decisions</td><td>"Annotators often default to middle values to avoid making hard decisions"<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a></td></tr>
+      <tr><td>Judges grade better in binary</td><td>"Where possible, I have my evaluators return binary outputs. This improves model performance while making it easier to apply classification metrics"<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024, LLM-Evaluators">[Yan]</a></td></tr>
+    </table>
+    <p>
+      Husain's sharpest version of the argument targets metric sprawl: "if someone says you need to
+      measure 8 things on a 1-5 scale, they don't know what they are looking for. They are just
+      guessing."<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024, Using LLM-as-a-Judge For Evaluation">[Husain, Judge]</a>
+      Two important refinements keep this from becoming dogma. First, binary doesn't mean
+      information-poor: every pass/fail comes with a written critique — "detailed enough that a new
+      employee could understand it"<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024">[Husain, Judge]</a>
+      — which later becomes few-shot material for judges
+      (<a href="10-aligning-judges.html">page 10</a>). Second, when you genuinely need to track gradual
+      improvement, decompose the quality into <em>multiple</em> binary sub-checks ("4 of 5 expected
+      facts present" as five separate checks) rather than reaching for a
+      scale.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a>
+      The FAQ's framing is "start binary": numeric labels are "advanced and usually not necessary."
+    </p>
+
+    <h2 id="which-grader">Not every failure mode gets an automated grader</h2>
+    <p>
+      For each taxonomy category, run it through the grader hierarchy from
+      <a href="03-types-of-evaluators.html">page 3</a>:
+    </p>
+    <ul>
+      <li><strong>Mechanically checkable?</strong> → code <span class="term" data-g="assertion">assertion</span>.
+        "Metric units requested, gave cups" is a parser and a unit table. Cheap, permanent, runs in CI.</li>
+      <li><strong>Subjective and recurring?</strong> → candidate for an LLM judge — but remember the
+        verified price tag: "100+ labeled examples, ongoing weekly maintenance, and coordination between
+        developers, PMs, and domain experts." The FAQ's rule: "Only build expensive evaluators for
+        problems you'll iterate on repeatedly."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a></li>
+      <li><strong>Rare, or fixable at the root?</strong> → sometimes the right response to a failure
+        mode is a fix plus a handful of regression cases, not a standing evaluator. A bug you'll never
+        reintroduce doesn't need a permanent meter.</li>
+    </ul>
+    <div class="callout">
+      <span class="label">Should evals come first, like TDD?</span>
+      <p>A tempting transplant from software engineering — write the evals before the feature. The
+      FAQ's verified answer is "generally no": eval-driven development "creates more problems than it
+      solves," because of the catch-22 documented on
+      <a href="06-validating-the-grader.html">the next page</a> — you can't define good criteria before
+      seeing real outputs. The carve-out: constraints you know exactly in advance, like "never mention
+      competitors," can be written as checks up front.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a></p>
+    </div>
+
+    <h2 id="splits">Keep a held-out set, even here</h2>
+    <p>
+      One habit from classical machine learning survives intact: don't evaluate your evaluator on the
+      data you built it with. When you label examples to construct a judge, reserve a
+      <span class="term" data-g="train-test-split">held-out split</span> of human-labeled cases the
+      judge never saw during prompt iteration — that's where its true positive and true negative rates
+      get measured (<a href="10-aligning-judges.html">page 10</a>), and the FAQ specifies "a held out
+      labeled test set" for exactly this
+      purpose.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a>
+      The same logic at benchmark scale — holdouts protecting against
+      <span class="term" data-g="overfitting">overfitting</span> — returns as a major theme in
+      <a href="15-cost-and-capability.html">Module 4</a> and <a href="21-contamination.html">Module 6</a>.
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall: the suspiciously perfect suite</span>
+      <p>If your new eval suite passes 100%, the suite is probably wrong — too easy, mis-graded, or
+      testing the cases you already fixed. Verified guidance: "If you're passing 100% of your evals,
+      you're likely not challenging your system enough. A 70% pass rate might indicate a more meaningful
+      evaluation that's actually stress-testing your
+      application."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a>
+      An eval's job is to find failures while they're cheap; a suite that can't fail is decoration.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>The pipeline so far: traces → taxonomy → structured dataset → binary labels with critiques →
+      graders matched to failure modes. Every artifact is downstream of looking at real data, and every
+      judgment is binary-with-critique. One link is still unexamined: the graders themselves. Who
+      checked <em>them</em>? That's <a href="06-validating-the-grader.html">the next page</a>.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+        <li>Hamel Husain, "Using LLM-as-a-Judge For Evaluation: A Complete Guide," hamel.dev, October 2024. <a href="https://hamel.dev/blog/posts/llm-judge/">hamel.dev/blog/posts/llm-judge</a></li>
+        <li>Hamel Husain, "Your AI Product Needs Evals," hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a></li>
+        <li>Eugene Yan, "Evaluating the Effectiveness of LLM-Evaluators," eugeneyan.com, August 2024. <a href="https://eugeneyan.com/writing/llm-evaluators/">eugeneyan.com/writing/llm-evaluators</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

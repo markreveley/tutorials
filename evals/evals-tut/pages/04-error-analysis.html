@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Error Analysis: Look at Your Data · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 2 · The Eval Process</p>
+    <h1>Error analysis: look at your data</h1>
+    <p class="lede">
+      Where do eval criteria come from? Not from brainstorming meetings, and not from a vendor's metric
+      list. They come from reading what your system actually did, failure by failure, until the failures
+      organize themselves into categories. This page teaches that process — the single
+      highest-leverage activity in all of AI engineering.
+    </p>
+
+    <h2 id="the-claim">The strongest claim in this course</h2>
+    <p>
+      The practitioners whose process forms this module's spine — Husain and Shankar, whose material has
+      been refined across cohorts totaling 4,500+ engineers and
+      PMs<a class="cite" href="https://maven.com/parlance-labs/evals" title="AI Evals for Engineers &amp; PMs, Maven">[Maven]</a>
+      — report spending "60–80% of our development time on error analysis and
+      evaluation."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      And within that, the bedrock practice is not building dashboards or judges. It's reading
+      <span class="term" data-g="trace">traces</span>: the full logged record of each interaction —
+      inputs, intermediate steps, tool calls, outputs. Husain's rules are written like safety
+      placards because teams keep violating them: "You must remove all friction from the process of
+      looking at data," and "You are doing it wrong if you aren't looking at lots of
+      data."<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+    </p>
+    <p>
+      Why does reading raw traces beat clever automation? Recall the "gulf of comprehension" from the
+      <a href="00-orientation.html">orientation</a>: you don't know what your users actually ask or how
+      your system actually fails until you look.<a class="cite" href="https://www.oreilly.com/library/view/evals-for-ai/9798341660717/" title="Shankar &amp; Husain, Evals for AI Engineers">[Evals Book]</a>
+      Husain is candid that even his most famous artifact is secondary to this: "creating a LLM judge is
+      a nice 'hack' I use to trick people into carefully looking at their data! … The real business
+      value comes from looking at your
+      data."<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024, Using LLM-as-a-Judge For Evaluation">[Husain, Judge]</a>
+    </p>
+
+    <h2 id="the-method">The method: open coding, then axial coding</h2>
+    <p>
+      <span class="term" data-g="error-analysis">Error analysis</span> borrows its method from
+      qualitative social science, and the borrowed names are worth keeping because they mark two
+      genuinely different activities:
+    </p>
+    <div class="card">
+      <p><strong>Step 1 — <span class="term" data-g="open-coding">open coding</span>.</strong> Read each
+      trace and write a free-form note about what went wrong, in your own words, with no preset
+      categories. One discipline matters here: note the <em>first</em> failure in each trace, because
+      upstream errors cause downstream ones — a bad retrieval step makes every later step look
+      broken.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a></p>
+      <p><strong>Step 2 — <span class="term" data-g="axial-coding">axial coding</span>.</strong> Group
+      the notes into a <span class="term" data-g="failure-taxonomy">failure taxonomy</span>: distinct,
+      named categories of failure — then <em>count</em> the traces in each. The FAQ flags this as "the
+      most important step": the counts turn anecdotes into priorities.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a></p>
+    </div>
+    <p>
+      A worked miniature. Suppose you open-code eight traces of a recipe-bot:
+    </p>
+    <pre><code>#1  "asked for vegan, suggested honey"          → constraint ignored
+#2  "asked for a substitution, invented a tool   → hallucinated capability
+     the app doesn't have ('scan your pantry')"
+#3  "metric units requested, gave cups"          → constraint ignored
+#4  "answer correct but buried in 400 words"     → verbosity
+#5  "asked about allergens, gave medical advice" → out-of-scope advice
+#6  "asked for vegan, suggested fish sauce"      → constraint ignored
+#7  "correct, concise"                           → (pass)
+#8  "invented a 'meal plan export' feature"      → hallucinated capability</code></pre>
+    <p>
+      Axial coding collapses eight notes into a taxonomy with counts: <strong>dietary constraint ignored
+      (3)</strong>, <strong>hallucinated capability (2)</strong>, <strong>out-of-scope advice (1)</strong>,
+      <strong>verbosity (1)</strong>. Already, with eight traces, you know your top problem — and it
+      isn't the one the angriest Slack thread was about. Real analyses do this over a hundred-plus
+      traces, but the mechanics are exactly these.
+    </p>
+
+    <h2 id="how-many">How many traces? Until saturation</h2>
+    <p>
+      The stopping rule is not a fixed number but a concept borrowed from grounded theory:
+      <span class="term" data-g="theoretical-saturation">theoretical saturation</span> — you stop when
+      new traces stop teaching you anything. The FAQ's operational version: "aim to review at least 100
+      traces" to start, and "if ~20 traces don't turn up a new category, you can
+      stop."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      For teams that can't commit to that yet, the same source's minimum viable version: 30 minutes
+      reviewing 20–50 outputs after every significant change.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+    </p>
+    <div class="callout">
+      <span class="label">Can an LLM do this for me?</span>
+      <p>Partly — but not first. The FAQ's guidance is to open-code 30–50 traces <em>yourself</em>
+      before letting an LLM take a first pass at categorizing the
+      rest.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      The reason connects to <a href="06-validating-the-grader.html">criteria drift</a>: until you've
+      personally seen the failures, you don't know what categories exist, so you can't check the LLM's
+      categorization — you'd be delegating a judgment you haven't yet formed. The same logic explains
+      why outsourcing error analysis to a labeling vendor is "usually a big
+      mistake."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a></p>
+    </div>
+
+    <h2 id="tooling">Tooling: deliberately boring</h2>
+    <p>
+      What tool should you read traces in? The consistent practitioner answer: the one with least
+      friction, even if you build it yourself. Husain renders traces "in domain-specific ways" and has
+      "often found that it's better to build my own data viewing &amp; labeling tool" — his example was
+      built with Shiny for Python in under a day — alongside the blunt advice: "Keep it simple. Don't
+      buy fancy LLM tools. Use what you have
+      first."<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+      A spreadsheet that your domain expert will actually open beats a platform they won't. (Module 7
+      covers <a href="26-observability.html">tracing infrastructure</a> for when scale forces the
+      issue.)
+    </p>
+
+    <h2 id="cadence">Error analysis never finishes</h2>
+    <p>
+      The taxonomy you build today describes today's system. Models get swapped, prompts edited,
+      features added — and the failure distribution moves. The FAQ's cadence: re-run error analysis
+      with 100+ fresh traces every review cycle (typically 2–4 weeks), and between major analyses,
+      review 10–20 traces weekly, focusing on
+      outliers.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      Sampling can get lighter as the system matures — Husain: "you can sample your data more over time,
+      lessening the burden" — but "you can never stop looking at data—no free lunch
+      exists."<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Skipping straight to metrics. A team that stands up a dashboard of generic scores without ever
+      reading traces has automated the measurement of failure modes <em>they haven't discovered yet</em>.
+      The dashboard will be green, the users unhappy, and nobody will know why — the Rechat plateau from
+      the <a href="00-orientation.html">orientation</a>, with better graphs. Error analysis is the
+      step that tells you <em>what to measure</em>; everything downstream inherits its quality.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Evals are discovered, not designed. The failure taxonomy — categories found in real traces,
+      with counts — is the source from which test datasets, graders, and judges are all derived.
+      <a href="05-from-failures-to-evals.html">The next page</a> performs exactly that derivation.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+        <li>Hamel Husain, "Your AI Product Needs Evals," hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a></li>
+        <li>Hamel Husain, "Using LLM-as-a-Judge For Evaluation: A Complete Guide," hamel.dev, October 2024. <a href="https://hamel.dev/blog/posts/llm-judge/">hamel.dev/blog/posts/llm-judge</a></li>
+        <li>Shreya Shankar &amp; Hamel Husain, <em>Evals for AI Engineers</em>, O'Reilly Media, Early Release. <a href="https://www.oreilly.com/library/view/evals-for-ai/9798341660717/">oreilly.com</a></li>
+        <li>"AI Evals for Engineers &amp; PMs," Maven course page. <a href="https://maven.com/parlance-labs/evals">maven.com/parlance-labs/evals</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

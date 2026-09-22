@@ -1,0 +1,140 @@
+{
+ "id": "sudo",
+ "tag": "[sudo(8)]",
+ "citation": {
+  "authors": "Todd C. Miller",
+  "title": "sudo(8) and sudoers(5) manual pages",
+  "venue": "sudo.ws",
+  "year": "n.d. (current online manual, fetched 2026)",
+  "url": "https://www.sudo.ws/docs/man/sudo.man/"
+ },
+ "fetched_urls": [
+  "https://www.sudo.ws/docs/man/sudo.man/",
+  "https://www.sudo.ws/docs/man/sudoers.man/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "sudo executes a command as another user (default root) according to the sudoers policy; NOPASSWD tag; sudo -l lists what the invoking user may run; env_reset default resets environment",
+   "verdict": "confirmed",
+   "finding": "sudo(8): 'allows a permitted user to execute a command as the superuser or another user, as specified by the security policy'; default policy plugin is sudoers (/etc/sudoers). -u picks a target user other than the default (usually root), by name or '#uid'. -l with no command lists the invoking user's privileges on this host. NOPASSWD: a tag on a Cmnd_Spec that removes the authentication requirement for the commands that follow it. env_reset is 'on by default': the command runs in a minimal environment of TERM, PATH, HOME, MAIL, SHELL, LOGNAME, USER and SUDO_* (plus env_keep/env_check matches); PATH is replaced by secure_path if that is set. Executed: caller's FOO, MYTOKEN and custom PATH entry were all absent from `sudo env`; PATH was Ubuntu's secure_path.",
+   "quote": "sudo allows a permitted user to execute a command as the superuser or another user, as specified by the security policy. The invoking user's real (not effective) user-ID is used to determine the user name with which to query the security policy.",
+   "location": "sudo(8) DESCRIPTION",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "planned": "Official minimal images (ubuntu, debian) do not ship sudo — verify by running, not from docs",
+   "verdict": "confirmed",
+   "finding": "Verified by running all three course images: sudo is absent from ubuntu:24.04, debian:bookworm-slim and alpine:3.20 (the default user in each is root, uid 0). Invoking it gives the shell's 127 'command not found'. On Ubuntu `apt-get install sudo` provides 1.9.15p5.",
+   "quote": "ubuntu:24.04 $ command -v sudo; echo status=$? -> status=1 ; $ sudo true -> sudo: command not found, status=127\ndebian:bookworm-slim $ sudo true -> sh: 1: sudo: not found, status=127 ; id -> uid=0(root) gid=0(root) groups=0(root)\nalpine:3.20 $ sudo true -> sh: sudo: not found, status=127",
+   "location": "executed ubuntu:24.04, debian:bookworm-slim, alpine:3.20"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "sudo is itself a set-user-ID-root binary, so it cannot work on a nosuid filesystem...",
+   "quote": "The sudo binary must be owned by the root user and have the set-user-ID bit set. Also, it must not be located on a file system mounted with the 'nosuid' option or on an NFS file system that maps uid 0 to an unprivileged uid.",
+   "location": "sudo(8) DIAGNOSTICS",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "...nor under the Linux no_new_privs flag — the manual names containers as the usual cause. This is why `docker run --security-opt no-new-privileges` disables sudo for an agent.",
+   "quote": "sudo was run by a process that has the Linux \"no new privileges\" flag is set. This causes the set-user-ID bit to be ignored when running an executable, which will prevent sudo from functioning. The most likely cause for this is running sudo within a container that sets this flag.",
+   "location": "sudo(8) DIAGNOSTICS",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "Observed no_new_privs failure.",
+   "quote": "$ setpriv --reuid=alice --regid=alice --init-groups --no-new-privs sudo id\nsudo: The \"no new privileges\" flag is set, which prevents sudo from running as root.\nsudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.\nstatus=1",
+   "location": "executed ubuntu:24.04 (apt sudo 1.9.15p5)"
+  },
+  {
+   "fact": "-l option exact text.",
+   "quote": "If no command is specified, list the privileges for the invoking user (or the user specified by the -U option) on the current host.",
+   "location": "sudo(8) OPTIONS, -l, --list",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "-u option exact text.",
+   "quote": "Run the command as a user other than the default target user (usually root). The user may be either a user name or a numeric user-ID (UID) prefixed with the '#' character (e.g., '#0' for UID 0).",
+   "location": "sudo(8) OPTIONS, -u, --user",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "-n (non-interactive): never prompt; fail instead. The right flag for agents and scripts.",
+   "quote": "Avoid prompting the user for input of any kind. If a password is required for the command to run, sudo will display an error message and exit.",
+   "location": "sudo(8) OPTIONS, -n, --non-interactive",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "Exit value: the command's own status on success; 1 for authentication failure, configuration/permission problem, or if the command cannot be executed.",
+   "quote": "Upon successful execution of a command, the exit status from sudo will be the exit status of the program that was executed.",
+   "location": "sudo(8) EXIT VALUE; executed: sudo bash -c 'exit 42' -> 42",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "Credential caching: 5 minutes per terminal by default; password prompt timeout 5 minutes.",
+   "quote": "By default, the sudoers policy caches credentials on a per-terminal basis for 5 minutes.",
+   "location": "sudo(8) DESCRIPTION",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "NOPASSWD exact text and the manual's example.",
+   "quote": "By default, sudo requires that a user authenticate before running a command. This behavior can be modified via the NOPASSWD tag. ... ray rushmore = NOPASSWD: /bin/kill, /bin/ls, /usr/bin/lprm",
+   "location": "sudoers(5) Tag_Spec, PASSWD and NOPASSWD",
+   "cite_url": "https://www.sudo.ws/docs/man/sudoers.man/"
+  },
+  {
+   "fact": "A user with any NOPASSWD entry can run `sudo -l` without a password.",
+   "quote": "By default, if the NOPASSWD tag is applied to any of a user's entries for the current host, the user will be able to run 'sudo -l' without a password.",
+   "location": "sudoers(5) Tag_Spec, PASSWD and NOPASSWD",
+   "cite_url": "https://www.sudo.ws/docs/man/sudoers.man/"
+  },
+  {
+   "fact": "env_reset exact text.",
+   "quote": "If set, sudo will run the command in a minimal environment containing the TERM, PATH, HOME, MAIL, SHELL, LOGNAME, USER and SUDO_* variables. ... This flag is on by default.",
+   "location": "sudoers(5) SUDOERS OPTIONS, env_reset",
+   "cite_url": "https://www.sudo.ws/docs/man/sudoers.man/"
+  },
+  {
+   "fact": "secure_path replaces the caller's PATH.",
+   "quote": "If set, sudo will use this value in place of the user's PATH environment variable.",
+   "location": "sudoers(5) SUDOERS OPTIONS, secure_path",
+   "cite_url": "https://www.sudo.ws/docs/man/sudoers.man/"
+  },
+  {
+   "fact": "Canonical 'anyone in the group may do anything' lines and a blanket NOPASSWD, from the manual's examples.",
+   "quote": "root ALL = (ALL) ALL / %wheel ALL = (ALL) ALL ... FULLTIMERS ALL = NOPASSWD: ALL",
+   "location": "sudoers(5) EXAMPLES",
+   "cite_url": "https://www.sudo.ws/docs/man/sudoers.man/"
+  },
+  {
+   "fact": "Drop-in files: `@includedir /etc/sudoers.d`, parsed in lexical order. Edit with visudo to avoid syntax errors locking you out.",
+   "quote": "changes to the configuration files should be made using the visudo(8) utility which will ensure that no syntax errors are introduced.",
+   "location": "sudo(8) DESCRIPTION; sudoers(5) 'Including other files from within sudoers'",
+   "cite_url": "https://www.sudo.ws/docs/man/sudo.man/"
+  },
+  {
+   "fact": "Ubuntu 24.04's stock /etc/sudoers after `apt-get install sudo` (comments stripped); file mode 440 root:root; /usr/bin/sudo is -rwsr-xr-x root root.",
+   "quote": "Defaults env_reset / Defaults mail_badpass / Defaults secure_path=\"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin\" / Defaults use_pty / root ALL=(ALL:ALL) ALL / %admin ALL=(ALL) ALL / %sudo ALL=(ALL:ALL) ALL / @includedir /etc/sudoers.d",
+   "location": "executed ubuntu:24.04 (apt sudo 1.9.15p5)"
+  },
+  {
+   "fact": "Observed NOPASSWD rule and sudo -l (rule file /etc/sudoers.d/alice, mode 440: 'alice ALL=(ALL) NOPASSWD: /usr/bin/id').",
+   "quote": "$ sudo -l -> User alice may run the following commands on <host>: (ALL) NOPASSWD: /usr/bin/id\n$ sudo id -> uid=0(root) gid=0(root) groups=0(root)\n$ sudo -u ubuntu id -un -> ubuntu\n$ sudo -n cat /etc/shadow -> sudo: a password is required (status 1)\n(without -n and no TTY) sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper",
+   "location": "executed ubuntu:24.04 (apt sudo 1.9.15p5)"
+  },
+  {
+   "fact": "Observed env_reset: variables exported by the caller do not reach the command; -E preserves variables but PATH is still secure_path.",
+   "quote": "caller: FOO=bar MYTOKEN=abc PATH=/custom/bin:...\n$ sudo env | sort -> HOME=/root HOSTNAME=... LANG=C.UTF-8 LOGNAME=root MAIL=/var/mail/root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin SHELL=/bin/bash SUDO_COMMAND=/usr/bin/env SUDO_GID=0 SUDO_UID=0 SUDO_USER=root TERM=unknown USER=root\n$ sudo -E env | grep -E '^(FOO|MYTOKEN|PATH)=' -> MYTOKEN=abc / FOO=bar / PATH=/usr/local/sbin:...:/snap/bin",
+   "location": "executed ubuntu:24.04 (apt sudo 1.9.15p5)"
+  },
+  {
+   "fact": "In ubuntu:24.04 the preinstalled 'ubuntu' user (uid 1000) is already a member of group sudo, so installing sudo gives that account full sudo rights via the %sudo rule (it has no usable password, so it would still need one set or a NOPASSWD rule).",
+   "quote": "$ sudo -u ubuntu id -> uid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev)",
+   "location": "executed ubuntu:24.04 (apt sudo 1.9.15p5)"
+  }
+ ],
+ "teaching_notes": "Both planned claims hold. The eval-relevant extras: (1) minimal images have no sudo and run as root already, so an agent transcript showing 'sudo: command not found' (127) is an environment fact, not a model failure; (2) sudo is just a setuid-root binary, so nosuid mounts and no_new_privs switch it off, and the manual itself names containers as the usual cause; (3) env_reset + secure_path mean `sudo cmd` does not see the caller's exported variables or PATH additions — a common reason a tool 'works without sudo but not with it'; (4) use `sudo -n` in anything non-interactive so it fails fast instead of hanging on a password prompt. The online manual documents the current upstream release (its exact version was not recorded); Ubuntu 24.04 packages 1.9.15p5."
+}

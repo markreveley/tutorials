@@ -1,0 +1,1071 @@
+{
+ "shell": {
+  "name": "Shell",
+  "short": "The program that reads the command lines you type (or a harness sends), works out what they mean, starts the programs they name, and reports the result.",
+  "def": "A shell is an ordinary program whose job is to turn a line of text into running programs: it splits the line into words, expands variables and wildcards, finds the program named by the first word, starts it, waits, and records its <a href='pages/02-shell-and-commands.html'>exit status</a>. It exists so that people and scripts can drive the operating system without writing C. On Ubuntu the interactive shell is <code>bash</code>; <code>/bin/sh</code> is a smaller shell called <code>dash</code>, and Alpine has neither by default. An agent's bash tool is just a harness feeding strings to a shell inside the sandbox, so most of what looks odd in a transcript &mdash; quoting errors, a missing <code>PATH</code> entry, <code>command not found</code> &mdash; is shell behaviour, not model behaviour.",
+  "also": "command-line interpreter, sh",
+  "see": [
+   "bash",
+   "terminal",
+   "command",
+   "bash-tool",
+   "posix"
+  ]
+ },
+ "terminal": {
+  "name": "Terminal",
+  "short": "The window (or program) that displays text and sends your keystrokes to a shell; it shows characters, while the shell is what actually interprets commands.",
+  "def": "A terminal is the program that draws text on your screen and passes keystrokes along &mdash; Terminal.app or iTerm on a Mac. It is not the thing that understands commands; that is the <a href='pages/02-shell-and-commands.html'>shell</a> running inside it. The split is historical (terminals were once physical devices wired to a computer) but it still matters: colours, line editing, and a program's decision to prompt or page all depend on whether it believes a terminal is attached. An agent in a sandbox usually has a shell with <em>no</em> terminal, which is why tools behave differently for it than they do when you try the same command by hand. See <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+  "also": "terminal emulator, console",
+  "see": [
+   "shell",
+   "tty",
+   "tmux",
+   "interactive-prompt"
+  ]
+ },
+ "bash": {
+  "name": "bash",
+  "short": "The Bourne Again Shell: the default interactive shell on Ubuntu and Debian and the language most eval setup scripts and agent commands are written in.",
+  "def": "<code>bash</code> is the shell you get by default on Ubuntu and Debian, and the dialect almost every benchmark's setup script assumes. It is a superset of the POSIX <code>sh</code> language, adding arrays, <code>[[ ]]</code> tests, and <code>set -o pipefail</code>. Three environments differ from that default and each bites: macOS uses <code>zsh</code> interactively and ships an old bash 3.2; Ubuntu's <code>/bin/sh</code> is <code>dash</code>, so a script run as <code>sh script.sh</code> loses the bash features; and Alpine images have no bash at all unless someone installs it. When an agent's command fails with <code>bash: not found</code> in an Alpine task image, that is an environment fact to record, not a reasoning error. Taught on <a href='pages/02-shell-and-commands.html'>page 2</a> and <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "Bourne Again Shell",
+  "see": [
+   "shell",
+   "posix",
+   "busybox",
+   "shebang",
+   "strict-mode"
+  ]
+ },
+ "command": {
+  "name": "Command",
+  "short": "The first word of a shell line: the name of the program, builtin, function, or alias to run, with the remaining words passed to it as arguments.",
+  "def": "A command line is a list of words; the first word names what to run and the rest are handed to it. That first word can resolve to four different things &mdash; an alias, a shell function, a <a href='pages/02-shell-and-commands.html'>builtin</a>, or an executable file found by searching the directories in <code>PATH</code> &mdash; and <code>type name</code> tells you which. Knowing this lets you derive the two most common transcript errors instead of memorising them: <code>command not found</code> (exit status 127) means the search came up empty, and <code>Permission denied</code> (126) means a file was found but is not executable. Both usually point at the task image, not at the agent.",
+  "see": [
+   "argument",
+   "option-flag",
+   "path-variable",
+   "builtin",
+   "exit-status"
+  ]
+ },
+ "argument": {
+  "name": "Argument",
+  "short": "One of the words after the command name, passed to the program as a separate string; the shell decides where one argument ends and the next begins.",
+  "def": "Arguments are the words that follow the command name. The shell splits the line into words <em>before</em> the program starts, and the program receives a finished list of strings &mdash; it never sees your spaces or quotes. That is why <code>rm my file.txt</code> tries to delete two files and why <a href='pages/06-shell-scripting.html'>quoting</a> exists: quotes are instructions to the shell about where word boundaries go. When a harness runs an agent's command, check whether it passes one string to <code>bash -c</code> (the shell splits it) or a pre-split list to <code>exec</code> (no shell involved, so no globs, pipes, or variables). The same text behaves differently under the two. See <a href='pages/02-shell-and-commands.html'>page 2</a>.",
+  "also": "parameter, argv",
+  "see": [
+   "command",
+   "option-flag",
+   "quoting",
+   "glob"
+  ]
+ },
+ "option-flag": {
+  "name": "Option (Flag)",
+  "short": "An argument beginning with a dash, such as -l or --help, that changes how a command behaves rather than naming something for it to act on.",
+  "def": "An option is just an argument that, by convention, starts with <code>-</code> (short, one letter, combinable: <code>ls -la</code>) or <code>--</code> (long: <code>--recursive</code>). Nothing in the kernel enforces this; each program parses its own arguments, which is why conventions vary (<code>find -name</code>, <code>tar xzf</code>). A bare <code>--</code> means &ldquo;end of options&rdquo;, so a filename beginning with a dash is not mistaken for one. The practical trap is that the same option can differ between GNU, BSD/macOS, and BusyBox versions of a tool &mdash; <code>sed -i</code> is the classic &mdash; so a command that works on your Mac can fail in the task image. See <a href='pages/02-shell-and-commands.html'>page 2</a> and <a href='appendices/e-macos-vs-linux.html'>Appendix E</a>.",
+  "also": "flag, switch, option",
+  "see": [
+   "argument",
+   "command",
+   "man-page",
+   "gnu-coreutils",
+   "busybox"
+  ]
+ },
+ "path-variable": {
+  "name": "PATH",
+  "short": "An environment variable holding a colon-separated list of directories that the shell searches, in order, to find the program a command name refers to.",
+  "def": "<code>PATH</code> is how the shell turns a bare name like <code>python3</code> into a file like <code>/usr/bin/python3</code>: it tries each listed directory in order and runs the first match. In an <code>ubuntu:24.04</code> container it is <code>/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</code>. Because it is an <a href='pages/11-environment-and-secrets.html'>environment variable</a>, it is inherited, and different ways of entering the same box can see different values &mdash; a login shell reads profile files that a harness's non-interactive <code>exec</code> never touches. That is the usual cause of &ldquo;it's installed but the agent gets <code>command not found</code>&rdquo;: the tool lives in a virtualenv or <code>~/.local/bin</code> that is on your PATH but not on the harness's. Taught on <a href='pages/02-shell-and-commands.html'>page 2</a>.",
+  "also": "$PATH, search path",
+  "see": [
+   "command",
+   "environment-variable",
+   "absolute-path",
+   "exit-status",
+   "virtual-environment"
+  ]
+ },
+ "absolute-path": {
+  "name": "Absolute Path",
+  "short": "A file location written out in full from the root directory, starting with a slash, so it means the same thing wherever you currently are.",
+  "def": "An absolute path starts at <code>/</code> and names every directory on the way down: <code>/var/log/syslog</code>. Because it does not depend on the current <a href='pages/03-files-and-the-tree.html'>working directory</a>, it is the unambiguous form &mdash; the one to use in Dockerfiles, harness configuration, and scorer code. It is absolute only within one view of the filesystem, though: <code>/workspace/tests</code> inside a container and <code>/workspace/tests</code> on the host are different places unless a mount makes them the same. When a transcript shows an agent writing its answer to a path the scorer never looks at, the first thing to establish is which filesystem each side was resolving that path in.",
+  "also": "full path",
+  "see": [
+   "relative-path",
+   "root-directory",
+   "working-directory",
+   "mount-namespace"
+  ]
+ },
+ "relative-path": {
+  "name": "Relative Path",
+  "short": "A file location written relative to the current working directory, with no leading slash; the same text points to different files from different directories.",
+  "def": "A relative path has no leading <code>/</code>; the kernel resolves it starting from the process's current <a href='pages/03-files-and-the-tree.html'>working directory</a>. Two special names help: <code>.</code> is the current directory and <code>..</code> is its parent, so <code>../data/in.json</code> means &ldquo;up one, then into data&rdquo;. Relative paths are convenient to type and fragile in automation, because their meaning depends on hidden state. A typical eval failure: the harness runs each tool call in a fresh shell, the agent's earlier <code>cd repo</code> did not persist, and <code>pytest tests/</code> now reports <code>No such file or directory</code>. That looks like the agent getting lost; it is actually the harness resetting the directory.",
+  "see": [
+   "absolute-path",
+   "working-directory",
+   "home-directory"
+  ]
+ },
+ "working-directory": {
+  "name": "Working Directory",
+  "short": "The directory a process is currently 'in', which is where its relative paths start; every process has its own, inherited from its parent.",
+  "def": "Each process carries a current working directory, inherited from the process that started it; <code>pwd</code> prints it and <code>cd</code> changes it. It is per-process state, which explains why <code>cd</code> must be a shell <a href='pages/02-shell-and-commands.html'>builtin</a>: a separate <code>cd</code> program could only change its own directory and then exit. The same logic explains a harness behaviour that confuses agents &mdash; if every tool call starts a new shell, a <code>cd</code> in one call has no effect on the next. Harnesses and Docker therefore set it explicitly (<code>WORKDIR</code>, <code>docker exec -w</code>, a <code>cwd</code> parameter). When auditing a task, check what directory the agent's commands actually start in. See <a href='pages/03-files-and-the-tree.html'>page 3</a> and <a href='pages/25-how-harnesses-use-linux.html'>page 25</a>.",
+  "also": "cwd, current directory, pwd",
+  "see": [
+   "relative-path",
+   "absolute-path",
+   "builtin",
+   "bash-tool"
+  ]
+ },
+ "home-directory": {
+  "name": "Home Directory",
+  "short": "A user's personal directory, usually /home/name (or /root for root), where their files and per-user configuration live; the shell abbreviates it as ~.",
+  "def": "Every account in <code>/etc/passwd</code> names a home directory: <code>/home/alice</code> for ordinary users, <code>/root</code> for root. The shell expands <code>~</code> to it and sets <code>HOME</code>, and tools use it to find per-user configuration &mdash; <code>~/.bashrc</code>, <code>~/.ssh</code>, <code>~/.cache/pip</code>, <code>~/.gitconfig</code>. That makes home a quiet source of differences between runs: the same command behaves differently as a different user because a different set of <a href='pages/03-files-and-the-tree.html'>dotfiles</a> applies. It is also a place leftovers hide. If a task image was built by someone working interactively, <code>~/.bash_history</code> or a cached credential may still be there for the agent to read. Users are covered on <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "~, $HOME",
+  "see": [
+   "dotfile",
+   "user",
+   "passwd-file",
+   "working-directory"
+  ]
+ },
+ "exit-status": {
+  "name": "Exit Status",
+  "short": "The number from 0 to 255 a program hands back when it ends: 0 means success, anything else means failure, and the shell stores it in $?.",
+  "def": "When a process ends it reports one small integer to its parent. Zero means success; any non-zero value means failure, and the program chooses what its own codes mean. The shell stores the last one in <code>$?</code> and uses it for <code>&amp;&amp;</code>, <code>||</code>, and <code>if</code>. A few values are conventions of the shell itself: 126 (found but not executable), 127 (command not found), and 128+<em>n</em> for death by signal <em>n</em>, so 137 is SIGKILL and 143 is SIGTERM. For evals this number is often the entire verdict: a scorer that runs the tests and checks the status is only as good as the chain that carries it, and a pipeline such as <code>pytest | tee log</code> reports <code>tee</code>'s status, not pytest's. See <a href='pages/10-signals-exit-codes.html'>page 10</a> and <a href='appendices/b-exit-codes-signals.html'>Appendix B</a>.",
+  "also": "exit code, return code, $?",
+  "see": [
+   "signal",
+   "sigkill",
+   "timeout",
+   "pipe",
+   "strict-mode"
+  ]
+ },
+ "stdin": {
+  "name": "Standard Input (stdin)",
+  "short": "File descriptor 0: the channel a program reads its input from, connected to the keyboard by default or to a file or pipe when redirected.",
+  "def": "Standard input is the already-open channel, numbered 0, that a program reads from when it is not given a file. At an interactive prompt it is your keyboard; with <code>&lt; file</code> it is a file; after a <code>|</code> it is the previous program's output. The program cannot easily tell which, and that is the design: it lets small tools be chained. For sandboxes the important case is stdin connected to <em>nothing</em>. A harness that runs commands without attaching input gives the program an immediate end-of-file or a closed descriptor, so anything that expects a typed answer &mdash; a confirmation, a password, a REPL &mdash; either fails at once or hangs until the timeout. Taught on <a href='pages/04-streams-pipes-redirection.html'>page 4</a>.",
+  "also": "standard input, fd 0",
+  "see": [
+   "stdout",
+   "stderr",
+   "file-descriptor",
+   "interactive-prompt",
+   "pipe"
+  ]
+ },
+ "stdout": {
+  "name": "Standard Output (stdout)",
+  "short": "File descriptor 1: the channel a program writes its normal results to, shown on the terminal by default and the only stream a pipe carries.",
+  "def": "Standard output is channel number 1, where a program writes its results. By default it goes to the terminal; <code>&gt; file</code> sends it to a file and <code>|</code> sends it to the next program. It is deliberately separate from <a href='pages/04-streams-pipes-redirection.html'>stderr</a> so that results can be piped onward while diagnostics still reach a human. Two consequences matter in eval work. A harness that records only stdout will log an empty string when a test runner crashes and prints its traceback to stderr. And many programs buffer stdout in blocks when it is not a terminal, so output from a process that is later killed may never appear, and interleaved stdout/stderr in a log may not be in the order events happened.",
+  "also": "standard output, fd 1",
+  "see": [
+   "stderr",
+   "stdin",
+   "redirection",
+   "pipe",
+   "transcript"
+  ]
+ },
+ "stderr": {
+  "name": "Standard Error (stderr)",
+  "short": "File descriptor 2: a second output channel reserved for error messages and diagnostics, kept separate so it does not mix into a program's real results.",
+  "def": "Standard error is channel number 2. It exists so that a program's complaints do not contaminate its data: in <code>sort names.txt &gt; out.txt</code>, an error message should reach you, not end up as a line in <code>out.txt</code>. Pipes and <code>&gt;</code> touch only channel 1, so stderr passes straight through to the terminal unless you redirect it as well (<code>2&gt; err.log</code>, or <code>2&gt;&amp;1</code> to merge it into wherever stdout currently points). When a transcript shows a command that &ldquo;printed nothing&rdquo; yet clearly failed, ask which streams the harness captured. Missing stderr turns a loud crash into a silent one, and the grader then scores a logging gap as a model failure. Taught on <a href='pages/04-streams-pipes-redirection.html'>page 4</a>.",
+  "also": "standard error, fd 2",
+  "see": [
+   "stdout",
+   "file-descriptor",
+   "redirection",
+   "exit-status",
+   "transcript"
+  ]
+ },
+ "file-descriptor": {
+  "name": "File Descriptor",
+  "short": "A small integer a process uses to refer to something it has open: a file, a pipe, a socket, or a terminal. 0, 1 and 2 are stdin, stdout and stderr.",
+  "def": "When a process opens something, the kernel hands back a small number and the process uses that number for every later read or write. Files, pipes, network sockets, and terminals all work this way, which is the practical meaning of &ldquo;everything is a file&rdquo;. Descriptors 0, 1, and 2 are open before the program starts and are inherited from the parent, so redirection is simply the shell re-pointing those numbers before launching the program. This model makes <code>2&gt;&amp;1</code> derivable: &ldquo;make 2 refer to whatever 1 refers to right now&rdquo;. You can inspect any process's descriptors under <code>/proc/PID/fd</code>, which is how you find where a hung agent command is really writing, or which deleted log file still holds disk space. See <a href='pages/04-streams-pipes-redirection.html'>page 4</a>.",
+  "also": "fd, file handle",
+  "see": [
+   "stdin",
+   "stdout",
+   "stderr",
+   "redirection",
+   "everything-is-a-file"
+  ]
+ },
+ "pipe": {
+  "name": "Pipe",
+  "short": "A one-way channel, written |, that connects one program's standard output directly to the next program's standard input so they run as a chain.",
+  "def": "A pipe is a kernel buffer with a write end and a read end. <code>a | b</code> starts both programs at once, with <code>a</code>'s stdout attached to the write end and <code>b</code>'s stdin to the read end; data flows as it is produced and nothing is written to disk. Only stdout travels &mdash; stderr still goes to the terminal. The part that catches people is the <a href='pages/10-signals-exit-codes.html'>exit status</a>: by default a pipeline reports only the <em>last</em> command's status, so <code>false | true</code> succeeds. A verifier that runs <code>pytest | tee results.log</code> and checks <code>$?</code> will pass every submission. <code>set -o pipefail</code> in bash changes the rule so any failing stage fails the pipeline. Taught on <a href='pages/04-streams-pipes-redirection.html'>page 4</a>.",
+  "also": "pipeline, |",
+  "see": [
+   "stdout",
+   "stdin",
+   "redirection",
+   "strict-mode",
+   "exit-status"
+  ]
+ },
+ "redirection": {
+  "name": "Redirection",
+  "short": "Shell syntax that re-points a program's input or output channels at files, or at each other, before the program starts; the program itself never sees it.",
+  "def": "Redirection is the shell rearranging a program's file descriptors before launching it. <code>&gt; f</code> points stdout at a file (truncating it first), <code>&gt;&gt; f</code> appends, <code>&lt; f</code> points stdin at a file, and <code>2&gt; f</code> does the same for stderr. <code>2&gt;&amp;1</code> means &ldquo;make descriptor 2 a copy of whatever 1 is <em>now</em>&rdquo;, which is why order matters: <code>cmd &gt; log 2&gt;&amp;1</code> captures both streams, while <code>cmd 2&gt;&amp;1 &gt; log</code> leaves errors on the terminal. The program itself never sees any of this syntax. Two eval-relevant traps: <code>&gt;</code> empties the target even if the command then fails, and <code>sudo cmd &gt; /root/file</code> fails because the redirect is performed by your unprivileged shell. See <a href='pages/04-streams-pipes-redirection.html'>page 4</a>.",
+  "also": "I/O redirection",
+  "see": [
+   "file-descriptor",
+   "stdout",
+   "stderr",
+   "dev-null",
+   "here-document"
+  ]
+ },
+ "here-document": {
+  "name": "Here-Document",
+  "short": "Shell syntax that feeds the following lines of a script to a command as its standard input, up to a chosen end marker, without needing a separate file.",
+  "def": "A here-document lets you put a block of input text inline: everything between <code>&lt;&lt;EOF</code> and a line containing only <code>EOF</code> becomes the command's stdin. The delimiter word is arbitrary. One detail decides whether it works: if the delimiter is unquoted, the shell still expands <code>$variables</code> and <code>$(commands)</code> inside the block; writing <code>&lt;&lt;'EOF'</code> turns expansion off and passes the text literally. Agents use here-documents constantly, because <code>cat &gt; file.py &lt;&lt;'EOF'</code> is the simplest way to create a file through a bash tool. When a transcript shows a written file with mangled dollar signs or missing backslashes, an unquoted delimiter is the first thing to check. Taught on <a href='pages/04-streams-pipes-redirection.html'>page 4</a> and used in <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "heredoc",
+  "see": [
+   "stdin",
+   "redirection",
+   "quoting",
+   "variable-expansion"
+  ]
+ },
+ "glob": {
+  "name": "Glob",
+  "short": "A wildcard pattern such as *.txt that the shell replaces with the list of matching filenames before the command ever runs.",
+  "def": "Globbing is filename matching done by the shell: <code>*</code> matches any run of characters, <code>?</code> one character, <code>[abc]</code> one of a set. The shell expands the pattern into a sorted list of existing names and passes those as separate arguments, so <code>ls</code> never sees the asterisk. Three derived consequences: if nothing matches, bash passes the pattern through literally and you get an error about a file called <code>*.log</code>; <code>*</code> skips names beginning with a dot, so <code>cp * backup/</code> silently omits <code>.env</code> and <code>.git</code>; and quoting a pattern stops expansion, which is what you want when the pattern is meant for <code>find -name</code> or <code>grep</code>. Globs are not <a href='appendices/d-regex.html'>regular expressions</a> &mdash; <code>*</code> means something different in each. See <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "wildcard, pathname expansion",
+  "see": [
+   "regex",
+   "quoting",
+   "dotfile",
+   "argument"
+  ]
+ },
+ "quoting": {
+  "name": "Quoting",
+  "short": "Using single quotes, double quotes, or backslashes to tell the shell which characters to treat literally and where one argument ends and the next begins.",
+  "def": "The shell gives meaning to spaces, <code>$</code>, <code>*</code>, <code>|</code>, <code>&gt;</code>, and more. Quoting switches that meaning off. Single quotes make everything literal. Double quotes keep the text as one word but still expand <code>$var</code> and <code>$(cmd)</code>. A backslash protects one character. The rule that prevents most script bugs follows directly: write <code>\"$file\"</code>, not <code>$file</code>, because an unquoted expansion is re-split on spaces and re-globbed, so a filename with a space becomes two arguments. Quoting gets harder with every layer a command passes through &mdash; JSON tool call, Python harness, <code>docker exec</code>, <code>bash -c</code> &mdash; and each layer strips one level. Mangled quotes in a transcript are as often the harness's fault as the model's. See <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "escaping",
+  "see": [
+   "variable-expansion",
+   "glob",
+   "argument",
+   "here-document",
+   "shellcheck"
+  ]
+ },
+ "variable-expansion": {
+  "name": "Variable Expansion",
+  "short": "The shell replacing $NAME or ${NAME} in a command line with the variable's current value before the command runs.",
+  "def": "Before running a line, the shell substitutes each <code>$NAME</code> with that variable's value; the program only ever sees the result. An unset variable expands to the empty string without complaint, which is how <code>rm -rf \"$BUILD_DIR/\"</code> becomes <code>rm -rf /</code> in a script where the variable was misspelled &mdash; and why <code>set -u</code> exists. Braces mark where the name ends (<code>${name}_v2</code>) and enable defaults (<code>${PORT:-8080}</code>). Expansion happens in whichever shell reads the text first. That matters when you drive a sandbox from outside: in <code>docker exec box bash -c \"echo $HOME\"</code>, the double quotes let your <em>host</em> shell expand <code>$HOME</code> before the container ever sees it. Taught on <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "parameter expansion, $VAR",
+  "see": [
+   "quoting",
+   "environment-variable",
+   "command-substitution",
+   "strict-mode"
+  ]
+ },
+ "command-substitution": {
+  "name": "Command Substitution",
+  "short": "The syntax $(command), which runs a command and inserts its standard output into the surrounding command line as text.",
+  "def": "<code>$(cmd)</code> runs <code>cmd</code> in a subshell, captures its stdout, strips trailing newlines, and pastes the text in place: <code>today=$(date +%F)</code>. The older backtick form does the same but nests badly. Two properties are worth deriving. Only stdout is captured, so an error message from the inner command still goes to the terminal and the variable quietly ends up empty. And the result is subject to word splitting unless the whole thing is double-quoted: <code>\"$(cat file)\"</code>. In a scorer script, the pattern <code>result=$(run_tests)</code> followed by a string comparison will happily compare against an empty string if the test runner crashed, so check the exit status as well as the text. See <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "$(...), backticks",
+  "see": [
+   "variable-expansion",
+   "quoting",
+   "stdout",
+   "exit-status"
+  ]
+ },
+ "shebang": {
+  "name": "Shebang",
+  "short": "The first line of a script, starting with #!, that names the interpreter the kernel should run the file with, such as #!/bin/bash.",
+  "def": "When you execute a file, the kernel looks at its first two bytes. If they are <code>#!</code>, it runs the program named on the rest of that line and passes the script's path as an argument, so <code>#!/bin/bash</code> means &ldquo;run this with bash&rdquo;. It is what lets a text file behave like a program once it also has execute permission. The shebang is a hard-coded path into the image, so it breaks across distributions: a script starting <code>#!/bin/bash</code> fails on Alpine with a confusing <code>not found</code> error that refers to the missing interpreter, not the script. <code>#!/usr/bin/env python3</code> searches <code>PATH</code> instead. Files saved with Windows line endings break it too, since the kernel looks for an interpreter whose name ends in a carriage return. See <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "hashbang, #!",
+  "see": [
+   "script",
+   "bash",
+   "permission-bits",
+   "path-variable",
+   "alpine"
+  ]
+ },
+ "script": {
+  "name": "Script",
+  "short": "A text file of commands that an interpreter such as bash or Python runs from top to bottom, used to automate a sequence you would otherwise type by hand.",
+  "def": "A shell script is the same language you type at the prompt, saved in a file. Eval environments are held together by them: the image's entrypoint, the task's setup script, the <code>run-tests.sh</code> a verifier calls. The default behaviour of bash is what makes them risky &mdash; a failing line does not stop the script, the script's exit status is just that of its last command, and unset variables expand to nothing. A setup script can therefore fail halfway, print an error nobody reads, exit 0, and leave a broken environment that every subsequent rollout is scored in. This course's rule is to keep shell scripts under about thirty lines, start them with strict mode, run them through ShellCheck, and move to Python beyond that. Taught on <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "shell script",
+  "see": [
+   "shebang",
+   "strict-mode",
+   "shellcheck",
+   "exit-status",
+   "entrypoint"
+  ]
+ },
+ "strict-mode": {
+  "name": "Strict Mode",
+  "short": "The informal name for starting a bash script with set -euo pipefail so that it stops on errors, on unset variables, and on failures inside pipelines.",
+  "def": "By default bash keeps going after a command fails. <code>set -euo pipefail</code> changes three defaults: <code>-e</code> exits when a command returns non-zero, <code>-u</code> treats an unset variable as an error rather than an empty string, and <code>-o pipefail</code> makes a pipeline fail if any stage fails, not just the last. Together they turn silent partial failure into a loud early exit, which is what you want from a task setup or scoring script. It is not a guarantee: <code>-e</code> is ignored for commands tested by <code>if</code>, <code>&amp;&amp;</code>, or <code>||</code>, and it makes <code>grep</code> finding no match (status 1) fatal unless you handle it. <code>pipefail</code> is a bash feature; do not assume it under a plain <code>sh</code>. See <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "also": "set -euo pipefail, unofficial bash strict mode",
+  "see": [
+   "script",
+   "exit-status",
+   "pipe",
+   "shellcheck",
+   "bash"
+  ]
+ },
+ "shellcheck": {
+  "name": "ShellCheck",
+  "short": "A static analysis tool for shell scripts that flags common bugs, such as unquoted variables, before the script is ever run.",
+  "def": "ShellCheck reads a shell script without executing it and reports likely mistakes, each with a code (<code>SC2086</code> is the famous one: an unquoted variable that will be split and globbed) and a wiki page explaining the reasoning. It exists because the shell language fails quietly: the bugs it finds are mostly ones that work on the author's test input and break on a filename with a space. For an evals engineer it is a cheap audit step. Running it over a benchmark's setup, entrypoint, and test-runner scripts takes seconds and regularly turns up the kind of defect that makes a task flaky or lets a failing test run report success. It is not installed by default; on Ubuntu it is the <code>shellcheck</code> package. Taught on <a href='pages/06-shell-scripting.html'>page 6</a>.",
+  "see": [
+   "script",
+   "strict-mode",
+   "quoting",
+   "flaky-test"
+  ]
+ },
+ "regex": {
+  "name": "Regular Expression",
+  "short": "A compact pattern language for describing text, such as ^ERROR.*timeout$, used by grep, sed, awk, and most programming languages to search and match strings.",
+  "def": "A regular expression describes a set of strings: literal characters match themselves, <code>.</code> matches any character, <code>*</code> repeats the previous item, <code>[0-9]</code> is a character class, and <code>^</code> and <code>$</code> anchor to the start and end of a line. Tools disagree on dialect. Plain <code>grep</code> uses &ldquo;basic&rdquo; syntax in which <code>+</code>, <code>?</code>, <code>|</code>, and <code>()</code> need backslashes; <code>grep -E</code> uses &ldquo;extended&rdquo; syntax where they do not; and Python-style shorthands such as <code>\\d</code> are not part of either. Regexes are not <a href='pages/06-shell-scripting.html'>globs</a>. Many scorers are a regex over model output, so an unanchored or overly greedy pattern is a grading bug: it can accept an answer that merely contains the right string. See <a href='appendices/d-regex.html'>Appendix D</a> and <a href='pages/05-text-fu.html'>page 5</a>.",
+  "also": "regexp, pattern",
+  "see": [
+   "grep",
+   "sed",
+   "awk",
+   "glob",
+   "scorer"
+  ]
+ },
+ "grep": {
+  "name": "grep",
+  "short": "A command that prints the lines of its input that match a pattern; the standard tool for finding a needle in logs, code, or transcripts.",
+  "def": "<code>grep PATTERN file</code> prints each line matching a regular expression. The options worth knowing: <code>-i</code> ignore case, <code>-v</code> invert, <code>-r</code> search a directory tree, <code>-n</code> show line numbers, <code>-c</code> count, <code>-E</code> extended regex, and <code>-F</code> treat the pattern as a fixed string. Its exit status carries meaning: 0 if something matched, 1 if nothing did, 2 on a real error. That makes it usable in <code>if</code> statements, and it also means a no-match <code>grep</code> will abort a script running under <code>set -e</code>. In eval work it is the first tool for triage at scale &mdash; counting how many of a thousand transcripts contain <code>command not found</code> or <code>Killed</code> tells you whether a failure is the model's or the environment's. Taught on <a href='pages/05-text-fu.html'>page 5</a>.",
+  "see": [
+   "regex",
+   "sed",
+   "awk",
+   "exit-status",
+   "error-analysis"
+  ]
+ },
+ "sed": {
+  "name": "sed",
+  "short": "A stream editor: it reads text line by line, applies editing commands such as find-and-replace, and writes the result, without opening an interactive editor.",
+  "def": "<code>sed</code> applies an editing script to each line of its input. Nearly all real use is two commands: substitution, <code>sed 's/old/new/g'</code>, and printing a range, <code>sed -n '10,20p' file</code>. By default it writes to stdout and leaves the file untouched; <code>-i</code> edits in place. Agents lean on it heavily because a bash tool has no interactive editor, so many code changes in a trajectory are <code>sed -i</code> one-liners &mdash; and a pattern that silently matches nothing still exits 0, leaving the agent believing it made an edit it did not. <code>-i</code> is also the best-known GNU/BSD incompatibility: on macOS it requires a backup-suffix argument (<code>sed -i ''</code>), so commands copied between your Mac and the sandbox break. See <a href='pages/05-text-fu.html'>page 5</a> and <a href='appendices/e-macos-vs-linux.html'>Appendix E</a>.",
+  "also": "stream editor",
+  "see": [
+   "regex",
+   "grep",
+   "awk",
+   "gnu-coreutils"
+  ]
+ },
+ "awk": {
+  "name": "awk",
+  "short": "A small language for processing text arranged in columns: it splits each line into fields and lets you filter, print, and total them in one line.",
+  "def": "<code>awk</code> reads input a line at a time, splits each line into fields (<code>$1</code>, <code>$2</code>, &hellip;, split on whitespace unless you set <code>-F</code>), and runs <code>pattern { action }</code> rules against it. That makes it the right tool whenever data is in columns: <code>awk '{print $1}'</code> to pull a column, <code>awk '$3 &gt; 100'</code> to filter on one, <code>awk '{s += $2} END {print s}'</code> to sum one. It fills the gap between <code>grep</code>, which cannot see columns, and writing a Python script. Typical eval use: totalling per-task durations from a harness log, or extracting the PID column from <code>ps</code> output. For JSON, use <code>jq</code> instead; awk does not understand nested structure. Taught on <a href='pages/05-text-fu.html'>page 5</a>.",
+  "see": [
+   "grep",
+   "sed",
+   "jq",
+   "regex"
+  ]
+ },
+ "jq": {
+  "name": "jq",
+  "short": "A command-line tool for reading, filtering, and reshaping JSON, doing for structured data what grep, sed, and awk do for plain lines of text.",
+  "def": "<code>jq</code> takes a filter expression and applies it to JSON input: <code>jq '.score'</code> extracts a field, <code>jq '.messages[].role'</code> walks an array, <code>select(.status == \"error\")</code> filters, and <code>-r</code> prints raw strings without quotes. It exists because line-oriented tools break on JSON &mdash; a value can contain spaces, newlines, or escaped quotes, and <code>grep</code> has no idea where a field ends. Eval logs, Docker's <code>inspect</code> output, and most harness results are JSON or JSONL, so <code>jq</code> is how you answer questions like &ldquo;which samples hit the timeout?&rdquo; from a shell. It is not in the base <code>ubuntu:24.04</code> image; install the <code>jq</code> package. Taught on <a href='pages/05-text-fu.html'>page 5</a>.",
+  "see": [
+   "jsonl",
+   "awk",
+   "grep",
+   "transcript"
+  ]
+ },
+ "jsonl": {
+  "name": "JSONL",
+  "short": "JSON Lines: a text format with one complete JSON object per line, widely used for eval datasets, model transcripts, and logs.",
+  "def": "A JSONL file holds one self-contained JSON value per line. The format exists because ordinary JSON is awkward for logs: a single top-level array must be read in full and is invalid until the closing bracket is written. With one record per line you can append safely, stream a file larger than memory, and use line tools &mdash; <code>wc -l</code> counts records, <code>head -1</code> shows the first, <code>split</code> shards the file &mdash; then hand each line to <a href='pages/05-text-fu.html'>jq</a>. The constraint is that a record may not contain a literal newline; newlines inside strings must be escaped as <code>\\n</code>. A run that crashed mid-write typically leaves a truncated last line, so a parse error on the final record of a results file points at the harness dying, not at bad data.",
+  "also": "JSON Lines, NDJSON",
+  "see": [
+   "jq",
+   "transcript",
+   "trajectory",
+   "grep"
+  ]
+ },
+ "xargs": {
+  "name": "xargs",
+  "short": "A command that reads items from standard input and runs another command with those items as arguments, bridging pipes and programs that expect arguments.",
+  "def": "Pipes deliver data on stdin, but many commands (<code>rm</code>, <code>cp</code>, <code>docker rm</code>) take their targets as arguments. <code>xargs</code> converts one into the other: <code>docker ps -aq | xargs docker rm</code>. By default it splits input on whitespace and treats quotes specially, so a filename with a space becomes two arguments. The safe pairing is <code>find &hellip; -print0 | xargs -0 &hellip;</code>, which separates names with a NUL byte that cannot occur in a path. <code>-n 1</code> runs the command once per item and <code>-P 4</code> runs four at a time, a quick way to parallelise a batch job over transcripts. With GNU xargs, empty input still runs the command once unless you pass <code>-r</code>. Taught on <a href='pages/05-text-fu.html'>page 5</a>.",
+  "see": [
+   "pipe",
+   "argument",
+   "stdin",
+   "quoting"
+  ]
+ },
+ "man-page": {
+  "name": "Man Page",
+  "short": "The reference manual entry for a command, file format, or system call, installed on the system and read with the man command.",
+  "def": "<code>man ls</code> shows the manual for <code>ls</code>. Pages are grouped into numbered sections &mdash; 1 for commands, 2 for system calls, 5 for file formats, 7 for overviews, 8 for administration &mdash; which is what the number in a citation such as <code>signal(7)</code> means, and why <code>man 5 passwd</code> differs from <code>man passwd</code>. They are reference, not tutorial: read the synopsis, then search with <code>/</code>. Minimal container images strip them to save space; in <code>ubuntu:24.04</code> the <code>man</code> command is a stub that tells you so, which makes <code>cmd --help</code> and the online copies at man7.org the practical fallback. A man page documents the version installed <em>there</em>, which is the one that matters when macOS and the sandbox disagree. See <a href='appendices/f-getting-help.html'>Appendix F</a>.",
+  "also": "manual page, man",
+  "see": [
+   "option-flag",
+   "gnu-coreutils",
+   "pager",
+   "system-call"
+  ]
+ },
+ "builtin": {
+  "name": "Shell Builtin",
+  "short": "A command implemented inside the shell itself rather than as a separate program, such as cd, export, or exit, because it must change the shell's own state.",
+  "def": "Most commands are executable files the shell starts as child processes. A few cannot work that way, because a child cannot alter its parent: <code>cd</code> must change the shell's own working directory, <code>export</code> its own variables, <code>exit</code> must end it, <code>ulimit</code> must set its own limits. These are builtins. Others (<code>echo</code>, <code>test</code>, <code>kill</code>) are built in for speed and also exist as files. <code>type cd</code> reports &ldquo;cd is a shell builtin&rdquo;. The distinction explains several puzzles: <code>sudo cd /root</code> fails because there is no <code>cd</code> program for sudo to run; builtins are documented in <code>help cd</code>, not <code>man cd</code>; and a harness that executes a command list directly, with no shell, cannot run a builtin at all. Taught on <a href='pages/02-shell-and-commands.html'>page 2</a>.",
+  "also": "built-in command",
+  "see": [
+   "command",
+   "shell",
+   "working-directory",
+   "alias",
+   "fork-exec"
+  ]
+ },
+ "alias": {
+  "name": "Alias",
+  "short": "A shell shortcut that replaces one command word with another string, such as ll for ls -alF, defined per shell session and usually set in ~/.bashrc.",
+  "def": "An alias is a text substitution the shell applies to the first word of a command: after <code>alias ll='ls -alF'</code>, typing <code>ll</code> runs the longer form. Ubuntu's default <code>~/.bashrc</code> defines <code>ll</code> and makes <code>ls</code> coloured this way. Aliases live only in the shell that defined them, and bash does not expand them at all in non-interactive shells &mdash; which is exactly the kind of shell a harness uses. So <code>bash -c ll</code> inside the same container returns <code>ll: command not found</code> with status 127. When an agent tries a command that works in every tutorial and the sandbox says it does not exist, check with <code>type</code> whether it was ever a real program. Keep aliases out of scripts; use functions or the full command. Taught on <a href='pages/02-shell-and-commands.html'>page 2</a>.",
+  "see": [
+   "command",
+   "builtin",
+   "dotfile",
+   "bash-tool"
+  ]
+ },
+ "tty": {
+  "name": "TTY",
+  "short": "A terminal device: the kernel object that connects a program to an interactive screen and keyboard. Programs check for one to decide whether a human is present.",
+  "def": "TTY is short for teletypewriter; today it means a terminal device, usually a software pseudo-terminal (pty) created by your terminal app, <code>ssh</code>, <code>tmux</code>, or <code>docker run -t</code>. A program can ask whether its stdin or stdout is a TTY, and many change behaviour on the answer: with one, they use colour, progress bars, pagers, and prompts; without one, they print plain text and buffer output in blocks. The <code>tty</code> command prints the device name or <code>not a tty</code>. Most harnesses run agent commands with no TTY, so the agent sees different behaviour from what you see when you <code>docker exec -it</code> into the same box to reproduce a failure. Reproduce without <code>-t</code> first. See <a href='pages/27-reading-terminal-transcripts.html'>page 27</a> and <a href='pages/25-how-harnesses-use-linux.html'>page 25</a>.",
+  "also": "pseudo-terminal, pty, terminal device",
+  "see": [
+   "terminal",
+   "interactive-prompt",
+   "pager",
+   "tmux",
+   "job-control"
+  ]
+ },
+ "pager": {
+  "name": "Pager",
+  "short": "A program such as less that shows long output one screen at a time and waits for keypresses; convenient for people, a classic way for an agent to hang.",
+  "def": "A pager takes output that is longer than the screen and lets you scroll through it; <code>less</code> is the usual one, and you leave it with <kbd>q</kbd>. Tools such as <code>git log</code>, <code>man</code>, <code>journalctl</code>, and <code>systemctl</code> start one automatically when their output is a terminal. For an agent driven through a terminal session, the pager sits waiting for a keypress the agent does not know it needs to send, and the command burns the task's time budget until the timeout fires. Defences belong in the environment: set <code>PAGER=cat</code> and <code>GIT_PAGER=cat</code>, or use <code>git --no-pager</code> and <code>--no-pager</code> for the systemd tools. A transcript ending in <code>:</code> or <code>(END)</code> is the signature. See <a href='pages/27-reading-terminal-transcripts.html'>page 27</a>.",
+  "also": "less, more",
+  "see": [
+   "tty",
+   "interactive-prompt",
+   "timeout",
+   "environment-variable",
+   "man-page"
+  ]
+ },
+ "interactive-prompt": {
+  "name": "Interactive Prompt",
+  "short": "A point where a program stops and waits for a person to type an answer, such as a yes/no confirmation or a password; in automation it causes hangs.",
+  "def": "Many tools pause to ask a question: <code>apt-get install</code> asks &ldquo;Do you want to continue? [Y/n]&rdquo;, package configuration asks for a time zone, <code>ssh</code> asks whether to trust a new host key, <code>rm -i</code> asks before each file. With a person at a terminal that is a safety feature. In a sandbox there is nobody to answer, so the command either aborts when it reads end-of-file or waits until the harness's timeout kills it &mdash; and the transcript shows a run that &ldquo;did nothing&rdquo; for ten minutes. Each tool has a non-interactive switch: <code>-y</code> and <code>DEBIAN_FRONTEND=noninteractive</code> for apt, <code>--yes</code>, <code>--batch</code>, <code>-f</code> elsewhere. When classifying failures, count prompt hangs separately: they measure the environment and the agent's tool habits, not task ability. See <a href='pages/27-reading-terminal-transcripts.html'>page 27</a>.",
+  "see": [
+   "stdin",
+   "tty",
+   "pager",
+   "timeout",
+   "infrastructure-failure"
+  ]
+ },
+ "tmux": {
+  "name": "tmux",
+  "short": "A terminal multiplexer: it runs shell sessions on the server that keep going after you disconnect and can be driven by other programs as well as people.",
+  "def": "<code>tmux</code> starts a server process that owns one or more terminal sessions. You attach to a session to see and type into it, detach to leave it running, and reattach later &mdash; useful over SSH, where a dropped connection would otherwise kill your long-running job. It can also be scripted: <code>tmux send-keys</code> types into a session and <code>tmux capture-pane</code> reads the screen back. That is why some agent harnesses, Terminal-Bench among them, give the model a tmux session rather than a run-one-command function: the agent gets a real terminal with a TTY, so interactive programs, editors, and long-lived processes work. The cost is that the harness sees screen contents instead of separate stdout, stderr, and exit status, and must work out for itself when a command has finished. See <a href='pages/25-how-harnesses-use-linux.html'>page 25</a>.",
+  "also": "terminal multiplexer",
+  "see": [
+   "tty",
+   "terminal",
+   "terminal-bench",
+   "bash-tool",
+   "sighup"
+  ]
+ },
+ "ssh": {
+  "name": "SSH",
+  "short": "Secure Shell: the standard encrypted protocol and command for logging in to, and running commands on, a remote Linux machine over the network.",
+  "def": "<code>ssh user@host</code> opens an encrypted connection to the SSH server on the remote machine (TCP port 22 by default) and gives you a shell there; <code>ssh user@host 'cmd'</code> runs one command and returns its exit status. Authentication is normally by key pair: the private key stays on your machine, the public key is listed in the server's <code>~/.ssh/authorized_keys</code>. It is how you reach the cloud VMs that eval runs execute on, and how <code>scp</code> and <code>rsync</code> move results back. Two audit points: a private key or agent socket left inside a task image is a credential the model can use, and the first-connection host-key question is an interactive prompt that stalls automation. The course's VM lab uses SSH; see <a href='pages/01-lab-setup.html'>page 1</a>.",
+  "also": "Secure Shell, OpenSSH",
+  "see": [
+   "shell",
+   "port",
+   "secret",
+   "interactive-prompt",
+   "tmux"
+  ]
+ },
+ "gnu-coreutils": {
+  "name": "GNU coreutils",
+  "short": "The GNU project's implementations of the basic Unix commands, such as ls, cp, cat, and sort, that ship with Ubuntu, Debian, and most mainstream Linux distributions.",
+  "def": "The everyday commands are not part of the Linux kernel; they are separate programs, and on Ubuntu and Debian most of them come from one package, GNU coreutils. Related GNU packages supply <code>grep</code>, <code>sed</code>, <code>find</code>, and <code>tar</code>. GNU versions are feature-rich: long <code>--options</code>, extras such as <code>sort -h</code> or <code>date -d</code>. The reason to know the name is that it is one of three families. macOS ships BSD versions with different options; Alpine ships BusyBox versions with fewer. A command line is only portable across all three if it sticks to what POSIX specifies. So when the same command works in one task image and fails in another, <code>ls --version</code> (GNU answers, the others usually complain) is a quick way to learn which family you are talking to. See <a href='appendices/e-macos-vs-linux.html'>Appendix E</a>.",
+  "also": "coreutils, GNU userland",
+  "see": [
+   "busybox",
+   "posix",
+   "option-flag",
+   "distribution",
+   "man-page"
+  ]
+ },
+ "busybox": {
+  "name": "BusyBox",
+  "short": "A single small program that provides cut-down versions of hundreds of standard Unix commands; it is the userland of Alpine Linux and many minimal containers.",
+  "def": "BusyBox packs simplified versions of <code>sh</code>, <code>ls</code>, <code>grep</code>, <code>sed</code>, <code>tar</code>, and many more into one executable; each command name is a symlink to it (in <code>alpine:3.20</code>, <code>/bin/ls</code> and <code>/bin/sh</code> both point to <code>/bin/busybox</code>), and it behaves according to the name it was called by. It exists to make very small systems, which is why Alpine-based images are a few megabytes. The trade-off is compatibility: the shell is <code>ash</code>, not bash, and the tools lack many GNU options. Agents trained mostly on Ubuntu-style transcripts issue bash-specific syntax or GNU-only flags and get <code>unrecognized option</code> or <code>not found</code>. When you see those in a trajectory, check the base image before blaming the model. See <a href='pages/15-packages-reproducibility.html'>page 15</a> and <a href='pages/27-reading-terminal-transcripts.html'>page 27</a>.",
+  "also": "ash",
+  "see": [
+   "alpine",
+   "gnu-coreutils",
+   "bash",
+   "posix",
+   "base-image"
+  ]
+ },
+ "posix": {
+  "name": "POSIX",
+  "short": "The formal standard that defines the common behaviour of Unix-like systems, including the sh language and the core commands, so that scripts and programs are portable.",
+  "def": "POSIX is an IEEE/Open Group standard describing what a Unix-like system must provide: the system-call interface, the <code>sh</code> command language, and the behaviour and options of utilities such as <code>grep</code>, <code>sed</code>, and <code>find</code>. It exists because Unix fragmented into many vendors' variants and software needed a common floor. Linux with GNU tools, macOS, and BusyBox all aim at that floor and then add their own extensions. &ldquo;POSIX sh&rdquo; therefore means the portable subset: no arrays, no <code>[[ ]]</code>, no <code>pipefail</code> guarantee. On Ubuntu <code>/bin/sh</code> is <code>dash</code>, which is close to that subset, so a script with <code>#!/bin/sh</code> that uses bash features fails there even though bash is installed. If a task's scripts must run across varied images, write to POSIX or pin the interpreter explicitly. See <a href='pages/06-shell-scripting.html'>page 6</a> and <a href='appendices/e-macos-vs-linux.html'>Appendix E</a>.",
+  "also": "Portable Operating System Interface, SUS",
+  "see": [
+   "bash",
+   "shell",
+   "gnu-coreutils",
+   "busybox",
+   "shebang"
+  ]
+ },
+ "filesystem": {
+  "name": "Filesystem",
+  "short": "Either the single directory tree starting at / that holds every file on a Linux system, or a particular on-disk format (such as ext4) that stores files.",
+  "def": "The word has two meanings and the course uses both. First, <em>the</em> filesystem: the one tree of directories rooted at <code>/</code> that every path is resolved in; Linux has no drive letters. Second, <em>a</em> filesystem: one organised store of files &mdash; an ext4 partition, a RAM-backed tmpfs, the virtual <code>/proc</code> &mdash; that gets attached to the tree at a directory by <a href='pages/14-mounts-and-filesystems.html'>mounting</a>. The tree you see is therefore a patchwork of several filesystems with different properties: some persistent, some wiped on restart, some read-only, some shared with the host. For an eval, those properties decide what the agent can change and what survives between episodes, which is why <code>findmnt</code> is one of the first commands in an audit. The tree itself is introduced on <a href='pages/03-files-and-the-tree.html'>page 3</a>.",
+  "also": "file system, fs",
+  "see": [
+   "mount",
+   "fhs",
+   "root-directory",
+   "inode",
+   "overlayfs"
+  ]
+ },
+ "fhs": {
+  "name": "Filesystem Hierarchy Standard (FHS)",
+  "short": "The convention that says what belongs in each top-level Linux directory, such as configuration in /etc, logs in /var/log, and programs in /usr/bin.",
+  "def": "The FHS is a published convention for the layout of the directory tree, followed closely by Debian and Ubuntu. The parts worth knowing: <code>/etc</code> holds system configuration, <code>/var</code> holds data that changes (logs in <code>/var/log</code>, package state in <code>/var/lib</code>), <code>/usr</code> holds installed software, <code>/home</code> holds users' files, <code>/tmp</code> is scratch space, and <code>/proc</code>, <code>/sys</code>, and <code>/dev</code> are windows onto the kernel rather than stored files. On current Ubuntu, <code>/bin</code> is a symlink to <code>usr/bin</code>. The standard exists so that people and software can find things on a machine they have never seen &mdash; which is precisely the ten-minute-audit situation. It also gives you a baseline: a task's answer key sitting in <code>/opt/solution</code> or tests under <code>/root</code> are things an agent that knows the layout will look for. See <a href='pages/03-files-and-the-tree.html'>page 3</a>.",
+  "also": "Filesystem Hierarchy Standard, directory layout",
+  "see": [
+   "root-directory",
+   "filesystem",
+   "tmp-directory",
+   "proc-filesystem",
+   "home-directory"
+  ]
+ },
+ "root-directory": {
+  "name": "Root Directory",
+  "short": "The top of the Linux directory tree, written as a single slash (/); every absolute path starts from it. Not the same as the root user or /root.",
+  "def": "<code>/</code> is the directory that contains everything else; every absolute path begins there. Three different things are called &ldquo;root&rdquo; and mixing them up causes real confusion: the root directory <code>/</code>; the root <em>user</em> (UID 0); and <code>/root</code>, which is merely the root user's home directory. What a process sees as <code>/</code> is not fixed. A container's root directory is a directory tree assembled from image layers, switched in with a mechanism descended from <code>chroot</code>, so <code>/etc/passwd</code> inside the container and on the host are unrelated files. When reading a harness's configuration, always ask &ldquo;whose <code>/</code>?&rdquo; about each path. Introduced on <a href='pages/03-files-and-the-tree.html'>page 3</a>; how a container gets its own on <a href='pages/20-namespaces.html'>page 20</a>.",
+  "also": "/, slash, rootfs",
+  "see": [
+   "absolute-path",
+   "fhs",
+   "root-user",
+   "chroot",
+   "mount-namespace"
+  ]
+ },
+ "inode": {
+  "name": "Inode",
+  "short": "The on-disk record that actually is a file: its type, owner, permissions, size, timestamps, and data location. Filenames are just directory entries pointing to inodes.",
+  "def": "A file's identity is its inode, a numbered record holding everything about the file except its name: type, owner, group, permission bits, size, timestamps, link count, and where the data blocks are. A directory is a table mapping names to inode numbers. Separating name from file explains a lot: renaming within a filesystem is instant because only a directory entry changes; one file can have several names (hard links); and deleting a name only frees the data when the link count reaches zero <em>and</em> no process still has it open. <code>ls -i</code> and <code>stat</code> show inode details. A filesystem has a fixed supply, so a job that creates millions of tiny files can fail with <code>No space left on device</code> while <code>df -h</code> shows free space; <code>df -i</code> reveals it. See <a href='pages/03-files-and-the-tree.html'>page 3</a>.",
+  "also": "index node",
+  "see": [
+   "hard-link",
+   "symlink",
+   "filesystem",
+   "disk-usage",
+   "permission-bits"
+  ]
+ },
+ "hard-link": {
+  "name": "Hard Link",
+  "short": "An additional directory entry pointing at the same inode as an existing file, so one file has two equally real names and lives until the last is removed.",
+  "def": "<code>ln target newname</code> creates a second name for the same inode. Neither name is &ldquo;the original&rdquo;: both show the same inode number in <code>ls -li</code>, the link count goes to 2, edits through one are visible through the other, and the data remains until every name is removed. Because a hard link refers to an inode number, it cannot cross from one filesystem to another, and you cannot hard-link directories. You will rarely create them, but they explain behaviour you will meet: why <code>rm</code> is really &ldquo;unlink&rdquo;, why deleting a file someone else has linked does not destroy the content, and how some backup and package tools save space. For integrity audits, note that removing the visible copy of an answer file does not remove a second link to it elsewhere on the same filesystem. See <a href='pages/03-files-and-the-tree.html'>page 3</a>.",
+  "also": "link",
+  "see": [
+   "inode",
+   "symlink",
+   "filesystem",
+   "solution-leakage"
+  ]
+ },
+ "symlink": {
+  "name": "Symbolic Link",
+  "short": "A small special file containing a path to another file or directory; opening it transparently follows that path, and it breaks if the target goes away.",
+  "def": "A symlink (<code>ln -s target name</code>) stores a path as text. When a program opens it, the kernel follows the stored path instead. Unlike a hard link, it can point at directories, across filesystems, or at something that does not exist &mdash; a dangling link, which produces a puzzling <code>No such file or directory</code> for a name that <code>ls</code> clearly shows. <code>ls -l</code> displays links as <code>name -&gt; target</code>, and <code>readlink -f</code> resolves the whole chain. Symlinks cross boundaries that are easy to forget: a link inside a bind-mounted workspace is resolved in whichever filesystem view the reader has, so a scorer on the host that follows an agent-created link may read a file the agent chose. Treat links in agent-writable directories as untrusted input. See <a href='pages/03-files-and-the-tree.html'>page 3</a> and <a href='pages/26-environment-integrity.html'>page 26</a>.",
+  "also": "symbolic link, soft link",
+  "see": [
+   "hard-link",
+   "inode",
+   "bind-mount",
+   "relative-path",
+   "environment-integrity"
+  ]
+ },
+ "dotfile": {
+  "name": "Dotfile",
+  "short": "A file or directory whose name begins with a dot, such as .bashrc or .git; ls and the * wildcard skip it by default, so it is 'hidden' by convention.",
+  "def": "Names that begin with <code>.</code> are left out by plain <code>ls</code> and are not matched by the <code>*</code> glob; <code>ls -a</code> shows them. There is no hidden attribute and no protection &mdash; it is purely a display convention, used mainly for per-user configuration (<code>~/.bashrc</code>, <code>~/.ssh</code>) and tool metadata (<code>.git</code>, <code>.env</code>, <code>.venv</code>). The convention hides things from <em>you</em> more effectively than from an agent. A reviewer who inspects a task directory with <code>ls</code> and sees only source and tests may miss a <code>.git</code> directory whose history contains the fix, or a <code>.env</code> with an API key, both of which an agent running <code>ls -la</code> finds in one step. Always audit with <code>-a</code>. See <a href='pages/03-files-and-the-tree.html'>page 3</a> and <a href='pages/26-environment-integrity.html'>page 26</a>.",
+  "also": "hidden file",
+  "see": [
+   "glob",
+   "home-directory",
+   "git-history-leak",
+   "secret",
+   "alias"
+  ]
+ },
+ "everything-is-a-file": {
+  "name": "Everything Is a File",
+  "short": "The Unix design idea that devices, pipes, sockets, and kernel information are all accessed through the same open, read, write, and close operations used for ordinary files.",
+  "def": "On Linux, a disk, a terminal, a pipe, a network connection, and a table of kernel statistics can all be opened and read like a file, and many of them appear as paths: <code>/dev/sda</code>, <code>/dev/null</code>, <code>/proc/meminfo</code>. The payoff is that one small set of tools works on everything &mdash; you can <code>cat</code> a process's environment, <code>echo</code> a value into a kernel setting, or redirect output to a device &mdash; and that one permission model guards it all. It is an approximation (network interfaces have no file, for instance), but it is the right starting assumption. It is also why file permissions and mounts are security controls in a sandbox: access to a &ldquo;file&rdquo; such as <code>/var/run/docker.sock</code> is access to the service behind it. See <a href='pages/04-streams-pipes-redirection.html'>page 4</a> and <a href='pages/14-mounts-and-filesystems.html'>page 14</a>.",
+  "see": [
+   "file-descriptor",
+   "device-file",
+   "proc-filesystem",
+   "sysfs",
+   "docker-socket"
+  ]
+ },
+ "device-file": {
+  "name": "Device File",
+  "short": "A special file under /dev that stands for a piece of hardware or a kernel facility; reading or writing it talks to a driver rather than to stored data.",
+  "def": "Entries in <code>/dev</code> are not stored data; each is a handle to a kernel driver, identified by a major and minor number. <code>ls -l</code> marks them with <code>c</code> (character devices, read as a byte stream: terminals, <code>/dev/null</code>, <code>/dev/urandom</code>) or <code>b</code> (block devices: disks). <code>/dev/null</code>, for example, shows as <code>crw-rw-rw- &hellip; 1, 3</code>. Because a device file is the doorway to hardware, which ones exist in a sandbox is part of its security posture. A default Docker container gets a small, safe <code>/dev</code>. A container started with <code>--privileged</code> or <code>--device</code> can see host devices, including the disks that hold the host's filesystem, and that is one reason privileged containers are not an isolation boundary. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a> and <a href='pages/23-hardening-containers.html'>page 23</a>.",
+  "also": "device node, special file, /dev",
+  "see": [
+   "dev-null",
+   "block-device",
+   "everything-is-a-file",
+   "privileged-container",
+   "tty"
+  ]
+ },
+ "dev-null": {
+  "name": "/dev/null",
+  "short": "A special file that throws away anything written to it and returns end-of-file when read; used to silence output or supply empty input.",
+  "def": "<code>/dev/null</code> is a device whose driver discards every write and answers every read with &ldquo;no more data&rdquo;. It exists so that &ldquo;nowhere&rdquo; can be named wherever a file is expected: <code>cmd &gt; /dev/null</code> drops stdout, <code>2&gt; /dev/null</code> drops errors, <code>&gt; /dev/null 2&gt;&amp;1</code> drops both, and <code>cmd &lt; /dev/null</code> gives a program empty input so it cannot wait on a keyboard. Convenient, and a common way to destroy evidence. A setup script that sends stderr to <code>/dev/null</code> hides the one line that would have explained why the environment is broken, and an agent that appends <code>2&gt;/dev/null</code> out of habit blinds itself to its own errors. When a transcript shows a failing command with no message, look for it. Taught on <a href='pages/04-streams-pipes-redirection.html'>page 4</a>.",
+  "also": "the bit bucket, null device",
+  "see": [
+   "redirection",
+   "stderr",
+   "stdin",
+   "device-file"
+  ]
+ },
+ "proc-filesystem": {
+  "name": "/proc",
+  "short": "A virtual filesystem, generated on the fly by the kernel, that exposes information about every running process and about the system as readable files.",
+  "def": "Nothing in <code>/proc</code> is on disk; the kernel produces the contents at the moment you read. Each process has a directory <code>/proc/PID</code> containing its command line (<code>cmdline</code>), environment (<code>environ</code>), working directory (<code>cwd</code>), open descriptors (<code>fd/</code>), and status, and <code>/proc/self</code> always refers to the reader. System-wide files such as <code>/proc/meminfo</code> and <code>/proc/mounts</code> sit alongside. Tools like <code>ps</code> and <code>top</code> are just readers of <code>/proc</code>. Two eval-relevant facts: <code>environ</code> is how secrets passed as environment variables leak to anything running as the same user, and <code>/proc/meminfo</code> inside a container reports the <em>host's</em> memory, not the cgroup limit, so a program that sizes itself from it can be OOM-killed. See <a href='pages/09-processes.html'>page 9</a>, <a href='pages/11-environment-and-secrets.html'>page 11</a>, and <a href='pages/14-mounts-and-filesystems.html'>page 14</a>.",
+  "also": "procfs, /proc",
+  "see": [
+   "process",
+   "pid",
+   "environment-variable",
+   "sysfs",
+   "oom-killer"
+  ]
+ },
+ "sysfs": {
+  "name": "sysfs (/sys)",
+  "short": "A virtual filesystem mounted at /sys through which the kernel exposes devices, drivers, and tunable settings as a tree of small files.",
+  "def": "<code>/sys</code> is a sibling of <code>/proc</code>: also generated by the kernel, but organised around devices and kernel subsystems rather than processes. Each file typically holds a single value, and some are writable, so configuration is done with <code>cat</code> and <code>echo</code>. For this course its most important resident is the cgroup filesystem at <code>/sys/fs/cgroup</code>, where a container's real resource limits live: <code>memory.max</code>, <code>cpu.max</code>, <code>pids.max</code>. When <code>/proc/meminfo</code> shows the host's memory, <code>/sys/fs/cgroup/memory.max</code> shows what the sandbox is actually allowed. In an unprivileged Docker container <code>/sys</code> is mounted read-only, so processes inside can read their limits but not raise them; a writable <code>/sys</code> is a sign of a privileged container. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a> and <a href='pages/21-cgroups-capabilities-seccomp.html'>page 21</a>.",
+  "also": "/sys",
+  "see": [
+   "proc-filesystem",
+   "cgroup",
+   "read-only-mount",
+   "everything-is-a-file",
+   "privileged-container"
+  ]
+ },
+ "tmp-directory": {
+  "name": "/tmp",
+  "short": "The system-wide scratch directory that any user may write to; its contents are temporary and should not be expected to survive a reboot.",
+  "def": "<code>/tmp</code> is where programs put short-lived files. Its mode is <code>drwxrwxrwt</code> (octal 1777): world-writable so every user can create files there, with the <a href='pages/08-permissions.html'>sticky bit</a> so that users cannot delete one another's. Because it is always present and always writable, it is where things end up when nowhere else works &mdash; including in a container whose root filesystem is read-only, where <code>/tmp</code> is usually given its own tmpfs mount so software can still function. That same openness makes it shared ground. If the agent and the verifier run in the same container, anything the verifier stages in <code>/tmp</code> is readable, and often replaceable, by the agent; and if a sandbox is reused without a proper reset, files left in <code>/tmp</code> carry one episode's work into the next. See <a href='pages/03-files-and-the-tree.html'>page 3</a> and <a href='pages/26-environment-integrity.html'>page 26</a>.",
+  "also": "temporary directory, TMPDIR",
+  "see": [
+   "sticky-bit",
+   "tmpfs",
+   "fhs",
+   "reset",
+   "read-only-mount"
+  ]
+ },
+ "mount": {
+  "name": "Mount",
+  "short": "To attach a filesystem, such as a disk partition, a RAM disk, or a host directory, to a directory in the tree so its contents appear there.",
+  "def": "Linux has one directory tree, so storage joins it by being mounted: <code>mount /dev/sdb1 /data</code> makes the filesystem on that partition appear under <code>/data</code>. The kernel keeps a mount table recording, for each mount, its source, target directory, filesystem type, and options such as <code>ro</code>, <code>nosuid</code>, and <code>noexec</code>. <code>findmnt</code> prints it as a tree; <code>/proc/mounts</code> is the raw form. That table is the ground truth about a sandbox's storage, and reading it answers the audit questions directly: which directories come from the host, which are read-only, which are RAM-backed and vanish, which persist. Containers each get their own mount table through a mount namespace, which is how their <code>/</code> differs from the host's. Taught on <a href='pages/14-mounts-and-filesystems.html'>page 14</a>.",
+  "also": "mounting, mount table",
+  "see": [
+   "mount-point",
+   "bind-mount",
+   "read-only-mount",
+   "mount-namespace",
+   "filesystem"
+  ]
+ },
+ "mount-point": {
+  "name": "Mount Point",
+  "short": "The directory at which a filesystem is attached to the tree; while the mount is in place, whatever the directory held before is hidden beneath it.",
+  "def": "A mount point is an ordinary directory chosen as the place where a mounted filesystem appears. From then on, paths passing through it cross into the mounted filesystem. Anything that was in the directory beforehand is not deleted, only hidden until the unmount. That shadowing effect explains a recurring container surprise: an image ships files in <code>/app</code>, someone runs it with a bind mount or empty volume over <code>/app</code>, and the image's files seem to have vanished. It also sets boundaries that tools respect &mdash; <code>df</code> reports space per mounted filesystem, hard links cannot cross a mount point, and <code>find -xdev</code> stops at them. In an audit, <code>findmnt --target /some/path</code> tells you which mount a given path really lives on. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a>.",
+  "also": "mountpoint",
+  "see": [
+   "mount",
+   "bind-mount",
+   "volume",
+   "hard-link",
+   "disk-usage"
+  ]
+ },
+ "bind-mount": {
+  "name": "Bind Mount",
+  "short": "A mount that makes an existing directory or file appear at a second location; Docker uses it to share a host directory with a container.",
+  "def": "An ordinary mount attaches a device; a bind mount attaches a directory that is already in the tree to another place, so the same files are reachable by two paths, with no copy: a write through either path is immediately visible through the other. <code>docker run -v /host/dir:/container/dir</code> is a bind mount across the container boundary, and it is the usual way a harness hands a repository to the agent and gets results back. It is also a deliberate hole in the sandbox wall. Writes land on the host with the container process's numeric UID (often root's); anything in the host directory is exposed, including tests or solutions stored beside the task; and mounting <code>/var/run/docker.sock</code> this way hands the container control of the host's Docker. Mount only what is needed, read-only where possible. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a> and <a href='pages/22-docker-for-evals.html'>page 22</a>.",
+  "also": "-v host:container, --mount type=bind",
+  "see": [
+   "mount",
+   "volume",
+   "read-only-mount",
+   "docker-socket",
+   "uid"
+  ]
+ },
+ "read-only-mount": {
+  "name": "Read-Only Mount",
+  "short": "A filesystem mounted with the ro option, so the kernel refuses every attempt to create, change, or delete files on it, even by root.",
+  "def": "The <code>ro</code> mount option makes the kernel reject all writes to that filesystem with the error <code>Read-only file system</code>. Unlike permission bits, which root bypasses, this applies to every user, which is what makes it useful in a sandbox where the agent often is root. Docker exposes it in two ways: <code>:ro</code> on an individual bind mount or volume, and <code>--read-only</code> for the container's whole root filesystem, normally paired with a tmpfs at <code>/tmp</code> so programs still have scratch space. For eval integrity this is the simplest strong control there is: tests, fixtures, and scoring scripts mounted read-only cannot be edited by the agent. Verify rather than assume &mdash; the <code>OPTIONS</code> column of <code>findmnt</code> shows <code>ro</code> or <code>rw</code> for each mount. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a> and <a href='pages/23-hardening-containers.html'>page 23</a>.",
+  "also": "ro, read-only filesystem, EROFS",
+  "see": [
+   "mount",
+   "bind-mount",
+   "tmpfs",
+   "test-tampering",
+   "root-user"
+  ]
+ },
+ "tmpfs": {
+  "name": "tmpfs",
+  "short": "A filesystem that lives in memory rather than on disk: fast, size-limited, and completely erased when it is unmounted or the machine or container stops.",
+  "def": "tmpfs stores files in RAM (spilling to swap if there is any). It is used where data should be fast and should not persist: <code>/run</code>, <code>/dev/shm</code>, and often <code>/tmp</code>. In Docker, <code>--tmpfs /tmp</code> adds one, and every container gets a small <code>/dev/shm</code>, 64 MB by default. Two properties matter for evals. It gives a guaranteed-clean scratch area: nothing written there can leak into the next episode once the container is gone. And its contents use memory, not disk, so a job that writes large files to a tmpfs is spending the sandbox's memory allowance and can end up killed for it rather than getting a tidy &ldquo;disk full&rdquo; error. The too-small <code>/dev/shm</code> is also a classic cause of browsers and multiprocess Python crashing in containers. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a>.",
+  "also": "RAM disk, /dev/shm",
+  "see": [
+   "mount",
+   "tmp-directory",
+   "read-only-mount",
+   "oom-killer",
+   "memory-rss"
+  ]
+ },
+ "overlayfs": {
+  "name": "OverlayFS",
+  "short": "A filesystem that stacks a writable layer on top of read-only layers and presents the merged result; it is how Docker builds a container's root filesystem.",
+  "def": "OverlayFS merges directories: one or more read-only <em>lower</em> layers and one writable <em>upper</em> layer, shown as a single tree. Reads fall through to whichever layer has the file. The first write to a lower-layer file copies it up into the upper layer and changes the copy; a deletion is recorded as a marker in the upper layer. Many containers can therefore share one set of image layers, each adding only a thin upper layer, visible as <code>overlay on /</code> in <code>mount</code> output. For evals it is the reset mechanism &mdash; remove the container and the upper layer goes with it, restoring the image state. The flip side: files &ldquo;deleted&rdquo; in a later image layer still exist in an earlier one, so secrets and solutions removed that way remain recoverable from the image. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a> and <a href='pages/22-docker-for-evals.html'>page 22</a>.",
+  "also": "overlay, overlay2, union filesystem",
+  "see": [
+   "layer",
+   "image",
+   "container",
+   "reset",
+   "solution-leakage"
+  ]
+ },
+ "volume": {
+  "name": "Volume",
+  "short": "Storage that Docker creates and manages outside any single container's writable layer, so the data persists when the container is removed and can be shared.",
+  "def": "A container's own filesystem disappears when the container is removed. A volume is Docker's answer for data that should outlive it: a directory Docker manages on the host, attached at a path in the container with <code>-v name:/path</code>, and listed with <code>docker volume ls</code>. It differs from a bind mount in that you name the volume, not a host path, so it does not depend on the host's directory layout. Persistence is the feature and, for evals, the hazard. A named volume reused across runs carries state from one episode into the next &mdash; caches, databases, half-finished work &mdash; and quietly breaks the assumption that every rollout starts from the same place. <code>docker compose down</code> leaves volumes in place unless you add <code>-v</code>. For eval tasks, prefer fresh volumes per run. See <a href='pages/22-docker-for-evals.html'>page 22</a>.",
+  "also": "Docker volume, named volume",
+  "see": [
+   "bind-mount",
+   "mount",
+   "reset",
+   "docker-compose",
+   "nondeterminism"
+  ]
+ },
+ "block-device": {
+  "name": "Block Device",
+  "short": "A storage device, such as a disk, SSD, or partition, that the kernel reads and writes in fixed-size blocks; filesystems are created on top of block devices.",
+  "def": "A block device is raw storage addressed by block number: a physical or virtual disk (<code>/dev/sda</code>, <code>/dev/nvme0n1</code>, <code>/dev/vda</code> in a VM) or a partition of one (<code>/dev/sda1</code>). On its own it has no files; you create a filesystem on it and then mount that. <code>lsblk</code> draws the picture: each device, its size, its partitions, and where each is mounted. The layering is worth holding in your head &mdash; hardware, block device, filesystem, mount point, path &mdash; because &ldquo;the disk is full&rdquo; or &ldquo;the file is missing&rdquo; can be a problem at any of those levels. On a VM you will see real block devices. Inside an ordinary container you mostly will not, because the container is given directories, not disks; seeing the host's disks under <code>/dev</code> indicates a privileged container. See <a href='pages/14-mounts-and-filesystems.html'>page 14</a>.",
+  "also": "disk, partition, lsblk",
+  "see": [
+   "device-file",
+   "filesystem",
+   "mount",
+   "disk-usage",
+   "privileged-container"
+  ]
+ },
+ "disk-usage": {
+  "name": "Disk Usage",
+  "short": "How much storage is used and free, measured per filesystem with df and per directory with du; the two can legitimately disagree.",
+  "def": "Two commands answer two different questions. <code>df -h</code> asks each mounted filesystem how full it is. <code>du -sh dir</code> walks a directory and adds up the files it finds. They diverge when space is held by something <code>du</code> cannot see, most often a large file that was deleted while a process still has it open; the space is released only when that process closes it or exits. A full filesystem produces <code>No space left on device</code>, and the same message appears when a filesystem runs out of inodes (<code>df -i</code>). Disk exhaustion is a classic infrastructure failure in eval runs: image layers, logs, and leftover containers fill the host, after which every task fails at <code>pip install</code> or on its first write, and the results look like a sudden capability collapse. See <a href='pages/12-resources-and-limits.html'>page 12</a> and <a href='pages/14-mounts-and-filesystems.html'>page 14</a>.",
+  "also": "df, du, ENOSPC",
+  "see": [
+   "inode",
+   "mount-point",
+   "filesystem",
+   "infrastructure-failure",
+   "file-descriptor"
+  ]
+ },
+ "user": {
+  "name": "User",
+  "short": "An account identity that processes run as and files are owned by; to the kernel a user is just a number (the UID), and the name is a label looked up in /etc/passwd.",
+  "def": "A Linux user is not necessarily a person. It is an identity attached to every process and every file, and the kernel compares the two to decide what a process may do. Some users are people with a password and a home directory; many are accounts that exist only so that a service runs with its own limited identity. The kernel deals only in numeric IDs; names such as <code>alice</code> or <code>www-data</code> come from <code>/etc/passwd</code> and exist for humans. <code>whoami</code> and <code>id</code> show who you are. In eval work the question &ldquo;which user does the agent run as?&rdquo; is a design decision with consequences: as root, the agent can edit tests, read anything in the container, and install anything; as an unprivileged user, some legitimate tasks (such as <code>apt-get install</code>) become impossible. Taught on <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "account, user account",
+  "see": [
+   "uid",
+   "group",
+   "root-user",
+   "passwd-file",
+   "service-account"
+  ]
+ },
+ "uid": {
+  "name": "UID",
+  "short": "User ID: the number the kernel actually uses to identify a user. UID 0 is root; ordinary accounts on Ubuntu start at 1000.",
+  "def": "Every process carries a UID and every file records its owner's UID; permission checks compare the numbers. The mapping from number to name lives in <code>/etc/passwd</code> and is local to each system &mdash; or each container image. UID 0 is root. On Ubuntu, system accounts take low numbers and the first ordinary user gets 1000; the <code>ubuntu:24.04</code> image ships a user <code>ubuntu</code> with UID 1000. Because only the number is real, identity does not translate across a bind mount: a file created by UID 1000 in a container belongs on the host to whoever is UID 1000 there, and files written by a container's root are owned by root on the host. That is the source of most &ldquo;permission denied on the results directory&rdquo; harness bugs. <code>ls -ln</code> shows numeric owners. See <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "user ID",
+  "see": [
+   "user",
+   "gid",
+   "root-user",
+   "passwd-file",
+   "user-namespace"
+  ]
+ },
+ "gid": {
+  "name": "GID",
+  "short": "Group ID: the number the kernel uses to identify a group. Each process has a primary GID plus a list of supplementary ones, and each file records one owning GID.",
+  "def": "A GID is to a group what a UID is to a user: the number that is actually stored and compared, with names supplied by <code>/etc/group</code>. A process has one primary GID, which new files it creates are stamped with, and a list of supplementary GIDs for the other groups its user belongs to; <code>id</code> prints all of them. A file has exactly one owning GID, and the middle three permission bits apply to processes holding it. Like UIDs, GIDs are only numbers and do not carry meaning across the container boundary: GID 999 might be <code>docker</code> on the host and something unrelated, or nothing, inside the image. When <code>ls -l</code> shows a bare number where a group name should be, the file's GID simply has no entry in this system's <code>/etc/group</code>. See <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "group ID",
+  "see": [
+   "group",
+   "uid",
+   "permission-bits",
+   "chown"
+  ]
+ },
+ "group": {
+  "name": "Group",
+  "short": "A named set of users, used to give several accounts the same access to files or devices without making those files open to everyone.",
+  "def": "Permission bits offer three audiences: the owner, one group, and everyone else. Groups are how you say &ldquo;these particular accounts, but not the world&rdquo;. Membership is listed in <code>/etc/group</code>; each user has a primary group (on Ubuntu, a private group with the same name as the user) and any number of supplementary ones, all shown by <code>id</code>. Membership is read at login, so a newly added group takes effect only in a new session. Some groups carry real power: members of <code>sudo</code> may run commands as root, <code>shadow</code> may read password hashes, and <code>docker</code> may talk to the Docker daemon, which Docker's own documentation describes as root-equivalent access to the host. When auditing an account, read its group list as carefully as its UID. Taught on <a href='pages/07-users-groups-root.html'>page 7</a> and applied on <a href='pages/08-permissions.html'>page 8</a>.",
+  "see": [
+   "gid",
+   "user",
+   "permission-bits",
+   "sudo",
+   "docker-socket"
+  ]
+ },
+ "root-user": {
+  "name": "Root (Superuser)",
+  "short": "The administrative account with UID 0, for which the kernel skips ordinary file permission checks; the default user inside most Docker containers.",
+  "def": "Root is whichever account has UID 0. The kernel exempts it from file permission checks and lets it perform privileged operations: binding low ports, mounting filesystems, changing file ownership, signalling any process. A file with mode <code>444</code> is still writable by root. It exists because something has to administer the machine; the convention is to use it as little as possible. Containers invert that: unless the image sets <code>USER</code>, a Docker container's processes run as root. That root is reduced &mdash; Docker removes many capabilities and confines it with namespaces &mdash; but within the container it still overrides every permission bit. So an agent running as root cannot be stopped from editing tests by <code>chmod</code>; you need a non-root user, a read-only mount, or tests held outside the sandbox. See <a href='pages/07-users-groups-root.html'>page 7</a> and <a href='pages/23-hardening-containers.html'>page 23</a>.",
+  "also": "superuser, UID 0, root",
+  "see": [
+   "uid",
+   "sudo",
+   "capability",
+   "least-privilege",
+   "read-only-mount"
+  ]
+ },
+ "sudo": {
+  "name": "sudo",
+  "short": "A command that runs another command as root (or another user) if the rules in /etc/sudoers allow the caller to do so, usually after asking for a password.",
+  "def": "<code>sudo cmd</code> lets a permitted user run one command with root's identity instead of logging in as root. The rules live in <code>/etc/sudoers</code> and <code>/etc/sudoers.d/</code>; on Ubuntu, members of the <code>sudo</code> group may run anything. It works because the <code>sudo</code> binary is setuid root: it starts with root's privileges and then decides whether to honour the request. It gives a machine with several administrators accountability and a habit of least privilege. In containers, expect it to be missing &mdash; the <code>ubuntu:24.04</code> image does not include it, and as root you do not need it &mdash; so an agent that prefixes every command with <code>sudo</code> collects <code>command not found</code> errors. The opposite problem is worse: a task image that grants its &ldquo;unprivileged&rdquo; agent user passwordless sudo (<code>NOPASSWD: ALL</code>) has no privilege separation at all. See <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "su, sudoers",
+  "see": [
+   "root-user",
+   "setuid",
+   "privilege-escalation",
+   "least-privilege",
+   "group"
+  ]
+ },
+ "passwd-file": {
+  "name": "/etc/passwd",
+  "short": "The world-readable text file listing every user account: name, UID, primary GID, home directory, and login shell. Despite the name it holds no passwords.",
+  "def": "Each line of <code>/etc/passwd</code> describes one account in seven colon-separated fields: name, password placeholder, UID, GID, comment, home directory, and login shell &mdash; for example <code>root:x:0:0:root:/root:/bin/bash</code>. The <code>x</code> means the password hash is kept elsewhere, in <code>/etc/shadow</code>. The file must be readable by everyone, because any program that prints a username (such as <code>ls -l</code>) has to look the number up here; that requirement is the reason hashes were moved out. Reading it is a fast audit step: it tells you which accounts exist, which have a real shell rather than <code>/usr/sbin/nologin</code>, and whether anything besides root has UID 0. It belongs to the image, so a container started with <code>--user 1234</code> can run as a UID with no line here; tools then report <code>I have no name!</code>. Taught on <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "passwd, user database",
+  "see": [
+   "shadow-file",
+   "uid",
+   "user",
+   "home-directory",
+   "service-account"
+  ]
+ },
+ "shadow-file": {
+  "name": "/etc/shadow",
+  "short": "The root-protected file that stores each account's hashed password and password-ageing settings, kept separate from the world-readable /etc/passwd.",
+  "def": "<code>/etc/passwd</code> has to be readable by all, so password hashes were moved to <code>/etc/shadow</code>, which on Ubuntu is mode <code>640</code>, owner <code>root</code>, group <code>shadow</code>. Each line holds a username, the salted hash of the password (its prefix identifies the algorithm), and ageing fields. A <code>!</code> or <code>*</code> in the hash field means no password can match, so the account cannot log in with one; most accounts in a container image look like this. The point of hiding hashes is that anyone who can read them can try to guess passwords offline at their leisure. For sandbox audits the file is a useful indicator: if the agent's user can read <code>/etc/shadow</code>, it is either root or has more privilege than was intended. See <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "shadow passwords",
+  "see": [
+   "passwd-file",
+   "root-user",
+   "permission-bits",
+   "secret"
+  ]
+ },
+ "permission-bits": {
+  "name": "Permission Bits",
+  "short": "The nine flags on every file, read, write, and execute for each of owner, group, and others, that decide what a non-root process may do with it.",
+  "def": "<code>ls -l</code> shows them as a string such as <code>-rwxr-x---</code>: after the type character come three triplets, for the owning user, the owning group, and everyone else. The kernel uses exactly one triplet &mdash; the first that applies to the process &mdash; and checks the bit for the requested operation. On a file, <code>r</code> is read, <code>w</code> modify, <code>x</code> execute. On a directory the meanings shift: <code>r</code> lists names, <code>x</code> allows passing through to what is inside, and <code>w</code> allows creating, renaming, and <em>deleting</em> entries. It follows that whether you can delete a file depends on the directory's permissions, not the file's &mdash; so a read-only test file in an agent-writable directory can be removed and replaced. Root bypasses all of these checks. Taught on <a href='pages/08-permissions.html'>page 8</a>.",
+  "also": "file mode, rwx, mode bits",
+  "see": [
+   "octal-mode",
+   "chmod",
+   "chown",
+   "umask",
+   "test-tampering"
+  ]
+ },
+ "octal-mode": {
+  "name": "Octal Mode",
+  "short": "Permission bits written as a three- or four-digit number such as 755 or 644, where each digit is the sum of read=4, write=2, execute=1.",
+  "def": "Each permission triplet is three bits, and three bits make exactly one octal digit: <code>r</code>=4, <code>w</code>=2, <code>x</code>=1, added together. So <code>rwx</code> is 7, <code>r-x</code> is 5, <code>r--</code> is 4, and the mode <code>rwxr-xr-x</code> is <code>755</code>. The values you will see daily: <code>644</code> (owner writes, everyone reads &mdash; normal files), <code>755</code> (the same plus execute &mdash; programs and directories), <code>600</code> and <code>700</code> (owner only &mdash; keys and private directories), and <code>777</code> (anyone can do anything, nearly always a mistake). An optional leading fourth digit holds the special bits: setuid=4, setgid=2, sticky=1, as in <code>1777</code> for <code>/tmp</code>. Deriving the digits from bits means you can read any mode, including unusual ones in a Dockerfile's <code>COPY --chmod</code>. See <a href='pages/08-permissions.html'>page 8</a> and <a href='appendices/c-binary-octal-cidr.html'>Appendix C</a>.",
+  "also": "numeric mode, 755, 644",
+  "see": [
+   "permission-bits",
+   "chmod",
+   "umask",
+   "setuid",
+   "sticky-bit"
+  ]
+ },
+ "chmod": {
+  "name": "chmod",
+  "short": "The command that changes a file's permission bits, using either an octal number (chmod 644 file) or symbolic changes (chmod u+x file).",
+  "def": "<code>chmod</code> (&ldquo;change mode&rdquo;) sets permission bits. The octal form replaces all of them at once: <code>chmod 600 key.pem</code>. The symbolic form adjusts some and leaves the rest: <code>chmod u+x run.sh</code> adds execute for the owner, <code>go-w</code> removes write from group and others, <code>-R</code> recurses. Only a file's owner or root may change its mode. The everyday use is <code>chmod +x script.sh</code>, the cure for <code>Permission denied</code> (exit status 126) when running a script you just wrote. Two warnings for eval builders. <code>chmod -R 777</code> to &ldquo;fix permissions&rdquo; makes every file, tests included, writable by the agent. And <code>chmod</code> is not a lock against the file's owner or root, who can simply change the mode back; protection needs a different owner or a read-only mount. Taught on <a href='pages/08-permissions.html'>page 8</a>.",
+  "also": "change mode",
+  "see": [
+   "permission-bits",
+   "octal-mode",
+   "chown",
+   "umask",
+   "exit-status"
+  ]
+ },
+ "chown": {
+  "name": "chown",
+  "short": "The command that changes which user and group own a file, as in chown alice:devs file; in general only root may give a file to another user.",
+  "def": "<code>chown user:group path</code> rewrites the owner UID and group GID stored in a file's inode; <code>-R</code> applies it to a whole tree. Ownership matters because the owner triplet of the permission bits applies to the owner, and only the owner (or root) may <code>chmod</code> the file. An ordinary user cannot give files away &mdash; the attempt fails with <code>Operation not permitted</code> &mdash; so in practice this is a root operation. You meet it constantly in Dockerfiles, because files copied into an image are owned by root unless you write <code>COPY --chown=agent:agent</code>; forget it, switch to a non-root <code>USER</code>, and the agent cannot write in its own workspace. The integrity pattern runs the other way: make tests and fixtures owned by root and not writable by others, and run the agent as someone else. See <a href='pages/08-permissions.html'>page 8</a>.",
+  "also": "change owner, chgrp",
+  "see": [
+   "uid",
+   "gid",
+   "permission-bits",
+   "chmod",
+   "dockerfile"
+  ]
+ },
+ "umask": {
+  "name": "umask",
+  "short": "A per-process setting listing the permission bits to remove from newly created files and directories; the usual default, 022, yields 644 files and 755 directories.",
+  "def": "When a program creates a file it requests a mode, typically <code>666</code> for files and <code>777</code> for directories, and the kernel clears whichever bits are set in the process's umask. With the common default of <code>022</code> (remove write for group and others) the results are <code>644</code> and <code>755</code>. It is inherited from parent to child, and running <code>umask</code> with no argument prints the current value; on Ubuntu an ordinary user with a private group may see <code>002</code> in a login session. It affects only creation, never existing files. If files an agent creates arrive with unexpected permissions &mdash; say, output the scorer's user cannot read &mdash; compare the umask under the harness with the one in your interactive shell. See <a href='pages/08-permissions.html'>page 8</a> and <a href='appendices/c-binary-octal-cidr.html'>Appendix C</a>.",
+  "also": "file mode creation mask",
+  "see": [
+   "permission-bits",
+   "octal-mode",
+   "chmod",
+   "builtin"
+  ]
+ },
+ "setuid": {
+  "name": "Setuid Bit",
+  "short": "A special permission bit on an executable that makes it run with the identity of the file's owner, usually root, rather than of the user who started it.",
+  "def": "Normally a program runs as whoever launched it. If an executable has the setuid bit (shown as <code>s</code> in the owner's execute position, octal <code>4000</code>), it runs with the file owner's effective UID instead. That is how an ordinary user can change their own password: <code>/usr/bin/passwd</code> is <code>-rwsr-xr-x root</code>, so it can update <code>/etc/shadow</code> on the user's behalf. <code>sudo</code> and <code>su</code> depend on the same bit. The sibling setgid bit (<code>2000</code>) does the same for the group. Each setuid-root binary is a deliberate, narrow door to root, and a bug in one &mdash; or a careless one such as a setuid copy of <code>bash</code> &mdash; becomes privilege escalation. Audit with <code>find / -perm -4000 -type f</code>, and close the door for sandboxes with the <code>nosuid</code> mount option or Docker's <code>no-new-privileges</code>. See <a href='pages/08-permissions.html'>page 8</a> and <a href='pages/23-hardening-containers.html'>page 23</a>.",
+  "also": "SUID, setgid, set-user-ID",
+  "see": [
+   "permission-bits",
+   "sudo",
+   "privilege-escalation",
+   "no-new-privileges",
+   "octal-mode"
+  ]
+ },
+ "sticky-bit": {
+  "name": "Sticky Bit",
+  "short": "A special permission bit on a directory that lets users delete or rename only their own files in it, even though everyone can write there; /tmp uses it.",
+  "def": "Write permission on a directory normally lets you delete any entry in it, whoever owns the file. For a shared directory such as <code>/tmp</code> that would let users destroy each other's work. The sticky bit (octal <code>1000</code>, shown as a <code>t</code> at the end of the mode: <code>drwxrwxrwt</code>) adds one rule: an entry may be removed or renamed only by the file's owner, the directory's owner, or root. The name is a leftover from an unrelated older meaning. It is the right setting for any directory several unprivileged identities share &mdash; for example a drop-box where an agent user and a verifier user both write. Without it, either side can remove and replace the other's files despite not being able to modify them. It does not restrain root. See <a href='pages/08-permissions.html'>page 8</a>.",
+  "also": "restricted deletion flag, 1777",
+  "see": [
+   "tmp-directory",
+   "permission-bits",
+   "octal-mode",
+   "setuid"
+  ]
+ },
+ "least-privilege": {
+  "name": "Principle of Least Privilege",
+  "short": "The design rule that every user, process, and container should hold only the permissions it needs for its job, so mistakes and compromises do limited damage.",
+  "def": "Least privilege means granting the minimum access a job requires . The argument is containment: whatever a process is <em>able</em> to do is what a bug, a compromise, or an over-eager agent will eventually do with it. On Linux the principle is applied in layers &mdash; a non-root user, tight file ownership and modes, read-only mounts, dropped capabilities, no network unless the task needs one, resource limits. For evals it serves two purposes. It protects your infrastructure from the code the model writes. And it protects the <em>measurement</em>: an agent that cannot write to the tests, read the solution, or reach the internet cannot score by those routes, so a pass means what you think it means. The cost is real (too little privilege blocks legitimate work), so record what each task needs. See <a href='pages/23-hardening-containers.html'>page 23</a> and <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "PoLP, minimal privilege",
+  "see": [
+   "root-user",
+   "capability",
+   "privilege-escalation",
+   "attack-surface",
+   "environment-integrity"
+  ]
+ },
+ "privilege-escalation": {
+  "name": "Privilege Escalation",
+  "short": "Gaining more access than you were given, typically an ordinary user becoming root, or a process inside a container gaining control of the host.",
+  "def": "Privilege escalation is any path from the access a process was granted to access it was not. On a single machine it usually means unprivileged user to root: a permissive sudo rule, a vulnerable or unnecessary setuid binary, a root-run script that an ordinary user can edit, membership of the <code>docker</code> group. In a sandbox there is a second step, from inside the container to the host, through a mounted Docker socket, a <code>--privileged</code> flag, or a kernel bug. You need the concept for defence, not attack: when designing an environment, ask what the agent's user could reach if it tried, and close those paths before the run. A capable agent that wants <code>apt-get</code> to work may well try <code>sudo</code>, look for writable root-owned scripts, or probe the socket. See <a href='pages/23-hardening-containers.html'>page 23</a> and <a href='pages/08-permissions.html'>page 8</a>.",
+  "also": "privesc",
+  "see": [
+   "setuid",
+   "sudo",
+   "least-privilege",
+   "container-escape",
+   "docker-socket"
+  ]
+ },
+ "service-account": {
+  "name": "Service Account",
+  "short": "A user account created for a program rather than a person, typically with a low UID, no password, and no login shell, so a service runs with limited rights.",
+  "def": "Many lines in <code>/etc/passwd</code> are not people: <code>www-data</code> (UID 33), <code>_apt</code>, <code>nobody</code> (65534), <code>daemon</code>. Each exists so a particular piece of software can run under its own identity and own only its own files. If the web server is compromised, the attacker holds <code>www-data</code>'s limited access, not root's. Such accounts normally have a system-range UID below 1000, a locked password, and the shell <code>/usr/sbin/nologin</code>, so nobody can sign in as them. The same pattern is what you want for an agent: a Dockerfile that runs <code>useradd</code> to create a dedicated user and then sets <code>USER</code> gives the agent a service account of its own, while tests and scorer files remain owned by root. When reading <code>ps</code> output in an audit, an unexpected service running as root rather than its own account deserves a second look. See <a href='pages/07-users-groups-root.html'>page 7</a>.",
+  "also": "system user, system account",
+  "see": [
+   "user",
+   "uid",
+   "passwd-file",
+   "least-privilege",
+   "daemon"
+  ]
+ }
+}

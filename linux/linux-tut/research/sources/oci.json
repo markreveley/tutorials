@@ -1,0 +1,202 @@
+{
+ "id": "oci",
+ "tag": "[OCI Runtime Spec]",
+ "citation": {
+  "authors": "Open Container Initiative (Linux Foundation)",
+  "title": "OCI Runtime Specification (spec.md, bundle.md, config.md, config-linux.md, runtime.md, implementations.md); OCI Image Format Specification (spec.md, descriptor.md); OCI 'About' overview; runc README; containerd README; Docker Engine 'Alternative container runtimes'",
+  "venue": "github.com/opencontainers; opencontainers.org; docs.docker.com",
+  "year": "2026 (main branches, living documents)",
+  "url": "https://github.com/opencontainers/runtime-spec/blob/main/spec.md"
+ },
+ "fetched_urls": [
+  "https://raw.githubusercontent.com/opencontainers/runtime-spec/main/spec.md",
+  "https://raw.githubusercontent.com/opencontainers/runtime-spec/main/bundle.md",
+  "https://raw.githubusercontent.com/opencontainers/runtime-spec/main/config.md",
+  "https://raw.githubusercontent.com/opencontainers/runtime-spec/main/config-linux.md",
+  "https://raw.githubusercontent.com/opencontainers/runtime-spec/main/runtime.md",
+  "https://raw.githubusercontent.com/opencontainers/runtime-spec/main/implementations.md",
+  "https://raw.githubusercontent.com/opencontainers/image-spec/main/spec.md",
+  "https://raw.githubusercontent.com/opencontainers/image-spec/main/descriptor.md",
+  "https://raw.githubusercontent.com/opencontainers/runc/main/README.md",
+  "https://raw.githubusercontent.com/containerd/containerd/main/README.md",
+  "https://opencontainers.org/about/overview/",
+  "https://docs.docker.com/engine/daemon/alternative-runtimes/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "OCI defines runtime-spec (how to run a 'filesystem bundle'), image-spec (layers, manifest, config, content-addressed by digest) and distribution-spec",
+   "verdict": "confirmed",
+   "finding": "Three specifications, named exactly; runtime-spec = how to run a 'filesystem bundle' unpacked on disk. OCI launched June 22nd 2015 by Docker, CoreOS and others under the Linux Foundation; distribution-spec reached v1.0 in May 2020.",
+   "quote": "The OCI currently contains three specifications: the Runtime Specification (runtime-spec), the Image Specification (image-spec) and the Distribution Specification (distribution-spec). The Runtime Specification outlines how to run a “filesystem bundle” that is unpacked on disk.",
+   "location": "opencontainers.org > About > Overview",
+   "cite_url": "https://opencontainers.org/about/overview/"
+  },
+  {
+   "planned": "OCI defines runtime-spec (how to run a 'filesystem bundle'), image-spec (layers, manifest, config, content-addressed by digest) and distribution-spec",
+   "verdict": "confirmed",
+   "finding": "Bundle = config.json (REQUIRED, at bundle root) + the container's root filesystem (directory referenced by root.path).",
+   "quote": "config.json: contains configuration data. This REQUIRED file MUST reside in the root of the bundle directory and MUST be named config.json.",
+   "location": "runtime-spec bundle.md > Container Format",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/bundle.md"
+  },
+  {
+   "planned": "OCI defines runtime-spec (how to run a 'filesystem bundle'), image-spec (layers, manifest, config, content-addressed by digest) and distribution-spec",
+   "verdict": "confirmed",
+   "finding": "Image = manifest + optional index + filesystem layers + configuration.",
+   "quote": "This specification defines an OCI Image, consisting of an image manifest, an image index (optional), a set of filesystem layers, and a configuration.",
+   "location": "image-spec spec.md > Image Format Specification",
+   "cite_url": "https://github.com/opencontainers/image-spec/blob/main/spec.md"
+  },
+  {
+   "planned": "OCI defines runtime-spec (how to run a 'filesystem bundle'), image-spec (layers, manifest, config, content-addressed by digest) and distribution-spec",
+   "verdict": "confirmed",
+   "finding": "Content-addressed by digest: a descriptor's digest is algorithm:encoded (registered algorithms include sha256); content from untrusted sources SHOULD be verified against it.",
+   "quote": "The digest property of a Descriptor acts as a content identifier, enabling content addressability. It uniquely identifies content by taking a collision-resistant hash of the bytes. If the digest can be communicated in a secure manner, one can verify content from an insecure source by recalculating the digest independently, ensuring the content has not been modified.",
+   "location": "image-spec descriptor.md > Digests",
+   "cite_url": "https://github.com/opencontainers/image-spec/blob/main/descriptor.md"
+  },
+  {
+   "planned": "config-linux lists namespaces, cgroups, capabilities, seccomp, maskedPaths/readonlyPaths as the knobs a runtime applies — i.e. a container = these kernel features configured together",
+   "verdict": "corrected",
+   "finding": "Mostly right, one misplacement: CAPABILITIES are not in config-linux.md. They are in config.md under process > 'Linux Process', alongside apparmorProfile, noNewPrivileges, oomScoreAdj, selinuxLabel (and rlimits). config-linux.md holds: Default Filesystems, Namespaces, User namespace mappings, Time-namespace offset, Devices, Network Devices, Control groups (memory, cpu, blockIO, hugepages, network, pids, rdma, unified), IntelRdt, Memory policy, Sysctl, Seccomp, Rootfs Mount Propagation, Masked Paths, Readonly Paths, Mount Label, Personality. Read-only ROOT filesystem is root.readonly in config.md.",
+   "quote": "capabilities (object, OPTIONAL) is an object containing arrays that specifies the sets of capabilities for the process. Valid values are defined in the capabilities(7) man page, such as CAP_CHOWN.",
+   "location": "runtime-spec config.md > Process > Linux Process",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config.md#linux-process"
+  },
+  {
+   "planned": "config-linux lists namespaces, cgroups, capabilities, seccomp, maskedPaths/readonlyPaths as the knobs a runtime applies — i.e. a container = these kernel features configured together",
+   "verdict": "confirmed",
+   "finding": "Namespace types the spec says SHOULD be supported — eight: pid, network, mount, ipc, uts, user, cgroup, time. If a type is not listed the container INHERITS the runtime's namespace of that type (i.e. no isolation for it).",
+   "quote": "If a namespace type is not specified in the namespaces array, the container MUST inherit the runtime namespace of that type.",
+   "location": "runtime-spec config-linux.md > Namespaces",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#namespaces"
+  },
+  {
+   "planned": "config-linux lists namespaces, cgroups, capabilities, seccomp, maskedPaths/readonlyPaths as the knobs a runtime applies — i.e. a container = these kernel features configured together",
+   "verdict": "confirmed",
+   "finding": "maskedPaths / readonlyPaths definitions (spec examples: /proc/kcore masked; /proc/sys read-only).",
+   "quote": "maskedPaths (array of strings, OPTIONAL) will mask over the provided paths inside the container so that they cannot be read.",
+   "location": "runtime-spec config-linux.md > Masked Paths",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#masked-paths"
+  },
+  {
+   "planned": "config-linux lists namespaces, cgroups, capabilities, seccomp, maskedPaths/readonlyPaths as the knobs a runtime applies — i.e. a container = these kernel features configured together",
+   "verdict": "confirmed",
+   "finding": "Seccomp section: defaultAction REQUIRED; defaultErrnoRet default is EPERM; can match on syscall argument values.",
+   "quote": "Seccomp provides application sandboxing mechanism in the Linux kernel. Seccomp configuration allows one to configure actions to take for matched syscalls and furthermore also allows matching on values passed as arguments to syscalls.",
+   "location": "runtime-spec config-linux.md > Seccomp",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#seccomp"
+  },
+  {
+   "planned": "runc is the reference low-level runtime; Docker → containerd → runc chain",
+   "verdict": "confirmed",
+   "finding": "'Reference implementation' wording is in runtime-spec implementations.md; runc's README describes itself only as a CLI tool for spawning and running containers 'according to the OCI specification'. Docker donated runC to OCI 'to serve as the cornerstone'.",
+   "quote": "opencontainers/runc - Reference implementation of OCI runtime",
+   "location": "runtime-spec implementations.md > Runtime (Container)",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/implementations.md"
+  },
+  {
+   "planned": "runc is the reference low-level runtime; Docker → containerd → runc chain",
+   "verdict": "confirmed",
+   "finding": "Docker Engine -> containerd -> runc, from Docker's own docs.",
+   "quote": "Docker Engine uses containerd for managing the container lifecycle, which includes creating, starting, and stopping containers. By default, containerd uses runc as its container runtime.",
+   "location": "Docker docs, Engine > Daemon > Alternative container runtimes",
+   "cite_url": "https://docs.docker.com/engine/daemon/alternative-runtimes/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Runtime-spec abstract: what the spec covers.",
+   "quote": "The Open Container Initiative Runtime Specification aims to specify the configuration, execution environment, and lifecycle of a container.",
+   "location": "runtime-spec spec.md > Abstract",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/spec.md"
+  },
+  {
+   "finding": "Platforms defined by runtime-spec today: freebsd, linux, solaris, windows, vm, zos — 'container' is not Linux-only in the spec, and there is a VM platform (config-vm.md) used by hypervisor-based runtimes.",
+   "quote": "Platforms defined by this specification are:",
+   "location": "runtime-spec spec.md > Platforms",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/spec.md"
+  },
+  {
+   "finding": "Namespace definition in spec's own words (good first-use definition).",
+   "quote": "A namespace wraps a global system resource in an abstraction that makes it appear to the processes within the namespace that they have their own isolated instance of the global resource.",
+   "location": "runtime-spec config-linux.md > Namespaces",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#namespaces"
+  },
+  {
+   "finding": "Default filesystems every Linux container SHOULD get: /proc (proc), /sys (sysfs), /dev/pts (devpts), /dev/shm (tmpfs).",
+   "quote": "The following filesystems SHOULD be made available in each container's filesystem:",
+   "location": "runtime-spec config-linux.md > Default Filesystems",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#default-filesystems"
+  },
+  {
+   "finding": "Read-only root filesystem knob.",
+   "quote": "readonly (bool, OPTIONAL) If true then the root filesystem MUST be read-only inside the container, defaults to false.",
+   "location": "runtime-spec config.md > Root",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config.md#root"
+  },
+  {
+   "finding": "noNewPrivileges knob.",
+   "quote": "noNewPrivileges (bool, OPTIONAL) setting noNewPrivileges to true prevents the process from gaining additional privileges.",
+   "location": "runtime-spec config.md > Process > Linux Process",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/config.md#linux-process"
+  },
+  {
+   "finding": "Lifecycle operations every OCI runtime implements: state, create, start, kill, delete (plus hooks).",
+   "quote": "Runtime and Lifecycle",
+   "location": "runtime-spec runtime.md > Operations (Query State, Create, Start, Kill, Delete)",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/runtime.md"
+  },
+  {
+   "finding": "Image workflow sentence: discovered by name, downloaded, verified by hash, trusted through a signature, unpacked into a runtime bundle.",
+   "quote": "Once built the OCI Image can then be discovered by name, downloaded, verified by hash, trusted through a signature, and unpacked into an OCI Runtime Bundle.",
+   "location": "image-spec spec.md > Overview",
+   "cite_url": "https://github.com/opencontainers/image-spec/blob/main/spec.md"
+  },
+  {
+   "finding": "Manifest holds content-addressable identities of layers.",
+   "quote": "At a high level the image manifest contains metadata about the contents and dependencies of the image including the content-addressable identity of one or more filesystem layer changeset archives that will be unpacked to make up the final runnable filesystem.",
+   "location": "image-spec spec.md > Overview",
+   "cite_url": "https://github.com/opencontainers/image-spec/blob/main/spec.md"
+  },
+  {
+   "finding": "Verify-on-untrusted rule.",
+   "quote": "This REQUIRED property is the digest of the targeted content, conforming to the requirements outlined in Digests. Retrieved content SHOULD be verified against this digest when consumed via untrusted sources.",
+   "location": "image-spec descriptor.md > Properties > digest",
+   "cite_url": "https://github.com/opencontainers/image-spec/blob/main/descriptor.md"
+  },
+  {
+   "finding": "gVisor and Kata are listed by runtime-spec as 'Runtime (Virtual Machine)' implementations — the OCI interface is how sandboxed runtimes slot under Docker/Kubernetes.",
+   "quote": "google/gvisor - gVisor is a user-space kernel, contains runsc to run sandboxed containers.",
+   "location": "runtime-spec implementations.md > Runtime (Virtual Machine)",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/implementations.md"
+  },
+  {
+   "finding": "Docker docs: gVisor and Kata plug in as containerd shims; drop-in runc replacements (e.g. youki) must be registered in the daemon config.",
+   "quote": "You can use any runtime that implements the containerd shim API. Such runtimes ship with a containerd shim, and you can use them without any additional configuration.",
+   "location": "Docker docs, Alternative container runtimes > 'What runtimes can I use?'",
+   "cite_url": "https://docs.docker.com/engine/daemon/alternative-runtimes/"
+  },
+  {
+   "finding": "runc self-description; Linux only.",
+   "quote": "runc is a CLI tool for spawning and running containers on Linux according to the OCI specification.",
+   "location": "runc README > Introduction",
+   "cite_url": "https://github.com/opencontainers/runc"
+  },
+  {
+   "finding": "containerd self-description.",
+   "quote": "containerd is an industry-standard container runtime with an emphasis on simplicity, robustness, and portability.",
+   "location": "containerd README (opening paragraph)",
+   "cite_url": "https://github.com/containerd/containerd"
+  },
+  {
+   "finding": "OCI origin.",
+   "quote": "The OCI was launched on June 22nd 2015 by Docker, CoreOS and other leaders in the container industry.",
+   "location": "opencontainers.org > About > Overview",
+   "cite_url": "https://opencontainers.org/about/overview/"
+  }
+ ],
+ "teaching_notes": "The pedagogical payload: config.json is literally the list of kernel features (namespaces, cgroups, seccomp, capabilities, masked/readonly paths, rlimits, read-only root) that together ARE 'a container' — there is no container object in the kernel. One correction for authors: capabilities, noNewPrivileges, AppArmor/SELinux labels live in config.md's process section, not in config-linux.md; cite config.md for those. The spec lists EIGHT namespace types (incl. cgroup and time), and an unlisted type means the container shares the runtime's namespace — a precise way to explain `--network host` / `--pid host`. 'Reference implementation' for runc is the runtime-spec implementations.md wording, not runc's README. The Docker->containerd->runc chain is citable to docs.docker.com (cite_url given). The 'Runtime and Lifecycle' extra is a locator rather than a sentence quote; the operation names come from runtime.md's headings."
+}

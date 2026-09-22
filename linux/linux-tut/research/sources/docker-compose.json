@@ -1,0 +1,186 @@
+{
+  "id": "docker-compose",
+  "tag": "[Compose]",
+  "citation": {
+    "authors": "Docker Inc.",
+    "title": "Compose file reference: Define services; Networks top-level element; Networking in Compose",
+    "venue": "Docker Docs",
+    "year": "2026 (living document)",
+    "url": "https://docs.docker.com/reference/compose-file/services/"
+  },
+  "fetched_urls": [
+    "https://docs.docker.com/reference/compose-file/services/ (as .md)",
+    "https://docs.docker.com/reference/compose-file/networks/ (as .md)",
+    "https://docs.docker.com/compose/how-tos/networking/ (as .md)",
+    "https://docs.docker.com/reference/compose-file/deploy/ (as .md)"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Service keys: image, build, command, init, user, read_only, cap_drop, security_opt, network_mode: none, networks, mem_limit / deploy.resources.limits, cpus, pids_limit, tmpfs, volumes (read_only), environment, healthcheck, depends_on",
+      "verdict": "confirmed",
+      "finding": "Every key exists in the current services reference with these meanings: image ([<registry>/][<project>/]<image>[:<tag>|@<digest>] - digest pinning supported); build (Compose Build Specification); command (overrides image CMD; NOT run via a shell); init: true ('runs an init process (PID 1) inside the container that forwards signals and reaps processes'); user ('The default is set by the image, for example Dockerfile USER. If it's not set, then root.'); read_only ('created with a read-only filesystem'); cap_add/cap_drop (lists of capability strings, ALL accepted); security_opt (e.g. no-new-privileges, no-new-privileges=true, no-new-privileges:true all equivalent); network_mode: none ('Turns off all container networking'; cannot be combined with networks); mem_limit; cpus (fractional, 0.000 = no limit); pids_limit (-1 unlimited); each of mem_limit/cpus/pids_limit 'must be consistent with' deploy.resources.limits.{memory,cpus,pids}; tmpfs (path or path:options with mode/uid/gid); volumes short syntax VOLUME:CONTAINER_PATH[:ACCESS_MODE] where rw 'is the default', long syntax has read_only: flag; environment (map or array; beats env_file); healthcheck (same semantics/defaults as Dockerfile HEALTHCHECK; test as CMD / CMD-SHELL / NONE; disable: true); depends_on (short = start order only, long = condition service_started | service_healthy | service_completed_successfully).",
+      "quote": "`user` overrides the user used to run the container process. The default is set by the image, for example Dockerfile `USER`. If it's not set, then `root`.",
+      "location": "Define services in Docker Compose > Attributes > user (and sibling attribute sections)",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#user"
+    },
+    {
+      "planned": "By default Compose creates one network for the app; every service joins and is reachable by service name",
+      "verdict": "confirmed",
+      "finding": "Confirmed; the network is named <project-name>_default (project name = directory name by default), uses the bridge driver, and service names are registered with an internal DNS server.",
+      "quote": "By default, Compose sets up a single network for your app. Each container for a service joins the default network and is both reachable by other containers on that network, and discoverable by its service name. This network uses the `bridge` driver.",
+      "location": "Networking in Compose > Default network and service discovery",
+      "cite_url": "https://docs.docker.com/compose/how-tos/networking/#default-network-and-service-discovery"
+    },
+    {
+      "planned": "networks: internal: true creates an externally isolated network",
+      "verdict": "confirmed",
+      "finding": "Exact wording below. Note what it does NOT promise: services on the same internal network can still reach each other; 'externally isolated' means no outbound/inbound connectivity beyond that network.",
+      "quote": "By default, Compose provides external connectivity to networks. `internal`, when set to `true`, lets you create an externally isolated network.",
+      "location": "Networks top-level element > Attributes > internal",
+      "cite_url": "https://docs.docker.com/reference/compose-file/networks/#internal"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "init key.",
+      "quote": "`init` runs an init process (PID 1) inside the container that forwards signals and reaps processes. Set this option to `true` to enable this feature for the service.",
+      "location": "services > init",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#init"
+    },
+    {
+      "finding": "read_only key.",
+      "quote": "`read_only` configures the service container to be created with a read-only filesystem.",
+      "location": "services > read_only",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#read_only"
+    },
+    {
+      "finding": "network_mode values; incompatible with networks.",
+      "quote": "- `none`: Turns off all container networking. - `host`: Gives the container raw access to the host's network interface. [...] When set, the `networks` attribute is not allowed and Compose rejects any Compose file containing both attributes.",
+      "location": "services > network_mode",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#network_mode"
+    },
+    {
+      "finding": "Implicit default network; opting out requires network_mode: none.",
+      "quote": "If `networks` is empty or absent from the Compose file, Compose considers an implicit definition for the service to be connected to the `default` network [...] If you want the service to not be connected a network, you must set `network_mode: none`.",
+      "location": "services > networks > Implicit default network",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#implicit-default-network"
+    },
+    {
+      "finding": "security_opt syntax.",
+      "quote": "For boolean options such as `no-new-privileges`, the value may be omitted entirely, in which case the option is treated as enabled. The following syntaxes are all equivalent: security_opt: - no-new-privileges - no-new-privileges=true - no-new-privileges:true",
+      "location": "services > security_opt",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#security_opt"
+    },
+    {
+      "finding": "cap_drop example.",
+      "quote": "`cap_drop` specifies container capabilities to drop as strings. cap_drop: - NET_ADMIN - SYS_ADMIN",
+      "location": "services > cap_drop",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#cap_drop"
+    },
+    {
+      "finding": "privileged key is platform-specific.",
+      "quote": "`privileged` configures the service container to run with elevated privileges. Support and actual impacts are platform specific.",
+      "location": "services > privileged",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#privileged"
+    },
+    {
+      "finding": "Resource keys.",
+      "quote": "`mem_limit` configures a limit on the amount of memory a container can allocate [...] When set, `mem_limit` must be consistent with the `limits.memory` attribute in the Deploy Specification.",
+      "location": "services > mem_limit",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#mem_limit"
+    },
+    {
+      "finding": "pids_limit.",
+      "quote": "`pids_limit` tunes a container's PIDs limit. Set to -1 for unlimited PIDs.",
+      "location": "services > pids_limit",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#pids_limit"
+    },
+    {
+      "finding": "deploy.resources.limits form.",
+      "quote": "- `limits`: The platform must prevent the container from allocating more resources. - `reservations`: The platform must guarantee the container can allocate at least the configured amount. [...] limits: cpus: '0.50' memory: 50M pids: 1",
+      "location": "Compose Deploy Specification > resources",
+      "cite_url": "https://docs.docker.com/reference/compose-file/deploy/#resources"
+    },
+    {
+      "finding": "command is not run through a shell.",
+      "quote": "Unlike the `CMD` instruction in a Dockerfile, the `command` field doesn't automatically run within the context of the `SHELL` instruction defined in the image. If your `command` relies on shell-specific features, such as environment variable expansion, you need to explicitly run it within a shell.",
+      "location": "services > command (NOTE)",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#command"
+    },
+    {
+      "finding": "volumes short-syntax access modes: rw is the default.",
+      "quote": "- `rw`: Read and write access. This is the default if none is specified. - `ro`: Read-only access.",
+      "location": "services > volumes > Short syntax",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#volumes"
+    },
+    {
+      "finding": "volumes long syntax fields; short syntax auto-creates missing host paths.",
+      "quote": "- `type`: The mount type. Either `volume`, `bind`, `tmpfs`, `image`, `npipe`, or `cluster` [...] - `read_only`: Flag to set the volume as read-only. [...] For bind mounts, the short syntax creates a directory at the source path on the host if it doesn't exist.",
+      "location": "services > volumes > Long syntax / Short syntax NOTE",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#volumes"
+    },
+    {
+      "finding": "environment precedence and YAML boolean gotcha.",
+      "quote": "Any boolean values; true, false, yes, no, should be enclosed in quotes to ensure they are not converted to True or False by the YAML parser. [...] When both `env_file` and `environment` are set for a service, values set by `environment` have precedence.",
+      "location": "services > environment",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#environment"
+    },
+    {
+      "finding": "depends_on short syntax does not wait for health.",
+      "quote": "Compose guarantees dependency services have been started before starting a dependent service. With short syntax, Compose does not wait for dependency services to be \"healthy\" before starting a dependent service.",
+      "location": "services > depends_on > Short syntax",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#depends_on"
+    },
+    {
+      "finding": "depends_on conditions.",
+      "quote": "- `service_started`: An equivalent of the short syntax described previously - `service_healthy`: Specifies that a dependency is expected to be \"healthy\" (as indicated by `healthcheck`) before starting a dependent service. - `service_completed_successfully`: Specifies that a dependency is expected to run to successful completion before starting a dependent service.",
+      "location": "services > depends_on > Long syntax",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#depends_on"
+    },
+    {
+      "finding": "healthcheck test forms.",
+      "quote": "If it's a list, the first item must be either `NONE`, `CMD` or `CMD-SHELL`. If it's a string, it's equivalent to specifying `CMD-SHELL` followed by that string. [...] Using `CMD-SHELL` runs the command configured as a string using the container's default shell (`/bin/sh` for Linux).",
+      "location": "services > healthcheck",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#healthcheck"
+    },
+    {
+      "finding": "image accepts a digest.",
+      "quote": "image: redis@sha256:0ed5d5928d4737458944eb604cc8509e245c3e19d02ad83935398bc4b991aac7",
+      "location": "services > image",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#image"
+    },
+    {
+      "finding": "stop_signal / stop_grace_period defaults: SIGTERM, 10 s then SIGKILL.",
+      "quote": "Default value is 10 seconds for the container to exit before sending SIGKILL.",
+      "location": "services > stop_grace_period",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#stop_grace_period"
+    },
+    {
+      "finding": "How the default network is named and what happens on `up`.",
+      "quote": "1. A network called `myapp_default` is created. 2. A container is created using `web`'s configuration. It joins `myapp_default` under the name `web`. 3. A container is created using `db`'s configuration. It joins `myapp_default` under the name `db`.",
+      "location": "Networking in Compose > Default network and service discovery",
+      "cite_url": "https://docs.docker.com/compose/how-tos/networking/#default-network-and-service-discovery"
+    },
+    {
+      "finding": "Service-to-service traffic uses the container port, not the published host port; reference by name not IP.",
+      "quote": "Networked service-to-service communication uses the `CONTAINER_PORT`. The host port is only used when accessing the service from outside the network.",
+      "location": "Networking in Compose > Default network and service discovery",
+      "cite_url": "https://docs.docker.com/compose/how-tos/networking/#default-network-and-service-discovery"
+    },
+    {
+      "finding": "default-bridge network_mode loses name resolution.",
+      "quote": "`bridge`: Connects the container to Docker's default bridge network instead of a project-specific network. Containers on the default bridge network cannot resolve each other by service name.",
+      "location": "services > network_mode",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#network_mode"
+    },
+    {
+      "finding": "ADDED BY PAGE-20 AUTHOR (fetched 2026-09-21). Compose keys that remove namespace walls: pid, network_mode: host, ipc, uts: host, userns_mode, privileged.",
+      "quote": "pid sets the PID mode for container created by Compose. Supported values are platform specific. [...] network_mode [...] host: Gives the container raw access to the host's network interface. [...] uts [...] host: Results in the container using the same UTS namespace as the host.",
+      "location": "Compose file reference > services > pid, network_mode, uts",
+      "cite_url": "https://docs.docker.com/reference/compose-file/services/#network_mode"
+    }
+  ],
+  "teaching_notes": "Nothing here was run (no compose project built) - all claims are doc-backed only; authors who show `docker compose` output must run it themselves. Useful for the sandbox-hardening page: Compose has a 1:1 key for every docker run hardening flag (read_only, cap_drop, security_opt, pids_limit, mem_limit, cpus, tmpfs, init, user, network_mode: none, networks.internal). Gotchas worth teaching: `command` is NOT shell-interpreted; short-syntax depends_on gives start ORDER, not readiness; `user` unset means root; volume short syntax defaults to rw and auto-creates host paths; network_mode and networks are mutually exclusive; unquoted yes/no/true/false env values are YAML booleans."
+}

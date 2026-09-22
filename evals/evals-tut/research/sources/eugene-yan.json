@@ -1,0 +1,79 @@
+{
+  "id": "eugene-yan",
+  "citation": {
+    "authors": "Eugene Yan",
+    "title": "Patterns for Building LLM-based Systems & Products (Jul 2023); Task-Specific LLM Evals that Do & Don't Work (Mar 2024); Evaluating the Effectiveness of LLM-Evaluators (aka LLM-as-Judge) (Aug 2024)",
+    "venue": "eugeneyan.com (personal practitioner blog)",
+    "year": "2023-2024",
+    "url": "https://eugeneyan.com/writing/llm-patterns/"
+  },
+  "fetched_urls": [
+    "https://eugeneyan.com/writing/llm-patterns/",
+    "https://eugeneyan.com/writing/evals/",
+    "https://eugeneyan.com/writing/llm-evaluators/"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Patterns for Building LLM-based Systems: evals as the first pattern; confirm framing",
+      "verdict": "confirmed",
+      "finding": "Evals is the first of seven patterns (Evals, RAG, Fine-tuning, Caching, Guardrails, Defensive UX, Collect user feedback). The patterns are 'organized along the spectrum of improving performance vs. reducing cost/risk, and closer to the data vs. closer to the user.' Yan explicitly recommends evals as the starting point.",
+      "quote": "Building solid evals should be the starting point for any LLM-based system or product (as well as conventional machine learning systems). ... How important evals are to the team is a major differentiator between folks rushing out hot garbage and those seriously building products.",
+      "location": "llm-patterns: intro + 'Evals: To measure performance' section"
+    },
+    {
+      "planned": "Positions on classification-style task-specific evals, reference-free vs reference-based evaluation",
+      "verdict": "confirmed",
+      "finding": "Confirmed in both llm-patterns and evals articles. llm-patterns: recommends starting by 'collecting a set of task-specific evals (i.e., prompt, context, expected outputs as references)' and for classification-like tasks using 'standard classification metrics such as recall, precision, PRAUC'; notes 'an emerging trend is to use a strong LLM as a reference-free metric to evaluate generations from other LLMs.' evals article: thesis is that off-the-shelf evals 'barely correlate with application-specific performance and aren't discriminative enough to use in production'; recommends recall, precision, ROC-AUC, PR-AUC and separation of distributions for categorical outputs; calls accuracy 'too coarse a metric to be useful'; covers reference-free metrics (recommends COMETKiwi for translation; 'In WMT23, it was the top baseline alongside COMET and BLEURT' and 'four of the top seven metrics in WMT23 were reference-free, suggesting that we may be able to reliably evaluate machine translations without the need for references soon') and critiques reference-based summarization metrics ('They require gold references which are a bottleneck').",
+      "quote": "If we're using an LLM for classification-like tasks (e.g., toxicity detection, document categorization) or extractive QA without dialogue, we can rely on standard classification metrics such as recall, precision, PRAUC, etc. ... an emerging trend is to use a strong LLM as a reference-free metric to evaluate generations from other LLMs. ... IMHO, accuracy is too coarse a metric to be useful. We'd need to separate it into recall and precision at minimum, ideally across thresholds.",
+      "location": "llm-patterns 'Evals' section; evals article intro + classification/extraction + translation + summarization appendix"
+    },
+    {
+      "planned": "LLM-evaluators piece: practical guidance on judge design, alignment with humans, and metric choice — extract the main verified recommendations",
+      "verdict": "confirmed",
+      "finding": "Main verified recommendations from 'Evaluating the Effectiveness of LLM-Evaluators (aka LLM-as-Judge)' (Aug 2024): (1) Prefer binary outputs — 'Where possible, I have my evaluators return binary outputs. This improves model performance while making it easier to apply classification metrics.' (2) Pairwise comparison is 'typically used—and more reliable—for subjective evals'; 'pairwise comparisons lead to more stable results and smaller differences between LLM judgments and human annotations.' (3) Chain-of-Thought 'improves the accuracy of LLM-evaluators.' (4) Watch position bias: 'Most LLM-evaluators preferred the first position, with gpt-3.5 being biased 50% of the time and claude-v1 being biased 70% of the time.' (5) For alignment metrics, use Cohen's kappa for binary/categorical data ('a more precise and conservative measurement of alignment compared to percentage agreement'; kappa 0.21-0.40 = fair, 0.41-0.60 = moderate agreement) and Kendall's tau / Spearman's rho for rankings. (6) Reference-based vs not: 'Reference-based evaluations require annotated references, while direct scoring and pairwise comparisons do not.'",
+      "quote": "Where possible, I have my evaluators return binary outputs. This improves model performance while making it easier to apply classification metrics. ... Cohen's κ provides a more precise and conservative measurement of alignment compared to percentage agreement.",
+      "location": "llm-evaluators: 'Techniques for prompting LLM-evaluators' and 'Aligning LLM-evaluators to our criteria' sections"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "LLM-evaluators are precision-skewed on factual consistency: in a SummEval study, the evaluator caught >95% of consistent summaries but only 30-60% of inconsistent ones — high precision, low recall, so a judge that 'looks good' may miss most real hallucinations.",
+      "quote": "While the LLM-evaluator identified >95% of consistent summaries (high precision), it only identified 30 - 60% of the inconsistent summaries (low recall).",
+      "numbers": ">95% precision-side detection; 30-60% recall on inconsistent summaries"
+    },
+    {
+      "point": "G-Eval's headline result is modest in absolute terms: GPT-4's Spearman correlation with human judgments averaged 0.514 — 'decent' but far from a substitute for humans.",
+      "quote": "Gpt-4 achieved decent Spearman's ρ with human judgments (average = 0.514).",
+      "numbers": "Spearman's rho = 0.514 (average)"
+    },
+    {
+      "point": "MT-Bench's widely cited agreement result: GPT-4-to-human agreement was 85%, exceeding human-human agreement of 81% — the canonical citation for LLM-as-judge viability, originally surfaced in the llm-patterns piece via the Vicuna/MT-Bench work.",
+      "quote": "Gpt-4 to human agreement was 85% which exceeded the human-human agreement of 81%.",
+      "numbers": "85% GPT-4-human agreement vs 81% human-human"
+    },
+    {
+      "point": "Even strong judges fall short of human-human agreement when measured with chance-corrected metrics: gpt-4 and llama-3-70b achieved Cohen's kappa of 0.84 and 0.79 vs human-human kappa of 0.97.",
+      "quote": "Gpt-4 and llama-3-70b had good human-alignment, achieving Cohen's κ of 0.84 and 0.79 respectively. However, they were still significantly lower than the human-human Cohen's κ of 0.97.",
+      "numbers": "kappa 0.84 (gpt-4), 0.79 (llama-3-70b), 0.97 (human-human)"
+    },
+    {
+      "point": "A small finetuned NLI model can beat LLM-based evals for factual consistency: with a few hundred task-specific samples it 'likely outperforms n-gram, similarity, and LLM-based evals,' and with a thousand-plus samples becomes 'a solid factual consistency eval and may be good enough as a hallucination guardrail.' Bootstrap labels from open benchmarks (FIB, USB).",
+      "quote": "With a few hundred task-specific samples, the model starts to identify obvious factual inconsistencies and likely outperforms n-gram, similarity, and LLM-based evals. ... With a thousand samples or more, it becomes a solid factual consistency eval and may be good enough as a hallucination guardrail.",
+      "numbers": "few hundred samples to outperform LLM-based evals; 1,000+ samples for guardrail quality"
+    },
+    {
+      "point": "Hallucination detection by LLMs is unreliable: on HaluEval the best model (gpt-3.5-turbo) achieved only 58.5% accuracy distinguishing factual from hallucinated summaries — barely above chance.",
+      "quote": "The best-performing model (gpt-3.5-turbo) had only 58.5% accuracy in distinguishing factual and hallucinated summaries.",
+      "numbers": "58.5% accuracy (HaluEval, gpt-3.5-turbo)"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say the seven patterns are organized 'from defensive to offensive' or along 'axes' — the prose says they're 'organized along the spectrum of improving performance vs. reducing cost/risk, and closer to the data vs. closer to the user.'",
+    "Do not cite the MT-Bench 85% vs 81% number as proof judges equal humans across the board — the same author documents kappa 0.84/0.79 vs human-human 0.97, low recall on inconsistent summaries (30-60%), and ChatGPT-human correlation of 0.3-0.6 vs expert-expert 0.8-0.9 for summarization. Percentage agreement and chance-corrected kappa tell different stories.",
+    "Do not present 'reference-free' as uniformly better — Yan presents it as an emerging trend with caveats; in the LLM-evaluators piece, removing the gold reference from Prometheus caused 'the greatest performance degradation.'",
+    "Do not attribute the 'evals first' framing to the evals (Mar 2024) article — it comes from the llm-patterns (Jul 2023) article. The Mar 2024 piece's thesis is that off-the-shelf evals don't work for task-specific use.",
+    "The position-bias numbers (gpt-3.5 biased 50%, claude-v1 biased 70% toward first position) refer to older models from cited papers, not current models."
+  ],
+  "notes_for_authors": "Strong practitioner SSOT spanning three articles with consistent through-line: (1) llm-patterns (Jul 2023) establishes evals as pattern #1 and the 'starting point' for any LLM system; (2) evals (Mar 2024) argues off-the-shelf evals barely correlate with application performance and prescribes per-task metrics — classification metrics (recall/precision/ROC-AUC/PR-AUC, never bare accuracy), finetuned NLI for summarization consistency, chrF/COMETKiwi for translation, longest-common-subsequence for copyright regurgitation, RealToxicityPrompts/BOLD for toxicity; (3) llm-evaluators (Aug 2024) gives judge-design guidance: binary outputs over Likert scales, pairwise for subjective evals, CoT helps, control position bias, and measure judge-human alignment with Cohen's kappa (categorical) or Kendall/Spearman (rankings) rather than raw percentage agreement. The three articles together make a clean teaching arc: evals first -> task-specific metrics -> judge validation. All quotes above were verified against live pages on 2026-06-10 via WebFetch, including a second verbatim spot-check pass on quotes from all three articles (all confirmed present; two paraphrases corrected: 'spectrum' not 'axes', and the COMETKiwi/WMT23 wording). The llm-patterns page does not display a publication date inline; July 2023 confirmed via Yan's own site index and LinkedIn announcement."
+}

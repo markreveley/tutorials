@@ -1,0 +1,91 @@
+{
+  "id": "eleuther-trenches",
+  "citation": {
+    "authors": "Stella Biderman, Hailey Schoelkopf, Lintang Sutawika, Leo Gao, Jonathan Tow, Baber Abbasi, Alham Fikri Aji, Pawan Sasanka Ammanamanchi, Sidney Black, Jordan Clive, Anthony DiPofi, Julen Etxaniz, Benjamin Fattori, Jessica Zosa Forde, Charles Foster, Jeffrey Hsu, Mimansa Jaiswal, Wilson Y. Lee, Haonan Li, Charles Lovering, Niklas Muennighoff, Ellie Pavlick, Jason Phang, Aviya Skowron, Samson Tan, Xiangru Tang, Kevin A. Wang, Genta Indra Winata, Francois Yvon, Andy Zou",
+    "title": "Lessons from the Trenches on Reproducible Evaluation of Language Models",
+    "venue": "arXiv:2405.14782 [cs.CL] (first posted 2024; text verified against v3, dated 31 May 2026)",
+    "year": "2024",
+    "url": "https://arxiv.org/abs/2405.14782"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2405.14782",
+    "https://arxiv.org/pdf/2405.14782"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Minor prompt formatting changes cause large score swings — confirm examples/magnitudes",
+      "verdict": "confirmed",
+      "finding": "Confirmed with exact numbers. Section 3.1 (Table 1, 0-shot accuracy) shows two common prompt styles produce dramatically different scores: ARC-Challenge cloze vs MMLU-style — GPT-NeoX-20B 38.0±2.78% vs 26.6±2.53%, Falcon-7B 40.2±2.81% vs 25.9±2.51%, Mistral-7B 50.1±2.86% vs 72.4±2.56%, Mixtral-8x7B 56.7±2.84% vs 81.3±2.23%; MMLU Hybrid vs MMLU-style — Mistral-7B 48.3±0.80% vs 58.6±0.77%. Which style wins varies by model, so prompt choice changes model rankings, not just scores. The most extreme case (Section 4.1): GPT-NeoX on ARC-Easy scores 72.4±1.80% cloze but 26.5±1.78% MMLU-style — a ~46-point swing. The paper also cites whitespace-level sensitivity.",
+      "quote": "performance varies dramatically with the prompt (in some cases, > 20%), and which prompt style works best varies by model. Thus, the selection of prompt affects the model rankings and research conclusions produced in addition to numeric scores themselves ... the precise string used for a given prompt, even down to whitespace usage, can significantly impact performance ... An even more extreme example is from ARC-Easy: using the \"cloze\" evaluation setup, GPT-NeoX achieves an accuracy of 72.4 ± 1.80% but using the MMLU-style setup it scores 26.5 ± 1.78%.",
+      "location": "Section 3.1 ('Minor' Implementation Details Matter), Table 1; Section 4.1 (The Benchmark Lottery); Appendix C.1"
+    },
+    {
+      "planned": "Implementation/harness differences make cross-paper comparisons unreliable — confirm catalogued issues",
+      "verdict": "confirmed",
+      "finding": "Confirmed. The paper (citing Fourrier et al. 2023b) reports that three independent MMLU implementations (HELM, lm-eval, original MMLU code) produce widely different scores and even change model ranking order. It catalogues concrete pitfalls: MMLU must be micro-averaged across documents, not macro-averaged across its 57 subjects — a choice that 'affects results by several percentage points' and is often unreported; AI2 ARC has a single question with 5 answer choices instead of 4; HumanEval has 3 documents lacking the example tests all others have; perplexity computed with nonoverlapping windows systematically favors longer-context models. The best-practices checklist explicitly warns against copying numbers across papers. Note: the three-implementation MMLU comparison is a cited result (Fourrier et al.), not an experiment original to this paper.",
+      "quote": "comparing three independent implementations of MMLU (HELM, lm-eval, and the original MMLU code), they find that these implementations produce widely different scores and even change the ranking order of models ... despite ostensibly evaluating the same benchmark. ... Avoid copying results from other implementations. Comparing results across papers can be misleading due to a wide range of experimental differences, including prompts, sample size, metric calculation, and more.",
+      "location": "Section 3.1 (Crucial Details Go Unreported / Each Task Requires Care); Appendix D (Best Practices Checklist)"
+    },
+    {
+      "planned": "Best practices: share exact prompts and code, report all numbers, use standardized harnesses (lm-evaluation-harness) — confirm recommendations",
+      "verdict": "confirmed",
+      "finding": "Largely confirmed, with one nuance. Section 3.2 recommends: Provide Evaluation Code; Provide Prompts and Detail Methodology Thoroughly; Create Reporting Standards. Appendix D checklist: 'Always share your exact prompts', 'Avoid copying results from other implementations', 'Always provide model outputs', 'Perform qualitative analyses', 'Perform statistical significance testing'. Section 3.3 recommends unified evaluation libraries (lm-eval or HELM), noting reporting lm-eval task+version 'has become a de facto reporting standard'. Nuance: the paper does not literally say 'report all numbers' — the closest recommendations are reporting variance/uncertainty and sources of error (Section 4.2) and providing raw model outputs so others can recompute scores.",
+      "quote": "Always share your exact prompts. If possible, full evaluation code including the full prompts used should be provided for reproducible evaluation runs. ... Prompts should not be optimized for performance on a given model, and the amount of prompt engineering done should be disclosed. ... By using easier-to-run unified evaluation libraries such as lm-eval or HELM (Liang et al., 2023), one can have a single location for many existing benchmark implementations ... Perform Statistical Analyses, and Report on Sources of Variance and Error.",
+      "location": "Section 3.2 (Best Practices), Section 3.3, Section 4.2, Appendix D (Best Practices Checklist)"
+    },
+    {
+      "planned": "Issues catalogued: answer extraction fragility, tokenization differences, log-likelihood vs generative scoring",
+      "verdict": "confirmed",
+      "finding": "Confirmed; all three are catalogued, mainly in Appendix B. (1) Answer extraction: regex/heuristic extraction of generated answers is 'a highly imperfect solution' — patterns are format-dependent and can bias toward models that happen to match the expected format, conflating format compliance with correctness; lm-eval addresses this with a customizable Filter component. (2) Tokenization: tokenizing input and target separately and concatenating 'is not always valid, and most widely-used language model tokenizers provide no such guarantees'; lm-eval mitigates by shifting trailing prompt whitespace into the target string. Loglikelihood normalization choices (raw, token-length, byte-length/acc_norm, mutual information) also differ across setups. (3) Loglikelihood vs generative scoring: Appendix B.5 compares them, and Section 4.1 cites Lyu et al. (2024) showing loglikelihood-based and generative-scored multiple-choice benchmarks 'do not even agree'. Many APIs do not expose log-probabilities, forcing generative evaluation with its extra variance.",
+      "quote": "However, this is often a highly imperfect solution, as different models may generate responses in varying formats, making it challenging to create a universal regex pattern that works for all models. ... This assumption is not always valid, and most widely-used language model tokenizers provide no such guarantees. ... research like Lyu et al. (2024) demonstrate that multiple-choice loglikelihood-based benchmarks do not even agree with generative-scored multiple-choice benchmarks.",
+      "location": "Appendix B.2 (Tokenization, Normalization), Appendix B.4 (Scoring and Answer Extraction), Appendix B.5 (Comparing Generative and Loglikelihood-based Evaluation), Section 4.1"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The 'Key Problem' framing: LM evaluation is hard because many syntactically different strings are semantically equivalent, and the best automated tools for judging semantic equivalence are the very models being evaluated. All eval approaches (closed-domain conversion/MCQA, model-based grading, human labor) are workarounds with trade-offs.",
+      "quote": "When evaluating language models, there can be many semantically equivalent but syntactically different ways of expressing the same idea. ... our best automated tools for determining whether two sentences are semantically equivalent are the very models we are seeking to evaluate.",
+      "numbers": "Section 2.1"
+    },
+    {
+      "point": "Single-run point estimates vs confidence intervals can reverse conclusions: GPQA results for OpenAI/Anthropic models look very different as one run vs a 95% CI over 10 runs. Small benchmarks make this acute — HumanEval has only 164 examples, so touted 'improvements' may wash out under resampling.",
+      "quote": "Presenting single-run point estimates of performance (top) instead of a 95% confidence interval across 10 runs of the benchmark (bottom) paints a very different pictures regarding the comparative performance of different models. Similar behavior holds for benchmarks such as HumanEval (Chen et al., 2021), which contains only 164 examples.",
+      "numbers": "10 runs, 95% CI, HumanEval n=164; Section 4.1, Figure 2 (data from Lukosiute 2024)"
+    },
+    {
+      "point": "Aggregation choices silently change scores: MMLU is correctly the micro average over all documents, not the macro average over its 57 subjects — the choice moves results by several percentage points and is usually unreported.",
+      "quote": "MMLU (Hendrycks et al., 2020) is correctly calculated via performing the micro average by averaging accuracy across documents, rather than macro-averaging unweighted accuracies of each of the 57 subjects–the choice of which affects results by several percentage points.",
+      "numbers": "57 subjects, 'several percentage points'; Section 3.1"
+    },
+    {
+      "point": "The Benchmark Lottery and leaderboard gaming: on the Open LLM Leaderboard, practitioners fine-tuned models to match the leaderboard's evaluation format — e.g. targeting separator tokens used in particular lm-eval versions — rather than improving underlying capability. Counterfactual: had MMLU-style prompting been the GPT-3-era standard, Pile-trained models like GPT-NeoX-20B would have looked near-random and the developers might have wrongly concluded their dataset was garbage.",
+      "quote": "practitioners have been observed fine-tuning their models specifically to match the evaluation format used by the leaderboard, such as targeting separator tokens used in particular versions of lm-eval, rather than improving the underlying capabilities being measured.",
+      "numbers": "GPT-NeoX-20B near-random (26.5-27.6%) under MMLU-style prompts vs 38-72.4% cloze; Section 4.1"
+    },
+    {
+      "point": "lm-eval operationalizes good defaults: bootstrapped standard errors reported by default; --limit and --log_samples flags for qualitative dry-runs; prompts changeable via one line of a YAML config; the bootstrap CI measures variation over question sampling, which is a different notion than variation over model reruns — both matter.",
+      "quote": "We report bootstrapped standard error metrics by default, making reporting of confidence intervals (as we have done in this paper) nearly as simple as copy-pasting an additional number into one's paper.",
+      "numbers": "Sections 3.3 and 4.3; experiments run on lm-eval v0.4.2"
+    },
+    {
+      "point": "Benchmark scores are proxies, not the quantity of interest, and validity is often untested: loglikelihood MCQA disagrees with generative scoring of the same questions (Lyu et al. 2024), and safety-trained models that look unbiased on bias benchmarks 'amplify biases far beyond what is suggested by their training data' in realistic interactions (Omiye et al. 2023; Hofmann et al. 2024). The popularity of 'vibes tests' and Chatbot Arena is described as 'a powerful indictment of the current state of benchmarking'.",
+      "quote": "The appropriate conclusions to draw about a model's behavior are informed by, not constituted by, these numerical scores.",
+      "numbers": "Section 4 / 4.1"
+    },
+    {
+      "point": "Perplexity comparisons hide methodology traps: nonoverlapping-window perplexity systematically favors longer-context models via the 'Early Token Curse' (Press et al. 2020); cross-tokenizer comparisons require tokenizer-agnostic metrics (bits-per-byte, word-level, or byte-level perplexity — lm-eval reports all three).",
+      "quote": "the methodology typically used–'nonoverlapping windows' ... to compute perplexity on greater-than-context-length sequences systematically skews results in favor of models trained and thus evaluated with longer context lengths.",
+      "numbers": "Section 3.1; Appendix B.3"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say the paper found swings of exactly 20% — it says 'in some cases, > 20%' in Table 1, and the most extreme documented case is ~46 points (GPT-NeoX on ARC-Easy: 72.4% cloze vs 26.5% MMLU-style).",
+    "The HELM vs lm-eval vs original-MMLU three-implementation comparison is cited from Fourrier et al. (2023b), not an original experiment of this paper; the paper's own original experiment is the cloze vs MMLU-style prompt comparison (Table 1).",
+    "'Report all numbers' is not a literal recommendation in the paper; the actual checklist items are: share exact prompts, release evaluation code, provide model outputs, avoid copying results across papers, perform qualitative analyses, and perform statistical significance testing / report variance.",
+    "The paper recommends standardized harnesses naming both lm-eval AND HELM, and explicitly says lm-eval is 'intentionally non-opinionated about what to evaluate' (an orchestration library) — don't present it as prescribing benchmarks.",
+    "The paper scopes its analysis mainly to MCQA-style evaluations ('we focus on MCQA evaluations because they are the approach we have the most experience with') and urges caution generalizing.",
+    "Version caveat: the verified text is arXiv v3 (dated 31 May 2026). Some content (e.g. Section 2.2 'Social Dynamics of Evaluation', the GPQA/Lukosiute figure, Open LLM Leaderboard gaming example) may not appear in the 2024 v1. If the course cites 'arXiv 2024', quote-level claims should be checked against the specific version cited, or cite v3 explicitly."
+  ],
+  "notes_for_authors": "Strongest teaching asset is Table 1 (Section 3.1): real 0-shot accuracy numbers for 5 named models under two prompt styles, showing rank reversals (GPT-NeoX prefers cloze 38.0 vs 26.6; Mixtral prefers MMLU-style 81.3 vs 56.7). Pair it with the ARC-Easy extreme (72.4 vs 26.5) and the counterfactual 'we could have concluded our dataset was garbage' story for why this matters. For the statistics tier, use the GPQA single-run vs 10-run 95% CI figure and HumanEval n=164, plus the paper's distinction between two notions of variance (rerun variance vs question-sampling bootstrap variance) — that maps directly onto measurement-error pedagogy. The Appendix D checklist is quotable verbatim as a best-practices slide. Cite as Biderman, Schoelkopf, Sutawika et al. (lead authors marked with *), EleutherAI et al., arXiv:2405.14782. Verify quotes against v3 if quoting verbatim, since v1 (May 2024) may differ."
+}

@@ -1,0 +1,204 @@
+{
+  "id": "oom",
+  "tag": "[Kernel: cgroup-v2]",
+  "citation": {
+    "authors": "Tejun Heo et al. (Linux kernel documentation); Docker Inc.; Linux man-pages project",
+    "title": "Control Group v2 (kernel admin guide); Docker 'Resource constraints'; proc_pid_oom_score(5), proc_pid_oom_score_adj(5)",
+    "venue": "docs.kernel.org; docs.docker.com; man7.org (man-pages 6.19)",
+    "year": "2026",
+    "url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+  },
+  "fetched_urls": [
+    "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+    "https://docs.docker.com/engine/containers/resource_constraints/",
+    "https://docs.docker.com/reference/cli/docker/container/run/",
+    "https://man7.org/linux/man-pages/man5/proc_pid_oom_score.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_pid_oom_score_adj.5.html",
+    "https://man7.org/linux/man-pages/man7/cgroups.7.html",
+    "https://man7.org/linux/man-pages/man2/fork.2.html",
+    "https://man7.org/linux/man-pages/man1/dmesg.1.html",
+    "https://docs.kernel.org/admin-guide/sysctl/kernel.html"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "memory.max is a hard limit; if usage reaches it and cannot be reclaimed, the OOM killer is invoked in the cgroup",
+      "verdict": "confirmed",
+      "finding": "Verbatim. Default is 'max' (no limit). Bytes. Usage may go over temporarily. The OOM killer invoked for a cgroup never kills tasks outside that cgroup. Executed: `--memory 64m` -> memory.max = 67108864.",
+      "quote": "Memory usage hard limit. This is the main mechanism to limit memory usage of a cgroup. If a cgroup's memory usage reaches this limit and can't be reduced, the OOM killer is invoked in the cgroup. Under certain circumstances, the usage may go over the limit temporarily.",
+      "location": "cgroup-v2.html, Controllers > Memory > Memory Interface Files > memory.max",
+      "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files"
+    },
+    {
+      "planned": "memory.events has oom and oom_kill counters — the authoritative way to tell that a container's process was OOM-killed; memory.current, memory.peak, memory.high (throttle), memory.swap.max",
+      "verdict": "confirmed",
+      "finding": "memory.events keys: low, high, max, oom, oom_kill, oom_group_kill, sock_throttled. 'max' = times usage was about to exceed memory.max (reclaim pressure, not a kill); 'oom' = times the limit was reached and an allocation was about to fail; 'oom_kill' = NUMBER OF PROCESSES in the cgroup killed by any OOM killer. Counters are hierarchical (include descendants); memory.events.local is this-cgroup-only. memory.current = bytes in use now by cgroup+descendants. memory.peak = max usage recorded since cgroup creation (or reset). memory.high = throttle limit, default max: over it, processes are throttled and put under heavy reclaim; 'never invokes the OOM killer'. memory.swap.max = SWAP-ONLY hard limit, default max ('authoritative' is this note's judgement, not the doc's word). Executed: after one OOM kill memory.events showed 'max 19 / oom 1 / oom_kill 1' and memory.peak 67108864.",
+      "quote": "oom_kill The number of processes belonging to this cgroup killed by any kind of OOM killer.",
+      "location": "cgroup-v2.html, Memory Interface Files > memory.events (also memory.current, memory.high, memory.peak, memory.swap.max entries)",
+      "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files"
+    },
+    {
+      "planned": "OOM-killed process receives SIGKILL → exit status 137 seen by shell/Docker; docker inspect State.OOMKilled field",
+      "verdict": "corrected",
+      "finding": "Executed and true for the killed process itself (bash reports 137 = 128+9; if that process is the container's PID 1 the container ExitCode is 137 and State.OOMKilled=true). CORRECTION to the implied equivalence: container ExitCode and OOMKilled are independent. (a) If the OOM victim is a CHILD and PID 1 carries on, the container can exit 0 with OOMKilled=true (executed). (b) ExitCode 137 with OOMKilled=false is what a `docker stop` timeout SIGKILL produces (executed, see 'pid1'). So: 137 means 'died of SIGKILL', not 'OOM'; OOMKilled=true means 'some process in the container was OOM-killed', not 'the container died of OOM'. The kernel doc does not itself name the signal in the memory section (cgroup.kill does say SIGKILL); Docker's resource-constraints page says only that 'the kernel kills processes in a container'. SIGKILL is established here by execution (bash prints 'Killed', status 137).",
+      "quote": "$ docker run --name lt-R2-oom2 --memory 64m --memory-swap 64m ubuntu:24.04 tail /dev/zero; echo \"container exit=$?\"\ncontainer exit=137\n$ docker inspect lt-R2-oom2 --format 'OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}} Status={{.State.Status}}'\nOOMKilled=true ExitCode=137 Status=exited",
+      "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1, cgroup v2, kernel 6.10.14-linuxkit)"
+    },
+    {
+      "planned": "Docker: by default a container has no resource constraints; -m/--memory, --memory-swap semantics (if --memory set and --memory-swap unset, swap = same amount again → total 2x), --cpus, --pids-limit",
+      "verdict": "confirmed",
+      "finding": "All confirmed. --memory minimum is 6m. --memory-swap is the TOTAL of memory+swap and only has meaning with --memory: positive N -> swap = N - memory; equal to --memory -> no swap; unset -> swap equal to --memory (total 2x) 'if the host has swap memory configured'; 0 -> treated as unset; -1 -> unlimited swap. --cpus=1.5 == --cpu-period=100000 --cpu-quota=150000. --pids-limit: 'Tune container pids limit (set -1 for unlimited)' (run reference; no default stated). Executed on cgroup v2: --memory 64m alone -> memory.swap.max 67108864 (swap-only value = same again); with --memory-swap 64m -> memory.swap.max 0; no flags -> memory.max 'max', cpu.max 'max 100000', pids.max 'max'.",
+      "quote": "By default, a container has no resource constraints and can use as much of a given resource as the host's kernel scheduler allows.",
+      "location": "Docker docs, Resource constraints (intro); '--memory-swap details' for swap rules",
+      "cite_url": "https://docs.docker.com/engine/containers/resource_constraints/"
+    },
+    {
+      "planned": "cpu.max format 'quota period' (e.g. '150000 100000' = 1.5 CPUs); CPU limit throttles rather than kills; cpu.stat nr_throttled/throttled_usec",
+      "verdict": "confirmed",
+      "finding": "Format '$MAX $PERIOD', default 'max 100000'; durations are in microseconds (so period default = 100 ms); 'max' = no limit; writing one number updates $MAX only. cpu.stat always has usage_usec, user_usec, system_usec; with the controller enabled also nr_periods, nr_throttled, throttled_usec, nr_bursts, burst_usec. 'Throttles rather than kills': the kernel doc says the group 'may consume up to $MAX in each $PERIOD'; Docker says the container 'is limited to before being throttled'. Executed: a busy loop under --cpus 0.5 ran to its 3 s timeout (not killed) with nr_periods 30, nr_throttled 30, throttled_usec 1466110; --cpus 1.5 -> cpu.max '150000 100000'.",
+      "quote": "The maximum bandwidth limit. It's in the following format: $MAX $PERIOD which indicates that the group may consume up to $MAX in each $PERIOD duration. \"max\" for $MAX indicates no limit. If only one number is written, $MAX is updated.",
+      "location": "cgroup-v2.html, Controllers > CPU > CPU Interface Files > cpu.max; units: 'All time durations are in microseconds.'",
+      "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files"
+    },
+    {
+      "planned": "pids.max limits number of processes; fork fails with EAGAIN when reached (fork-bomb containment)",
+      "verdict": "confirmed",
+      "finding": "pids.max: hard limit of number of processes, default 'max'. Counts TIDs (threads count). fork()/clone() return -EAGAIN. pids.current = current count incl. descendants; pids.peak; pids.events 'max' counts hits. pids.current can exceed pids.max via migration or lowering the limit, never via fork. The doc itself gives the fork-bomb rationale. Executed: --pids-limit 10 -> bash 'fork: retry: Resource temporarily unavailable', pids.events 'max 3'.",
+      "quote": "However, it is not possible to violate a cgroup PID policy through fork() or clone(). These will return -EAGAIN if the creation of a new process would cause a cgroup policy to be violated.",
+      "location": "cgroup-v2.html, Controllers > PID > PID Interface Files",
+      "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#pid"
+    },
+    {
+      "planned": "cgroup v2 single unified hierarchy mounted at /sys/fs/cgroup; a process belongs to exactly one cgroup; /proc/PID/cgroup shows it; controllers listed in cgroup.controllers",
+      "verdict": "confirmed",
+      "finding": "'only single hierarchy'; 'every process in the system belongs to one and only one cgroup', all threads of a process in the same cgroup; children start in the parent's cgroup. /proc/$PID/cgroup v2 entry format '0::$PATH'. cgroup.controllers: read-only space-separated list of controllers available to the cgroup. The /sys/fs/cgroup mount point is convention, not kernel mandate: the kernel doc mounts at '$MOUNT_POINT'; systemd(1) and systemd-cgls(1) name /sys/fs/cgroup/; cgroups(7) still mentions the older hybrid location /sys/fs/cgroup/unified. Executed in ubuntu:24.04 container: 'cgroup /sys/fs/cgroup cgroup2 ro,nosuid,nodev,noexec,relatime' (READ-ONLY inside the container), /proc/self/cgroup = '0::/' (cgroup namespace hides the host path), controllers 'cpuset cpu io memory hugetlb pids rdma'.",
+      "quote": "cgroups form a tree structure and every process in the system belongs to one and only one cgroup. All threads of a process belong to the same cgroup. On creation, all processes are put in the cgroup that the parent process belongs to at the time.",
+      "location": "cgroup-v2.html, Introduction > What is cgroup?; Basic Operations > Mounting ('Unlike v1, cgroup v2 has only single hierarchy.'); Processes ('0::$PATH')",
+      "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html"
+    },
+    {
+      "planned": "(Added by page-13 author) dmesg reads the kernel ring buffer; access can be restricted (dmesg_restrict / CAP_SYSLOG); OOM kills are recorded in the kernel log",
+      "verdict": "confirmed",
+      "finding": "dmesg(1): 'dmesg is used to examine or control the kernel ring buffer.' -T prints human-readable timestamps with the caveat 'Be aware that the timestamp could be inaccurate!'; -w waits for new messages; 'dmesg can fail reporting permission denied error. This is usually caused by dmesg_restrict kernel setting'. Kernel sysctl doc: with dmesg_restrict=1 'users must have CAP_SYSLOG to use dmesg(8)'. EXECUTED (Docker Desktop linuxkit kernel 6.10, 2026-09-21): in a default container `dmesg` fails with 'dmesg: read kernel buffer failed: Operation not permitted' (Docker's default capability set lacks CAP_SYSLOG); with --cap-add SYSLOG it works and shows, for a cgroup OOM kill, the lines '<comm> invoked oom-killer: …', 'oom-kill:constraint=CONSTRAINT_MEMCG,…,oom_memcg=/docker/<container id>,…' and 'Memory cgroup out of memory: Killed process <pid> (<comm>) total-vm:…, anon-rss:…'. The ring buffer is NOT namespaced: the same dmesg showed OOM kills from other containers on the host.",
+      "quote": "When dmesg_restrict is set to 0 there are no restrictions. When dmesg_restrict is set to 1, users must have CAP_SYSLOG to use dmesg(8).",
+      "location": "dmesg(1) DESCRIPTION / OPTIONS / NOTES; docs.kernel.org admin-guide/sysctl/kernel.html#dmesg-restrict",
+      "cite_url": "https://man7.org/linux/man-pages/man1/dmesg.1.html"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "memory.high exact text — throttle, never OOM.",
+      "quote": "Memory usage throttle limit. If a cgroup's usage goes over the high boundary, the processes of the cgroup are throttled and put under heavy reclaim pressure. Going over the high limit never invokes the OOM killer and under extreme conditions the limit may be breached.",
+      "location": "cgroup-v2.html, Memory Interface Files > memory.high"
+    },
+    {
+      "finding": "memory.events 'max' and 'oom' exact text (so authors can explain 'max 19, oom 1, oom_kill 1').",
+      "quote": "max The number of times the cgroup's memory usage was about to go over the max boundary. If direct reclaim fails to bring it down, the cgroup goes to OOM state. oom The number of time the cgroup's memory usage was reached the limit and allocation was about to fail.",
+      "location": "cgroup-v2.html, Memory Interface Files > memory.events"
+    },
+    {
+      "finding": "memory.events is hierarchical; memory.events.local is not.",
+      "quote": "Note that all fields in this file are hierarchical and the file modified event can be generated due to an event down the hierarchy. For the local events at the cgroup level see memory.events.local.",
+      "location": "cgroup-v2.html, Memory Interface Files > memory.events"
+    },
+    {
+      "finding": "memory.current and memory.peak exact text.",
+      "quote": "memory.current ... The total amount of memory currently being used by the cgroup and its descendants. / memory.peak ... The max memory usage recorded for the cgroup and its descendants since either the creation of the cgroup or the most recent reset for that FD.",
+      "location": "cgroup-v2.html, Memory Interface Files"
+    },
+    {
+      "finding": "memory.swap.max is a swap-only limit (cgroup v2 accounts swap separately; Docker's --memory-swap is memory+swap and is translated).",
+      "quote": "Swap usage hard limit. If a cgroup's swap usage reaches this limit, anonymous memory of the cgroup will not be swapped out.",
+      "location": "cgroup-v2.html, Memory Interface Files > memory.swap.max"
+    },
+    {
+      "finding": "memory.oom.group: kill the whole cgroup together; cgroup OOM never kills outside the cgroup; oom_score_adj -1000 tasks are exempt.",
+      "quote": "If the OOM killer is invoked in a cgroup, it's not going to kill any tasks outside of this cgroup, regardless memory.oom.group values of ancestor cgroups.",
+      "location": "cgroup-v2.html, Memory Interface Files > memory.oom.group"
+    },
+    {
+      "finding": "cgroup.kill: writing 1 SIGKILLs every process in the cgroup subtree, race-free against forks — the clean way to tear down a sandbox.",
+      "quote": "Writing \"1\" to the file causes the cgroup and all descendant cgroups to be killed. This means that all processes located in the affected cgroup tree will be killed via SIGKILL. Killing a cgroup tree will deal with concurrent forks appropriately and is protected against migrations.",
+      "location": "cgroup-v2.html, Core Interface Files > cgroup.kill"
+    },
+    {
+      "finding": "PID controller rationale (fork bomb) and that it counts TIDs.",
+      "quote": "The number of tasks in a cgroup can be exhausted in ways which other controllers cannot prevent, thus warranting its own controller. For example, a fork bomb is likely to exhaust the number of tasks before hitting memory restrictions. Note that PIDs used in this controller refer to TIDs, process IDs as used by the kernel.",
+      "location": "cgroup-v2.html, Controllers > PID"
+    },
+    {
+      "finding": "Controller behaviour is hierarchical: a limit near the root cannot be loosened further down.",
+      "quote": "When a controller is enabled on a nested cgroup, it always restricts the resource distribution further. The restrictions set closer to the root in the hierarchy can not be overridden from further away.",
+      "location": "cgroup-v2.html, Introduction > What is cgroup?"
+    },
+    {
+      "finding": "cgroup namespace: a process inside sees /proc/self/cgroup relative to its namespace root ('0::/'); the real path is visible only from the initial namespace.",
+      "quote": "Each process gets its namespace-specific view of \"/proc/$PID/cgroup\" Processes running inside the cgroup namespace will be able to see cgroup paths (in /proc/self/cgroup) only inside their root cgroup.",
+      "location": "cgroup-v2.html, Namespace > Basics"
+    },
+    {
+      "finding": "Docker --memory-swap rules, exact text for the unset case.",
+      "quote": "If --memory-swap is unset, and --memory is set, the container can use as much swap as the --memory setting, if the host has swap memory configured. For instance, if --memory=\"300m\" and --memory-swap is not set, the container can use 600m in total of memory and swap.",
+      "location": "Docker docs, Resource constraints > --memory-swap details",
+      "cite_url": "https://docs.docker.com/engine/containers/resource_constraints/"
+    },
+    {
+      "finding": "Docker --memory-swap: total semantics and the no-swap idiom.",
+      "quote": "--memory-swap represents the total amount of memory and swap that can be used, and --memory controls the amount used by non-swap memory. So if --memory=\"300m\" and --memory-swap=\"1g\", the container can use 300m of memory and 700m (1g - 300m) swap.",
+      "location": "Docker docs, Resource constraints > --memory-swap details; 'Prevent a container from using swap': set both to the same value"
+    },
+    {
+      "finding": "Docker: minimum --memory is 6m; free inside a container reports the host.",
+      "quote": "Inside the container, tools like free report the host's available swap, not what's available inside the container. Don't rely on the output of free or similar tools to determine whether swap is present.",
+      "location": "Docker docs, Resource constraints > --memory-swap details; '-m or --memory=' row: 'the minimum allowed value is 6m'"
+    },
+    {
+      "finding": "Docker on host-level OOM: without limits, a runaway container endangers the whole host; Docker lowers the daemon's OOM priority but not containers'. --oom-kill-disable only with -m.",
+      "quote": "On Linux hosts, if the kernel detects that there isn't enough memory to perform important system functions, it throws an OOME, or Out Of Memory Exception, and starts killing processes to free up memory. Any process is subject to killing, including Docker and other important applications.",
+      "location": "Docker docs, Resource constraints > Understand the risks of running out of memory"
+    },
+    {
+      "finding": "Docker CPU flags exact text.",
+      "quote": "--cpus=<value> Specify how much of the available CPU resources a container can use. For instance, if the host machine has two CPUs and you set --cpus=\"1.5\", the container is guaranteed at most one and a half of the CPUs. This is the equivalent of setting --cpu-period=\"100000\" and --cpu-quota=\"150000\".",
+      "location": "Docker docs, Resource constraints > CPU > Configure the default CFS scheduler; --cpu-period 'Defaults to 100000 microseconds (100 milliseconds)'; --cpu-shares default 1024, soft, only under contention"
+    },
+    {
+      "finding": "oom_score / oom_score_adj: badness 0..1000 proportional to the share of ALLOWED memory used (for a cgroup OOM, allowed = the configured limit); adj range -1000..+1000; -1000 disables OOM-killing of that task; root processes get a 3% bonus.",
+      "quote": "The value of oom_score_adj is added to the badness score before it is used to determine which task to kill. Acceptable values range from -1000 (OOM_SCORE_ADJ_MIN) to +1000 (OOM_SCORE_ADJ_MAX). ... The lowest possible value, -1000, is equivalent to disabling OOM-killing entirely for that task",
+      "location": "proc_pid_oom_score_adj(5), DESCRIPTION; proc_pid_oom_score(5): 'A higher score means that the process is more likely to be selected by the OOM-killer.'",
+      "cite_url": "https://man7.org/linux/man-pages/man5/proc_pid_oom_score_adj.5.html"
+    },
+    {
+      "finding": "EXECUTED: the requested check.",
+      "quote": "$ docker run --rm --memory 64m ubuntu:24.04 cat /sys/fs/cgroup/memory.max\n67108864",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: translation of Docker flags to cgroup v2 files.",
+      "quote": "$ docker run --rm --memory 64m ubuntu:24.04 sh -c 'cat /sys/fs/cgroup/memory.swap.max; cat /sys/fs/cgroup/memory.high'\n67108864\nmax\n$ docker run --rm --memory 64m --memory-swap 64m ubuntu:24.04 cat /sys/fs/cgroup/memory.swap.max\n0\n$ docker run --rm --cpus 1.5 --pids-limit 64 ubuntu:24.04 sh -c 'cat /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max'\n150000 100000\n64",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: an unconstrained container, and what the cgroup mount looks like from inside.",
+      "quote": "$ docker run --rm ubuntu:24.04 sh -c 'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max; cat /sys/fs/cgroup/cgroup.controllers; cat /proc/self/cgroup; grep cgroup /proc/mounts'\nmax\nmax 100000\nmax\ncpuset cpu io memory hugetlb pids rdma\n0::/\ncgroup /sys/fs/cgroup cgroup2 ro,nosuid,nodev,noexec,relatime 0 0",
+      "location": "executed ubuntu:24.04 (docker info: CgroupVersion 2, driver cgroupfs)"
+    },
+    {
+      "finding": "EXECUTED: OOM kill of a CHILD process. The shell sees 137 and prints 'Killed'; memory.events records it; the container itself exits 0 yet OOMKilled=true.",
+      "quote": "$ docker run --name lt-R2-oom --memory 64m --memory-swap 64m ubuntu:24.04 sh -c 'tail /dev/zero; echo \"tail exit=$?\"; cat /sys/fs/cgroup/memory.events; cat /sys/fs/cgroup/memory.peak'; echo \"container exit=$?\"\ntail exit=137\nKilled\nlow 0\nhigh 0\nmax 19\noom 1\noom_kill 1\noom_group_kill 0\n67108864\ncontainer exit=0\n$ docker inspect lt-R2-oom --format 'OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}} Status={{.State.Status}}'\nOOMKilled=true ExitCode=0 Status=exited",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: CPU limit throttles, does not kill.",
+      "quote": "$ docker run --rm --cpus 0.5 ubuntu:24.04 bash -c 'timeout 3 bash -c \"while :; do :; done\"; echo \"loop exit=$?\"; cat /sys/fs/cgroup/cpu.max; grep -E \"nr_periods|nr_throttled|throttled_usec\" /sys/fs/cgroup/cpu.stat'\nloop exit=124\n50000 100000\nnr_periods 30\nnr_throttled 30\nthrottled_usec 1466110",
+      "location": "executed ubuntu:24.04 (124 is timeout(1)'s own exit status)"
+    },
+    {
+      "finding": "EXECUTED: pids limit.",
+      "quote": "$ docker run --rm --pids-limit 10 ubuntu:24.04 bash -c 'for i in $(seq 1 15); do sleep 5 & done 2>&1 | head -3; cat /sys/fs/cgroup/pids.max; cat /sys/fs/cgroup/pids.events'\nbash: fork: retry: Resource temporarily unavailable\nbash: fork: retry: Resource temporarily unavailable\nbash: fork: retry: Resource temporarily unavailable\n10\nmax 3",
+      "location": "executed ubuntu:24.04"
+    }
+  ],
+  "teaching_notes": "The highest-value correction in group R2: exit code 137 and OOMKilled are NOT interchangeable. 137 = SIGKILL from any source (OOM killer, docker stop timeout, docker kill, RLIMIT_CPU hard limit, a human). State.OOMKilled=true = at least one process in the container's cgroup was OOM-killed — and the container may still exit 0 if the victim was a child (very common in agentic evals: the agent's test run or compiler is killed, the shell carries on, the task 'fails' for an environmental reason). The reliable evidence chain is memory.events oom_kill (count of processes) + memory.peak, read from inside (/sys/fs/cgroup, mounted read-only in containers) or from the host. Other points: Docker's --memory-swap is memory+swap but cgroup v2's memory.swap.max is swap-only — Docker translates (64m/unset -> swap.max 64m; 64m/64m -> 0); use the equal-values idiom for a deterministic OOM demo. The '2x' default only applies 'if the host has swap configured'. cpu.max default is 'max 100000' and CPU limits only throttle (nr_throttled/throttled_usec) — a throttled agent times out rather than dies, which is a different validity problem. /sys/fs/cgroup as the mount point is a systemd/distro convention; man7 cgroups(7) still describes /sys/fs/cgroup/unified from the hybrid era — don't cite that for Ubuntu 24.04. Test host was Docker Desktop (linuxkit VM, arm64, cgroupfs driver); on a systemd host the host-side cgroup path differs but in-container views are the same."
+}

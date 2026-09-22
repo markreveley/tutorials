@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Processes: What Is Running · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 3 · Processes</p>
+    <h1>Processes: what is running</h1>
+    <p class="lede">
+      Everything that happens on a Linux box happens inside a process, and every process has exactly
+      one parent. That tree is the model; <code>ps</code> is just the command that prints it. This page
+      answers the first question of the ten-minute audit — <em>what is running?</em> — and shows why
+      "the agent started a server" is a claim about the process tree that you can check.
+    </p>
+
+    <h2 id="program-vs-process">A program is a file; a process is a running instance</h2>
+    <p>
+      <code>/usr/bin/python3</code> is a program: bytes on disk. Run it three times and you have three
+      <span class="term" data-g="process">processes</span>: three independent running instances, each
+      with its own memory, its own open files, its own
+      working directory, its own copy of the
+      environment, and an identity (the uid from <a href="07-users-groups-root.html">page 7</a>). The
+      kernel gives each one a number, the
+      <span class="term" data-g="pid">PID</span>, and records which process created it: the
+      <span class="term" data-g="parent-process">parent</span>, whose PID shows up as <strong>PPID</strong>.
+      Follow the PPIDs upward and every process leads back to PID 1. That is the process tree.
+    </p>
+    <p>
+      In the container lab from <a href="01-lab-setup.html">page 1</a>, open a second terminal as the
+      non-root user (<code>docker exec -it -u learner lt-lab bash</code>), start something slow in the
+      background, and look:
+    </p>
+<pre class="term"><code><span class="p">$</span> echo $$                     <span class="c"># $$ = the PID of this shell</span>
+<span class="o">15</span>
+<span class="p">$</span> sleep 300 &amp;
+<span class="o">[1] 23</span>
+<span class="p">$</span> ps -ef --forest
+<span class="o">UID        PID  PPID  C STIME TTY          TIME CMD
+learner     15     0  0 16:29 pts/1    00:00:00 bash
+learner     23    15  0 16:29 pts/1    00:00:00  \_ sleep 300
+learner     24    15  0 16:29 pts/1    00:00:00  \_ ps -ef --forest
+root         1     0  0 16:29 pts/0    00:00:00 bash</span>
+<span class="p">$</span> pstree -p $$
+<span class="o">bash(15)-+-pstree(26)
+         `-sleep(23)</span></code></pre>
+    <p>
+      Your shell (15) is the parent of both <code>sleep</code> and the <code>ps</code> that printed
+      the listing (<code>ps</code> always catches itself). PID 1 is the <code>bash</code> that
+      <code>docker run</code> started. <code>-e</code> means every process, <code>-f</code> the "full"
+      columns, <code>--forest</code> draws the indentation; <code>pstree</code> (package
+      <code>psmisc</code>) is the compact version.
+    </p>
+    <div class="callout">
+      <span class="label">If you're wondering why your shell's PPID is 0</span>
+      <p>A process started by <code>docker exec</code> has a parent that lives <em>outside</em> the
+      container, where the container's <code>ps</code> cannot see, so the kernel reports PPID 0 (and
+      plain <code>pstree -p</code>, which draws the tree under PID 1, prints only
+      <code>bash(1)</code>). On a VM, your shell's ancestry runs through <code>sshd</code> up to
+      PID 1. The mechanism behind this restricted view is the
+      <span class="term" data-g="pid-namespace">PID namespace</span>, on
+      <a href="20-namespaces.html">page 20</a>.</p>
+    </div>
+
+    <h2 id="fork-exec-wait">Where processes come from: fork, exec, wait, exit</h2>
+    <p>
+      Linux has no "start a program" operation. There are two smaller ones, and every process you
+      will ever see was made with them
+      (<span class="term" data-g="fork-exec">fork and exec</span>):
+    </p>
+    <ul>
+      <li><strong>fork</strong> duplicates the calling process. The child is "an exact duplicate" of
+        the parent apart from a short list of differences — its own PID, its parent's PID as PPID —
+        and it receives copies of the parent's open
+        file descriptors.<a class="cite" href="https://man7.org/linux/man-pages/man2/fork.2.html" title="fork(2), Linux man-pages: DESCRIPTION">[fork(2)]</a></li>
+      <li><strong>exec</strong> replaces the program running <em>inside</em> a process with a
+        different one. The man page is blunt about a common misreading: "there is no new process; many
+        attributes of the calling process remain unchanged (in particular, its PID)". File descriptors
+        stay open across it unless marked close-on-exec.<a class="cite" href="https://man7.org/linux/man-pages/man2/execve.2.html" title="execve(2), Linux man-pages: NOTES; Effect on process attributes">[execve(2)]</a></li>
+      <li><strong>exit</strong> ends the process and leaves one small number behind, the
+        exit status; <strong>wait</strong> is how the
+        parent collects it.<a class="cite" href="https://man7.org/linux/man-pages/man2/wait.2.html" title="wait(2), Linux man-pages">[wait(2)]</a>
+        What those numbers mean is <a href="10-signals-exit-codes.html">page 10</a>.</li>
+    </ul>
+    <div class="diagram">  bash (PID 15)                      when you type:  ls -l
+     │
+     ├─ fork() ───────────▶ bash (PID 27)       a copy: same fds, env,
+     │                        │                 cwd, uid, limits
+     │                        │ exec("/usr/bin/ls")
+     │                        ▼
+     │                      ls (PID 27)         same process, new program
+     │                        │
+     │ wait() … blocked       │ exit(0)
+     ◀──── status 0 ──────────┘
+     │
+   prompt returns; $? is 0</div>
+    <p>You can watch both halves. A child has its own PID and knows its parent; <code>exec</code> changes the program but not the PID:</p>
+<pre class="term"><code><span class="p">$</span> bash -c 'echo "child: I am $$, my parent is $PPID"'
+<span class="o">child: I am 27, my parent is 15</span>
+<span class="p">$</span> bash -c 'echo "before exec: $$"; exec ps -o pid,ppid,comm -p $$'
+<span class="o">before exec: 28
+  PID  PPID COMMAND
+   28    15 ps</span></code></pre>
+    <p>
+      PID 28 was <code>bash</code> when it printed the first line and <code>ps</code> when it printed
+      the table. The split explains inheritance: whatever you set up in a shell — directory,
+      exported variables, redirections, limits, identity — is copied by fork and survives exec, so
+      the program you launch simply <em>finds</em> it there.
+    </p>
+<pre class="term"><code><span class="p">$</span> cd /tmp; export COLOUR=plum; ulimit -Sn 512
+<span class="p">$</span> bash -c 'pwd; echo $COLOUR; ulimit -Sn; id -un'
+<span class="o">/tmp
+plum
+512
+learner</span></code></pre>
+    <table>
+      <tr><th>Inherited by a child</th><th>Where the course uses it</th></tr>
+      <tr><td>Open file descriptors (0, 1, 2 and the rest)</td><td>Redirection is "rewire fds, then exec" — <a href="04-streams-pipes-redirection.html">page 4</a></td></tr>
+      <tr><td>Environment variables (a copy: changes never flow back up)</td><td>Secrets leak downward to every descendant — <a href="11-environment-and-secrets.html">page 11</a></td></tr>
+      <tr><td>Working directory</td><td>Why <code>cd</code> has to be a shell builtin — <a href="02-shell-and-commands.html">page 2</a></td></tr>
+      <tr><td>Credentials (uid, gids)</td><td>A root harness that forks an agent makes a root agent unless it drops privileges — <a href="07-users-groups-root.html">page 7</a></td></tr>
+      <tr><td>Resource limits and cgroup membership</td><td><a href="12-resources-and-limits.html">Page 12</a></td></tr>
+    </table>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>A process's starting conditions are its parent's, copied. So "why did the agent's command see
+      that variable / run as root / write to that file?" is always answered by walking <em>up</em> the
+      tree to whoever set it.</p>
+    </div>
+
+    <h2 id="reading-ps">Reading ps and top</h2>
+    <p>
+      <code>ps</code> has two dialects you will meet in every transcript, because it accepts both Unix
+      options (with a dash) and BSD options (without).<a class="cite" href="https://man7.org/linux/man-pages/man1/ps.1.html" title="ps(1), procps-ng: DESCRIPTION, option styles">[ps(1)]</a>
+      <code>ps -ef</code> gives you PPID but no memory or state; <code>ps aux</code> gives memory and
+      state but no PPID. Here is <code>aux</code> with a small web server running in the background:
+    </p>
+<pre class="term"><code><span class="p">$</span> cd /tmp; python3 -m http.server 8000 &gt;/tmp/server.log 2&gt;&amp;1 &amp;
+<span class="o">[1] 30</span>
+<span class="p">$</span> ps aux
+<span class="o">USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   4296  3488 pts/0    Ss+  16:29   0:00 bash
+learner     15  0.0  0.0   4816  3936 pts/1    Ss   16:29   0:00 bash
+learner     30  5.9  0.2  25744 18460 pts/1    S    16:29   0:00 python3 -m http
+learner     32  0.0  0.0   7628  3532 pts/1    R+   16:29   0:00 ps aux</span></code></pre>
+    <table>
+      <tr><th>Column</th><th>Meaning</th><th>Trap</th></tr>
+      <tr><td><code>RSS</code></td><td><span class="term" data-g="memory-rss">Resident set size</span>: physical memory in use, in KiB<a class="cite" href="https://man7.org/linux/man-pages/man1/ps.1.html" title="ps(1): STANDARD FORMAT SPECIFIERS, rss">[ps(1)]</a></td><td><code>VSZ</code> (virtual size) is address space reserved, not memory used. Look at RSS.</td></tr>
+      <tr><td><code>%CPU</code></td><td>CPU time used divided by the time the process has been running<a class="cite" href="https://man7.org/linux/man-pages/man1/ps.1.html" title="ps(1): STANDARD FORMAT SPECIFIERS, %cpu">[ps(1)]</a></td><td>A lifetime average, not "right now". For now, use <code>top</code>.</td></tr>
+      <tr><td><code>TIME</code></td><td>Cumulative CPU time</td><td>Not wall-clock. A server asleep for an hour shows <code>0:00</code>. Elapsed time is the <code>etime</code> column.</td></tr>
+      <tr><td><code>TTY</code></td><td>The terminal the process is attached to</td><td>Processes with no terminal show <code>?</code> — which is every process in a container started without <code>-t</code>.</td></tr>
+      <tr><td><code>STAT</code></td><td>State letter plus modifiers</td><td>See below.</td></tr>
+    </table>
+    <p>
+      The state letters, from the man page: <code>R</code> running or runnable, <code>S</code>
+      interruptible sleep (waiting for something — the normal state of nearly everything),
+      <code>D</code> uninterruptible sleep (usually I/O), <code>T</code> stopped by a job-control
+      signal, <code>Z</code> defunct ("zombie"). Modifiers: <code>s</code> session leader,
+      <code>+</code> in the foreground process group, <code>l</code> multi-threaded,
+      <code>&lt;</code>/<code>N</code> high/low priority.<a class="cite" href="https://man7.org/linux/man-pages/man1/ps.1.html" title="ps(1): PROCESS STATE CODES">[ps(1)]</a>
+      So <code>Ss+</code> on PID 1 reads: sleeping, session leader, foreground of its terminal.
+    </p>
+    <p>
+      The default columns rarely answer the question you have. Ask for the ones you want with
+      <code>-o</code>; this is the form worth memorising:
+    </p>
+<pre class="term"><code><span class="p">$</span> ps -eo pid,ppid,user,stat,rss,etime,time,args
+<span class="o">  PID  PPID USER     STAT   RSS     ELAPSED     TIME COMMAND
+    1     0 root     Ss+   3488       00:01 00:00:00 bash
+   15     0 learner  Ss    3936       00:01 00:00:00 bash
+   30    15 learner  S    18460       00:01 00:00:00 python3 -m http.server 8000
+   33    15 learner  R+    3468       00:00 00:00:00 ps -eo pid,ppid,user,stat,r</span></code></pre>
+    <p>
+      <code>top</code> is the live view (<code>htop</code> is a friendlier one, rarely installed).
+      Both are full-screen programs that a non-interactive tool call cannot drive, so in scripts and
+      agent transcripts you will see the batch form
+      <code>top -bn1</code>.<a class="cite" href="https://man7.org/linux/man-pages/man1/top.1.html" title="top(1): -b batch mode; 2. SUMMARY Display">[top(1)]</a>
+      Read the header before the table:
+    </p>
+<pre class="term"><code><span class="p">$</span> top -bn1 | head -5
+<span class="o">top - 16:29:41 up  4:53,  0 user,  load average: 1.08, 1.05, 0.68
+Tasks:   5 total,   1 running,   4 sleeping,   0 stopped,   <span class="hl">0 zombie</span>
+%Cpu(s):  0.0 us,  0.0 sy,  0.0 ni, 99.2 id,  0.8 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :   <span class="hl">7837.3 total</span>,   4494.9 free,    796.2 used,   2745.4 buff/cache
+MiB Swap:   1024.0 total,   1024.0 free,      0.0 used.   7041.1 avail Mem</span></code></pre>
+    <p>
+      Line 2 counts tasks by state, including zombies. Line 3 splits CPU time: <code>us</code> user
+      programs, <code>sy</code> kernel, <code>id</code> idle, <code>wa</code> waiting for I/O,
+      <code>st</code> stolen by a hypervisor.<a class="cite" href="https://man7.org/linux/man-pages/man1/top.1.html" title="top(1): 2b. TASK and CPU States">[top(1)]</a>
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — the header is not about your container</span>
+      <p>The task list is the container's, but the memory and load lines are the whole machine's. This
+      lab container was started with <code>--memory 1g</code> and <code>top</code> still reports
+      7837 MiB. Tools that read <code>/proc</code> do not see cgroup limits; the real budget is in
+      <code>/sys/fs/cgroup</code> (<a href="12-resources-and-limits.html">page 12</a>).</p>
+    </div>
+    <p>
+      To find processes by name rather than by eye, use <code>pgrep</code> (and its sibling
+      <code>pkill</code>, which signals what <code>pgrep</code> would list). One rule saves an hour of
+      confusion: the name it matches is the process name, limited to 15 characters; to match the whole
+      command line you need <code>-f</code>.<a class="cite" href="https://man7.org/linux/man-pages/man1/pgrep.1.html" title="pgrep(1), procps-ng: NOTES">[pgrep(1)]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> pgrep -a python
+<span class="o">30 python3 -m http.server 8000</span>
+<span class="p">$</span> pgrep http.server; echo "rc=$?"
+<span class="o">rc=1</span>
+<span class="p">$</span> pgrep -f http.server; echo "rc=$?"
+<span class="o">30
+rc=0</span></code></pre>
+
+    <h2 id="proc-pid">ps is just a /proc reader</h2>
+    <p>
+      Where does <code>ps</code> get all this? From the
+      <span class="term" data-g="proc-filesystem">/proc filesystem</span>: the kernel presents every
+      process as a directory, <code>/proc/PID/</code>, whose files are generated when you read them.
+      Take the server (PID 30):
+    </p>
+<pre class="term"><code><span class="p">$</span> tr '\0' ' ' &lt; /proc/30/cmdline; echo       <span class="c"># arguments are NUL-separated</span>
+<span class="o">python3 -m http.server 8000</span>
+<span class="p">$</span> ls -l /proc/30/cwd /proc/30/exe
+<span class="o">lrwxrwxrwx 1 learner learner 0 Sep 21 16:29 /proc/30/cwd -&gt; /tmp
+lrwxrwxrwx 1 learner learner 0 Sep 21 16:29 /proc/30/exe -&gt; /usr/bin/python3.12</span>
+<span class="p">$</span> ls -l /proc/30/fd
+<span class="o">total 0
+lrwx------ 1 learner learner 64 Sep 21 16:29 0 -&gt; /dev/pts/1
+l-wx------ 1 learner learner 64 Sep 21 16:29 1 -&gt; /tmp/server.log
+l-wx------ 1 learner learner 64 Sep 21 16:29 2 -&gt; /tmp/server.log
+lrwx------ 1 learner learner 64 Sep 21 16:29 3 -&gt; 'socket:[191132]'</span>
+<span class="p">$</span> grep -E '^(Name|State|PPid|Uid|VmRSS)' /proc/30/status
+<span class="o">Name:	python3
+State:	S (sleeping)
+PPid:	15
+Uid:	1001	1001	1001	1001
+VmRSS:	   18460 kB</span></code></pre>
+    <p>
+      Four files answer four questions about any process: <em>what is it really?</em>
+      (<code>exe</code> — the binary, whatever the name claims), <em>where is it working?</em>
+      (<code>cwd</code>), <em>what is it holding open?</em> (<code>fd/</code>: here the redirection to
+      <code>server.log</code> from <a href="04-streams-pipes-redirection.html">page 4</a>, made
+      visible, plus the listening socket of <a href="17-ports-and-sockets.html">page 17</a>), and
+      <em>who is it?</em> (<code>status</code>). The fifth, <code>environ</code>, holds the environment
+      the program was started with and gets <a href="11-environment-and-secrets.html">page 11</a> to
+      itself.
+    </p>
+    <p>
+      Access is uneven, and the unevenness matters. <code>cmdline</code> and <code>status</code> are
+      readable by every user on the box; <code>environ</code>, <code>cwd</code> and <code>fd/</code>
+      are not:
+    </p>
+<pre class="term"><code><span class="p">$</span> tr '\0' ' ' &lt; /proc/1/cmdline; echo
+<span class="o">bash</span>
+<span class="p">$</span> cat /proc/1/environ
+<span class="o">cat: /proc/1/environ: Permission denied</span></code></pre>
+    <div class="evals">
+      <span class="label">In eval work — navigate</span>
+      <p><strong>When <code>ps</code> is missing, <code>/proc</code> is not.</strong> Plenty of task
+      images are built on slim bases with no <code>procps</code>. On <code>debian:bookworm-slim</code>,
+      <code>docker run --rm debian:bookworm-slim ps -ef</code> fails with
+      <code>exec: "ps": executable file not found in $PATH</code> and exit 127, and Alpine's BusyBox
+      <code>ps</code> ignores <code>-ef</code> and prints only <code>PID USER TIME COMMAND</code>. An
+      agent that concludes "nothing is running" from a failed <code>ps</code> is wrong, and so is an
+      auditor. This loop needs nothing but a shell:</p>
+<pre class="term"><code><span class="p">$</span> for p in /proc/[0-9]*; do echo "${p#/proc/} $(tr '\0' ' ' &lt; "$p/cmdline")"; done
+<span class="o">1 bash
+15 bash
+30 python3 -m http.server 8000</span></code></pre>
+      <p>One limit on what it proves: <code>cmdline</code> is, in the man page's words, "the command
+      line that the process wants you to see" — a process can rewrite
+      it.<a class="cite" href="https://man7.org/linux/man-pages/man5/proc_pid_cmdline.5.html" title="proc_pid_cmdline(5), Linux man-pages">[proc_pid_cmdline(5)]</a>
+      <code>exe</code> is the stronger evidence of what a process is.</p>
+    </div>
+
+    <h2 id="job-control">Foreground, background, and what survives</h2>
+    <p>
+      A command normally runs in the <em>foreground</em>: the shell forks it and waits. Ending the line
+      with <code>&amp;</code> makes it a <span class="term" data-g="background-process">background
+      process</span>: the shell forks it, prints a job number and the PID, and gives you the prompt
+      back. <span class="term" data-g="job-control">Job control</span> is the shell's bookkeeping for
+      moving work between the two. <kbd>Ctrl</kbd>+<kbd>Z</kbd> stops the foreground job (state
+      <code>T</code>), <code>bg</code> resumes it in the background, <code>fg</code> brings a job to the
+      foreground, and <kbd>Ctrl</kbd>+<kbd>C</kbd> interrupts whatever is in the foreground:
+    </p>
+<pre class="term"><code><span class="p">$</span> sleep 600 &amp;
+<span class="o">[1] 59</span>
+<span class="p">$</span> sleep 700
+<span class="o">^Z
+[2]+  Stopped                 sleep 700</span>
+<span class="p">$</span> jobs -l
+<span class="o">[1]-    59 Running                 sleep 600 &amp;
+[2]+    60 Stopped                 sleep 700</span>
+<span class="p">$</span> bg %2
+<span class="o">[2]+ sleep 700 &amp;</span>
+<span class="p">$</span> fg %1
+<span class="o">sleep 600
+^C</span>
+<span class="p">$</span> echo "rc=$?"
+<span class="o">rc=130</span></code></pre>
+    <p>
+      Those keystrokes are signals sent by the terminal, and the 130 is how the shell reports a death
+      by one (<a href="10-signals-exit-codes.html">page 10</a>). <code>jobs</code> is per-shell
+      bookkeeping; for a whole-box view you need <code>ps</code>.
+    </p>
+    <p>
+      What happens to background jobs when their terminal goes away? The shell receives a hangup
+      signal (<span class="term" data-g="sighup">SIGHUP</span>), and "before exiting, an interactive
+      shell resends the SIGHUP to all jobs, running or
+      stopped";<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Signals" title="GNU Bash Reference Manual, 3.7.6 Signals">[Bash Manual]</a>
+      the default action of SIGHUP is to terminate. Two tools opt a job out: <code>nohup cmd
+      &amp;</code> starts the command ignoring SIGHUP, and <code>disown</code> removes a job from the
+      shell's table so the shell never forwards the signal. To see it, this script opens a terminal
+      with <code>tmux</code>, starts three background jobs in it, and closes it:
+    </p>
+<pre><code>#!/bin/bash
+# Three background jobs in a terminal; then the terminal goes away.
+tmux new-session -d -s demo
+tmux send-keys -t demo 'sleep 800 &amp;' Enter
+tmux send-keys -t demo 'nohup sleep 900 &gt;/dev/null 2&gt;&amp;1 &amp;' Enter
+tmux send-keys -t demo 'sleep 1000 &amp; disown' Enter
+sleep 1
+ps -o pid,ppid,stat,args -C sleep
+tmux kill-session -t demo
+sleep 1
+echo '--- after the terminal closed:'
+ps -o pid,ppid,stat,args -C sleep</code></pre>
+<pre class="term"><code><span class="p">$</span> /tmp/hup-demo.sh
+<span class="o">  PID  PPID STAT COMMAND
+   97    90 S    sleep 800
+   99    90 S    sleep 900
+  100    90 S    sleep 1000
+--- after the terminal closed:
+  PID  PPID STAT COMMAND
+   99     <span class="hl">1</span> S    sleep 900
+  100     <span class="hl">1</span> S    sleep 1000</span></code></pre>
+    <p>
+      The plain <code>&amp;</code> job died with its terminal; the other two survived — and their PPID
+      changed from 90 to 1. Hold that thought for the next section. A
+      <span class="term" data-g="daemon">daemon</span> is this idea made permanent: a long-running
+      process with no terminal at all (<code>TTY</code> shows <code>?</code>), such as
+      <code>sshd</code> or <code>dockerd</code>. On a real machine daemons are started and supervised
+      by systemd (<a href="13-services-and-logs.html">page 13</a>); in a container, usually nothing
+      supervises anything.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — "&amp;" does not mean the tool call returns</span>
+      <p>A harness that runs a command and captures its output is reading a pipe until every process
+      holding the write end has closed it. A background child <em>inherits that pipe</em> as its
+      stdout. So the call does not return when the shell exits; it returns when the last inheritor
+      does. This is a 12-line stand-in for a harness tool call, run for real:</p>
+<pre><code>import subprocess, time
+
+def tool_call(cmd, timeout=5):
+    """What a harness does: run one command, capture both streams."""
+    t0 = time.time()
+    try:
+        r = subprocess.run(["bash", "-c", cmd], capture_output=True,
+                           text=True, timeout=timeout)
+        out = f"exit={r.returncode} stdout={r.stdout!r}"
+    except subprocess.TimeoutExpired:
+        out = "TIMEOUT"
+    print(f"{time.time() - t0:4.1f}s  {out}  &lt;- {cmd}")
+
+tool_call("sleep 3 &amp; echo started")
+tool_call("sleep 3 &gt;/dev/null 2&gt;&amp;1 &amp; echo started")
+tool_call("sleep 30 &amp; echo started")</code></pre>
+<pre class="term"><code><span class="p">$</span> python3 /tmp/toolcall.py
+<span class="o"> 3.0s  exit=0 stdout='started\n'  &lt;- sleep 3 &amp; echo started
+ 0.0s  exit=0 stdout='started\n'  &lt;- sleep 3 &gt;/dev/null 2&gt;&amp;1 &amp; echo started
+ 5.0s  TIMEOUT  &lt;- sleep 30 &amp; echo started</span>
+<span class="p">$</span> ps -o pid,ppid,stat,etime,args -C sleep
+<span class="o">  PID  PPID STAT     ELAPSED COMMAND
+  114     1 S          00:05 sleep 30</span></code></pre>
+      <p>The first call blocked for the background job's whole life. The second returned at once
+      because the job's output was redirected away from the pipe — a correct background launch is
+      <code>cmd &gt;log 2&gt;&amp;1 &amp;</code>. The third timed out, the timeout killed the
+      <em>shell</em>, and the <code>sleep</code> is still there, re-parented to PID 1: a timed-out
+      tool call can leave its children running.</p>
+    </div>
+
+    <h2 id="zombies-orphans">Zombies, orphans, and the job of PID 1</h2>
+    <p>
+      Two things can go wrong at the end of the fork–wait cycle, and they are opposites.
+    </p>
+    <p>
+      An <span class="term" data-g="orphan-process">orphan</span> is a live process whose parent has
+      died. It cannot be left parentless — someone must eventually collect its exit status — so the
+      kernel re-parents it to the init process of its PID namespace, PID 1 (or to a nearer ancestor
+      that has volunteered as a "subreaper").<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7): Adoption of orphaned children">[pid_namespaces(7)]</a>
+      That is the PPID 90 → 1 change you just saw, and the fate of the <code>sleep 30</code> above.
+      Orphans are normal; every daemon is one on purpose.
+    </p>
+    <p>
+      A <span class="term" data-g="zombie-process">zombie</span> is the reverse: a process that has
+      <em>exited</em> but whose parent has not yet called wait. The program is gone — its memory and
+      open files are released — but the kernel keeps "a minimal set of information about the zombie
+      process (PID, termination status, resource usage information)" so that the parent can still ask
+      for it.<a class="cite" href="https://man7.org/linux/man-pages/man2/wait.2.html" title="wait(2), Linux man-pages: NOTES">[wait(2)]</a>
+      Here is one, made with ten lines of Python whose parent forks and then refuses to wait:
+    </p>
+<pre><code>import os, time
+
+pid = os.fork()            # from here on there are two processes
+if pid == 0:
+    os._exit(7)            # the child: exits at once with status 7
+print(f"parent {os.getpid()} made child {pid} and is not calling wait()")
+time.sleep(60)             # the parent: alive, but never collects the status</code></pre>
+<pre class="term"><code><span class="p">$</span> python3 /tmp/zombie.py &amp;
+<span class="o">[1] 117
+parent 117 made child 119 and is not calling wait()</span>
+<span class="p">$</span> ps -o pid,ppid,stat,args
+<span class="o">  PID  PPID STAT COMMAND
+   78     0 Ss   bash
+  117    78 S    python3 /tmp/zombie.py
+  119   117 <span class="hl">Z    [python3] &lt;defunct&gt;</span>
+  120    78 R+   ps -o pid,ppid,stat,args</span>
+<span class="p">$</span> kill -9 119; echo "rc=$?"; ps -o pid,stat,args -p 119
+<span class="o">rc=0
+  PID STAT COMMAND
+  119 Z    [python3] &lt;defunct&gt;</span></code></pre>
+    <p>
+      You cannot kill a zombie: it is already dead, and <code>kill -9</code> "succeeds" without effect.
+      What removes it is its parent calling wait — or its parent dying, at which point the zombie is
+      adopted by init, and "init automatically performs a wait to remove the
+      zombies".<a class="cite" href="https://man7.org/linux/man-pages/man2/wait.2.html" title="wait(2), Linux man-pages: NOTES">[wait(2)]</a>
+      Kill the parent (<code>kill %1</code>) and both rows vanish. A zombie costs almost nothing — but
+      not nothing: each one "will consume a slot in the kernel process table, and if this table fills,
+      it will not be possible to create further
+      processes".<a class="cite" href="https://man7.org/linux/man-pages/man2/wait.2.html" title="wait(2), Linux man-pages: NOTES">[wait(2)]</a>
+      In a container with a <code>--pids-limit</code>, that table is small.
+    </p>
+    <p>
+      So <span class="term" data-g="pid-1">PID 1</span> has a job: adopt orphans and reap them. A real
+      init such as systemd does it. In a container, PID 1 is
+      whatever command the image runs, and most programs were never written to reap children that are
+      not theirs. Run the same command twice — it orphans a one-second <code>sleep</code>, then
+      becomes a long <code>sleep</code> as PID 1 — the second time with Docker's <code>--init</code>
+      flag, which puts a tiny init (<code>docker-init</code>, backed by tini) at PID 1 to do "the usual
+      responsibilities of an init system, such as reaping zombie
+      processes":<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#init" title="Docker Docs, docker container run: Specify an init process (--init)">[Docker: run]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-z1 ubuntu:24.04 sh -c '(sleep 1 &amp;); exec sleep 120'
+<span class="p">$</span> docker run -d --init --name lt-z2 ubuntu:24.04 sh -c '(sleep 1 &amp;); exec sleep 120'
+<span class="p">$</span> docker exec lt-z1 ps -eo pid,ppid,stat,args
+<span class="o">  PID  PPID STAT COMMAND
+    1     0 Ss   sleep 120
+    8     1 <span class="hl">Z    [sleep] &lt;defunct&gt;</span>
+    9     0 Rs   ps -eo pid,ppid,stat,args</span>
+<span class="p">$</span> docker exec lt-z2 ps -eo pid,ppid,stat,args
+<span class="o">  PID  PPID STAT COMMAND
+    1     0 Ss   /sbin/docker-init -- sh -c (sleep 1 &amp;); exec sleep 120
+    7     1 S    sleep 120
+   10     0 Rs   ps -eo pid,ppid,stat,args</span></code></pre>
+    <p>
+      Without an init, the zombie stays for the life of the container, and an agent that launches
+      many short-lived background commands accumulates them. The other half of the
+      PID 1 problem — that it shrugs off signals — is on
+      <a href="10-signals-exit-codes.html#pid-1">page 10</a>.
+    </p>
+
+    <h2 id="container-view">What ps shows inside a container</h2>
+    <p>
+      On a VM, <code>ps -ef</code> runs to many lines: systemd at PID 1, kernel threads in square
+      brackets, daemons, login sessions. Inside a container it is startlingly short:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 ps -ef
+<span class="o">UID        PID  PPID  C STIME TTY          TIME CMD
+root         1     0  0 16:31 ?        00:00:00 ps -ef</span></code></pre>
+    <p>
+      One process, and it is PID 1; nothing was "booted". Container processes are ordinary processes
+      on the host, shown to themselves through a restricted view: from the host side,
+      <code>docker top lt-z2</code> listed the same two processes as PIDs 61490 and 61503. One
+      consequence is a gift to eval engineering: when PID 1 of a PID namespace exits, the kernel kills
+      every other process in the namespace with
+      SIGKILL.<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7): The namespace init process">[pid_namespaces(7)]</a>
+      Removing a container therefore removes every process the agent ever started, however well hidden.
+      A bare VM or a shared host gives you no such guarantee.
+      <a href="20-namespaces.html">Page 20</a> takes the mechanism apart.
+    </p>
+
+    <div class="evals">
+      <span class="label">In eval work — design</span>
+      <p><strong>Leftover processes are shared state.</strong> Anthropic's guidance on agent evals asks
+      that each trial be "isolated" by starting from a clean environment, because "unnecessary shared
+      state between runs (leftover files, cached data, resource exhaustion) can cause correlated
+      failures due to infrastructure flakiness rather than agent
+      performance".<a class="cite" href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" title="Anthropic, Demystifying evals for AI agents, Step 4">[Anthropic: Agent Evals]</a>
+      Processes are the form of shared state people forget. In a container reused across two
+      <span class="term" data-g="rollout">rollouts</span>, the first agent's server is still there when
+      the second agent starts its own:</p>
+<pre class="term"><code><span class="p">$</span> docker exec -u learner lt-lab bash -c 'cd /tmp; python3 -m http.server 8000 2&gt;&amp;1 | tail -1'
+<span class="o">OSError: [Errno 98] Address already in use</span>
+<span class="p">$</span> docker exec lt-lab ps -eo pid,ppid,user,etime,args
+<span class="o">  PID  PPID USER         ELAPSED COMMAND
+    1     0 root           01:52 bash
+  158     1 learner        00:01 python3 -m http.server 8000</span></code></pre>
+      <p>The second rollout fails on a port, not on the task — or, worse, <em>passes</em> because the
+      grader's probe is answered by the first rollout's server. Design: a fresh container per rollout
+      (<a href="22-docker-for-evals.html">page 22</a>). Audit: <code>ps -ef --forest</code> in a fresh
+      sandbox should show PID 1 and nothing you cannot explain.</p>
+    </div>
+
+    <div class="evals">
+      <span class="label">In eval work — discuss</span>
+      <p><strong>What happens to the agent's background server depends on the harness, and you should
+      know which you have.</strong> Inspect's <code>bash()</code> tool runs each call in a fresh shell,
+      and its documentation notes that "a detached process keeps running between bash() calls" — and
+      that its <code>background=True</code> option only changes the tool's description to suggest
+      <code>nohup … &amp;</code> and
+      polling.<a class="cite" href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash" title="Inspect AI reference, inspect_ai.tool: bash(); Standard Tools, Background Tasks">[Inspect]</a>
+      A harness that drives a persistent terminal instead
+      (<a href="25-how-harnesses-use-linux.html">page 25</a>) keeps jobs alive as long as that
+      terminal lives. Either way, two rules follow. A verifier that
+      needs the agent's service must <em>check the process and probe the port</em>, never trust the
+      transcript's "Server started": the outcome is the state of the environment, not what the agent
+      says about it.<a class="cite" href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" title="Anthropic, Demystifying evals for AI agents, definitions: outcome">[Anthropic: Agent Evals]</a>
+      And a grader process that runs inside the sandbox as the agent's user is itself a row in the
+      agent's <code>ps</code> output, with a readable command line
+      (<a href="26-environment-integrity.html">page 26</a>).</p>
+    </div>
+
+    <table>
+      <tr><th>What you see</th><th>What it means</th><th>Next step</th></tr>
+      <tr><td><code>ps: command not found</code> / exit 127</td><td>Slim image without <code>procps</code>; says nothing about what is running</td><td>The <code>/proc</code> loop above</td></tr>
+      <tr><td><code>STAT</code> <code>Z</code>, <code>&lt;defunct&gt;</code></td><td>Exited, not yet waited for</td><td>Look at its PPID: that parent is not reaping. If the parent is PID 1, the container has no init</td></tr>
+      <tr><td>PPID 1 on a process the agent started</td><td>Orphan: its launching shell has exited or was killed</td><td>Normal for a background server; suspicious after a timeout</td></tr>
+      <tr><td>PPID 0 inside a container</td><td>PID 1, or something injected with <code>docker exec</code></td><td>Harness tool calls usually look like this</td></tr>
+      <tr><td><code>STAT</code> <code>T</code></td><td>Stopped (<kbd>Ctrl</kbd>+<kbd>Z</kbd> or SIGSTOP); holds memory, does nothing</td><td><code>fg</code>/<code>bg</code>, or <code>kill -CONT</code></td></tr>
+      <tr><td><code>STAT</code> <code>D</code> for a long time</td><td>Stuck in the kernel waiting on I/O (a slow or dead disk or network mount)</td><td>Recognise it; the fix is outside the process</td></tr>
+      <tr><td><code>Address already in use</code></td><td>Another process holds the port, possibly from an earlier rollout</td><td><code>ps -eo pid,ppid,etime,args</code>: is <code>ELAPSED</code> older than this rollout?</td></tr>
+    </table>
+    <p>
+      Depth triage for this page: <em>learn to use</em> <code>ps -ef --forest</code>, <code>ps -eo</code>,
+      <code>pgrep -af</code>, and the four <code>/proc/PID</code> files. <em>Recognise</em> state
+      <code>D</code>, subreapers, process groups and sessions when they appear. <em>Leave to a
+      specialist</em> scheduler tuning and priorities (<code>nice</code>), which almost never decide
+      an eval's outcome.
+    </p>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A web-app benchmark reuses one long-lived container per task to save start-up time, running
+      <code>git reset --hard &amp;&amp; git clean -fdx</code> between rollouts. Its pass rate is 71%.
+      A colleague moves it to a fresh container per rollout and the pass rate falls to 64%. They
+      propose reverting, "since the new setup clearly breaks tasks". What would you want to establish
+      before agreeing?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Observed:</strong> two numbers under two reset policies. <strong>Hypotheses:</strong>
+        (a) the fresh setup is broken — slower start, a missing warm cache, so more timeouts; (b) the
+        old setup was inflated — <code>git clean</code> resets files, not processes, so a server left
+        running by an earlier, successful rollout could answer the grader's probe for a later rollout
+        that never got its own server working. Shared state "can also artificially inflate
+        performance", in Anthropic's words. Both are plausible; neither is proven by the numbers.</p>
+        <p><strong>Discriminating evidence:</strong> in the old setup, run
+        <code>ps -eo pid,ppid,user,etime,args</code> at the <em>start</em> of a rollout. Any process
+        whose <code>ELAPSED</code> exceeds the rollout's age is leaked state. Then take rollouts that
+        passed in the old setup and check whether the listening process at grading time was started
+        during that rollout (its start time against the rollout's first timestamp). In the new setup,
+        look at how the extra failures ended: if they are timeouts during environment start-up, that
+        is an infrastructure outcome to fix and to count separately, not a reason to bring the shared
+        state back.</p>
+        <p><strong>Bearing on the score:</strong> if (b) holds, 71% was never a measurement of the
+        model — and the rollouts were not independent, so its error bar was wrong as well. The fresh
+        container is the valid instrument even if its number is less flattering.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p>Container lab (<a href="01-lab-setup.html">page 1</a>), as <code>learner</code>:
+      <code>docker exec -it -u learner lt-lab bash</code>. You need <code>procps</code>,
+      <code>psmisc</code> and <code>python3</code> from the page-1 tool install. Your PIDs will differ
+      from the ones shown.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Start <code>sleep 300 &amp;</code>, then find it three ways:
+          <code>ps -ef --forest</code>, <code>pgrep -a sleep</code>, and by reading
+          <code>/proc/&lt;PID&gt;/status</code>. Confirm all three agree on its PPID, and that the PPID is
+          your shell's <code>$$</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> echo $$; sleep 300 &amp;
+<span class="o">15
+[1] 23</span>
+<span class="p">$</span> ps -ef --forest | grep -B1 'sleep 300'
+<span class="o">learner     15     0  0 16:29 pts/1    00:00:00 bash
+learner     23    15  0 16:29 pts/1    00:00:00  \_ sleep 300</span>
+<span class="p">$</span> grep PPid /proc/23/status
+<span class="o">PPid:	15</span></code></pre>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Before running it, write down what PPID you expect
+          the <code>sleep</code> to have one second after this finishes:
+          <code>bash -c 'sleep 250 &amp; echo $!'</code>.
+          <details class="solution"><summary>Solution</summary>
+            <p>The inner <code>bash</code> forks <code>sleep</code>, prints its PID, and exits. The
+            <code>sleep</code> is now an orphan, so the kernel re-parents it to PID 1 — not to your
+            interactive shell, which was its grandparent and has no claim on it.</p>
+<pre class="term"><code><span class="p">$</span> bash -c 'sleep 250 &amp; echo $!'
+<span class="o">187</span>
+<span class="p">$</span> ps -o pid,ppid,args -C sleep
+<span class="o">  PID  PPID COMMAND
+  187     1 sleep 250</span></code></pre>
+          </details></li>
+        <li><strong>No ps.</strong> Start a container without <code>procps</code> and open a shell in it:
+          <code>docker run -dit --name lt-slim debian:bookworm-slim bash</code>, then
+          <code>docker exec -it lt-slim bash</code>. Run
+          <code>tail -f /etc/hostname &gt;/dev/null &amp;</code>. Using only <code>/proc</code>, list
+          every process with its command line, and find which process has <code>/etc/hostname</code>
+          open. Clean up with <code>docker rm -f lt-slim</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> ps -ef
+<span class="o">bash: ps: command not found</span>
+<span class="p">#</span> tail -f /etc/hostname &gt;/dev/null &amp;
+<span class="o">[1] 14</span>
+<span class="p">#</span> for p in /proc/[0-9]*; do echo "${p#/proc/} $(tr '\0' ' ' &lt; "$p/cmdline")"; done
+<span class="o">1 bash
+14 tail -f /etc/hostname
+7 bash</span>
+<span class="p">#</span> ls -l /proc/[0-9]*/fd/* 2&gt;/dev/null | grep hostname
+<span class="o">lr-x------ 1 root root 64 Sep 21 21:07 /proc/14/fd/3 -&gt; /etc/hostname</span></code></pre>
+            <p>The glob sorts as text, so 14 comes before 7. PID 1 is the container's
+            <code>bash</code>, PID 7 the shell you <code>exec</code>'d in. The <code>fd</code> directory
+            is how you answer "what is holding this file open?" without <code>lsof</code>.</p>
+          </details></li>
+        <li><strong>Make and clear a zombie.</strong> Save the <code>zombie.py</code> from this page to
+          <code>/tmp</code>, run it in the background, and find the <code>Z</code> row. Try
+          <code>kill -9</code> on the zombie. Then make it disappear without waiting out the 60 seconds.
+          <details class="solution"><summary>Solution</summary>
+            <p><code>kill -9 &lt;zombie&gt;</code> returns 0 and changes nothing: there is no program
+            left to kill. Kill the <em>parent</em> (<code>kill %1</code>); the zombie is adopted by
+            PID 1. In this lab PID 1 is <code>bash</code>, which does reap, so the row vanishes — as it
+            did in the session shown on this page. If PID 1 were <code>sleep</code>, it would not.</p>
+          </details></li>
+        <li><strong>Eval task: the agent says the server is up.</strong> The transcript's last tool
+          call is below. It exited 0 and printed <code>Server started on port 8000</code>; the grader's
+          HTTP probe then failed. Reproduce it, and establish from the box — not from the transcript —
+          what happened.
+<pre><code>cd /tmp
+python3 -m http.server 8000 --bind 10.9.9.9 &gt;/dev/null 2&gt;&amp;1 &amp;
+echo "Server started on port 8000"</code></pre>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> pgrep -af http.server; echo "rc=$?"     <span class="c"># typed immediately after</span>
+<span class="o">216 python3 -m http.server 8000 --bind 10.9.9.9
+rc=0</span>
+<span class="p">$</span> python3 -c 'import urllib.request as u; print(u.urlopen("http://127.0.0.1:8000/", timeout=3).status)' 2&gt;&amp;1 | tail -1
+<span class="o">urllib.error.URLError: &lt;urlopen error [Errno 111] Connection refused&gt;
+[1]+  Exit 1                  python3 -m http.server 8000 --bind 10.9.9.9 &gt; /dev/null 2&gt;&amp;1</span>
+<span class="p">$</span> python3 -m http.server 8000 --bind 10.9.9.9 2&gt;&amp;1 | tail -1
+<span class="o">OSError: [Errno 99] Cannot assign requested address</span></code></pre>
+            <p>The <code>echo</code> ran unconditionally; it reports that a line of the script was
+            reached, not that a server exists. The server died within a fraction of a second (the box
+            has no address 10.9.9.9) and its error went to <code>/dev/null</code>. Notice the trap in
+            the first command: a process check made <em>immediately</em> after launch can still catch
+            the doomed process alive. A sound check waits and then probes the port — and an in-script
+            <code>pgrep -f</code> needs care, because <code>bash -c 'pgrep -af http.server'</code>
+            matches its own command line (we got <code>222 bash -c pgrep -af http.server…</code>,
+            rc=0, with no server running); <code>pgrep -af '[h]ttp.server'</code> avoids the
+            self-match and correctly returned rc=1. For scoring, this is a genuine agent failure, but
+            one you can only classify correctly because you looked at the process table rather than
+            the agent's claim.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>fork(2), execve(2), wait(2), Linux man-pages project (man-pages 6.19). <a href="https://man7.org/linux/man-pages/man2/fork.2.html">man7.org/…/fork.2.html</a>, <a href="https://man7.org/linux/man-pages/man2/execve.2.html">execve.2.html</a>, <a href="https://man7.org/linux/man-pages/man2/wait.2.html">wait.2.html</a></li>
+        <li>ps(1), top(1), pgrep(1), procps-ng project (Ubuntu 24.04 ships procps-ng 4.0.4). <a href="https://man7.org/linux/man-pages/man1/ps.1.html">man7.org/…/ps.1.html</a>, <a href="https://man7.org/linux/man-pages/man1/top.1.html">top.1.html</a>, <a href="https://man7.org/linux/man-pages/man1/pgrep.1.html">pgrep.1.html</a></li>
+        <li>Chet Ramey and Brian Fox, <em>GNU Bash Reference Manual</em>, §3.7.6 Signals. <a href="https://www.gnu.org/software/bash/manual/bash.html#Signals">gnu.org/software/bash/manual/bash.html#Signals</a></li>
+        <li>proc_pid_cmdline(5), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man5/proc_pid_cmdline.5.html">man7.org/…/proc_pid_cmdline.5.html</a></li>
+        <li>pid_namespaces(7), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html">man7.org/…/pid_namespaces.7.html</a></li>
+        <li>Docker Inc., "docker container run" CLI reference, "Specify an init process". <a href="https://docs.docker.com/reference/cli/docker/container/run/#init">docs.docker.com/reference/cli/docker/container/run/</a></li>
+        <li>UK AI Security Institute, Inspect AI documentation: <code>inspect_ai.tool</code> reference (<code>bash</code>) and Standard Tools. <a href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash">inspect.aisi.org.uk/reference/inspect_ai.tool.html</a></li>
+        <li>Anthropic, "Demystifying evals for AI agents," Engineering at Anthropic, 9 January 2026. <a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents">anthropic.com/engineering/demystifying-evals-for-ai-agents</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

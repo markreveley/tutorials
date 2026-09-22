@@ -1,0 +1,284 @@
+# Appendix D verification. Container lt-05-lab (ubuntu:24.04, GNU grep 3.11, sed 4.9, python3 3.12.3, jq 1.7), user learner, 2026-09-21.
+## agent.log (constructed sample; last line has trailing spaces):
+2026-09-21T10:52:03Z INFO  sandbox 172.17.0.2 started task=wordfreq epoch=1
+2026-09-21T10:52:04Z INFO  tool_call cmd="pytest -q" cwd=/app
+2026-09-21T10:52:09Z ERROR tool_result exit code 127: bash: line 1: pytest: command not found
+2026-09-21T10:52:15Z INFO  tool_call cmd="pip install pytest"
+2026-09-21T10:52:41Z WARN  proxy 10.0.0.5 denied CONNECT github.com:443
+2026-09-21T10:53:02Z ERROR tool_result exit code 1: Traceback (most recent call last):
+  File "/app/wordfreq.py", line 12, in count
+    return totals[word]
+KeyError: 'the'
+2026-09-21T10:55:40Z ERROR tool_result exit code 137: Killed
+2026-09-21T10:55:41Z INFO  note="model said \"done\" early" exit code 0
+2026-09-21T10:57:00Z ERROR harness timeout after 300s, exit code 124   
+## session 1
+$ grep -c 'ERROR' agent.log
+4
+$ grep 'exit code 1' agent.log | cut -c 1-60
+2026-09-21T10:52:09Z ERROR tool_result exit code 127: bash: 
+2026-09-21T10:53:02Z ERROR tool_result exit code 1: Tracebac
+2026-09-21T10:55:40Z ERROR tool_result exit code 137: Killed
+2026-09-21T10:57:00Z ERROR harness timeout after 300s, exit 
+$ grep 'exit code 1$' agent.log | cut -c 1-60
+$ grep -c '^2026' agent.log
+9
+$ grep -v '^2026' agent.log
+  File "/app/wordfreq.py", line 12, in count
+    return totals[word]
+KeyError: 'the'
+$ grep -o 'epoch=.' agent.log
+epoch=1
+$ grep -o '10.0.0.5' agent.log
+10.0.0.5
+$ echo '10x0y0z5' | grep -o '10.0.0.5'
+10x0y0z5
+$ echo '10x0y0z5' | grep -c '10\.0\.0\.5'
+0
+$ grep -o 'exit code [0-9]' agent.log | head -n 2
+exit code 1
+exit code 1
+$ grep -o 'exit code [0-9]*' agent.log
+exit code 127
+exit code 1
+exit code 137
+exit code 0
+exit code 124
+$ grep -o '[A-Z][A-Z]*  *[a-z_]*' agent.log | head -n 3
+Z 
+INFO  sandbox
+Z 
+$ grep -c '[[:space:]]$' agent.log
+1
+$ grep -o 'T[0-9:]*Z' agent.log | head -n 2
+T10:52:03Z
+T10:52:04Z
+
+$ echo '--- BRE vs ERE'
+--- BRE vs ERE
+$ grep -o 'exit code [0-9]+' agent.log | head -n 2
+$ grep -o -E 'exit code [0-9]+' agent.log | head -n 2
+exit code 127
+exit code 1
+$ grep -o 'exit code [0-9]\+' agent.log | head -n 2
+exit code 127
+exit code 1
+$ grep -c 'WARN|ERROR' agent.log
+0
+$ grep -c -E 'WARN|ERROR' agent.log
+5
+$ grep -c 'WARN\|ERROR' agent.log
+5
+$ grep -o -E 'exit code 1(24|37)' agent.log
+exit code 137
+exit code 124
+$ grep -o -E '[0-9]{1,3}(\.[0-9]{1,3}){3}' agent.log
+172.17.0.2
+10.0.0.5
+$ grep -o -E '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z' agent.log | head -n 2
+2026-09-21T10:52:03Z
+2026-09-21T10:52:04Z
+$ grep -c -E 'colou?r' <<< 'color colour'
+1
+$ echo 'a+b' | grep -c 'a+b'
+1
+$ echo 'a+b' | grep -c -E 'a+b'
+0
+$ echo 'a+b' | grep -c -E 'a\+b'
+1
+$ echo 'a+b' | grep -c -F 'a+b'
+1
+
+$ echo '--- PCRE / Python'
+--- PCRE / Python
+$ grep -c -E '\d+' agent.log
+11
+$ grep -c -P '\d+' agent.log
+10
+$ grep -o -P 'exit code \K\d+' agent.log
+127
+1
+137
+0
+124
+$ grep -o -E '\bKilled\b' agent.log
+Killed
+$ grep -c -w 'Kill' agent.log
+0
+$ python3 -c 'import re,sys; print(re.findall(r"exit code (\d+)", open("agent.log").read()))'
+['127', '1', '137', '0', '124']
+
+$ echo '--- greedy'
+--- greedy
+$ grep -o 'cmd=".*"' agent.log
+cmd="pytest -q"
+cmd="pip install pytest"
+$ grep -o '".*"' agent.log | tail -n 1
+"model said \"done\" early"
+$ grep -o '"[^"]*"' agent.log | tail -n 2
+"model said \"
+" early"
+$ grep -o -P '".*?"' agent.log | tail -n 2
+"model said \"
+" early"
+$ python3 -c 'import re; s=open("agent.log").read().splitlines()[9]; print(re.findall(r"\".*\"", s)); print(re.findall(r"\".*?\"", s))'
+[]
+[]
+
+$ echo '--- quoting'
+--- quoting
+$ mkdir -p q; cd q; touch 5; echo 'exit 137' | grep -o [0-9]*; echo 'exit 137' | grep -o '[0-9]*'; cd ..
+137
+$ echo 'cost: $5' | grep -c "$5"
+1
+$ echo 'cost: $5' | grep -c '\$5'
+1
+$ echo 'end' | grep -c "end$"
+1
+
+$ echo '--- patterns'
+--- patterns
+$ grep -o -E 'exit code [0-9]+' agent.log | sort | uniq -c | sort -rn
+      1 exit code 137
+      1 exit code 127
+      1 exit code 124
+      1 exit code 1
+      1 exit code 0
+$ grep -E 'exit code (12[6-9]|1[3-9][0-9]|2[0-4][0-9]|25[0-5])\b' agent.log | cut -c 1-75
+2026-09-21T10:52:09Z ERROR tool_result exit code 127: bash: line 1: pytest:
+2026-09-21T10:55:40Z ERROR tool_result exit code 137: Killed
+$ grep -A 3 'Traceback' agent.log | cut -c 1-80
+2026-09-21T10:53:02Z ERROR tool_result exit code 1: Traceback (most recent call 
+  File "/app/wordfreq.py", line 12, in count
+    return totals[word]
+KeyError: 'the'
+$ grep -E '^[A-Za-z]+(Error|Exception):' agent.log
+KeyError: 'the'
+$ sed -n -E 's/.*: ([^:]+): command not found$/\1/p' agent.log
+pytest
+$ grep -n -E '[[:space:]]+$' agent.log | cut -c 1-40
+12:2026-09-21T10:57:00Z ERROR harness ti
+$ grep -c -i 'permission denied|killed' agent.log
+0
+$ grep -c -i -E 'permission denied|killed' agent.log
+1
+$ grep -o -E 'denied CONNECT [^ ]+' agent.log
+denied CONNECT github.com:443
+$ grep -o -E '(task|epoch)=[^ ]+' agent.log
+task=wordfreq
+epoch=1
+$ grep -o '"stderr_tail": "[^"]*"' results.jsonl | sort | uniq -c | sort -rn | head -n 3
+    114 "stderr_tail": ""
+     37 "stderr_tail": "AssertionError: Lists differ: [('The', 3)] != [('the', 7)]"
+      9 "stderr_tail": "bash: line 1: pytest: command not found"
+$ grep -o 'note="[^"]*"' agent.log
+note="model said \"
+$ grep -o -E 'note="([^"\\]|\\.)*"' agent.log
+note="model said \"done\" early"
+$ grep -c -E '^$' agent.log
+0
+$ grep -c -E '"exit_code": (124|137),' results.jsonl
+13
+## session 2 (cleaner reruns; supersedes the \d, "$5" and python-greedy demos above)
+$ echo 'exit code 137' | grep -o -E '\d+'
+d
+$ echo 'exit code 137' | grep -o -E '[0-9]+'
+137
+$ echo 'exit code 137' | grep -o -P '\d+'
+137
+$ echo 'exit code 137' | sed -E 's/\d+/N/'
+exit coNe 137
+$ echo 'exit code 137' | sed -E 's/[0-9]+/N/'
+exit code N
+$ echo 'cost: 9' | grep -c "$5"
+1
+$ echo 'cost: 9' | grep -c '\$5'
+0
+$ echo 'cmd="a" arg="b"' | grep -o '".*"'
+"a" arg="b"
+$ echo 'cmd="a" arg="b"' | grep -o '"[^"]*"'
+"a"
+"b"
+$ echo 'cmd="a" arg="b"' | grep -o -P '".*?"'
+"a"
+"b"
+$ python3 -c 'import re; s="cmd=\"a\" arg=\"b\""; print(re.findall(r"\".*\"", s), re.findall(r"\".*?\"", s))'
+['"a" arg="b"'] ['"a"', '"b"']
+$ grep 'note=' agent.log | jq -R 'capture("note=(?<n>\"([^\"\\\\]|\\\\.)*\")").n | fromjson'
+"model said \"done\" early"
+$ echo 'exit code 137' | sed -E 's/exit code ([0-9]+)/status=\1/'
+status=137
+$ echo 'exit code 137' | sed 's/exit code \([0-9]*\)/status=\1/'
+status=137
+$ echo 'AAA' | grep -o -E 'A{2}'
+AA
+$ grep -c -E '^[0-9-]+T[0-9:]+Z (ERROR|WARN) ' agent.log
+5
+$ grep --version | head -n 1
+grep (GNU grep) 3.11
+## alpine:3.20 (docker run --rm alpine:3.20 sh -c ...)
+grep: unrecognized option: P
+BusyBox v1.36.1 (2025-11-23 14:32:18 UTC) multi-call binary.
+
+Usage: grep [-HhnlLoqvsrRiwFE] [-m N] [-A|B|C N] { PATTERN | -e PATTERN... | -f FILE... } [FILE]...
+
+Search for PATTERN in FILEs (or stdin)
+
+	-H	Add 'filename:' prefix
+	-h	Do not add 'filename:' prefix
+	-n	Add 'line_no:' prefix
+	-l	Show only names of files that match
+	-L	Show only names of files that don't match
+	-c	Show only count of matching lines
+	-o	Show only the matching part of line
+	-q	Quiet. Return 0 if PATTERN is found, 1 otherwise
+	-v	Select non-matching lines
+	-s	Suppress open and read errors
+	-r	Recurse
+	-R	Recurse and dereference symlinks
+	-i	Ignore case
+	-w	Match whole words only
+	-x	Match whole lines only
+	-F	PATTERN is a literal (not regexp)
+	-E	PATTERN is an extended regexp
+	-m N	Match up to N times per file
+	-A N	Print N lines of trailing context
+	-B N	Print N lines of leading context
+	-C N	Same as '-A N -B N'
+	-e PTRN	Pattern to match
+	-f FILE	Read pattern from file
+status=2
+137
+BusyBox v1.36.1 (2025-11-23 14:32:18 UTC) multi-call binary.
+
+## macOS /usr/bin/grep on the authoring Mac
+grep: invalid option -- P
+usage: grep [-abcdDEFGHhIiJLlMmnOopqRSsUVvwXxZz] [-A num] [-B num] [-C[num]]
+	[-e pattern] [-f file] [--binary-files=value] [--color=when]
+	[--context[=num]] [--directories=action] [--label] [--line-buffered]
+	[--null] [pattern] [file ...]
+status=2
+grep (BSD grep, GNU compatible) 2.6.0-FreeBSD
+137
+## session 3
+$ wc -l agent.log
+12 agent.log
+$ grep 'exit code 1' agent.log | cut -c 27-60
+ tool_result exit code 127: bash: 
+ tool_result exit code 1: Tracebac
+ tool_result exit code 137: Killed
+ harness timeout after 300s, exit 
+$ grep -c 'exit code 1$' agent.log
+0
+$ grep -c 'exit code 1:' agent.log
+1
+$ grep -c -E 'exit code 1\b' agent.log
+1
+$ sed -n -E 's/.*exit code ([0-9]+).*/\1/p' agent.log
+127
+1
+137
+0
+124
+$ sed --version | head -n 1
+sed (GNU sed) 4.9

@@ -1,0 +1,203 @@
+{
+ "id": "inode-7",
+ "tag": "[inode(7)]",
+ "citation": {
+  "authors": "Linux man-pages project",
+  "title": "inode(7), symlink(7), path_resolution(7), unlink(2), link(2) — Linux man-pages 6.19",
+  "venue": "man7.org",
+  "year": "2026 (man-pages 6.19)",
+  "url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man7/inode.7.html",
+  "https://man7.org/linux/man-pages/man7/symlink.7.html",
+  "https://man7.org/linux/man-pages/man7/path_resolution.7.html",
+  "https://man7.org/linux/man-pages/man2/unlink.2.html",
+  "https://man7.org/linux/man-pages/man2/link.2.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "An inode holds file metadata (type, mode, owner uid/gid, size, timestamps, link count) but NOT the filename; names live in directories",
+   "verdict": "confirmed",
+   "finding": "inode(7) lists what the inode holds: device, inode number, file type and mode, link count, UID, GID, (rdev), size, preferred block size, blocks allocated, atime, btime, mtime, ctime. No name field is listed. inode(7) never states the negative in so many words; the positive statement that names are separate comes from symlink(7) (each hard link is 'a reference to the same inode number') and POSIX XBD 3.104 (a directory entry 'associates a filename with a file' — see posix-shell note). Executed: two names, one inode number, link count 2.",
+   "quote": "Each file has an inode containing metadata about the file. An application can retrieve this metadata using stat(2) (or related calls), which returns a stat structure, or statx(2), which returns a statx structure.",
+   "location": "inode(7) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "planned": "Hard link = another name for the same inode; file data is freed when link count reaches 0 AND no process has it open (unlink(2)) — explains 'deleted but still using disk'",
+   "verdict": "confirmed",
+   "finding": "Confirmed verbatim in unlink(2) and link(2). Executed: a 50 MB file held open by a process, then rm'd — `df` usage unchanged until the process exited; /proc/PID/fd/0 showed '/srv/big (deleted)'. Hard links cannot span filesystems (EXDEV, even between two mounts of the same filesystem) and cannot point to directories.",
+   "quote": "If the name was the last link to a file but any processes still have the file open, the file will remain in existence until the last file descriptor referring to it is closed.",
+   "location": "unlink(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+  },
+  {
+   "planned": "Symlink permissions are ignored / always 0777; permission of the target applies; dangling symlinks",
+   "verdict": "confirmed",
+   "finding": "On Linux an ordinary symlink's permissions 'are not used in any operations', are always 0777 and cannot be changed ('magic links' in /proc are the exception). A symlink to a nonexistent pathname is 'a dangling link'. Symlink OWNERSHIP does matter in sticky directories and under fs.protected_symlinks. Executed: `chmod 644 sl` changed the target to 644 while the link stayed 777; `cat` on a dangling link -> 'No such file or directory' while `ls -l` still shows the link.",
+   "quote": "On Linux, the permissions of an ordinary symbolic link are not used in any operations; the permissions are always 0777 (read, write, and execute for all user categories), and can't be changed.",
+   "location": "symlink(7) 'Symbolic link ownership, permissions, and timestamps'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/symlink.7.html"
+  },
+  {
+   "planned": "path_resolution: search (execute) permission needed on every directory in the path",
+   "verdict": "confirmed",
+   "finding": "For each non-final component, lacking search permission on the current lookup directory gives EACCES. Executed: file mode 644 inside p/q (755) under p (700, root-owned) -> 'Permission denied' for another user.",
+   "quote": "If the process does not have search permission on the current lookup directory, an EACCES error is returned (\"Permission denied\").",
+   "location": "path_resolution(7) 'Step 2: walk along the path'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "First half of the unlink rule.",
+   "quote": "unlink() deletes a name from the filesystem. If that name was the last link to a file and no processes have the file open, the file is deleted and the space it was using is made available for reuse.",
+   "location": "unlink(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+  },
+  {
+   "fact": "Inode numbers are unique only within one filesystem — the reason hard links cannot cross filesystems.",
+   "quote": "Inode numbers are guaranteed to be unique only within a filesystem (i.e., the same inode numbers may be used by different filesystems, which is the reason that hard links may not cross filesystem boundaries).",
+   "location": "inode(7), Inode number",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "Link count field.",
+   "quote": "This field contains the number of hard links to the file. Additional links to an existing file are created using link(2).",
+   "location": "inode(7), Link count",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "New file ownership: UID = creator's effective UID; GID = creator's effective GID, or the parent directory's GID if the directory has set-group-ID.",
+   "quote": "For newly created files, the file user ID is the effective user ID of the creating process.",
+   "location": "inode(7), User ID / Group ID",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "Three classic timestamps: atime (access), mtime (content), ctime (status change: owner, mode, link count...). ctime is NOT creation time; creation time is btime, only via statx.",
+   "quote": "This is the file's last status change timestamp. It is changed by writing or by setting inode information (i.e., owner, group, link count, mode, etc.).",
+   "location": "inode(7), Last status change timestamp (ctime)",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "A directory's mtime changes when entries are created or deleted in it; mtime is not changed by chmod/chown.",
+   "quote": "Moreover, the mtime timestamp of a directory is changed by the creation or deletion of files in that directory. The mtime timestamp is not changed for changes in owner, group, hard link count, or mode.",
+   "location": "inode(7), Last modification timestamp (mtime)",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "btime caveat as written in man-pages 6.19 (but `stat` on ubuntu:24.04 overlayfs did print a Birth: time).",
+   "quote": "The btime timestamp was not historically present on UNIX systems and is not currently supported by most Linux filesystems.",
+   "location": "inode(7), File creation (birth) timestamp (btime); executed ubuntu:24.04"
+  },
+  {
+   "fact": "st_blocks is in 512-byte units and can be smaller than size/512 for files with holes (sparse files).",
+   "quote": "This field indicates the number of blocks allocated to the file, 512-byte units, (This may be smaller than st_size/512 when the file has holes.)",
+   "location": "inode(7), Number of blocks allocated to the file",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "File type values (S_IFMT): socket 0140000, symlink 0120000, regular 0100000, block 0060000, directory 0040000, char 0020000, FIFO 0010000. POSIX names: 12 bits 07777 = file mode bits; low 9 bits 0777 = file permission bits.",
+   "quote": "POSIX refers to the stat.st_mode bits corresponding to the mask S_IFMT (see below) as the file type, the 12 bits corresponding to the mask 07777 as the file mode bits and the least significant 9 bits (0777) as the file permission bits.",
+   "location": "inode(7) 'The file type and mode'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "Hard links are indistinguishable from the 'original'.",
+   "quote": "This new name may be used exactly as the old one for any operation; both names refer to the same file (and so have the same permissions and ownership) and it is impossible to tell which name was the \"original\".",
+   "location": "link(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/link.2.html"
+  },
+  {
+   "fact": "Hard link vs symlink, in symlink(7)'s words.",
+   "quote": "each of the hard links to a file is a reference to the same inode number, where an inode number is an index into the inode table, which contains metadata about all files on a filesystem.",
+   "location": "symlink(7) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/symlink.7.html"
+  },
+  {
+   "fact": "A symlink points to a NAME, not an object; hence it may cross filesystems, refer to directories, and dangle.",
+   "quote": "In other words, a symbolic link is a pointer to another name, and not to an underlying object. For this reason, symbolic links may refer to directories and may cross filesystem boundaries.",
+   "location": "symlink(7) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/symlink.7.html"
+  },
+  {
+   "fact": "Dangling link definition.",
+   "quote": "There is no requirement that the pathname referred to by a symbolic link should exist. A symbolic link that refers to a pathname that does not exist is said to be a dangling link.",
+   "location": "symlink(7) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/symlink.7.html"
+  },
+  {
+   "fact": "Magic links (/proc/pid/exe, /proc/pid/fd/*) bypass normal path resolution and mount-namespace restrictions and 'have been used as attack vectors in various exploits' — relevant to sandbox escape discussions.",
+   "quote": "Because they can bypass ordinary mount_namespaces(7)-based restrictions, magic links have been used as attack vectors in various exploits.",
+   "location": "symlink(7) 'Magic links'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/symlink.7.html"
+  },
+  {
+   "fact": "EXDEV even across two mounts of the same filesystem; EPERM for directories.",
+   "quote": "EXDEV oldpath and newpath are not on the same mounted filesystem. (Linux permits a filesystem to be mounted at multiple points, but link() does not work across different mounts, even if the same filesystem is mounted on both.)",
+   "location": "link(2) ERRORS",
+   "cite_url": "https://man7.org/linux/man-pages/man2/link.2.html"
+  },
+  {
+   "fact": "Deleting needs WRITE on the containing directory (and search on the path) — not any permission on the file.",
+   "quote": "EACCES Write access to the directory containing path is not allowed for the process's effective UID, or one of the directories in path did not allow search permission.",
+   "location": "unlink(2) ERRORS",
+   "cite_url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+  },
+  {
+   "fact": "Sticky directory rule as an unlink error; the overriding capability is CAP_FOWNER.",
+   "quote": "The directory containing path has the sticky bit (S_ISVTX) set and the process's effective UID is neither the UID of the file to be deleted nor that of the directory containing it, and the process is not privileged (Linux: does not have the CAP_FOWNER capability).",
+   "location": "unlink(2) ERRORS, EPERM or EACCES",
+   "cite_url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+  },
+  {
+   "fact": "Immutable / append-only files cannot be unlinked even by a process with write access to the directory.",
+   "quote": "EPERM The file to be unlinked is marked immutable or append-only.",
+   "location": "unlink(2) ERRORS",
+   "cite_url": "https://man7.org/linux/man-pages/man2/unlink.2.html"
+  },
+  {
+   "fact": "Symlink limit: at most 40 symlinks followed per pathname (ELOOP).",
+   "quote": "As currently implemented on Linux, the maximum number of symbolic links that will be followed while resolving a pathname is 40.",
+   "location": "path_resolution(7) Step 2",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "fact": "Absolute paths start at the PROCESS's root directory, inherited from the parent and changeable with chroot(2); the cwd is likewise inherited. '/..' is '/'.",
+   "quote": "If the pathname starts with the '/' character, the starting lookup directory is the root directory of the calling process. A process inherits its root directory from its parent.",
+   "location": "path_resolution(7) Step 1",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "fact": "An empty pathname is an error (ENOENT); a trailing slash forces the last component to be a directory.",
+   "quote": "Nowadays POSIX decrees that an empty pathname must not be resolved successfully. Linux returns ENOENT in this case.",
+   "location": "path_resolution(7) 'Empty pathname'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "fact": "Whether the final symlink is followed depends on the call: stat follows, lstat does not.",
+   "quote": "For example, the system call lstat(2) will operate on the symbolic link, while stat(2) operates on the file pointed to by the symbolic link.",
+   "location": "path_resolution(7) 'Final symbolic link'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "fact": "Observed: hard link, symlink, dangling link.",
+   "quote": "$ echo data > orig; ln orig hard; ln -s orig soft; ls -li orig hard soft\n33608447 -rw-r--r-- 2 root root 5 ... hard\n33608447 -rw-r--r-- 2 root root 5 ... orig\n33608448 lrwxrwxrwx 1 root root 4 ... soft -> orig\n$ rm orig; cat hard -> data ; cat soft -> cat: soft: No such file or directory (status 1)\n$ ln /srv/target /dev/shm/x -> ln: failed to create hard link '/dev/shm/x' => '/srv/target': Invalid cross-device link\n$ ln /srv/d /srv/dlink -> ln: /srv/d: hard link not allowed for directory",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Observed: deleted-but-open file keeps its disk space.",
+   "quote": "$ dd if=/dev/zero of=/srv/big bs=1M count=50; sleep 300 < /srv/big &\nused KB before rm: 5405688 ; after rm (still open): 5405688 ; ls -l /proc/155/fd/0 -> /srv/big (deleted) ; after kill: 5354620",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Observed: chmod on a symlink changes the target.",
+   "quote": "$ echo t > target; chmod 600 target; ln -s target sl; chmod 644 sl; stat -c '%a %N' sl target -> 777 'sl' -> 'target' / 644 'target'",
+   "location": "executed ubuntu:24.04"
+  }
+ ],
+ "teaching_notes": "inode(7) supports the positive list of inode contents but never says 'the name is not in the inode' — cite symlink(7) or POSIX XBD 3.104 for that half. unlink(2) gives the exact two-condition rule behind 'rm didn't free the space', and the /proc/PID/fd '(deleted)' marker is the practical diagnostic. Cite sub-pages with their own tags ([symlink(7)], [path_resolution(7)], [unlink(2)], [link(2)]) and URLs from fetched_urls. path_resolution(7) is also the Linux source for the one-class permission rule (see chmod-umask note)."
+}

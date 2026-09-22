@@ -1,0 +1,140 @@
+{
+ "id": "docker-logs-inspect",
+ "tag": "[Docker: logs]",
+ "citation": {
+  "authors": "Docker Inc.",
+  "title": "View container logs; Configure logging drivers; JSON File logging driver; docker inspect",
+  "venue": "Docker Docs",
+  "year": "2026 (living document)",
+  "url": "https://docs.docker.com/engine/logging/"
+ },
+ "fetched_urls": [
+  "https://docs.docker.com/engine/logging/ (as .md)",
+  "https://docs.docker.com/engine/logging/configure/ (as .md)",
+  "https://docs.docker.com/engine/logging/drivers/json-file/ (as .md)",
+  "https://docs.docker.com/engine/logging/drivers/local/ (as .md)",
+  "https://docs.docker.com/reference/cli/docker/inspect/ (as .md)",
+  "https://docs.docker.com/reference/cli/docker/container/logs/ (as .md)"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "docker logs shows the container's STDOUT and STDERR (of PID 1's process tree writing to those streams); default logging driver json-file; no log rotation by default with json-file (disk-fill risk) - exact wording",
+   "verdict": "confirmed",
+   "finding": "Confirmed. Exact wording: 'By default, `docker logs` shows the command's `STDOUT` and `STDERR`.' 'The default logging driver is `json-file`.' 'By default, no log-rotation is performed.' json-file max-size 'Defaults to -1 (unlimited)', max-file defaults to 1 and is only effective when max-size is set. Docker recommends the `local` driver (rotates by default: 20m x 5 files = 100MB, compressed). The parenthetical about 'PID 1's process tree' is NOT in the docs - docs say 'the command's' output / 'the container's endpoint command'; an app that writes to a log FILE instead of stdout/stderr shows nothing in docker logs (docs' nginx/httpd symlink workaround).",
+   "quote": "Use the `local` logging driver to prevent disk-exhaustion. By default, no log-rotation is performed. As a result, log-files stored by the default `json-file` logging driver can cause a significant amount of disk space to be used for containers that generate much output, which can lead to disk space exhaustion.",
+   "location": "Configure logging drivers (TIP box)",
+   "cite_url": "https://docs.docker.com/engine/logging/configure/"
+  },
+  {
+   "planned": "docker inspect exposes Config.Env (environment variables, incl. any secrets passed with -e), Mounts, HostConfig (Memory, CapDrop, ReadonlyRootfs, NetworkMode, Privileged), State.ExitCode, State.OOMKilled",
+   "verdict": "confirmed",
+   "finding": "The docker inspect reference page does NOT enumerate these fields (it documents --format/--type/--size and examples such as .LogPath, .Config.Image, .NetworkSettings.Ports; the ENV reference says values are viewable 'using docker inspect'). All field names in the claim were therefore verified by EXECUTION on Docker 28.1.1: .Config.Env shows a secret passed with -e in clear text; .State.ExitCode=137 and .State.OOMKilled=true after an OOM kill; .HostConfig.Memory, .HostConfig.ReadonlyRootfs, .HostConfig.CapDrop, .HostConfig.NetworkMode, .HostConfig.Privileged, .HostConfig.LogConfig, .Mounts, .HostConfig.Tmpfs, .LogPath all exist with the values shown in extra_findings.",
+   "quote": "$ docker run -d --name lt-R5-secret -e API_KEY=sk-demo-12345 ubuntu:24.04 sleep 300\n$ docker inspect --format '{{json .Config.Env}}' lt-R5-secret\n[\"API_KEY=sk-demo-12345\",\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"]",
+   "location": "executed ubuntu:24.04",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/inspect/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "What docker logs shows (exact).",
+   "quote": "By default, `docker logs` or `docker service logs` shows the command's output just as it would appear if you ran the command interactively in a terminal. [...] By default, `docker logs` shows the command's `STDOUT` and `STDERR`.",
+   "location": "View container logs",
+   "cite_url": "https://docs.docker.com/engine/logging/"
+  },
+  {
+   "finding": "When docker logs is empty: app logs to files, or a non-local driver without dual logging.",
+   "quote": "If your image runs a non-interactive process such as a web server or a database, that application may send its output to log files instead of `STDOUT` and `STDERR`.",
+   "location": "View container logs",
+   "cite_url": "https://docs.docker.com/engine/logging/"
+  },
+  {
+   "finding": "nginx image workaround (symlink log files to /dev/stdout, /dev/stderr).",
+   "quote": "The official `nginx` image creates a symbolic link from `/var/log/nginx/access.log` to `/dev/stdout`, and creates another symbolic link from `/var/log/nginx/error.log` to `/dev/stderr`",
+   "location": "View container logs",
+   "cite_url": "https://docs.docker.com/engine/logging/"
+  },
+  {
+   "finding": "Default driver statement + why it stays default.",
+   "quote": "Docker keeps the json-file logging driver (without log-rotation) as a default to remain backwards compatible with older versions of Docker, and for situations where Docker is used as runtime for Kubernetes.",
+   "location": "Configure logging drivers (TIP box)",
+   "cite_url": "https://docs.docker.com/engine/logging/configure/"
+  },
+  {
+   "finding": "json-file format: one JSON object per line with log, stream, time.",
+   "quote": "{ \"log\": \"Log line is here\\n\", \"stream\": \"stdout\", \"time\": \"2019-01-01T11:11:11.111111111Z\" }",
+   "location": "JSON File logging driver",
+   "cite_url": "https://docs.docker.com/engine/logging/drivers/json-file/"
+  },
+  {
+   "finding": "json-file option defaults.",
+   "quote": "| `max-size` | The maximum size of the log before it is rolled. [...] Defaults to -1 (unlimited). | `max-file` | The maximum number of log files that can be present. [...] **Only effective when `max-size` is also set.** A positive integer. Defaults to 1. |",
+   "location": "JSON File logging driver > Options",
+   "cite_url": "https://docs.docker.com/engine/logging/drivers/json-file/#options"
+  },
+  {
+   "finding": "Enable rotation: daemon.json log-opts (values must be strings) or per container --log-opt; applies only to newly created containers.",
+   "quote": "$ docker run --log-driver json-file --log-opt max-size=10m alpine echo hello world [...] Restart Docker for the changes to take effect for newly created containers. Existing containers don't use the new logging configuration automatically.",
+   "location": "JSON File logging driver > Usage",
+   "cite_url": "https://docs.docker.com/engine/logging/drivers/json-file/#usage"
+  },
+  {
+   "finding": "Don't touch the json log files with external tools.",
+   "quote": "These files are designed to be exclusively accessed by the Docker daemon. Interacting with these files with external tools may interfere with Docker's logging system and result in unexpected behavior, and should be avoided.",
+   "location": "JSON File logging driver (WARNING)",
+   "cite_url": "https://docs.docker.com/engine/logging/drivers/json-file/"
+  },
+  {
+   "finding": "local driver defaults.",
+   "quote": "By default, the `local` driver preserves 100MB of log messages per container and uses automatic compression to reduce the size on disk. The 100MB default value is based on a 20M default size for each file and a default count of 5 for the number of such files",
+   "location": "Local file logging driver",
+   "cite_url": "https://docs.docker.com/engine/logging/drivers/local/"
+  },
+  {
+   "finding": "Delivery mode: blocking is the default; a blocked stdout/stderr can stall or break the app; non-blocking drops messages when the 1m default buffer is full.",
+   "quote": "The `non-blocking` message delivery mode prevents applications from blocking due to logging back pressure. Applications are likely to fail in unexpected ways when STDERR or STDOUT streams block. [...] When the buffer is full, new messages will not be enqueued.",
+   "location": "Configure logging drivers > Configure the delivery mode of log messages",
+   "cite_url": "https://docs.docker.com/engine/logging/configure/#configure-the-delivery-mode-of-log-messages-from-container-to-log-driver"
+  },
+  {
+   "finding": "docker logs options: -f/--follow, --since, --until, -n/--tail (default all), -t/--timestamps, --details; 'batch-retrieves logs present at the time of execution'. --log-driver=none disables logging.",
+   "quote": "The `docker logs` command batch-retrieves logs present at the time of execution.",
+   "location": "docker container logs > Description",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/container/logs/"
+  },
+  {
+   "finding": "docker inspect basics: JSON array by default; --format Go template; `json` template function; -s size; --type.",
+   "quote": "By default, `docker inspect` will render results in a JSON array. [...] Docker adds a template function, `json`, which can be applied to get results in JSON format.",
+   "location": "docker inspect > Description / Get a subsection in JSON format",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/inspect/"
+  },
+  {
+   "finding": "Log path example in docs.",
+   "quote": "$ docker inspect --format='{{.LogPath}}' $INSTANCE_ID",
+   "location": "docker inspect > Get an instance's log path",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/inspect/#get-an-instances-log-path"
+  },
+  {
+   "finding": "EXECUTED: the -e secret is also readable from /proc/1/environ inside the container (any process with access sees it).",
+   "quote": "$ docker exec lt-R5-secret sh -c 'tr \"\\0\" \"\\n\" < /proc/1/environ | grep API'\nAPI_KEY=sk-demo-12345",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "finding": "EXECUTED: defaults as seen by inspect on an unhardened container.",
+   "quote": "$ docker inspect --format '{{.State.ExitCode}} {{.State.OOMKilled}} {{.HostConfig.ReadonlyRootfs}} {{.HostConfig.Privileged}} {{.HostConfig.NetworkMode}} {{.HostConfig.Memory}} {{json .HostConfig.CapDrop}} {{json .Mounts}}' lt-R5-secret\n0 false false false bridge 0 null []",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "finding": "EXECUTED: hardened container killed by the OOM killer - inspect is the audit record.",
+   "quote": "$ docker run --name lt-R5-oom -m 64m --memory-swap 64m --read-only --cap-drop ALL --network none ubuntu:24.04 sh -c 'tail /dev/zero'; echo \"exit=$?\"\nKilled\nexit=137\n$ docker inspect --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Status={{.State.Status}} Memory={{.HostConfig.Memory}} ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}} CapDrop={{json .HostConfig.CapDrop}} NetworkMode={{.HostConfig.NetworkMode}} Privileged={{.HostConfig.Privileged}} LogType={{.HostConfig.LogConfig.Type}} LogOpts={{json .HostConfig.LogConfig.Config}}' lt-R5-oom\nExitCode=137 OOMKilled=true Status=exited Memory=67108864 ReadonlyRootfs=true CapDrop=[\"ALL\"] NetworkMode=none Privileged=false LogType=json-file LogOpts={}",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "finding": "EXECUTED: docker logs keeps stdout and stderr separate, and does not see output written to a file; LogOpts={} above = no rotation configured.",
+   "quote": "$ docker run --name lt-R5-log ubuntu:24.04 sh -c 'echo to-stdout; echo to-stderr >&2; echo to-file > /tmp/app.log'\nto-stdout\nto-stderr\n$ docker logs lt-R5-log 2>/dev/null\nto-stdout\n$ docker logs lt-R5-log 2>&1 >/dev/null\nto-stderr\n$ docker inspect --format '{{.LogPath}}' lt-R5-log\n/var/lib/docker/containers/<id>/<id>-json.log",
+   "location": "executed ubuntu:24.04"
+  }
+ ],
+ "teaching_notes": "The no-rotation default is confirmed in Docker's own words and is the quotable disk-fill risk for long agent runs (a chatty agent can fill the host). Correction to the planned phrasing: docs never say 'PID 1's process tree' - say 'the container command's stdout and stderr'; whether children's output appears depends on them inheriting those fds (general Unix, no citation needed). The inspect reference does not list the JSON schema, so every field name in the course must come from the executed outputs recorded here (Config.Env, State.ExitCode, State.OOMKilled, HostConfig.Memory/ReadonlyRootfs/CapDrop/NetworkMode/Privileged/LogConfig/Tmpfs, Mounts[].RW, LogPath). Extra hazard: the default 'blocking' delivery mode means a stalled log driver can block the application's writes to stdout."
+}

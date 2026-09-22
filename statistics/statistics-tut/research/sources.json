@@ -1,0 +1,138 @@
+{
+  "miller": {
+    "tag": "Error bars",
+    "title": "Evan Miller (2024), Adding Error Bars to Evals, §§2–5",
+    "url": "https://arxiv.org/html/2411.00640v1",
+    "claims": "Verified: task-level differences for paired comparisons; clustered questions require dependence-aware uncertainty; averaging repeated answers reduces within-question variability; sample-size planning uses effect and variance assumptions.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "wilson": {
+    "tag": "NIST: proportions",
+    "title": "NIST/SEMATECH e-Handbook, §7.2.4.1: Confidence intervals for proportions",
+    "url": "https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm",
+    "claims": "Verified: Wilson formula, bounded endpoints, distinction from the Wald interval, and exact binomial interval construction.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "mean": {
+    "tag": "NIST: means",
+    "title": "NIST/SEMATECH e-Handbook, §1.3.5.2: Confidence limits for the mean",
+    "url": "https://www.itl.nist.gov/div898/handbook/eda/section3/eda352.htm",
+    "claims": "Verified: mean interval uses standard deviation divided by square root of sample size and a t critical value; interpretation concerns repeated interval construction.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "paired": {
+    "tag": "NIST: paired",
+    "title": "NIST/SEMATECH e-Handbook, §7.3.1.1: Analysis of paired observations",
+    "url": "https://www.itl.nist.gov/div898/handbook/prc/section3/prc311.htm",
+    "claims": "Verified: form within-pair differences and analyze their mean; the paired t procedure uses the variance of those differences.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "bootstrap": {
+    "tag": "SciPy: bootstrap",
+    "title": "SciPy documentation: scipy.stats.bootstrap",
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.bootstrap.html",
+    "claims": "Verified: resampling with replacement, percentile/basic/BCa alternatives, paired=True shares sampled indices, and degenerate distributions need care. The local lab explicitly uses percentile intervals, not the SciPy default.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "asa": {
+    "tag": "ASA",
+    "title": "American Statistical Association (2016), Statement on statistical significance and p-values: release and six principles",
+    "url": "https://www.amstat.org/asa/files/pdfs/p-valuestatement.pdf",
+    "claims": "Verified: p-values do not give hypothesis probabilities or effect importance; threshold-only decisions and selective reporting are inappropriate.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "binomial": {
+    "tag": "SciPy: binomial",
+    "title": "SciPy documentation: scipy.stats.binomtest",
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.binomtest.html",
+    "claims": "Verified: test of a binomial success probability with two-sided and one-sided alternatives. The local discordance test specializes the binomial null to p=0.5.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "bonferroni": {
+    "tag": "NIST: Bonferroni",
+    "title": "NIST/SEMATECH e-Handbook, §7.4.6.3: Bonferroni’s method",
+    "url": "https://www.itl.nist.gov/div898/handbook/prc/section4/prc463.htm",
+    "claims": "Verified: allocating alpha across a specified family bounds its overall error using the Bonferroni inequality.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "sequential": {
+    "tag": "Confidence sequences",
+    "title": "Howard, Ramdas, McAuliffe & Sekhon, Time-uniform, nonparametric, nonasymptotic confidence sequences",
+    "url": "https://arxiv.org/abs/1810.08240",
+    "claims": "Verified from abstract: confidence sequences provide time-uniform coverage under their assumptions. No particular implementation or sample efficiency is claimed in the course.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "metrics": {
+    "tag": "Metrics",
+    "title": "scikit-learn user guide, §3.4: Metrics and scoring",
+    "url": "https://scikit-learn.org/stable/modules/model_evaluation.html",
+    "claims": "Verified: confusion-matrix and precision/recall/F-score definitions; averaging schemes change what summary metrics mean. The examples and confusion matrices here are original.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "calibration": {
+    "tag": "Calibration",
+    "title": "scikit-learn user guide, §1.16: Probability calibration",
+    "url": "https://scikit-learn.org/stable/modules/calibration.html",
+    "claims": "Verified: reliability diagrams compare forecast averages with observed frequencies; proper scores assess more than calibration alone; calibration fitting requires independent data.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "beta": {
+    "tag": "Beta update",
+    "title": "Joram Soch, The Book of Statistical Proofs: Posterior distribution for binomial observations",
+    "url": "https://statproofbook.github.io/P/bin-post.html",
+    "claims": "Verified: Beta prior with Binomial likelihood yields Beta(alpha+successes, beta+failures). Course posterior numbers are computed locally.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "blocks": {
+    "tag": "NIST: design",
+    "title": "NIST/SEMATECH e-Handbook, §5.3.3.2: Randomized block designs",
+    "url": "https://www.itl.nist.gov/div898/handbook/pri/section3/pri332.htm",
+    "claims": "Verified: blocking controls known nuisance factors and randomization operates within blocks. Application to agent execution order is an original course design example.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "humaneval": {
+    "tag": "HumanEval",
+    "title": "Chen et al. (2021), Evaluating Large Language Models Trained on Code, §2.1",
+    "url": "https://arxiv.org/html/2107.03374v2",
+    "claims": "Verified: pass@k estimates whether at least one of k samples passes and uses 1-C(n-c,k)/C(n,k). No model performance claims are reproduced.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "equivalence": {
+    "tag": "Equivalence tests",
+    "title": "statsmodels documentation: paired two-one-sided equivalence tests",
+    "url": "https://www.statsmodels.org/stable/generated/statsmodels.stats.weightstats.ttost_paired.html",
+    "claims": "Verified: equivalence is tested against specified lower and upper limits using two one-sided tests; it is not established by failing to reject a zero difference.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "agreement": {
+    "tag": "Agreement",
+    "title": "scikit-learn documentation: Cohen’s kappa",
+    "url": "https://scikit-learn.org/stable/modules/generated/sklearn.metrics.cohen_kappa_score.html",
+    "claims": "Verified: kappa=(observed agreement−expected agreement)/(1−expected agreement), with expected agreement derived from empirical label marginals; weighting options for ordinal labels.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  },
+  "fdr": {
+    "tag": "Multiple testing",
+    "title": "statsmodels documentation: multiple-test corrections",
+    "url": "https://www.statsmodels.org/stable/generated/statsmodels.stats.multitest.multipletests.html",
+    "claims": "Verified: implementations distinguish FWER and FDR procedures, including Bonferroni, Holm, Benjamini–Hochberg, and Benjamini–Yekutieli; dependence assumptions matter.",
+    "checked": "2026-09-21",
+    "status": "confirmed-with-stated-scope"
+  }
+}

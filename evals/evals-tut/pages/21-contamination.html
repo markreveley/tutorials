@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Contamination · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Contamination &amp; Validity</p>
+    <h1>Data contamination</h1>
+    <p class="lede">
+      Models train on the internet; benchmarks live on the internet. When test data leaks into training
+      data, scores measure familiarity instead of ability — and nothing about the score looks wrong.
+      This page covers how contamination happens and the canonical demonstration of how to catch it:
+      GSM1k.
+    </p>
+
+    <h2 id="mechanisms">How the test gets into the training set</h2>
+    <p>
+      Anthropic's analogy sets the stakes plainly: because MMLU is so widely used, "models are more
+      likely to encounter MMLU questions during training. This is comparable to students seeing the
+      questions before the test—it's
+      cheating."<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023, Challenges in Evaluating AI Systems">[Anthropic]</a>
+      But "cheating" implies intent, and the mechanisms are mostly ambient:
+    </p>
+    <ul>
+      <li><strong>Web-scrape inclusion.</strong> Benchmarks are published, mirrored, quoted in blog
+        posts, embedded in tutorials — then scraped. This is why HumanEval's authors hand-wrote their
+        164 problems in 2021: GitHub "already contains solutions to problems from a variety of
+        sources."<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, §2.2">[HumanEval]</a></li>
+      <li><strong>The benchmark predates the model.</strong> Any benchmark built from pre-existing
+        public artifacts is contaminated at birth for future models: 94% of SWE-bench's instances
+        predate the training cutoffs of the models evaluated on
+        them.<a class="cite" href="https://arxiv.org/abs/2410.06992" title="Aleithan et al. 2024, SWE-Bench+, §1">[SWE-bench+]</a></li>
+      <li><strong>The synthetic-data side door.</strong> Training on LLM-generated data <em>resembling</em>
+        a benchmark inflates scores without the test set ever being touched — a verified case below.</li>
+      <li><strong><span class="term" data-g="solution-leakage">Solution leakage</span>.</strong> The
+        answer sits in the task input itself — one-third of audited SWE-bench successes
+        (<a href="12-swe-bench-case-study.html">page 12</a>). Not training contamination, but the same
+        effect: score without skill.</li>
+    </ul>
+
+    <h2 id="gsm1k">GSM1k: the controlled experiment</h2>
+    <p>
+      By 2024, GSM8k — the standard grade-school math benchmark — was years old, public, and suspiciously
+      conquered. Scale AI's GSM1k study (Zhang et al., NeurIPS 2024) ran the experiment everyone needed:
+      <strong>commission fresh problems that are like the benchmark in every way except being new, and
+      see which models' scores survive.</strong>
+    </p>
+    <p>
+      The construction is the masterclass. Human annotators, prompted with example GSM8k problems, wrote
+      novel ones; a pipeline of independent re-solving, quality audits, and winnowing to match GSM8k's
+      answer-magnitude distribution took 2,108 raw problems down to a final
+      <strong>1,205</strong> — at a cost of roughly $180,000 in annotation
+      fees.<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, GSM1k, §3">[GSM1k]</a>
+      Then they <em>validated</em> the difficulty match three independent ways: human annotators shown
+      one GSM1k problem among four GSM8k problems picked the newcomer only 21.83% of the time (chance:
+      20%); timed humans solved slightly <em>more</em> GSM1k problems per 15 minutes than GSM8k (4.36 vs
+      4.07 — the new set is, if anything, easier, making any score drops conservative); and pre-2021
+      models that provably never saw either dataset (GPT-2, GPT-NeoX-20B) scored the same on
+      both.<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, §3.2, §5">[GSM1k]</a>
+      That third check is the quiet brilliance: a control group for the benchmark itself.
+    </p>
+    <h3 id="findings">What they found</h3>
+    <ul>
+      <li><strong>Systematic family-level overfitting.</strong> "Accuracy drops of up to 8%," with the
+        Phi and Mistral families performing worse on GSM1k "for almost every release and scale," and Yi,
+        Xwin, Gemma, and CodeLlama showing the pattern to a lesser
+        degree.<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, Abstract, §5.1">[GSM1k]</a>
+        Worst individual cases: Yi-6B-Chat −8.0, math-shepherd-mistral-7b-rl −7.2, phi-2 −6.3
+        points.<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, Appendix F">[GSM1k]</a></li>
+      <li><strong>Frontier models came out clean.</strong> GPT, Gemini, Claude, and Mistral Large
+        performed similarly on both sets — Claude actually slightly <em>better</em> on the fresh
+        problems. The authors' favored explanation: "sufficiently strong LLMs also learn elementary
+        reasoning ability during training" — supported by the telling detail that Mistral Large is the
+        only clean Mistral model, and selective decontamination of just the largest model is
+        implausible.<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, §5.2">[GSM1k]</a></li>
+      <li><strong>An independent contamination signal agreed.</strong> A model's per-character
+        <span class="term" data-g="log-likelihood">log-likelihood</span> of generating GSM8k text — how
+        unsurprised it is by the exact test data — correlated with its GSM8k-vs-GSM1k gap (Spearman rank
+        correlation 0.36, p = 0.03).<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, §5.4">[GSM1k]</a>
+        Models that found the benchmark text familiar were the models whose scores didn't survive fresh
+        instances.</li>
+      <li><strong>But contamination wasn't the whole story.</strong> One of the most overfit models
+        (Math-Shepherd) had <em>low</em> GSM8k log-likelihood — it was trained on synthetic data
+        resembling the benchmark, not the benchmark itself. The authors' caution: "data contamination is
+        likely not the full story."<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, §5.4">[GSM1k]</a></li>
+      <li><strong>Overfit ≠ unable.</strong> The most-quoted nuance: phi-2 dropped ~6 points yet still
+        solved over half of GSM1k — problems guaranteed absent from its training data. "The fact that a
+        model is overfit does not mean that it is poor at reasoning, merely that it is not as good as
+        the benchmarks might indicate it to
+        be."<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, §5.3">[GSM1k]</a>
+        Contamination inflates; it doesn't fabricate from nothing.</li>
+    </ul>
+
+    <div class="warn">
+      <span class="label">A meta-lesson this course caught in the act</span>
+      <p>The GSM1k numbers most people quote are wrong — because they cite the May 2024 <em>preprint</em>:
+      1,250 problems, drops "up to 13%," correlation 0.32. The final NeurIPS version revised all three:
+      <strong>1,205 problems, up to 8%, 0.36</strong>.<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, v1 vs v4 (camera-ready)">[GSM1k]</a>
+      This page's claims were verified against the camera-ready. The lesson generalizes: preprints
+      mutate, and a citation without a version is a citation to a moving target — the reproducibility
+      rules of <a href="19-reproducibility.html">page 19</a> apply to papers, not just code.</p>
+    </div>
+
+    <h2 id="recipe">The reusable recipe</h2>
+    <p>
+      GSM1k's method transfers to any benchmark you depend on, and its components are worth listing as a
+      checklist because each one answers a specific objection:
+    </p>
+    <div class="card">
+      <ol style="margin-bottom:0">
+        <li><strong>Fresh instances, matched in distribution</strong> — style, difficulty, answer
+          format. (Objection answered: "your new problems are just harder.")</li>
+        <li><strong>Empirical difficulty validation</strong> — human indistinguishability, timed solve
+          rates. (Same objection, with receipts.)</li>
+        <li><strong>An uncontaminated control</strong> — models that predate both datasets should show
+          no gap. (Objection: "your pipeline differs somehow.")</li>
+        <li><strong>An independent signal</strong> — the log-likelihood probe. (Objection: "the gap is
+          coincidence.")</li>
+        <li><strong>Keep the new set private</strong>, with a committed release trigger — GSM1k's
+          authors withheld the dataset, running recurring evaluations, with release promised when top
+          open models exceed 95% or by a fixed date.<a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, §1, §6">[GSM1k]</a>
+          (Objection: "now <em>your</em> benchmark will contaminate.")</li>
+      </ol>
+    </div>
+    <p>
+      The same logic, adapted to agents, produced the SWE-Bench Illusion's in-benchmark vs
+      fresh-same-repo vs outside-repo differentials (<a href="12-swe-bench-case-study.html">page 12</a>)
+      — and the next page covers benchmarks that build the freshness in from the start.
+    </p>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Contamination can't be ruled out by inspection — the score looks identical either way. It can
+      only be ruled out by <em>design</em> (data the model cannot have seen) or exposed by
+      <em>experiment</em> (fresh instances, matched and validated). Any high score on an old public
+      benchmark carries an asterisk that only one of those two moves can remove.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Hugh Zhang et al. (Scale AI), "A Careful Examination of Large Language Model Performance on Grade School Arithmetic," NeurIPS 2024 (arXiv:2405.00332, v4 camera-ready). <a href="https://arxiv.org/abs/2405.00332">arxiv.org/abs/2405.00332</a></li>
+        <li>Anthropic, "Challenges in Evaluating AI Systems," anthropic.com, October 2023. <a href="https://www.anthropic.com/news/evaluating-ai-systems">anthropic.com/news/evaluating-ai-systems</a></li>
+        <li>Mark Chen et al., "Evaluating Large Language Models Trained on Code," arXiv:2107.03374, 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+        <li>Reem Aleithan et al., "SWE-Bench+: Enhanced Coding Benchmark for LLMs," arXiv:2410.06992, 2024. <a href="https://arxiv.org/abs/2410.06992">arxiv.org/abs/2410.06992</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

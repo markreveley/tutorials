@@ -1,0 +1,274 @@
+{
+ "id": "aisi-sandboxing",
+ "tag": "[AISI: Sandboxing]",
+ "citation": {
+  "authors": "UK AI Security Institute (AISI)",
+  "title": "The Inspect Sandboxing Toolkit: Scalable and secure AI agent evaluations (blog post, Aug 7, 2025) with the accompanying 'Technical guidance: sandboxing configurations for agentic evaluations' PDF in UKGovernmentBEIS/aisi-sandboxing",
+  "venue": "AISI blog; GitHub UKGovernmentBEIS/aisi-sandboxing",
+  "year": "2025",
+  "url": "https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations"
+ },
+ "fetched_urls": [
+  "https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations",
+  "https://www.aisi.gov.uk/work/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations (redirects to the /blog/ URL)",
+  "https://raw.githubusercontent.com/UKGovernmentBEIS/aisi-sandboxing/main/README.md",
+  "https://raw.githubusercontent.com/UKGovernmentBEIS/aisi-sandboxing/main/Technical%20Guidance.pdf",
+  "https://k8s-sandbox.aisi.org.uk/",
+  "https://k8s-sandbox.aisi.org.uk/security/container-runtime/",
+  "https://k8s-sandbox.aisi.org.uk/security/network-access/",
+  "https://raw.githubusercontent.com/UKGovernmentBEIS/inspect_proxmox_sandbox/main/README.md",
+  "https://inspect.aisi.org.uk/sandboxing.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "AISI frames sandbox requirements along three axes: tooling (what the agent can use), host isolation (protection of the host from the agent), network isolation (what it can reach) — verify exact axes and level definitions",
+   "verdict": "confirmed",
+   "finding": "Three axes confirmed. Blog/README wording: tooling, host, network. The glosses differ from the planned ones: tooling = restricting access to tools AND/OR the ability to execute code; host = preventing escape from or compromise of the host; network = controlling interaction with external systems incl. the internet.",
+   "quote": "Our sandboxing protocol classifies isolation along three different axes: tooling (restricts model access to certain tools, and/or the ability to execute code), host (prevents a model from escaping or compromising the host system), and network (controls a model’s interaction with external systems – including the internet – over the network).",
+   "location": "AISI blog post, section 'The toolkit' (same sentence in repo README, 'Technical Documentation')"
+  },
+  {
+   "planned": "AISI frames sandbox requirements along three axes: tooling (what the agent can use), host isolation (protection of the host from the agent), network isolation (what it can reach) — verify exact axes and level definitions",
+   "verdict": "confirmed",
+   "finding": "The Technical Guidance PDF names the dimensions Tooling (T), Host Isolation (H), Network Isolation (N).",
+   "quote": "1. Tooling (T): Defines the agent's execution capabilities, including access to external APIs and file interactions. 2. Host Isolation (H): Defines the containment level of the execution environment in which the agent operations. 3. Network Isolation (N): Controls the agent’s access to external networks and resources.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'Defining the level of sandbox capabilities', pp. 1-2",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "AISI frames sandbox requirements along three axes: tooling (what the agent can use), host isolation (protection of the host from the agent), network isolation (what it can reach) — verify exact axes and level definitions",
+   "verdict": "corrected",
+   "finding": "LEVEL NUMBERING: the prose says each dimension gets 'a level from 1-3', but the table (and every example) is ZERO-based and H has FOUR levels: T0-T2, H0-H3, N0-N2. Higher number = more restriction. Use the table. Profiles are written Tx.Hx.Nx and called the 'sandbox profile'.",
+   "quote": "Each dimension is assigned a level from 1-3. This is generally but not exclusively based on risk mitigation requirements: the higher the level, the higher the risk mitigation requirement. Levels for each dimension are then amalgamated in the format Tx.Hx.Nx This three-part designation is known as the sandbox profile",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'Defining the level of sandbox capabilities', p. 2",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "AISI frames sandbox requirements along three axes: tooling (what the agent can use), host isolation (protection of the host from the agent), network isolation (what it can reach) — verify exact axes and level definitions",
+   "verdict": "confirmed",
+   "finding": "TOOLING levels, exact: T0 = Unrestricted execution: full code execution and access to web browser. T1 = Restricted execution: web browsing & basic tooling with no side-effects (e.g. single command-line tools). T2 = No execution (e.g., predefined response mode, no external interactions). In Inspect terms T0 = bash(), python(), read_file(), write_file(), web_search(), web_browser(), computer(); T1 = web_search(), web_browser(); T2 = solver=[generate()], no tools.",
+   "quote": "Unrestricted execution: full code execution and access to web browser. [...] Restricted execution: web browsing & basic tooling with no side-effects (e.g. single command-line tools). [...] No execution (e.g., predefined response mode, no external interactions)",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), levels table, p. 2",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "AISI frames sandbox requirements along three axes: tooling (what the agent can use), host isolation (protection of the host from the agent), network isolation (what it can reach) — verify exact axes and level definitions",
+   "verdict": "confirmed",
+   "finding": "HOST ISOLATION levels, exact: H0 = No isolation (researcher's local machine, tool calls without a sandbox; 'not recommended unless other containerisation software is used'); H1 = Local containerised execution (Docker and Docker Compose); H2 = Remote containerised execution (Kubernetes Pods); H3 = Remote virtual machine (Proxmox). Inspect settings: sandbox=\"local\" / \"docker\" / \"k8s\" / \"proxmox\". H3 is later headed 'Temporary, fully-isolated, remote VM with Proxmox'.",
+   "quote": "No isolation (execution on a researcher’s local machine - tool calls are made without a sandbox). This is not recommended unless other containerisation software is used. [...] Local containerised execution (Docker and Docker Compose) [...] Remote containerised execution (Kubernetes Pods) [...] Remote virtual machine (Proxmox)",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), levels table, p. 2",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "AISI frames sandbox requirements along three axes: tooling (what the agent can use), host isolation (protection of the host from the agent), network isolation (what it can reach) — verify exact axes and level definitions",
+   "verdict": "confirmed",
+   "finding": "NETWORK ISOLATION levels, exact: N0 = Full external network access; N1 = Narrow network access (pre-approved domains); N2 = No external network access (local network communication may still be possible in controlled scenarios). N1 is stated to be compatible only with H2 (k8s, via allowDomains in helm-values.yaml).",
+   "quote": "Full external network access [...] Narrow network access (pre-approved domains) [...] No external network access (local network communication may still be possible in controlled scenarios)",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), levels table, p. 2",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "AISI provides sandbox plugins beyond Docker: Kubernetes (k8s) and Proxmox (VMs), and why (scale; stronger isolation for e.g. cyber evals / full VMs / Windows)",
+   "verdict": "confirmed",
+   "finding": "Three plugins: Docker Compose, Kubernetes, Proxmox. Blog's one-line reasons: k8s = more complex environments + automatic scale up/down; Proxmox = strong VM isolation for high-risk evaluations.",
+   "quote": "Kubernetes Plugin: Allows you to simulate more complex environments, and automatically spin up or shut down containers based on resource demands. [...] Proxmox plugin: Strong virtual machine (VM) isolation for high-risk evaluations.",
+   "location": "AISI blog post, section 'The toolkit'"
+  },
+  {
+   "planned": "AISI provides sandbox plugins beyond Docker: Kubernetes (k8s) and Proxmox (VMs), and why (scale; stronger isolation for e.g. cyber evals / full VMs / Windows)",
+   "verdict": "confirmed",
+   "finding": "Technical Guidance reasons for k8s: runs on a cluster rather than locally; 'greater scalability, security and built-in tooling'; 'superior startup times'; ecosystem tooling. The k8s-sandbox docs spell out 'security' as Cilium network policies (fine-grained internet access control) and gVisor, which is ENABLED BY DEFAULT in the k8s_sandbox built-in Helm chart.",
+   "quote": "This package lets you run multiple docker containers which your agent can interact with on a K8s cluster, rather than locally. It provides greater scalability, security and built-in tooling. It also has superior startup times and the ability to draw on an ecosystem of tooling.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'Sandboxing Tools', p. 1",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "AISI provides sandbox plugins beyond Docker: Kubernetes (k8s) and Proxmox (VMs), and why (scale; stronger isolation for e.g. cyber evals / full VMs / Windows)",
+   "verdict": "corrected",
+   "finding": "Technical Guidance reasons for Proxmox: virtualisation as 'an additional strong layer of isolation' AND software-defined networks (SDNs) for cyber evaluations. 'Windows' is NOT given as a reason in the blog or guidance; the Proxmox plugin README merely documents that Windows VMs are supported (via the QEMU guest agent). State Windows support as a capability of the plugin, not as AISI's stated motivation.",
+   "quote": "This allows you to use VMs within a Proxmox instance to sandbox Inspect evaluations. Using virtualisation adds an additional strong layer of isolation, and lets you set up complex software defined networks (SDNs) for cyber evaluations.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'Sandboxing Tools', p. 1",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "Statements on why Docker alone may be insufficient for high-risk agentic evals (shared kernel / container escape)",
+   "verdict": "unverifiable",
+   "finding": "No AISI document fetched says 'shared kernel' or explains container escape as the reason Docker is insufficient. What AISI does say: (a) H3/Proxmox is for 'secure evaluations that may threaten the sandbox environment'; (b) virtualisation 'adds an additional strong layer of isolation'; (c) the k8s docs recommend gVisor 'for good security practice when running untrusted LLM-generated code in containers'; (d) Docker Compose cannot practically do domain allow-listing (N1). The shared-kernel argument must be cited to [Firecracker] (NSDI'20 §2.1) or [gVisor], not to AISI.",
+   "quote": "Need to run secure evaluations that may threaten the sandbox environment → H3 (Proxmox VM)",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), decision diagram, column '2. Host Isolation - H', p. 3",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "Any guidance on choosing isolation level by risk (threat-model-driven)",
+   "verdict": "confirmed",
+   "finding": "Yes — a decision diagram plus worked profiles. Host-isolation choice is framed as 'Scalability and complexity considerations': H0 strongly discouraged; H1 when 'Prioritising simplicity and portability' (only compatible with N0 or N2); H2 when you 'Need to run at scale, or with granular control over network access'; H3 when evaluations 'may threaten the sandbox environment'. Text-to-text evals need no sandbox (T2HXNX). Final responsibility is the user's.",
+   "quote": "Prioritising simplicity and portability → H1 (local Docker container or Docker Compose) (Only compatible with N0 or N2) [...] Need to run at scale, or with granular control over network access → H2 (Kubernetes pods)",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), decision diagram, p. 3",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "planned": "Any guidance on choosing isolation level by risk (threat-model-driven)",
+   "verdict": "confirmed",
+   "finding": "AISI explicitly leaves the risk decision with the evaluator and disclaims completeness.",
+   "quote": "Note that it is up to users to make the ultimate decision as to the correct level of security and sandboxing for the evaluation they run.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'Defining the level of sandbox capabilities', p. 1",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Disclaimer worth quoting when teaching 'no sandbox is perfect'.",
+   "quote": "No sandboxing solution can provide 100% security assurance, and users should conduct their own risk assessments and implement additional safeguards as appropriate for their specific use cases.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), Disclaimer, p. 1",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "finding": "AISI's threat ordering: TODAY the main concern is accidental damage; deliberate sandbox-escape testing is increasing; defending against actively misaligned models is research.",
+   "quote": "The primary current concern is agents accidentally damaging infrastructure. However, we increasingly run evaluations that deliberately test an agent's ability to escape sandboxes – relevant to our cyber and autonomy risk areas.",
+   "location": "AISI blog post, section 'Our Solution: Sandboxing plugins native to Inspect'"
+  },
+  {
+   "finding": "Why agent instructions must be sandboxed at all.",
+   "quote": "When evaluating AI agents, it is critical that instructions are appropriately sandboxed because they come directly from the agent being evaluated.",
+   "location": "AISI blog post, section 'Why we built the Inspect Sandboxing Toolkit'"
+  },
+  {
+   "finding": "Architecture: Inspect (harness + model calls) sits OUTSIDE the sandbox and sends commands in. This is the harness-sandbox interface the course teaches.",
+   "quote": "Inspect itself sits outside of the sandbox and sends commands into it, as requested by the model being tested, to execute code or functions.",
+   "location": "AISI blog post, section 'Our Solution: Sandboxing plugins native to Inspect'"
+  },
+  {
+   "finding": "AISI names the residual risk of that architecture: injection from the sandbox back into the harness.",
+   "quote": "Commands are issued from outside the sandbox. Everything that happens inside is explicitly allowed and initiated by Inspect. In the future, we may face the risk of sandboxed agents using injection attacks to attempt to access Inspect's Python code.",
+   "location": "AISI blog post, 'This architecture provides: Security'"
+  },
+  {
+   "finding": "Adopters named by AISI: US CAISI, METR, Apollo Research.",
+   "quote": "We’ve also helped the US Centre for AI Standards and Innovation (CAISI), Model Evaluation and Threat Research (METR) and Apollo Research adopt the open-source sandbox providers for their own agentic evaluations.",
+   "location": "AISI blog post, section 'Our Solution: Sandboxing plugins native to Inspect'"
+  },
+  {
+   "finding": "Guidance recommends logging every affordance granted, with manual or automated checking.",
+   "quote": "We further recommend that any affordances provided should be logged with an appropriate regime of manual or automated checking for undesirable activity.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'Defining the level of sandbox capabilities', p. 2",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "finding": "Worked profile: a cyber eval hunting a zero-day in the Docker runtime is given T0.H2.N2 (k8s, not Proxmox) in the guidance — i.e. even AISI's own 'actively hostile' example is placed at H2. Do not claim AISI mandates VMs for all hostile-agent evals.",
+   "quote": "Sandbox profile T0.H2.N2: No internet is required for the task and the model is being actively hostile to its environment, but it will need to write and execute code to do so.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'An agentic cyber eval that tries to find a zero-day exploit in the Docker runtime', p. 5",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "finding": "Worked profile: a tool (Ghidra) can live in its OWN sandbox separate from the agent, with its own profile.",
+   "quote": "The Ghidra tool happens in its own sandbox separate from the agent, at sandbox profile T1.H2.N1. This is because the tool call can invoke the Ghidra CLI in the sandbox but not write or execute arbitrary code and without network access.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'An agentic cyber eval that uses a Ghidra tool for decompiling binaries', p. 4",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "finding": "CAUTION — the guidance PDF contains a factual slip about Docker: it shows 'network_mode: host' labelled '# This is the default' for Docker Compose. Docker's and Inspect's docs contradict this (see next two findings). Do NOT repeat the PDF's claim; the safe statement is 'a Compose service with no network_mode gets outbound internet access'.",
+   "quote": "By default in Docker Compose (H1), containers have access to the host network which will in turn have access to the internet.",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'N0: Full external network access', pp. 6 and 8",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  },
+  {
+   "finding": "Inspect docs (authoritative for Inspect's behaviour): if you supply NO compose file, Inspect generates one with network_mode: none. The guidance PDF agrees on this point ('This is the default in Inspect if you don't provide your own Docker Compose file').",
+   "quote": "Providing a compose.yaml is not strictly required, as Inspect will automatically generate one as needed. The generated Compose configuration sets network_mode: none, which prevents network access at container runtime.",
+   "location": "Inspect docs, Sandboxing > Docker Configuration",
+   "cite_url": "https://inspect.aisi.org.uk/sandboxing.html"
+  },
+  {
+   "finding": "Inspect docs: a custom compose file REPLACES the generated one, including its network_mode: none, and Compose's own default has outbound internet. A common way eval sandboxes silently gain internet access.",
+   "quote": "Supplying a custom Compose configuration — whether a Compose file or ComposeConfig — replaces the generated configuration rather than extending it, including its network_mode: none. Docker Compose’s default is a project-scoped network with outbound Internet access, so include network_mode: none in your own configuration unless the evaluation requires networking.",
+   "location": "Inspect docs, Sandboxing > Docker Configuration",
+   "cite_url": "https://inspect.aisi.org.uk/sandboxing.html"
+  },
+  {
+   "finding": "Inspect docs: network_mode: none only restricts processes INSIDE the container; the harness process, scorers, and non-sandbox tools like web_search() still have network.",
+   "quote": "The network_mode: none entry applies only to processes inside the container. It does not restrict network access from the evaluation process or model provider. Code in custom tools, agents or scorers may therefore access the internet outside the Docker sandbox.",
+   "location": "Inspect docs, Sandboxing > Docker Configuration",
+   "cite_url": "https://inspect.aisi.org.uk/sandboxing.html"
+  },
+  {
+   "finding": "Inspect sandbox providers as listed today: built-in docker and local; external k8s, daytona, modal, ec2, proxmox, vagrant.",
+   "quote": "There are two sandbox environments built in to Inspect and six available as external packages.",
+   "location": "Inspect docs, Sandboxing > Environment Binding",
+   "cite_url": "https://inspect.aisi.org.uk/sandboxing.html"
+  },
+  {
+   "finding": "Each sample gets its own sandbox instance (relevant to reset/contamination between samples).",
+   "quote": "Note, each sample gets its own sandbox instance, even if the sandbox is defined at Task level. So samples do not interfere with each other’s sandboxes.",
+   "location": "Inspect docs, Sandboxing > Environment Binding",
+   "cite_url": "https://inspect.aisi.org.uk/sandboxing.html"
+  },
+  {
+   "finding": "k8s-sandbox docs: why k8s over Compose — scalability, security (Cilium policies + gVisor), tooling. Footnote: gVisor can be used with Compose too but is on by default in k8s_sandbox.",
+   "quote": "Security: Leverage Cilium Network Policies to provide fine-grained internet access control. Use gVisor[1] to run containers in a sandboxed manner.",
+   "location": "Inspect K8s Sandbox docs, Introduction > 'Why use Kubernetes over Docker Compose?'",
+   "cite_url": "https://k8s-sandbox.aisi.org.uk/"
+  },
+  {
+   "finding": "k8s-sandbox docs: gVisor is the recommended and default runtime for untrusted LLM-generated code.",
+   "quote": "Using gVisor as the container runtime wherever possible is recommended for good security practice when running untrusted LLM-generated code in containers. The built-in Helm chart uses gvisor as the container runtime class name unless you specify otherwise",
+   "location": "Inspect K8s Sandbox docs, Security > Container Runtime > gVisor",
+   "cite_url": "https://k8s-sandbox.aisi.org.uk/security/container-runtime/"
+  },
+  {
+   "finding": "k8s-sandbox docs: the sandbox changes the measurement — gVisor can make cyber evals 'harder or impossible to solve' (blocks raw packet crafting, chroot breakouts, sshpass password auth). Direct evidence that the environment is part of the instrument.",
+   "quote": "There are however some differences in behaviour between using gVisor (which uses the runsc runtime) and the default runc runtime. This may make some Cyber misuse evals harder or impossible to solve.",
+   "location": "Inspect K8s Sandbox docs, Security > Container Runtime > gVisor",
+   "cite_url": "https://k8s-sandbox.aisi.org.uk/security/container-runtime/"
+  },
+  {
+   "finding": "k8s-sandbox docs: how to tell from inside a container whether gVisor is the runtime.",
+   "quote": "To determine whether gVisor is being used as the runtime for a container or not, open a shell into the container and run sudo dmesg | grep gvisor. If there is a match, then gVisor is being used.",
+   "location": "Inspect K8s Sandbox docs, Security > Container Runtime > gVisor (Info box)",
+   "cite_url": "https://k8s-sandbox.aisi.org.uk/security/container-runtime/"
+  },
+  {
+   "finding": "k8s-sandbox docs: internet access is the common route to bypassing other restrictions; default deny.",
+   "quote": "We recommend against allowing internet access, this is a common way for agents to violate or bypass other sandbox restrictions.",
+   "location": "Inspect K8s Sandbox docs, Security > Network Access (Danger box)",
+   "cite_url": "https://k8s-sandbox.aisi.org.uk/security/network-access/"
+  },
+  {
+   "finding": "k8s-sandbox docs: DNS exfiltration is addressed — DNS lookups restricted to in-namespace services and allowDomains.",
+   "quote": "The built-in Helm chart prevents DNS exfiltration attacks. This is where an attacker uses DNS lookups to an attacker-controlled domain or set of subdomains in order to exfiltrate data from a system.",
+   "location": "Inspect K8s Sandbox docs, Security > Network Access > DNS Exfiltration",
+   "cite_url": "https://k8s-sandbox.aisi.org.uk/security/network-access/"
+  },
+  {
+   "finding": "k8s-sandbox docs: don't open the internet just to install dependencies — mirror or pre-bake them.",
+   "quote": "Allowing broad internet access for installing dependencies is not recommended. Where possible, use an internal mirror or artefact storage for downloading packages from within your own infrastructure, or include critical packages preinstalled in the docker container running the eval.",
+   "location": "Inspect K8s Sandbox docs, Security > Network Access",
+   "cite_url": "https://k8s-sandbox.aisi.org.uk/security/network-access/"
+  },
+  {
+   "finding": "Proxmox plugin README: even with VMs, by default a sandbox VM can reach the Proxmox host's API/SSH and cloud metadata services; blocking this is host firewall configuration, not something the library does. (Same lesson as the o1 incident: a reachable control plane defeats the isolation layer.)",
+   "quote": "By default a sandbox VM can reach the Proxmox host's own services — the API (pveproxy, port 8006), SSH, etc. — via the SDN gateway, the vmbr0 IP, or the host's external NIC. Forwarded traffic can also reach cloud instance metadata services.",
+   "location": "inspect_proxmox_sandbox README, 'Host firewall isolation'",
+   "cite_url": "https://github.com/UKGovernmentBEIS/inspect_proxmox_sandbox"
+  },
+  {
+   "finding": "Proxmox plugin README: the stated goal of that firewalling, in cyber-eval terms.",
+   "quote": "For cyber evals especially, you want those blocked so agents can't attack the Proxmox or cloud control planes.",
+   "location": "inspect_proxmox_sandbox README, 'Host firewall isolation'",
+   "cite_url": "https://github.com/UKGovernmentBEIS/inspect_proxmox_sandbox"
+  },
+  {
+   "finding": "Proxmox plugin README: Windows guests are supported.",
+   "quote": "Windows VMs are supported via the QEMU guest agent.",
+   "location": "inspect_proxmox_sandbox README, 'Windows VMs'",
+   "cite_url": "https://github.com/UKGovernmentBEIS/inspect_proxmox_sandbox"
+  },
+  {
+   "finding": "Incompatible combinations per the guidance: a sandbox (H1-H3) with no tools (T2) makes no sense; H1 + N1 impractical; H0 network isolation not easily enforceable.",
+   "quote": "Docker Compose (H1) does not make fine-grained network isolation practical (N1) – it is better to have Kubernetes Host Isolation here (H2).",
+   "location": "AISI \"Technical guidance: sandboxing configurations for agentic evaluations\" (Technical Guidance.pdf, first version 2025/08/06), 'Incompatible configurations', p. 9",
+   "cite_url": "https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf"
+  }
+ ],
+ "teaching_notes": "The level definitions are NOT in the blog post; they are in 'Technical Guidance.pdf' in the aisi-sandboxing repo (9 pages, changelog: '2025/08/06: First version'). Cite the blog for the three axes and the PDF (cite_url) for levels. Key facts authors must get right: levels are zero-based (T0-T2, H0-H3, N0-N2) even though the prose says '1-3'; higher = more restrictive; T0 is the MOST permissive tooling level. The H axis is defined by provider, not by mechanism: H1 Docker, H2 Kubernetes pods, H3 Proxmox VM — AISI never makes the shared-kernel argument itself, so the 'containers share the host kernel' reasoning must be cited to [Firecracker]/[gVisor]. AISI's stated reason for k8s is primarily scale + fine-grained network control (+ gVisor by default), not host isolation per se; Proxmox is 'strong VM isolation for high-risk evaluations' and SDNs for cyber ranges. The PDF has rough edges: a '1-3' vs 0-based inconsistency, a profile example (T1.H1.N1) whose prose contradicts its label, an example written 'N1.H2.T1', and a wrong claim that network_mode: host is Docker Compose's default — quote it only with the correction from the Inspect docs. The repo disclaimer says this is AISI's internal approach shared as a community resource, 'not official UK government guidance'. The org is the 'AI Security Institute' (renamed from AI Safety Institute); the blog is dated Aug 7, 2025."
+}

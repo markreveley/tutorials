@@ -1,0 +1,1134 @@
+{
+ "process": {
+  "name": "Process",
+  "short": "A running instance of a program: its code in memory plus the bookkeeping the kernel keeps for it, such as an ID, an owner, open files and a working directory.",
+  "def": "A program is a file on disk; a process is what you get when the kernel loads that file and runs it. Each process has its own memory, a numeric ID, an owning user, a working directory, a set of environment variables and a table of open file descriptors. Running the same program twice gives two independent processes. The kernel keeps processes apart so that one crashing or misbehaving cannot corrupt another. Everything an agent does in a sandbox is a process you can list with <code>ps</code>, which is how you answer the first audit question: what is running here? See <a href='pages/09-processes.html'>Processes: What Is Running</a>.",
+  "see": [
+   "pid",
+   "parent-process",
+   "fork-exec",
+   "kernel",
+   "signal"
+  ]
+ },
+ "pid": {
+  "name": "PID",
+  "short": "Process ID: the number the kernel assigns to each running process, used to inspect it, signal it, or find its entry under /proc.",
+  "def": "Every process gets a process ID when it is created, and the number is how every other tool refers to it: <code>kill 4312</code> signals it, <code>/proc/4312/</code> describes it, <code>ps -p 4312</code> shows it. PIDs are handed out in increasing order and eventually reused after a process is gone, so a PID identifies a process only while it is alive. Inside a container the numbering starts again from 1, because the container has its own PID namespace; the same process has a different, larger PID when seen from the host. Keep that in mind when matching harness logs against what you see inside the box. Taught in <a href='pages/09-processes.html'>Processes</a>.",
+  "also": "process ID",
+  "see": [
+   "process",
+   "pid-1",
+   "pid-namespace",
+   "proc-filesystem",
+   "parent-process"
+  ]
+ },
+ "parent-process": {
+  "name": "Parent Process",
+  "short": "The process that created another process; every process records its parent's ID (PPID), so all processes on a machine form a single tree.",
+  "def": "Processes are only ever created by other processes, so each one has a parent, recorded as its PPID. Follow the parents upward and you always arrive at PID 1; the result is a tree, which <code>ps -ef --forest</code> or <code>pstree</code> will draw for you. The tree matters because a child inherits from its parent: environment variables, open file descriptors, user identity, working directory and resource limits. It is also the parent's job to collect the child's exit status. When you read a process listing in a sandbox, the tree tells you who started what — whether that stray server was launched by the harness, by the task's setup script, or by the agent. See <a href='pages/09-processes.html'>Processes</a>.",
+  "also": "PPID, child process",
+  "see": [
+   "process",
+   "pid",
+   "fork-exec",
+   "zombie-process",
+   "orphan-process"
+  ]
+ },
+ "fork-exec": {
+  "name": "fork and exec",
+  "short": "The two-step way Unix starts programs: fork copies the current process, then exec replaces the copy's program with a new one, keeping the same PID.",
+  "def": "Linux has no single call meaning run this program. Instead a process calls <code>fork</code> to make a near-identical copy of itself, and the copy calls <code>exec</code> to replace its own code with a new program. The gap between the two steps is the point: the child can rearrange its file descriptors, change directory or drop privileges before the new program starts, which is exactly how a shell implements pipes and redirection. It also explains inheritance — the new program keeps the environment and open files of the process that forked it. When a transcript shows a secret or a working directory turning up in an unexpected program, inheritance across fork and exec is the mechanism. See <a href='pages/09-processes.html'>Processes</a>.",
+  "also": "fork, exec, execve",
+  "see": [
+   "process",
+   "parent-process",
+   "system-call",
+   "environment-variable",
+   "file-descriptor"
+  ]
+ },
+ "daemon": {
+  "name": "Daemon",
+  "short": "A long-running background process with no terminal attached, usually providing a service such as a web server, a database, or the Docker engine.",
+  "def": "A daemon is a process meant to run indefinitely in the background rather than do a job and exit: <code>sshd</code> waiting for logins, <code>dockerd</code> managing containers, a database waiting for queries. By convention many daemon names end in d. They have no controlling terminal, so they report through log files or the journal instead of your screen, and on a full machine they are started and supervised by the init system. Containers usually have no init system, so a task that needs a database must start the daemon itself and wait until it is ready. A task that fails on every model because the service never came up is an environment bug, not a capability result. See <a href='pages/09-processes.html'>Processes</a> and <a href='pages/13-services-and-logs.html'>Services, Init, and Logs</a>.",
+  "also": "service, background service",
+  "see": [
+   "process",
+   "init",
+   "systemd",
+   "unit",
+   "background-process"
+  ]
+ },
+ "zombie-process": {
+  "name": "Zombie Process",
+  "short": "A process that has exited but whose parent has not yet collected its exit status, leaving a dead entry in the process table.",
+  "def": "When a process exits, the kernel frees its memory but keeps a small record — the PID and the exit status — until the parent asks for it with <code>wait</code>. In that in-between state the process is a zombie, shown by <code>ps</code> with state <code>Z</code> or <code>&lt;defunct&gt;</code>. A zombie uses no CPU or memory and cannot be killed, because it is already dead; only the parent collecting the status, or the parent itself exiting, clears it. A handful are harmless. They pile up when the parent never waits, and each one occupies a PID slot, so a container with a process-count limit can eventually fail to start anything new. See <a href='pages/09-processes.html'>Processes</a> and <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+  "also": "defunct process",
+  "see": [
+   "parent-process",
+   "orphan-process",
+   "pid-1",
+   "init",
+   "exit-status"
+  ]
+ },
+ "orphan-process": {
+  "name": "Orphan Process",
+  "short": "A process whose parent has exited while it is still running; the kernel re-parents it, normally to PID 1.",
+  "def": "If a parent exits before its child, the child carries on running and the kernel gives it a new parent — normally PID 1, whose job includes collecting the exit status of such adopted children. Orphans are not an error; deliberately orphaning yourself is how a daemon detaches from the shell that launched it. They matter in eval work because killing the process you started does not kill what it started. A harness that times out an agent's command by killing only the shell can leave the real work — a test runner, a server, a busy loop — still running, eating CPU and holding ports during the next command or the scoring step. See <a href='pages/09-processes.html'>Processes</a> and <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+  "see": [
+   "parent-process",
+   "zombie-process",
+   "pid-1",
+   "background-process",
+   "timeout"
+  ]
+ },
+ "pid-1": {
+  "name": "PID 1",
+  "short": "The first process in a machine or container; it adopts orphaned processes, gets special signal treatment from the kernel, and when it exits the container stops.",
+  "def": "On a full machine PID 1 is the init system. In a container it is whatever command the image was told to run — often your application, or just <code>sleep infinity</code>. Two rules make it special. First, the kernel delivers a signal to PID 1 only if that process has installed a handler for it, so a program that never planned to be PID 1 may simply ignore SIGTERM; <code>docker stop</code> then waits out its grace period and resorts to SIGKILL. Second, orphans are re-parented to PID 1, and if it never collects them zombies accumulate. Running the container with a small init (<code>docker run --init</code>) fixes both. When PID 1 exits, the container is over. See <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a> and <a href='pages/20-namespaces.html'>Namespaces</a>.",
+  "see": [
+   "init",
+   "pid-namespace",
+   "zombie-process",
+   "sigterm",
+   "entrypoint"
+  ]
+ },
+ "init": {
+  "name": "Init",
+  "short": "The first user-space process the kernel starts (PID 1), responsible for launching and supervising everything else and for cleaning up orphaned processes.",
+  "def": "After the kernel finishes booting it starts exactly one program, and that program — init — starts everything else: mounting filesystems, bringing up the network, launching daemons and restarting them if they die. On Ubuntu and Debian the init system is systemd. Init also has a standing duty as the adoptive parent of orphaned processes, collecting their exit statuses so they do not linger as zombies. A container normally has no init system at all: its PID 1 is the application itself, so nothing starts services for you and nothing reaps orphans unless you add a minimal init such as the one <code>docker run --init</code> provides. See <a href='pages/13-services-and-logs.html'>Services, Init, and Logs</a> and <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+  "also": "init system",
+  "see": [
+   "pid-1",
+   "systemd",
+   "daemon",
+   "zombie-process",
+   "orphan-process"
+  ]
+ },
+ "systemd": {
+  "name": "systemd",
+  "short": "The init system and service manager on Ubuntu, Debian and most mainstream distributions; it starts services at boot, supervises them, and collects their logs.",
+  "def": "systemd runs as PID 1 on a normal Ubuntu machine. It reads declarative unit files that say what to start, in what order and what to do on failure; you drive it with <code>systemctl</code> (<code>status</code>, <code>start</code>, <code>stop</code>, <code>enable</code>) and read what its services printed with <code>journalctl</code>. It exists so that services come up reliably and are restarted when they crash, without hand-written boot scripts. The catch for eval work is that containers almost never run systemd, so <code>systemctl start postgresql</code> inside a task container fails even though the package is installed. Agents burn turns on this, and task authors who developed on a VM ship setup scripts that silently do nothing in the container. See <a href='pages/13-services-and-logs.html'>Services, Init, and Logs</a>.",
+  "also": "systemctl",
+  "see": [
+   "init",
+   "unit",
+   "journal",
+   "daemon",
+   "pid-1"
+  ]
+ },
+ "unit": {
+  "name": "Unit",
+  "short": "A systemd configuration file describing one thing systemd manages, most commonly a service: what command to run, as which user, and when to restart it.",
+  "def": "systemd manages the machine as a set of units, each defined by a small INI-style file. The kind you meet most is the service unit (<code>nginx.service</code>), which names the command to run, the user to run it as, what it depends on and the restart policy. Other types cover mounts, sockets and timers. Units shipped by packages live under <code>/usr/lib/systemd/system</code> and local ones under <code>/etc/systemd/system</code>; <code>systemctl cat name</code> prints the file and <code>systemctl list-units</code> shows what is loaded. On a VM-based sandbox the unit file is the authoritative answer to how a service was started and with what privileges and environment. See <a href='pages/13-services-and-logs.html'>Services, Init, and Logs</a>.",
+  "also": "unit file, service unit",
+  "see": [
+   "systemd",
+   "daemon",
+   "journal",
+   "service-account"
+  ]
+ },
+ "journal": {
+  "name": "Journal",
+  "short": "systemd's central log store, which captures the output of every service plus kernel messages, and is read and filtered with journalctl.",
+  "def": "On a systemd machine anything a service writes to stdout or stderr is captured by <code>journald</code> along with metadata — which unit, which PID, which boot, what time. You query it with <code>journalctl</code>: <code>-u nginx</code> for one unit, <code>-b</code> for the current boot, <code>-f</code> to follow, <code>-k</code> for kernel messages. The store is binary and indexed, which makes filtering fast but means you cannot simply <code>grep</code> a file. It exists so there is one place to look instead of a per-program scatter of log files. A container has no journal; the equivalent is whatever PID 1 wrote to its streams, which you read from outside with <code>docker logs</code>. See <a href='pages/13-services-and-logs.html'>Services, Init, and Logs</a>.",
+  "also": "journald, journalctl",
+  "see": [
+   "systemd",
+   "syslog",
+   "dmesg",
+   "unit",
+   "stderr"
+  ]
+ },
+ "syslog": {
+  "name": "syslog",
+  "short": "The traditional Unix logging system, in which programs send messages to a log daemon that writes them to plain-text files under /var/log.",
+  "def": "Before the journal, and still alongside it on many machines, programs logged by sending messages to a syslog daemon such as <code>rsyslog</code>, which sorted them by source and severity into text files under <code>/var/log</code> — on Ubuntu the general-purpose one is <code>/var/log/syslog</code>. Because the files are plain text, everything from <a href='pages/05-text-fu.html'>Text-Fu</a> applies: <code>grep</code>, <code>tail -f</code>, <code>awk</code>. Containers typically run no syslog daemon, so <code>/var/log</code> there is nearly empty and a program that logs only to syslog is effectively silent. That is one reason container software is conventionally configured to log to stdout and stderr, where the harness can capture it. See <a href='pages/13-services-and-logs.html'>Services, Init, and Logs</a>.",
+  "also": "rsyslog, /var/log/syslog",
+  "see": [
+   "journal",
+   "dmesg",
+   "daemon",
+   "stdout"
+  ]
+ },
+ "dmesg": {
+  "name": "dmesg",
+  "short": "The command that prints the kernel's own message log, where hardware events, driver messages and out-of-memory kills are recorded.",
+  "def": "The kernel cannot use ordinary log files — it is running before any filesystem is mounted — so it writes messages into a fixed-size buffer in memory, and <code>dmesg</code> prints that buffer (<code>journalctl -k</code> shows the same thing on a systemd machine). It is where you find evidence that no user-space program can report: the OOM killer naming the process it killed, a disk returning errors, a filesystem being remounted read-only. Because containers share the host's kernel, this log belongs to the host; from inside a container reading it is normally refused with <code>Operation not permitted</code>, so confirming an out-of-memory kill is a job for the host or the harness. See <a href='pages/13-services-and-logs.html'>Services, Init, and Logs</a> and <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "kernel ring buffer, kernel log",
+  "see": [
+   "kernel",
+   "oom-killer",
+   "journal",
+   "syslog"
+  ]
+ },
+ "signal": {
+  "name": "Signal",
+  "short": "A small numbered notification the kernel delivers to a process, used to ask it to stop, force it to die, or tell it that something happened.",
+  "def": "Signals are the kernel's way of interrupting a process from outside. Each has a name and a number — SIGINT 2, SIGKILL 9, SIGTERM 15 — and you send one with <code>kill -TERM 4312</code> (the <code>kill</code> command sends any signal, not only fatal ones). For most signals the target may install a handler and react however it likes — clean up, reload configuration, ignore it; without a handler a default action applies, usually termination. SIGKILL and SIGSTOP cannot be caught or ignored. A process ended by a signal has no exit code of its own, so the shell reports 128 plus the signal number: 137 means SIGKILL, 143 means SIGTERM. Reading those numbers tells you who ended an agent's command, and how. See <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a> and <a href='appendices/b-exit-codes-signals.html'>Appendix B</a>.",
+  "see": [
+   "sigterm",
+   "sigkill",
+   "sigint",
+   "sighup",
+   "exit-status"
+  ]
+ },
+ "sigterm": {
+  "name": "SIGTERM",
+  "short": "Signal 15, the polite request to terminate: a process may catch it to clean up before exiting, and it is what kill and docker stop send first.",
+  "def": "SIGTERM is the default signal sent by <code>kill</code>, by the <code>timeout</code> command and by <code>docker stop</code>. It asks rather than forces: a well-behaved program catches it, flushes files, closes connections and exits; a program with no handler is simply terminated. Because it can be caught, it can also be ignored, which is why every stop mechanism pairs it with a deadline and a SIGKILL. A process that dies from SIGTERM is reported by the shell as exit status 143 (128 + 15). If a harness stops containers with too short a grace period, partially written result files and half-flushed logs are the symptom. See <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a> and <a href='appendices/b-exit-codes-signals.html'>Appendix B</a>.",
+  "also": "signal 15, exit 143",
+  "see": [
+   "signal",
+   "sigkill",
+   "timeout",
+   "pid-1",
+   "exit-status"
+  ]
+ },
+ "sigkill": {
+  "name": "SIGKILL",
+  "short": "Signal 9, the unconditional kill: the kernel removes the process immediately, and the process cannot catch, block or ignore it.",
+  "def": "SIGKILL is never delivered to the program at all — the kernel simply stops scheduling the process and tears it down. That makes it the one reliable way to end something that is hung or ignoring SIGTERM, and also means the program gets no chance to clean up: temporary files stay, buffered output is lost, child processes are left running as orphans. The shell reports such a death as exit status 137 (128 + 9). In sandboxes 137 has two common causes worth telling apart: a timeout that escalated to SIGKILL, and the kernel's OOM killer enforcing a memory limit. Neither is the model returning a wrong answer, so neither should be scored as one without a look. See <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a> and <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "signal 9, kill -9, exit 137",
+  "see": [
+   "signal",
+   "sigterm",
+   "oom-killer",
+   "timeout",
+   "infrastructure-failure"
+  ]
+ },
+ "sigint": {
+  "name": "SIGINT",
+  "short": "Signal 2, the interrupt sent to the foreground program when you press Ctrl+C in a terminal.",
+  "def": "Pressing <kbd>Ctrl</kbd>+<kbd>C</kbd> does not send a character to your program; the terminal driver turns the keystroke into SIGINT and delivers it to the foreground process group. Most programs die on it (exit status 130, which is 128 + 2); interactive ones such as a Python REPL or a pager catch it and merely cancel the current action. The mechanism needs a terminal. An agent whose bash tool runs commands without a TTY has no <kbd>Ctrl</kbd>+<kbd>C</kbd> to press, so a hung command can only be ended by the harness's timeout; terminal-driven harnesses that type into tmux can send the keystroke, and you will see agents do exactly that in transcripts. See <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+  "also": "signal 2, Ctrl+C, exit 130",
+  "see": [
+   "signal",
+   "sigterm",
+   "tty",
+   "job-control",
+   "tmux"
+  ]
+ },
+ "sighup": {
+  "name": "SIGHUP",
+  "short": "Signal 1, the hang-up signal sent to a terminal's processes when that terminal closes; many daemons reuse it to mean reload your configuration.",
+  "def": "SIGHUP dates from modems hanging up the phone line. Today it is sent to the processes attached to a terminal when that terminal goes away — you close the window, or an SSH connection drops — and its default action is to terminate them. That is why a long job started over SSH dies when your laptop sleeps, and why <code>nohup</code>, <code>tmux</code> and proper services exist: each keeps a job alive after the terminal that started it is gone. Daemons have no terminal to lose, so by convention many treat SIGHUP as a request to re-read their configuration. For multi-hour eval runs on a remote box, start them inside tmux rather than in a bare SSH session. See <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+  "also": "signal 1, hang-up, nohup",
+  "see": [
+   "signal",
+   "tty",
+   "tmux",
+   "ssh",
+   "daemon"
+  ]
+ },
+ "timeout": {
+  "name": "Timeout",
+  "short": "A limit on how long a command may run before it is killed; also the coreutils command that enforces one and exits with status 124 when the limit is hit.",
+  "def": "Anything that can hang needs a deadline, and an agent's commands hang often: a program waiting for input, a server that never returns, a download with no route out. <code>timeout 60 cmd</code> runs <code>cmd</code>, sends SIGTERM after 60 seconds and exits with status 124; adding <code>-k 5</code> follows up with SIGKILL five seconds later if the program ignored the first signal. Harnesses apply the same pattern per tool call and per sample. Timeouts are measured in wall-clock time, so a slow or overloaded host turns into more timeouts and a lower score with no change in the model. A timed-out command also may leave children running. See <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a> and <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+  "also": "exit 124, time limit",
+  "see": [
+   "sigterm",
+   "sigkill",
+   "wall-clock-time",
+   "orphan-process",
+   "infrastructure-failure"
+  ]
+ },
+ "job-control": {
+  "name": "Job Control",
+  "short": "The interactive shell's feature for running several commands from one terminal: start one in the background, suspend the foreground one with Ctrl+Z, and resume either with fg or bg.",
+  "def": "A terminal has one foreground at a time, so the shell lets you juggle. <code>cmd &amp;</code> starts a job in the background, <kbd>Ctrl</kbd>+<kbd>Z</kbd> suspends the foreground job, <code>jobs</code> lists them, and <code>fg</code> or <code>bg</code> resumes one in the foreground or background. Underneath, the shell places each job in its own process group and tells the terminal which group currently owns the keyboard. Job control is a feature of interactive shells; in scripts and in the non-interactive shells most harnesses use to run an agent's commands it is switched off, so <code>&amp;</code> still works but <code>fg</code> does not. For anything that must outlive one command, use tmux or a real service. See <a href='pages/09-processes.html'>Processes</a>.",
+  "also": "jobs, fg, bg",
+  "see": [
+   "background-process",
+   "sigint",
+   "tty",
+   "tmux",
+   "shell"
+  ]
+ },
+ "background-process": {
+  "name": "Background Process",
+  "short": "A process started so that the shell does not wait for it to finish, typically by ending the command with an ampersand, leaving it running while other commands execute.",
+  "def": "Normally the shell starts a command and waits for it. Ending the command with <code>&amp;</code> skips the wait: the shell prints a job number and PID and returns at once while the process runs on. That is how you start a server and then talk to it from the same session, and agents do it constantly (<code>python app.py &amp;</code>). Two consequences follow. The process still holds the shell's stdout and stderr unless redirected, which can make a harness wait for output that never ends. And it may outlive the command that launched it, so it is still there — holding a port, using memory — when later commands and the scorer run. See <a href='pages/09-processes.html'>Processes</a>.",
+  "also": "background job",
+  "see": [
+   "job-control",
+   "orphan-process",
+   "daemon",
+   "process",
+   "listening-socket"
+  ]
+ },
+ "environment-variable": {
+  "name": "Environment Variable",
+  "short": "A named string attached to a process and copied to every process it starts, used to pass configuration such as PATH, HOME or an API key.",
+  "def": "Every process carries a list of <code>NAME=value</code> strings called its environment. A child receives a copy of its parent's environment when it is created, which is what makes it a configuration channel: set a variable once in the shell, <code>export</code> it, and every program started from that shell sees it. Copies flow one way only — a child cannot change its parent's environment, which is why running a script cannot alter your shell's variables but sourcing it can. Inspect the environment with <code>env</code> or <code>printenv</code>, or read another process's from <code>/proc/PID/environ</code>. In a sandbox, whatever the harness placed in the container's environment is readable by the agent with a single command. See <a href='pages/11-environment-and-secrets.html'>Environment Variables and Secrets</a>.",
+  "also": "env var, environment",
+  "see": [
+   "path-variable",
+   "secret",
+   "parent-process",
+   "fork-exec",
+   "proc-filesystem"
+  ]
+ },
+ "secret": {
+  "name": "Secret",
+  "short": "Any credential that grants access, such as an API key, token, password or private key, and which must not be readable by the thing being evaluated.",
+  "def": "Eval infrastructure runs on secrets: model-provider API keys, registry tokens, cloud credentials, SSH keys. The common way to hand one to a program is an environment variable, and that is also the common way to leak one. Environment variables are inherited by every child process, are readable from <code>/proc/PID/environ</code> by the same user and by root, appear in <code>docker inspect</code> output, and end up in a transcript the moment an agent runs <code>env</code>. The working rule is that anything inside the sandbox — environment, mounted files, image layers, shell history — is visible to the agent, so credentials the harness needs stay with the harness, outside the box. See <a href='pages/11-environment-and-secrets.html'>Environment Variables and Secrets</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+  "also": "credential, API key, token",
+  "see": [
+   "environment-variable",
+   "least-privilege",
+   "metadata-service",
+   "trust-boundary",
+   "solution-leakage"
+  ]
+ },
+ "load-average": {
+  "name": "Load Average",
+  "short": "Three numbers reporting how many processes were running or waiting to run, averaged over the last 1, 5 and 15 minutes; compare them with the CPU count.",
+  "def": "<code>uptime</code> and <code>top</code> print three load averages: the average number of processes that were runnable — on a CPU or queued for one — over the past one, five and fifteen minutes. Linux also counts processes stuck in uninterruptible waits, usually on disk, so heavy I/O raises the figure too. The number only means something next to the CPU count from <code>nproc</code>: a load of 8 on sixteen cores is comfortable, on two cores it is a queue. Inside a container the figure describes the whole host, not your container. It is the quickest check when tasks start timing out: if load far exceeds cores, the box is oversubscribed and the clock, not the model, is failing samples. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "see": [
+   "cpu-time",
+   "wall-clock-time",
+   "timeout",
+   "cgroup",
+   "flaky-test"
+  ]
+ },
+ "oom-killer": {
+  "name": "OOM Killer",
+  "short": "The kernel mechanism that, when memory runs out on the machine or within a container's limit, picks a process and kills it with SIGKILL.",
+  "def": "Linux lets processes reserve more memory than exists, betting they will not all use it. When the bet fails — the machine, or a cgroup with a memory limit, genuinely runs out — the kernel cannot return an error to anyone in particular, so it chooses a victim, usually the largest consumer, and sends SIGKILL. The victim gets no warning and prints no message; its parent sees exit status 137 and the shell may print <code>Killed</code>. The evidence lives elsewhere: in the kernel log, and for Docker containers in the <code>OOMKilled</code> field of <code>docker inspect</code>. A task whose tests need more memory than the sandbox allows fails this way for every model, which is an infrastructure failure to fix, not a score to report. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "out-of-memory killer, OOM",
+  "see": [
+   "sigkill",
+   "memory-rss",
+   "cgroup",
+   "dmesg",
+   "infrastructure-failure"
+  ]
+ },
+ "rlimit": {
+  "name": "Resource Limit (rlimit)",
+  "short": "A per-process cap set through the kernel, for example on open files, process count or file size, inherited by child processes and viewed with ulimit.",
+  "def": "Resource limits are the older, per-process way of stopping one program from exhausting a machine. Each limit — open file descriptors, number of processes for the user, largest file size, stack size, CPU seconds — has a soft value that is enforced and a hard ceiling that the soft value may be raised to. Children inherit them, so a limit set in a shell with <code>ulimit</code> applies to everything launched from it; <code>ulimit -a</code> lists the current values. Hitting one produces an ordinary error such as <code>Too many open files</code>, rather than a kill. Containers rely mainly on cgroups, which cap a whole group of processes instead of each one, but rlimits still apply inside and differ between hosts. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "ulimit, setrlimit",
+  "see": [
+   "cgroup",
+   "file-descriptor",
+   "oom-killer",
+   "process"
+  ]
+ },
+ "nice": {
+  "name": "nice",
+  "short": "A process's scheduling priority hint, from -20 (most favoured) to 19 (least); the nice command starts a program with a lowered priority.",
+  "def": "When more processes want the CPU than there are cores, the scheduler must choose, and the nice value tilts that choice. It runs from -20 to 19 with a default of 0, and the name is literal: a higher number is nicer to everyone else and receives a smaller share. <code>nice -n 10 cmd</code> starts a command at lower priority and <code>renice</code> changes a running one; only root may make a process less nice. It has no effect on an idle machine and is no limit at all — a niced process will still use every idle core. To cap CPU for a sandbox you want a cgroup limit such as Docker's <code>--cpus</code>. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "niceness, renice",
+  "see": [
+   "cpu-time",
+   "load-average",
+   "cgroup",
+   "process"
+  ]
+ },
+ "cpu-time": {
+  "name": "CPU Time",
+  "short": "The amount of time a processor actually spent executing a process's instructions, as opposed to how long the process took by the clock.",
+  "def": "The kernel accounts for each process's time on a CPU, split into user time (running the program's own code) and system time (the kernel working on its behalf). <code>time cmd</code> prints both beside <code>real</code>, the elapsed time. Comparing them is diagnostic: CPU time close to real means the program was computing; CPU time far below real means it was waiting — on disk, the network, a lock, or for a turn on a contended or throttled CPU; CPU time above real means several cores ran in parallel. A container with a CPU cap is throttled once it uses its share, so the same test suite does the same CPU work but takes longer by the clock. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "user time, system time",
+  "see": [
+   "wall-clock-time",
+   "load-average",
+   "cgroup",
+   "nice",
+   "timeout"
+  ]
+ },
+ "wall-clock-time": {
+  "name": "Wall-Clock Time",
+  "short": "Elapsed real-world time between a command starting and finishing, as a clock on the wall would measure it, including all waiting.",
+  "def": "Wall-clock time is what <code>time</code> reports as <code>real</code>: start to finish, including every moment the process spent waiting rather than computing. It is what users feel and what almost every timeout measures, and it depends on much more than the program: how many other containers share the host, CPU throttling, a cold disk cache, network latency, a package mirror having a bad day. For evals this makes it the noisy variable. Two runs of the same agent on the same task can land on opposite sides of a timeout purely because of what else the host was doing, so record durations, set limits with headroom, and treat clusters of timeouts as a host problem first. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a> and <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+  "also": "real time, elapsed time",
+  "see": [
+   "cpu-time",
+   "timeout",
+   "load-average",
+   "nondeterminism",
+   "flaky-test"
+  ]
+ },
+ "memory-rss": {
+  "name": "Resident Set Size (RSS)",
+  "short": "The amount of physical RAM a process currently occupies, as opposed to the usually much larger amount of address space it has reserved.",
+  "def": "<code>ps</code> and <code>top</code> show two memory columns per process. VSZ (virtual size) is all the address space the process has mapped, much of it never touched; RSS is the part actually sitting in physical RAM right now, and it is the one that tells you who is using the memory. Even RSS is approximate: pages shared between processes, such as common libraries, are counted once for each, so adding up RSS overstates the total. A container's memory limit is enforced on the cgroup's accounting, which also includes file cache charged to the group, so the figure to compare with the limit is the cgroup's own counter rather than a sum over <code>ps</code>. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "RSS, RES, resident memory",
+  "see": [
+   "oom-killer",
+   "swap",
+   "cgroup",
+   "process"
+  ]
+ },
+ "swap": {
+  "name": "Swap",
+  "short": "Disk space the kernel uses as overflow for RAM, moving idle memory pages out to disk so that the machine slows down instead of running out of memory.",
+  "def": "When physical memory fills, the kernel can write pages that have not been used recently to a swap partition or file and reuse the RAM, reading them back when they are next touched. It turns a hard failure into a soft one — but disk is vastly slower than RAM, so a machine that is actively swapping keeps working at a crawl. <code>free -h</code> shows how much swap exists and how much is in use. For evals, swap converts memory pressure from a clear signal (an OOM kill, exit 137) into an ambiguous one (everything becomes slow and timeouts fire). Whether a container may use swap depends on host and runtime settings, so the same task image can behave differently on two hosts. See <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+  "also": "swap space, paging",
+  "see": [
+   "memory-rss",
+   "oom-killer",
+   "wall-clock-time",
+   "cgroup"
+  ]
+ },
+ "kernel": {
+  "name": "Kernel",
+  "short": "The core program of the operating system: it alone controls the hardware and decides what every process may do with CPU, memory, files and the network.",
+  "def": "Linux, strictly speaking, is the kernel: the one program that runs with full control of the hardware. It schedules processes onto CPUs, hands out memory, implements filesystems and the network stack, and enforces permissions. Everything else — the shell, Python, your agent — is an ordinary process that must ask the kernel for anything involving the outside world. The fact that shapes this course is that containers do not have a kernel of their own; every container on a host shares the host's. <code>uname -r</code> inside a container prints the host's kernel version (on a Mac, that of Docker's hidden Linux VM). A shared kernel is what makes containers cheap, and it is why a kernel bug is a route out of one. See <a href='pages/20-namespaces.html'>Namespaces</a> and <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+  "also": "Linux kernel",
+  "see": [
+   "system-call",
+   "user-space",
+   "namespace",
+   "container",
+   "virtual-machine"
+  ]
+ },
+ "system-call": {
+  "name": "System Call",
+  "short": "A request from a process to the kernel to do something the process cannot do itself, such as open a file, start a process, or send data over the network.",
+  "def": "A process can compute inside its own memory unaided, but touching anything shared — files, the network, other processes, the clock — requires asking the kernel through a system call. There are a few hundred, with names you will recognise from error messages and traces: <code>openat</code>, <code>read</code>, <code>write</code>, <code>execve</code>, <code>connect</code>, <code>mount</code>. When a call fails the kernel returns an error code such as <code>ENOENT</code> or <code>EACCES</code>, which the program turns into messages like No such file or directory or Permission denied. Since every meaningful action crosses this one interface, it is where sandboxes are enforced: seccomp filters which calls a container may make, and gVisor intercepts them entirely. See <a href='pages/21-cgroups-capabilities-seccomp.html'>Cgroups, Capabilities, and Seccomp</a> and <a href='pages/20-namespaces.html'>Namespaces</a>.",
+  "also": "syscall",
+  "see": [
+   "kernel",
+   "user-space",
+   "seccomp",
+   "strace",
+   "gvisor"
+  ]
+ },
+ "user-space": {
+  "name": "User Space",
+  "short": "Everything that runs outside the kernel: ordinary programs, libraries, shells and services, which reach hardware only by making system calls.",
+  "def": "The CPU runs code in two modes. Kernel mode can do anything; user mode cannot touch hardware or other processes' memory directly. User space is all the code running in the second mode — the shell, coreutils, the C library, Python, databases, your agent's tools. The split exists for protection: a bug in a user-space program kills that program, while a bug in the kernel can take down or compromise the machine. It also pins down what a container image is: a bundle of user-space files, and nothing more. An Ubuntu image running on another distribution's kernel is Ubuntu's user space talking to that kernel, which works because the system-call interface is kept stable. See <a href='pages/20-namespaces.html'>Namespaces</a>.",
+  "also": "userland, user mode",
+  "see": [
+   "kernel",
+   "system-call",
+   "distribution",
+   "image",
+   "musl-glibc"
+  ]
+ },
+ "strace": {
+  "name": "strace",
+  "short": "A debugging tool that prints every system call a program makes, with arguments and results, showing what the program actually asked the kernel to do.",
+  "def": "When a program fails with an unhelpful message, <code>strace</code> shows the ground truth: each system call, its arguments and what the kernel answered. <code>strace -f -e trace=openat,execve cmd</code> follows child processes and shows only file opens and program launches, which is usually enough to see which configuration file it looked for, in which directories, and which one came back <code>ENOENT</code>. Attach to a running process with <code>-p PID</code> to see what a hung one is blocked on. It is not installed in most images, slows the traced program considerably, and depends on the ptrace facility, which a container's seccomp profile or capability set may deny. See <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a> and <a href='pages/21-cgroups-capabilities-seccomp.html'>Cgroups, Capabilities, and Seccomp</a>.",
+  "see": [
+   "system-call",
+   "kernel",
+   "seccomp",
+   "capability",
+   "process"
+  ]
+ },
+ "package-manager": {
+  "name": "Package Manager",
+  "short": "The tool that installs, upgrades and removes software on a system, fetching packages from repositories and working out which other packages each one needs.",
+  "def": "On Linux you rarely download an installer. A package manager fetches a named package from a repository, verifies it, works out and installs everything it depends on, unpacks the files into the right directories and records what it did so the package can later be upgraded or removed cleanly. Each ecosystem has its own: <code>apt</code> on Debian and Ubuntu, <code>apk</code> on Alpine, <code>pip</code> for Python libraries. The convenience has a cost for evals: <code>install X</code> means the newest X the repository offers today, so the same build script produces different environments in different months unless versions are pinned. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "see": [
+   "apt",
+   "dpkg",
+   "pip",
+   "repository",
+   "dependency"
+  ]
+ },
+ "apt": {
+  "name": "apt",
+  "short": "The package manager for Debian and Ubuntu: it downloads packages and their dependencies from configured repositories and hands them to dpkg to install.",
+  "def": "APT is the high-level package tool on Debian-family systems. <code>apt-get update</code> downloads the repositories' current package indexes; <code>apt-get install -y name</code> resolves dependencies, downloads the <code>.deb</code> files and has dpkg install them. Use <code>apt-get</code> in scripts and Dockerfiles: the friendlier <code>apt</code> command warns that its interface is not stable for scripting. Official Docker images ship with no indexes, so an install before any <code>update</code> fails with <code>Unable to locate package</code> — one of the most common errors in agent transcripts. Two others: a confirmation or configuration prompt that hangs a non-interactive session (use <code>-y</code> and <code>DEBIAN_FRONTEND=noninteractive</code>), and the lock error when two installs run at once. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a> and <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+  "also": "apt-get, APT",
+  "see": [
+   "dpkg",
+   "package-manager",
+   "repository",
+   "version-pinning",
+   "interactive-prompt"
+  ]
+ },
+ "dpkg": {
+  "name": "dpkg",
+  "short": "The low-level Debian package tool that actually unpacks .deb files and keeps the database of which packages and files are installed.",
+  "def": "apt decides what to install; dpkg does the installing. It unpacks a <code>.deb</code> archive, runs the package's setup scripts and records every file in a database under <code>/var/lib/dpkg</code>. It knows nothing about repositories or dependency resolution, which is why you seldom install with it directly, but it is the tool for questions about what is already on a box: <code>dpkg -l</code> lists installed packages with versions, <code>dpkg -L pkg</code> lists a package's files, and <code>dpkg -S /path</code> names the package that owns a file. Saving <code>dpkg -l</code> output from a task image gives you an inventory to diff against the next rebuild, which is how you catch environment drift. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": ".deb",
+  "see": [
+   "apt",
+   "package-manager",
+   "debian",
+   "reproducible-build"
+  ]
+ },
+ "repository": {
+  "name": "Repository (Package)",
+  "short": "A server holding packages and a signed index of them, which a package manager consults to find, download and verify software.",
+  "def": "A package repository is a published collection of packages plus an index listing names, versions, dependencies and checksums, signed so that clients can detect tampering. A machine's list of repositories is configuration: for apt it lives under <code>/etc/apt/sources.list.d/</code> (Ubuntu 24.04 uses <code>ubuntu.sources</code>), and for pip the default is the Python Package Index. Repositories are living things — new versions appear and old ones are removed — so the same install command returns different software over time. They are also a network dependency: a sandbox with no egress cannot install anything, so whatever a task needs must be baked into the image or served from a mirror you control. (A git repository is an unrelated use of the word.) See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "repo, package archive, mirror",
+  "see": [
+   "apt",
+   "package-manager",
+   "registry",
+   "egress",
+   "version-pinning"
+  ]
+ },
+ "dependency": {
+  "name": "Dependency",
+  "short": "Another package that a piece of software needs in order to work; dependencies have dependencies of their own, forming a tree the package manager resolves.",
+  "def": "Almost no software stands alone. A package declares what it needs — a library, an interpreter, another tool — often with a version range, and the package manager installs those too, and then what they need in turn. The ones you asked for are direct dependencies; the rest are transitive, and there are usually far more of them. That is where reproducibility goes wrong: you pin the three libraries you know about, and an unpinned transitive dependency releases a new version that changes behaviour or breaks the build. For a benchmark this shows up as a task whose tests passed last quarter and now fail for every model, with no change to the task. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "transitive dependency",
+  "see": [
+   "package-manager",
+   "version-pinning",
+   "lockfile",
+   "reproducible-build"
+  ]
+ },
+ "version-pinning": {
+  "name": "Version Pinning",
+  "short": "Specifying the exact version of a package to install instead of whatever is newest, so that an environment built later matches one built today.",
+  "def": "Without a pin, an install command means the latest version as of now. Pinning replaces that with an exact version: <code>pip install requests==2.32.3</code>, <code>apt-get install curl=VERSION</code>, or a base image named by digest rather than by tag. It exists because an eval environment is a measuring instrument and an instrument should not change between measurements. Two limits are worth knowing. Pinning only your direct dependencies leaves the transitive ones floating, which is the job of a lockfile. And distribution repositories usually keep only current versions, so an apt pin can stop resolving months later; building against a dated snapshot of the archive is the durable fix. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "pinning, pin",
+  "see": [
+   "lockfile",
+   "dependency",
+   "image-digest",
+   "reproducible-build",
+   "nondeterminism"
+  ]
+ },
+ "lockfile": {
+  "name": "Lockfile",
+  "short": "A generated file recording the exact version, and usually a checksum, of every direct and transitive dependency, so an install can be repeated exactly.",
+  "def": "A requirements file says what you want (<code>pandas&gt;=2</code>); a lockfile records what you got — every package in the resolved tree, each at one exact version, ideally with a hash of the downloaded file. Installing from the lockfile skips resolution and reproduces that set, and with hashes it refuses anything that does not match (pip's <code>--require-hashes</code> mode). Examples are a fully pinned <code>requirements.txt</code> produced by a lock tool, <code>uv.lock</code>, <code>poetry.lock</code> and <code>package-lock.json</code>. Commit the lockfile beside the task's Dockerfile. It covers one ecosystem only: system packages and the base image need pinning of their own. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "lock file",
+  "see": [
+   "version-pinning",
+   "dependency",
+   "pip",
+   "reproducible-build",
+   "image-digest"
+  ]
+ },
+ "reproducible-build": {
+  "name": "Reproducible Build",
+  "short": "A build process that yields the same result every time it runs on the same inputs, regardless of when or where it is run.",
+  "def": "In the strict sense a reproducible build is bit-for-bit identical on every run. Eval work usually needs the practical version: rebuild the task image next year and get the same software at the same versions behaving the same way. A plain Dockerfile is not reproducible by default. <code>FROM ubuntu:24.04</code> names a tag that is updated in place, <code>apt-get update</code> reads today's index, and <code>pip install</code> resolves today's newest releases. The remedies stack up: pin the base image by digest, pin or snapshot system packages, install language packages from a lockfile — and then push the built image to a registry and run it by digest, so you rarely rebuild at all. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a> and <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a>.",
+  "also": "reproducibility, environment drift",
+  "see": [
+   "version-pinning",
+   "lockfile",
+   "base-image",
+   "image-digest",
+   "nondeterminism"
+  ]
+ },
+ "base-image": {
+  "name": "Base Image",
+  "short": "The existing container image a Dockerfile starts from, named on its FROM line, which supplies the distribution's files underneath everything you add.",
+  "def": "Nobody builds a container image from nothing. The <code>FROM</code> line of a Dockerfile picks a base — <code>ubuntu:24.04</code>, <code>debian:bookworm-slim</code>, <code>python:3.12-slim</code>, <code>alpine:3.20</code> — and every later instruction adds layers on top. The choice fixes more than it seems to: the package manager, the C library, the shell, which everyday tools exist, and how large the image is. Official bases are deliberately minimal, so expect no <code>curl</code>, no <code>ping</code> and no <code>python3</code> in <code>ubuntu:24.04</code> until you install them. A base named by tag also changes underneath you as its publisher rebuilds it, so pin it by digest for anything you intend to measure with. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "parent image, FROM",
+  "see": [
+   "image",
+   "dockerfile",
+   "image-digest",
+   "tag",
+   "distribution"
+  ]
+ },
+ "distribution": {
+  "name": "Distribution",
+  "short": "A complete operating system assembled around the Linux kernel: a chosen set of user-space tools, a package manager, default settings and a release schedule.",
+  "def": "Linux itself is only a kernel. A distribution — Ubuntu, Debian, Alpine, Fedora — combines it with a C library, a shell, core utilities, an init system and a package manager, and publishes tested releases of the whole. Distributions differ exactly where it hurts in a transcript: which package manager exists (<code>apt</code> or <code>apk</code>), what packages are called, whether <code>bash</code> is present, where configuration lives. A container image carries a distribution's user space but none of its kernel, so the distribution inside a container can differ from the host's. The first command on an unfamiliar box is <code>cat /etc/os-release</code>, which tells you which one you are in and therefore which commands will work. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a> and <a href='pages/00-orientation.html'>Orientation</a>.",
+  "also": "distro",
+  "see": [
+   "debian",
+   "ubuntu",
+   "alpine",
+   "user-space",
+   "package-manager"
+  ]
+ },
+ "debian": {
+  "name": "Debian",
+  "short": "A long-established community Linux distribution known for stability; it is the parent of Ubuntu and the base of many official Docker images.",
+  "def": "Debian is a community-run distribution whose stable releases change slowly and carefully; the current one used in this course is Debian 12, codenamed bookworm. It originated the <code>.deb</code> package format and the apt and dpkg tools, so nearly everything the course teaches on Ubuntu applies unchanged. You meet Debian most often without choosing it: many official language images on Docker Hub, including the default <code>python</code> images, are built on it, and <code>debian:bookworm-slim</code> is a popular small base. Image tags carry the codename (<code>python:3.12-slim-bookworm</code>), which is how you tell which Debian release, and so which package versions, a task image sits on. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "bookworm",
+  "see": [
+   "ubuntu",
+   "distribution",
+   "apt",
+   "dpkg",
+   "base-image"
+  ]
+ },
+ "ubuntu": {
+  "name": "Ubuntu",
+  "short": "A widely used Linux distribution derived from Debian, with long-term-support releases every two years; Ubuntu 24.04 LTS is this course's reference system.",
+  "def": "Ubuntu is built from Debian by Canonical and shares its tooling: apt, dpkg, <code>.deb</code> packages, systemd. Versions are named by year and month, so 24.04 is the April 2024 release (codename noble), and the April release of every even year is a long-term-support (LTS) version maintained for years — the ones servers, cloud VMs and task images are built on. The Docker image <code>ubuntu:24.04</code> is much smaller than an installed Ubuntu machine: there is no systemd running, and everyday tools such as <code>curl</code>, <code>ping</code> and <code>python3</code> are absent until installed. Expecting the VM experience inside the container is a routine source of confusion for people and agents alike. See <a href='pages/01-lab-setup.html'>Lab Setup</a> and <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "Ubuntu LTS, noble",
+  "see": [
+   "debian",
+   "distribution",
+   "apt",
+   "systemd",
+   "base-image"
+  ]
+ },
+ "alpine": {
+  "name": "Alpine Linux",
+  "short": "A very small Linux distribution popular for container images; it uses musl instead of glibc, BusyBox instead of GNU tools, and apk instead of apt.",
+  "def": "Alpine's base image is a small fraction of the size of Ubuntu's, which is why so many container images build on it. It gets there by swapping out the usual parts: the musl C library instead of glibc, a single BusyBox binary standing in for the GNU core utilities, <code>apk add</code> instead of <code>apt-get install</code>, and the BusyBox <code>ash</code> shell at <code>/bin/sh</code>, with no bash unless you add it. Each swap is a trap for habits formed on Ubuntu: scripts with a <code>#!/bin/bash</code> line will not start, familiar GNU flags are missing, and software compiled for glibc will not run. An agent that assumes Ubuntu inside an Alpine task image loses several turns finding this out. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a> and <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+  "also": "apk",
+  "see": [
+   "musl-glibc",
+   "busybox",
+   "distribution",
+   "base-image",
+   "gnu-coreutils"
+  ]
+ },
+ "musl-glibc": {
+  "name": "musl vs glibc",
+  "short": "The two common C standard libraries on Linux: glibc on Ubuntu, Debian and most distributions, musl on Alpine; programs built for one generally will not run on the other.",
+  "def": "Nearly every program reaches the kernel through a C library, which wraps system calls and supplies basics such as memory allocation and name resolution. Mainstream distributions use GNU libc (glibc); Alpine uses musl, which is smaller and simpler. A dynamically linked binary names the specific loader and library it was built against, so a glibc-built program copied into Alpine fails — often with a baffling <code>not found</code> for a file that plainly exists, because the missing thing is the loader, not the program. For Python, prebuilt wheels are published per C library: if a package has no musl wheel, pip falls back to compiling from source, needing compilers the image lacks. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "libc, C library",
+  "see": [
+   "alpine",
+   "user-space",
+   "system-call",
+   "pip",
+   "distribution"
+  ]
+ },
+ "pip": {
+  "name": "pip",
+  "short": "Python's package installer, which downloads libraries from the Python Package Index (PyPI) along with their dependencies.",
+  "def": "<code>pip install name</code> fetches a library and whatever it depends on from PyPI into the current Python environment. It resolves versions at install time, so an unpinned install is a moving target; for reproducible task images install from a fully pinned requirements file, ideally with <code>--require-hashes</code>. Two behaviours fill transcripts. On Ubuntu 24.04 and Debian 12, running pip against the system Python is refused with <code>error: externally-managed-environment</code>, because the distribution's own tools depend on those packages — the intended answer is a virtual environment. And pip needs network access to PyPI, so in a sandbox with no egress every install fails, and tasks must ship their dependencies preinstalled. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a> and <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+  "also": "PyPI, pip install",
+  "see": [
+   "virtual-environment",
+   "lockfile",
+   "version-pinning",
+   "package-manager",
+   "egress"
+  ]
+ },
+ "virtual-environment": {
+  "name": "Virtual Environment",
+  "short": "A self-contained directory holding its own Python packages, so that one project's libraries do not conflict with another's or with the system's.",
+  "def": "<code>python3 -m venv .venv</code> creates a directory with its own <code>bin/python</code>, its own <code>pip</code> and its own package folder; whatever you install with that pip stays inside. It exists because one machine-wide set of packages cannot satisfy two projects that need different versions, and because the system Python's packages belong to the distribution. On Ubuntu the feature lives in a separate package, <code>python3-venv</code>. Activation is less magical than it looks: <code>source .venv/bin/activate</code> mostly puts the environment's <code>bin</code> directory first on <code>PATH</code> for the current shell. When a harness runs each command in a fresh shell, that activation is gone by the next command, so call <code>.venv/bin/python</code> by path instead. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+  "also": "venv, virtualenv",
+  "see": [
+   "pip",
+   "path-variable",
+   "lockfile",
+   "dependency",
+   "bash-tool"
+  ]
+ },
+ "ip-address": {
+  "name": "IP Address",
+  "short": "The numeric address that identifies a network interface so that packets can be delivered to it, such as 172.17.0.2.",
+  "def": "Every packet on an IP network carries a source and a destination address, and routers use the destination to move it hop by hop. Addresses belong to network interfaces rather than to machines, so one box commonly has several: <code>127.0.0.1</code> on loopback, a private address on its main interface, perhaps more on bridges. <code>ip addr</code> lists them; <code>hostname -I</code> prints just the addresses. A container gets an address of its own on a virtual network inside the host, distinct from the host's address, which is why a service in a container cannot be reached at the host's address until a port is published. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a>.",
+  "also": "IP",
+  "see": [
+   "ipv4",
+   "ipv6",
+   "cidr",
+   "network-interface",
+   "private-address-range"
+  ]
+ },
+ "ipv4": {
+  "name": "IPv4",
+  "short": "The original and still dominant version of the Internet Protocol, with 32-bit addresses written as four decimal numbers from 0 to 255, such as 192.168.1.10.",
+  "def": "An IPv4 address is 32 bits, written as four bytes in decimal separated by dots. Thirty-two bits allow about 4.3 billion addresses, far fewer than there are devices, and that shortage explains two things you meet everywhere: private address ranges that are reused inside every organisation, home and Docker host, and NAT, which lets many privately addressed machines share one public address. Almost all container networking you will inspect is IPv4 — Docker's default networks are IPv4-only unless configured otherwise. The dotted form hides the bit structure that subnet sizes depend on; <a href='appendices/c-binary-octal-cidr.html'>Appendix C</a> covers that arithmetic. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a>.",
+  "see": [
+   "ip-address",
+   "ipv6",
+   "cidr",
+   "private-address-range",
+   "nat"
+  ]
+ },
+ "ipv6": {
+  "name": "IPv6",
+  "short": "The newer version of the Internet Protocol, with 128-bit addresses written in hexadecimal groups separated by colons, such as 2001:db8::1.",
+  "def": "IPv6 was designed to end the address shortage: 128-bit addresses, written as up to eight groups of hexadecimal digits, with <code>::</code> standing for a run of zeros. Its loopback address is <code>::1</code>. Most machines run both protocols side by side, and that dual stack is the thing to watch. Firewall rules written for IPv4 do nothing to IPv6 traffic — with the older tools it is a separate ruleset — so an egress block can be complete for one protocol and absent for the other. A quieter surprise is <code>localhost</code> resolving to <code>::1</code> while a service listens only on <code>127.0.0.1</code>, giving connection refused for something that is plainly running. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a> and <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "see": [
+   "ipv4",
+   "ip-address",
+   "localhost",
+   "firewall",
+   "egress"
+  ]
+ },
+ "cidr": {
+  "name": "CIDR Notation",
+  "short": "A compact way of writing a block of IP addresses as an address plus a prefix length, such as 10.0.0.0/8, where the number says how many leading bits are fixed.",
+  "def": "<code>192.168.1.0/24</code> means the first 24 bits are fixed and the remaining 8 vary, so the block covers 192.168.1.0 through 192.168.1.255 — 256 addresses. Each bit removed from the prefix doubles the block: a <code>/16</code> holds 65,536 addresses, a <code>/8</code> about 16.7 million, and a <code>/32</code> is exactly one. The notation appears wherever a set of addresses is named: on interfaces (<code>172.17.0.2/16</code>), in routing tables, in firewall rules and in allowlists. Reading it correctly matters in an audit. A rule permitting <code>10.0.0.0/8</code> when <code>10.0.0.8/32</code> was intended opens the whole range rather than one host. <a href='appendices/c-binary-octal-cidr.html'>Appendix C</a> does the arithmetic; see also <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a>.",
+  "also": "prefix length, /24, netmask",
+  "see": [
+   "subnet",
+   "ip-address",
+   "ipv4",
+   "private-address-range",
+   "allowlist"
+  ]
+ },
+ "subnet": {
+  "name": "Subnet",
+  "short": "A block of IP addresses that share a prefix and sit on one local network, so that their members can reach each other directly without passing through a router.",
+  "def": "An interface's address comes with a prefix length, and together they define its subnet: <code>172.17.0.2/16</code> says everything in 172.17.x.x is a neighbour. When sending, the kernel asks one question — is the destination inside one of my subnets? If so the packet goes straight out of that interface; if not it goes to a gateway to be forwarded. That single test is why a wrong prefix produces strange partial connectivity. For sandboxes the subnet defines who the neighbours are. Containers attached to the same Docker network share a subnet and can reach each other directly, so two concurrently running samples placed on one network are not isolated from one another. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a> and <a href='appendices/c-binary-octal-cidr.html'>Appendix C</a>.",
+  "also": "subnetwork, network prefix",
+  "see": [
+   "cidr",
+   "routing-table",
+   "default-gateway",
+   "bridge-network",
+   "ip-address"
+  ]
+ },
+ "private-address-range": {
+  "name": "Private Address Range",
+  "short": "IPv4 blocks reserved for internal networks and never routed on the public internet: 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16.",
+  "def": "RFC 1918 set aside three blocks that anyone may use internally without coordination — <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code> and <code>192.168.0.0/16</code> — on the understanding that internet routers will not carry them. Reuse is the point: your home network, your employer's and every Docker host can all use the same numbers, reaching the outside through NAT. Docker's default bridge network is typically <code>172.17.0.0/16</code>, inside the second block. The audit consequence is that an address starting 10., 172.16–31. or 192.168. is not the internet but is somewhere: the host, a sibling container, a service on the internal network. Blocking internet access and blocking private ranges are separate decisions, and a sandbox usually needs both. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a> and <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "RFC 1918, private IP",
+  "see": [
+   "cidr",
+   "nat",
+   "ipv4",
+   "bridge-network",
+   "metadata-service"
+  ]
+ },
+ "network-interface": {
+  "name": "Network Interface",
+  "short": "A network attachment point as the kernel sees it, which may be a physical card or a purely virtual device, each with a name such as lo or eth0 and its own addresses.",
+  "def": "The kernel sends and receives packets through interfaces. Some correspond to hardware, such as an Ethernet or Wi-Fi card; many are software only: <code>lo</code> for loopback, bridges, the virtual Ethernet pairs that wire up containers, VPN tunnels. <code>ip addr</code> lists each interface with its state and addresses, and <code>ip link</code> shows just the devices. A typical Docker container has exactly two, <code>lo</code> and <code>eth0</code>; one started with <code>--network none</code> has only <code>lo</code>, and that listing is the fastest proof that a no-network sandbox really has no network. Minimal images often lack the <code>ip</code> command, which comes from the <code>iproute2</code> package. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a>.",
+  "also": "NIC, interface, eth0",
+  "see": [
+   "ip-address",
+   "loopback",
+   "veth",
+   "bridge-network",
+   "network-namespace"
+  ]
+ },
+ "loopback": {
+  "name": "Loopback",
+  "short": "A virtual network interface, named lo, that delivers traffic back to the same machine; addresses in 127.0.0.0/8, usually 127.0.0.1, never leave the box.",
+  "def": "The loopback interface lets programs on one machine talk to each other with ordinary network code and no network: a test suite connecting to a local database, a browser to a development server. Anything sent to <code>127.0.0.1</code> (or <code>::1</code> in IPv6) is handed straight back by the kernel and never touches a wire. The subtlety in containers is that loopback belongs to a network namespace, so each container has its own private <code>lo</code>. A service listening on 127.0.0.1 inside a container is reachable only from inside that container — not from the host, not from a sibling container, and not through a published port. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a> and <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a>.",
+  "also": "lo, 127.0.0.1",
+  "see": [
+   "localhost",
+   "network-interface",
+   "bind-address",
+   "network-namespace"
+  ]
+ },
+ "localhost": {
+  "name": "localhost",
+  "short": "The conventional hostname for this same machine, which resolves to the loopback address 127.0.0.1 (or ::1 for IPv6).",
+  "def": "<code>localhost</code> is just a name, mapped to the loopback addresses by the first lines of <code>/etc/hosts</code>. It always means whichever network namespace the program is running in, and that is the trap once containers are involved. Inside a container, localhost is the container; a database running on your Mac or in another container is not there, however natural <code>localhost:5432</code> feels. In a multi-container task each service is reached by its service name on the shared network instead. A large share of connection refused errors in agent transcripts are this mistake, made either by the agent or by the task author who wrote the instructions. See <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a> and <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "see": [
+   "loopback",
+   "hosts-file",
+   "bind-address",
+   "network-namespace",
+   "docker-compose"
+  ]
+ },
+ "routing-table": {
+  "name": "Routing Table",
+  "short": "The kernel's list of rules for deciding, for each outgoing packet, which interface to send it out of and which next hop should receive it.",
+  "def": "<code>ip route</code> prints the table. Each line pairs a destination block with a way to reach it: <code>172.17.0.0/16 dev eth0</code> means those addresses are directly attached, and <code>default via 172.17.0.1 dev eth0</code> means everything else is handed to that gateway. When several lines match, the most specific — the longest prefix — wins, with the default route as the fallback. The table is the definitive answer to where a box can send traffic. No default route means nothing beyond the local subnets is reachable, and the error is an immediate <code>Network is unreachable</code> rather than a timeout. It shows where packets may be sent, not whether a firewall further along lets them through. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a>.",
+  "also": "route, ip route",
+  "see": [
+   "default-gateway",
+   "subnet",
+   "cidr",
+   "network-interface",
+   "egress"
+  ]
+ },
+ "default-gateway": {
+  "name": "Default Gateway",
+  "short": "The router a machine sends packets to when the destination is not on any directly attached network; it is the way out to everything else.",
+  "def": "A machine knows how to reach its own subnets directly. For every other destination it needs a neighbour willing to forward packets, and the default route names that neighbour: <code>default via 172.17.0.1 dev eth0</code>. At home the gateway is your router. For a container on Docker's bridge network it is the host's end of the bridge, which leads to two facts worth remembering in an audit. All of the container's outside traffic passes through the host, where it can be filtered, logged or blocked. And the gateway address is the host itself as seen from inside the sandbox, so any service the host exposes on that address is reachable by the agent. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a>.",
+  "also": "gateway, default route",
+  "see": [
+   "routing-table",
+   "subnet",
+   "nat",
+   "bridge-network",
+   "egress"
+  ]
+ },
+ "nat": {
+  "name": "NAT",
+  "short": "Network address translation: a router rewrites the addresses in packets passing through it, most often so that many privately addressed machines share one public address.",
+  "def": "Private addresses cannot be routed on the internet, so something at the edge must swap them. With source NAT (masquerading), the gateway replaces the private source address of each outgoing packet with its own, remembers the mapping and reverses it on replies. Your home router does this, and so does a Docker host for its containers. The reverse direction, destination NAT, is how a published port works: traffic arriving at the host's port 8080 is rewritten to the container's address and port. Two consequences for evals: remote services see every container on a host as the same address, so rate limits and bans apply to all of them together; and nothing outside can open a connection to a container unless a port was published. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a> and <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "network address translation, masquerade",
+  "see": [
+   "private-address-range",
+   "default-gateway",
+   "iptables",
+   "bridge-network",
+   "ingress"
+  ]
+ },
+ "port": {
+  "name": "Port",
+  "short": "A number from 0 to 65535 that identifies which program on a machine a network connection is for, so that one IP address can host many services.",
+  "def": "An IP address gets a packet to a machine; the port number gets it to the right program on that machine. A server claims a port and listens on it, and clients connect to address plus port: <code>10.0.0.5:443</code>. Conventions assign well-known numbers — 22 for SSH, 53 for DNS, 80 for HTTP, 443 for HTTPS, 5432 for PostgreSQL — and ports below 1024 have traditionally required root to claim. The client's end of a connection also uses a port, a temporary one chosen by the kernel. Only one program can listen on a given address and port at a time, so a leftover server from an earlier command produces <code>Address already in use</code> when the agent tries to start another. See <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a>.",
+  "also": "port number, TCP port",
+  "see": [
+   "socket",
+   "listening-socket",
+   "tcp",
+   "udp",
+   "bind-address"
+  ]
+ },
+ "socket": {
+  "name": "Socket",
+  "short": "The kernel object a program uses as its endpoint for network communication; it is read and written through a file descriptor, much like a file.",
+  "def": "A program that wants to talk over the network asks the kernel for a socket, then either connects it to a remote address and port or binds it to a local one and listens. From then on the program reads and writes the socket through a file descriptor, as it would a file — the everything-is-a-file idea applied to networking. An established TCP connection is identified by both ends together (local address and port, remote address and port), which is how one server port carries thousands of connections at once. <code>ss</code> lists a machine's sockets. There are also Unix domain sockets, which appear as paths on the filesystem and connect processes on one machine; <code>/var/run/docker.sock</code> is the one that matters for sandbox security. See <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a> and <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>.",
+  "also": "network socket, Unix socket",
+  "see": [
+   "port",
+   "listening-socket",
+   "file-descriptor",
+   "tcp",
+   "docker-socket"
+  ]
+ },
+ "tcp": {
+  "name": "TCP",
+  "short": "Transmission Control Protocol: the connection-based transport that delivers a reliable, ordered stream of bytes between two programs; HTTP, SSH and most services use it.",
+  "def": "IP alone delivers individual packets on a best-effort basis: they may be lost, duplicated or reordered. TCP builds a dependable channel on top. The two sides first exchange a handshake to set up a connection, then number, acknowledge and retransmit data so the application sees a clean byte stream. The handshake is a useful diagnostic because it fails in two distinct ways. <code>Connection refused</code> comes back at once and means the machine answered but nothing is listening on that port. A timeout means no answer came at all — the address is wrong or, most often, a firewall is silently dropping the packets. Telling the two apart in a transcript separates a service that never started from a blocked network. See <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a>.",
+  "also": "Transmission Control Protocol",
+  "see": [
+   "udp",
+   "port",
+   "socket",
+   "listening-socket",
+   "firewall"
+  ]
+ },
+ "udp": {
+  "name": "UDP",
+  "short": "User Datagram Protocol: a minimal transport that sends individual messages with no connection, no delivery guarantee and no ordering; DNS is its best-known user.",
+  "def": "UDP adds port numbers to IP and very little else. A program sends a datagram and hopes; there is no handshake, acknowledgement or retransmission unless the application supplies its own. That suits short request-and-reply exchanges such as DNS lookups and time synchronisation, and traffic where a late packet is worthless. It has its own port space, so TCP port 53 and UDP port 53 are separate things, and <code>ss -u</code> lists UDP sockets separately from TCP ones. With no handshake, failure has no clear signal: a blocked UDP request simply never gets a reply. Firewall rules name a protocol, so a ruleset reviewed only for TCP may still leave UDP — and with it DNS — open as a path out of a sandbox. See <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a>.",
+  "also": "User Datagram Protocol",
+  "see": [
+   "tcp",
+   "port",
+   "dns",
+   "socket",
+   "egress"
+  ]
+ },
+ "listening-socket": {
+  "name": "Listening Socket",
+  "short": "A socket that a server has bound to an address and port and marked as ready to accept incoming connections; it is what it means for a port to be open.",
+  "def": "A server becomes reachable by creating a socket, binding it to an address and port, and calling <code>listen</code>. From that moment the kernel accepts connections on the program's behalf; with no listening socket on a port, connection attempts are refused. <code>ss -tlnp</code> shows them all: TCP (<code>t</code>), listening (<code>l</code>), numeric (<code>n</code>), with the owning process (<code>p</code>, which needs root to see other users' processes). This is a core audit command because it enumerates every way into the box from the network and names the program behind each. Run inside a task container, it also tells you whether the service the task depends on actually started before you blame the agent for failing to reach it. See <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a> and <a href='pages/28-ten-minute-audit.html'>The Ten-Minute Audit</a>.",
+  "also": "open port, LISTEN, ss -tlnp",
+  "see": [
+   "socket",
+   "port",
+   "bind-address",
+   "tcp",
+   "attack-surface"
+  ]
+ },
+ "bind-address": {
+  "name": "Bind Address",
+  "short": "The local address a server listens on: 127.0.0.1 accepts connections only from the same machine, while 0.0.0.0 accepts them on every interface.",
+  "def": "A listening socket is tied to a port and also to a local address, and the address decides who can connect. Bound to <code>127.0.0.1</code>, the service is reachable only through loopback, from the same machine. Bound to <code>0.0.0.0</code>, meaning all IPv4 addresses, it is reachable through every interface. Many development servers default to 127.0.0.1 for safety, which is the classic container puzzle: the server runs, the port is published, and connections from the host still fail, because inside the container it listens only on the container's own loopback. The fix is to bind 0.0.0.0 inside the container and restrict exposure at the publishing step. The local-address column of <code>ss -tln</code> shows the bind address. See <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a>.",
+  "also": "0.0.0.0, listen address",
+  "see": [
+   "listening-socket",
+   "loopback",
+   "localhost",
+   "port",
+   "ingress"
+  ]
+ },
+ "dns": {
+  "name": "DNS",
+  "short": "The Domain Name System: the distributed directory that translates hostnames such as pypi.org into the IP addresses needed to connect to them.",
+  "def": "Networks route on addresses, people and configuration files use names, and DNS bridges the two. A program hands a name to the system's resolver, which queries a DNS server — conventionally on port 53, over UDP first — and receives one or more addresses. Since nearly every connection begins with a lookup, broken DNS looks like a broken network even when routing is fine: the errors are <code>Could not resolve host</code> or <code>Temporary failure in name resolution</code>, not refused or timed out. Test the layers separately: <code>dig example.com</code> exercises DNS alone, while <code>curl</code> to a raw IP address skips it. DNS is also an outbound channel, so a sandbox meant to have no egress should be checked for whether lookups of external names still succeed. See <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "also": "Domain Name System, name resolution",
+  "see": [
+   "resolver",
+   "hosts-file",
+   "udp",
+   "egress",
+   "ip-address"
+  ]
+ },
+ "resolver": {
+  "name": "Resolver",
+  "short": "The part of the system that turns a hostname into an address on behalf of programs, configured chiefly by /etc/resolv.conf, which names the DNS servers to ask.",
+  "def": "Programs do not speak DNS themselves; they call a library function, and the resolver does the rest. On Linux it consults sources in the order set by the <code>hosts</code> line of <code>/etc/nsswitch.conf</code> — normally <code>files dns</code>, meaning <code>/etc/hosts</code> first, then the servers listed as <code>nameserver</code> lines in <code>/etc/resolv.conf</code>. On an Ubuntu machine that server is usually a local caching stub at <code>127.0.0.53</code>; in a container Docker writes the file, pointing at the host's DNS or, on user-defined networks, at its built-in server at <code>127.0.0.11</code>, which also resolves container names. Note that <code>dig</code> queries DNS directly and ignores <code>/etc/hosts</code>, whereas <code>getent hosts name</code> answers the way ordinary programs do. See <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "also": "/etc/resolv.conf, stub resolver",
+  "see": [
+   "dns",
+   "hosts-file",
+   "localhost",
+   "bridge-network"
+  ]
+ },
+ "hosts-file": {
+  "name": "/etc/hosts",
+  "short": "A plain-text file mapping hostnames to IP addresses that the system normally consults before DNS; it is where localhost is defined.",
+  "def": "Each line of <code>/etc/hosts</code> is an address followed by one or more names, and because the resolver normally reads this file first, an entry here overrides DNS for that name on this machine. It is how <code>localhost</code> resolves with no network, and how you give a test service a name without running a DNS server. In a container Docker generates the file, adding the container's own hostname and anything passed with <code>--add-host</code>. Two cautions. It is no security control: pointing a domain at <code>127.0.0.1</code> does not stop an agent running as root from editing the file or connecting by IP address. And tools that query DNS directly, such as <code>dig</code>, never consult it. See <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "also": "hosts file",
+  "see": [
+   "resolver",
+   "dns",
+   "localhost",
+   "allowlist"
+  ]
+ },
+ "http": {
+  "name": "HTTP",
+  "short": "The request-and-response protocol of the web and of nearly every API: a client sends a method, a path and headers, and the server answers with a status code and a body.",
+  "def": "HTTP is text-structured and simple at heart. The client opens a TCP connection (port 80, or 443 when wrapped in TLS), sends a request line such as <code>GET /v1/models</code>, headers and perhaps a body; the server replies with a status code, headers and a body. The first digit of the status tells you whose problem it is: 2xx success, 3xx redirect, 4xx the request was wrong (401 unauthenticated, 404 not found, 429 rate-limited), 5xx the server failed. <code>curl -v</code> prints the whole exchange and is the standard way to see what actually went over the wire. Model APIs, package downloads, and often the harness's own channel to the sandbox are all HTTP, so reading a status line is how you separate bad credentials from a blocked network. See <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "also": "HTTPS, status code, curl",
+  "see": [
+   "tls",
+   "tcp",
+   "proxy",
+   "port",
+   "dns"
+  ]
+ },
+ "tls": {
+  "name": "TLS",
+  "short": "Transport Layer Security: the protocol that encrypts a connection and verifies the server's identity; HTTPS is simply HTTP carried inside TLS.",
+  "def": "A plain TCP connection can be read and altered by anything on the path. TLS wraps it: during a handshake the server presents a certificate, the client checks it against authorities it already trusts and against the name it meant to reach, and the two agree on encryption keys. After that the application protocol runs unchanged inside the tunnel, so HTTPS is HTTP over TLS, conventionally on port 443. In sandboxes, TLS problems are rarely about cryptography. They come from the environment: a minimal image with no CA certificates installed, a system clock that is wrong, or an inspecting proxy whose certificate the container does not trust. <code>curl -v</code> shows the handshake and the precise complaint. See <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "also": "SSL, HTTPS",
+  "see": [
+   "certificate",
+   "http",
+   "proxy",
+   "tcp"
+  ]
+ },
+ "certificate": {
+  "name": "Certificate",
+  "short": "A signed file binding a public key to a hostname, presented by a TLS server to prove its identity; clients trust it if it chains to a certificate authority they know.",
+  "def": "When you connect to <code>https://pypi.org</code>, the server sends a certificate stating that this key belongs to pypi.org, signed by a certificate authority (CA). Your side verifies the signature chain up to one of the root CAs it already trusts, and checks the hostname and validity dates. On Debian and Ubuntu the trusted roots come from the <code>ca-certificates</code> package under <code>/etc/ssl/certs</code> — and the <code>ubuntu:24.04</code> image does not include it, so HTTPS requests fail verification there until it is installed. Agents commonly react by switching verification off (<code>curl -k</code>, <code>verify=False</code>), which hides the real fault. An organisation's TLS-inspecting proxy causes the same error until its CA is added to the trust store. See <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "also": "TLS certificate, CA, ca-certificates",
+  "see": [
+   "tls",
+   "http",
+   "proxy",
+   "base-image"
+  ]
+ },
+ "proxy": {
+  "name": "Proxy",
+  "short": "An intermediary server that makes network requests on behalf of clients, giving one controlled point at which traffic can be filtered, logged or cached.",
+  "def": "With a forward proxy, the client sends its request to the proxy, which connects to the real destination and relays the answer. Most command-line tools find the proxy through environment variables — <code>HTTP_PROXY</code>, <code>HTTPS_PROXY</code> and <code>NO_PROXY</code> for exceptions — though not every program honours them. In sandbox design a proxy is the practical way to enforce a domain allowlist. A packet firewall sees only IP addresses, which change constantly for sites behind content delivery networks, whereas a proxy sees the requested hostname. The pattern is to block all direct egress by firewall, allow only the proxy, and let the proxy decide by domain and keep a log. That log doubles as the record of everything the agent tried to reach. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a> and <a href='pages/18-dns-http-tls.html'>DNS, HTTP, and TLS</a>.",
+  "also": "forward proxy, HTTP_PROXY",
+  "see": [
+   "egress",
+   "allowlist",
+   "firewall",
+   "http",
+   "environment-variable"
+  ]
+ },
+ "egress": {
+  "name": "Egress",
+  "short": "Network traffic leaving a machine or sandbox for somewhere else; egress control decides what, if anything, an agent inside can reach.",
+  "def": "Egress is the outbound direction: connections that start inside the sandbox and go out. For evaluation it is the direction that matters most. An agent with open internet access can look up a benchmark task's published solution, download the fixed version of the repository, call another model for help, or send data out — each of which makes the score measure something other than the agent's own ability. Options run from none (<code>docker run --network none</code>), through a default-deny firewall with an allowlist, to fully open. Whichever you choose, verify it from inside the box, and test more than one route: a raw IP address, a DNS lookup, an HTTPS request, and the cloud metadata address. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+  "also": "outbound traffic, egress control",
+  "see": [
+   "ingress",
+   "firewall",
+   "default-deny",
+   "allowlist",
+   "solution-leakage"
+  ]
+ },
+ "ingress": {
+  "name": "Ingress",
+  "short": "Network traffic arriving at a machine or sandbox from outside: connections that something else initiates towards a service listening inside.",
+  "def": "Ingress is the inbound direction — who can connect to what is listening here. A container on Docker's default network is unreachable from outside the host until you publish a port with <code>-p</code>, and harnesses rarely need any, since they drive the sandbox through the container runtime rather than over its network. The thing to watch is how publishing binds. <code>-p 8080:80</code> listens on every interface of the host, not just loopback, so a task's web application may be exposed to the whole local network; writing <code>-p 127.0.0.1:8080:80</code> keeps it local. On a shared or cloud host, every open listening port is attack surface and should be deliberate. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a> and <a href='pages/17-ports-and-sockets.html'>Ports, Sockets, TCP and UDP</a>.",
+  "also": "inbound traffic, published port",
+  "see": [
+   "egress",
+   "listening-socket",
+   "bind-address",
+   "firewall",
+   "attack-surface"
+  ]
+ },
+ "firewall": {
+  "name": "Firewall",
+  "short": "Rules, enforced by the kernel on Linux, that decide which network packets are allowed through, based on direction, addresses, ports and protocol.",
+  "def": "A Linux firewall is a list of rules the kernel's netfilter layer checks against each packet: match on direction, interface, source and destination address, protocol, port and connection state, then accept, drop or reject. Dropping discards silently, so the sender waits for a timeout; rejecting sends back an error, so the sender fails immediately — a difference you can read in a transcript. The rules are managed with <code>nft</code> or the older <code>iptables</code>. For a sandbox the firewall must sit where the agent cannot alter it: on the host or in a separate network layer, not inside a container in which the agent is root with network-administration capabilities. And it must be tested by attempting connections, because a ruleset that reads correctly can still be wrong. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "packet filter, netfilter",
+  "see": [
+   "nftables",
+   "iptables",
+   "default-deny",
+   "egress",
+   "allowlist"
+  ]
+ },
+ "default-deny": {
+  "name": "Default Deny",
+  "short": "A firewall stance in which everything is blocked unless a rule explicitly allows it, as opposed to allowing everything except what is listed.",
+  "def": "Every ruleset has to say what happens to a packet that matches no rule. Default allow means you list the bad things and everything else passes, including all the bad things you did not think of. Default deny reverses it: the base policy is drop, and you add narrow exceptions for what the task needs. It is least privilege applied to the network, and it fails safe — an omission breaks a task visibly rather than leaving a hole silently. For sandboxes you cannot enumerate every site that might host a benchmark's answers, so a blocklist is unworkable and default deny is the only defensible starting point. Remember that the policy must cover IPv6 and UDP as well as IPv4 TCP. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "deny by default, default drop",
+  "see": [
+   "allowlist",
+   "firewall",
+   "egress",
+   "least-privilege",
+   "nftables"
+  ]
+ },
+ "allowlist": {
+  "name": "Allowlist",
+  "short": "An explicit list of the destinations, or other items, that are permitted, with everything not on the list refused.",
+  "def": "An allowlist is the set of exceptions that makes a default-deny policy usable: this package mirror, that model API, nothing else. The difficulty is that people think in domain names while packet firewalls match IP addresses. A large site's addresses change frequently and are shared with unrelated sites on the same delivery network, so an address-based allowlist is at once too fragile and too broad. Hence the usual design of an HTTP proxy that allows by hostname, with the firewall permitting traffic only to the proxy. Audit every entry for what else it enables: allowing a code-hosting site for one dependency also allows reaching any repository there, including ones containing benchmark solutions. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+  "also": "whitelist",
+  "see": [
+   "default-deny",
+   "proxy",
+   "egress",
+   "firewall",
+   "solution-leakage"
+  ]
+ },
+ "nftables": {
+  "name": "nftables",
+  "short": "The current Linux packet-filtering framework, configured with the nft command; it is the successor to iptables and handles IPv4 and IPv6 in one ruleset.",
+  "def": "nftables is the modern interface to the kernel's packet filter. Rules live in tables, which hold chains attached to hooks — input, output, forward — and each chain has a default policy plus an ordered list of rules. <code>nft list ruleset</code> prints everything in one readable block, which is the audit command to remember. A table of family <code>inet</code> covers IPv4 and IPv6 together, closing the gap that separate rulesets used to leave. On current Debian and Ubuntu even the <code>iptables</code> command is normally a compatibility front end feeding the same kernel machinery. Both need root and a network namespace of your own, which is why the course uses a VM, not a container, for firewall labs. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "nft",
+  "see": [
+   "iptables",
+   "firewall",
+   "default-deny",
+   "egress",
+   "ipv6"
+  ]
+ },
+ "iptables": {
+  "name": "iptables",
+  "short": "The long-standing Linux command for configuring packet-filtering and NAT rules; superseded by nftables but still everywhere, including in Docker's own networking.",
+  "def": "iptables organises rules into tables (<code>filter</code> for allow and deny, <code>nat</code> for address rewriting), each containing chains such as INPUT, OUTPUT and FORWARD that packets pass through in order. <code>iptables -S</code> or <code>iptables -L -n -v</code> lists the rules. You need to read it because so much existing material uses it: tutorials, sandbox setup scripts, and Docker, which programs iptables rules on the host to implement container NAT and published ports. Two cautions. IPv6 has a separate command, <code>ip6tables</code>, so an egress block written only in iptables does not cover IPv6. And Docker inserts its own rules, which can let traffic to published ports through in spite of a host firewall you believed was closed. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "ip6tables, netfilter",
+  "see": [
+   "nftables",
+   "firewall",
+   "nat",
+   "egress",
+   "docker"
+  ]
+ },
+ "bridge-network": {
+  "name": "Bridge Network",
+  "short": "Docker's default kind of container network: a virtual switch inside the host to which containers attach, each with a private address, reaching the outside through NAT.",
+  "def": "A Linux bridge is a software Ethernet switch. Docker creates one, <code>docker0</code>, typically with the subnet <code>172.17.0.0/16</code>, plugs each new container into it and gives the container the bridge's address as its default gateway; outbound traffic is NATed to the host's address. Containers on the same bridge can reach one another directly. Networks you define yourself, including the ones Compose creates, behave the same way but add DNS, so containers find each other by name. For evals the consequences are two. Unless you choose otherwise every container gets outbound internet access, and samples running side by side on one bridge can reach each other. Use <code>--network none</code>, or a separate internal network per sample, when that matters. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "docker0, bridge",
+  "see": [
+   "veth",
+   "nat",
+   "network-namespace",
+   "default-gateway",
+   "subnet"
+  ]
+ },
+ "veth": {
+  "name": "veth Pair",
+  "short": "A pair of linked virtual network interfaces acting like a cable: whatever enters one end comes out of the other, used to connect a container to the host's network.",
+  "def": "A new network namespace contains nothing but its own loopback interface, so it is cut off from everything. To connect it, the kernel offers virtual Ethernet devices that are created in pairs. The container runtime moves one end into the container's namespace, where it appears as <code>eth0</code>, and leaves the other end on the host attached to a bridge, where it shows up in <code>ip link</code> under a name beginning with <code>veth</code>. That is the whole trick behind container networking: a virtual cable from a private namespace to a virtual switch. Knowing it lets you find, on the host, the exact interface carrying one container's traffic, which is where you would capture its packets or apply a rule to that container alone. See <a href='pages/20-namespaces.html'>Namespaces</a> and <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a>.",
+  "also": "virtual Ethernet",
+  "see": [
+   "network-namespace",
+   "bridge-network",
+   "network-interface",
+   "packet-capture"
+  ]
+ },
+ "packet-capture": {
+  "name": "Packet Capture",
+  "short": "Recording the actual packets crossing a network interface, typically with tcpdump, to see what was really sent and received.",
+  "def": "When claims about the network conflict — the application says it sent the request, the server says nothing arrived — a capture settles it. <code>tcpdump -n -i eth0 port 53</code> prints each matching packet as it passes; <code>-n</code> skips name lookups, <code>-i any</code> watches every interface and <code>-w file.pcap</code> saves the capture for Wireshark. Capturing needs root or the equivalent network capabilities, and the tool is rarely present in task images, so capture from the host side of the container's interface instead. For sandbox work it is the strongest available evidence about egress. A capture taken on the host during a run shows every destination the container attempted to reach, whatever the agent's transcript says or leaves out. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "tcpdump, pcap",
+  "see": [
+   "network-interface",
+   "veth",
+   "egress",
+   "firewall",
+   "environment-integrity"
+  ]
+ },
+ "icmp": {
+  "name": "ICMP",
+  "short": "Internet Control Message Protocol: the network's error-and-diagnostics channel, best known as what ping uses to test whether a host answers.",
+  "def": "ICMP carries messages about the network itself instead of application data: destination unreachable, time exceeded, and the echo request and reply behind <code>ping</code>. It has no ports, so rules written in terms of ports do not describe it, and firewalls treat it as its own protocol. That makes ping a weaker test than it appears. A failed ping may only mean ICMP is filtered while TCP port 443 works; a successful ping proves the host is up and says nothing about whether the port you need is open. To test reachability of a service, attempt a real connection with <code>curl</code> or <code>nc -zv host port</code>. Minimal images usually lack <code>ping</code> anyway; on Ubuntu it is in the <code>iputils-ping</code> package. See <a href='pages/16-addresses-and-routes.html'>Addresses, Interfaces, and Routes</a> and <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+  "also": "ping",
+  "see": [
+   "tcp",
+   "udp",
+   "firewall",
+   "ip-address",
+   "egress"
+  ]
+ },
+ "metadata-service": {
+  "name": "Metadata Service",
+  "short": "An HTTP endpoint at the fixed address 169.254.169.254 that cloud providers expose to each VM, serving details about the instance and often temporary credentials.",
+  "def": "Cloud virtual machines learn about themselves — instance name, region, startup scripts, and the temporary credentials for whatever role is attached — by requesting them from a link-local address, <code>169.254.169.254</code>, which the platform answers from within the host. No password is needed, because being on the VM is treated as the proof of identity. A container on that VM is on the VM too. Unless the address is blocked, an agent in a sandbox hosted on a cloud instance can query it and may obtain credentials carrying the instance's permissions — a route to secrets that appears nowhere in the environment or the filesystem. Include the address in every egress reachability test, and give instances that run sandboxes the narrowest role you can. See <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a> and <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+  "also": "instance metadata, IMDS, 169.254.169.254",
+  "see": [
+   "secret",
+   "egress",
+   "default-deny",
+   "trust-boundary",
+   "least-privilege"
+  ]
+ }
+}

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading Terminal Transcripts · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 7 · Linux in Eval Harnesses</p>
+    <h1>Reading terminal transcripts</h1>
+    <p class="lede">
+      Error analysis for terminal agents: how to read a rollout's commands, outputs and exit codes,
+      recognise the two dozen Linux-level failures that recur, and decide for each one whether the
+      model failed or the environment did — before that decision gets baked into a score.
+    </p>
+
+    <h2 id="what-a-transcript-holds">What a transcript holds, and what it doesn't</h2>
+    <p>
+      An agent's <span class="term" data-g="transcript">transcript</span> is the harness's record
+      of the conversation between a model and a sandbox. For an exec-per-call
+      <span class="term" data-g="bash-tool">bash tool</span> (<a href="25-how-harnesses-use-linux.html">page 25</a>)
+      each step holds five things: the command string the model sent, the stdout and the
+      <span class="term" data-g="stderr">stderr</span> that came back (possibly merged, possibly
+      cut), the <span class="term" data-g="exit-status">exit status</span>, and — if you are lucky
+      — a duration. Everything you will diagnose on this page is inferred from those five fields.
+    </p>
+    <p>
+      Just as important is what the transcript does <em>not</em> hold. It is a record of what the
+      model saw, not of the box:
+    </p>
+    <div class="diagram">  in the transcript                 not in the transcript
+  ---------------------------        ------------------------------------
+  argv / script the model sent       the filesystem after each call
+  stdout   (maybe truncated)         processes still running (background)
+  stderr   (maybe merged in)         the screen, if a TTY harness is used
+  exit status                        cgroup counters: oom_kill, pids max
+  duration (sometimes)               the container's own exit / OOMKilled
+                                     anything `docker logs` would show
+                                     the grader's view of the final state</div>
+    <p>
+      That right-hand column is where the environment failures hide, which is why the triage
+      procedure below always ends outside the transcript. Two facts from it, reproduced for this
+      page. Output from a <code>docker exec</code> never reaches <code>docker logs</code>, which only
+      records the container's main process — so "check the logs" finds nothing about what the agent
+      ran:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker exec lt-27-box bash -c 'echo "from exec"; echo "err from exec" &gt;&amp;2'
+<span class="o">err from exec
+from exec</span>
+<span class="p">$</span> docker logs lt-27-box | wc -l
+<span class="o"><span class="hl">0</span></span></code></pre>
+    <p>
+      And the output itself may have been cut. Inspect caps one <code>exec()</code>'s output at
+      10 MiB and, past that, keeps only the <em>tail</em> and returns a successful result with no
+      error;<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect docs, Sandboxing: Sandbox Limits; source util/_sandbox/limits.py">[Inspect]</a>
+      tools that show the model a window of output typically keep the end too. The end is where a
+      test runner's progress chatter lives; the one line that mattered was printed first:
+    </p>
+<pre class="term"><code><span class="p">$</span> python3 -c '…print FAILED to stderr, then 5000 progress lines…' 2&gt;&amp;1 | tail -c 300
+<span class="o">ress line 4984
+progress line 4985
+…
+progress line 4999</span></code></pre>
+    <p>
+      The <code>FAILED test_counts</code> line is gone. When a transcript shows only noise and a
+      non-zero status, suspect front truncation before you suspect the model
+      (<a href="04-streams-pipes-redirection.html#output-limits">page 4</a>).
+    </p>
+
+    <h2 id="field-guide">A field guide to recurring failures</h2>
+    <p>
+      Terminal-Bench's authors sampled 3,800 failed commands from agent runs and coded them. The
+      single most frequent failure — 24.1% of all failures — was calling an executable that is not
+      installed or not on the <span class="term" data-g="path-variable">PATH</span>; next came
+      failures while running an executable, at 9.6%. Per-command error rates ranged from 9.2% to
+      26.7% across models.<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Merrill, Shaw, Carlini et al., Terminal-Bench, arXiv:2601.11868, §4.5 command-level analysis">[Terminal-Bench]</a>
+      Their taxonomy's top-level categories — invocation, filesystem and permissions, environment
+      and configuration, packages, network, processes — are this course's table of contents. Every
+      row below was reproduced in Docker for this page (raw sessions in
+      <code>research/verify/27-reading-terminal-transcripts.txt</code>). Read each as: what you
+      see → the mechanism and where it is taught → whose fault, usually → the fix.
+    </p>
+
+    <h3 id="fg-invocation">Invocation: "not found", "denied", "not permitted"</h3>
+    <table>
+      <tr><th>What you see</th><th>Mechanism</th><th>Usually</th><th>Fix</th></tr>
+      <tr><td><code>bash: line 1: pytest: command not found</code>, 127</td><td>No file of that name in any <code>PATH</code> directory (<a href="02-shell-and-commands.html#finding-programs">p2</a>)</td><td>Model fluency if the task never promised the tool; environment defect if the instructions say to use it</td><td><code>command -v</code> first; use what the image has (<code>python3 -m unittest</code>)</td></tr>
+      <tr><td>Tool works in your terminal, 127 in the harness</td><td>The harness's shell is non-interactive; a <code>PATH</code> line in <code>~/.bashrc</code> is never read — not even by <code>bash -lc</code> on Ubuntu (below)</td><td>Environment defect</td><td>Set <code>PATH</code> with <code>ENV</code> in the image, or call by absolute path</td></tr>
+      <tr><td><code>sh: /b/hello: not found</code>, 127 — yet <code>ls -l</code> shows the file</td><td>A glibc binary on Alpine: the kernel can't find its dynamic loader, and the shell reports the <em>loader</em> as missing (<a href="02-shell-and-commands.html#alpine">p2</a>, <a href="15-packages-reproducibility.html#alpine">p15</a>)</td><td>Environment defect</td><td>Build for the right <span class="term" data-g="musl-glibc">libc</span>; <code>bash: not found</code> on Alpine is the same row</td></tr>
+      <tr><td><code>/tmp/run.sh: Permission denied</code>, 126</td><td>Found, not executable: no <code>x</code> bit or a <code>noexec</code> mount (<a href="08-permissions.html">p8</a>)</td><td>Model (forgot <code>chmod +x</code>) or environment (<code>noexec</code> /tmp)</td><td><code>bash run.sh</code>; check <code>findmnt -no OPTIONS /tmp</code></td></tr>
+      <tr><td><code>cat: /etc/shadow: Permission denied</code>, 1</td><td>EACCES on a <em>file</em>: the program ran and the kernel refused the open; status is the program's own (1)</td><td>Usually correct policy</td><td>None — unless the agent needed it, then it's a task-design question</td></tr>
+      <tr><td><code>chown: … Operation not permitted</code>, <code>date: cannot set date: Operation not permitted</code></td><td>EPERM: the operation needs a <span class="term" data-g="capability">capability</span> the process lacks — even as root (<a href="21-cgroups-capabilities-seccomp.html">p21</a>)</td><td>Correct policy, or model asking for something the sandbox forbids</td><td>Don't grant the capability to make a transcript cleaner</td></tr>
+    </table>
+    <p>
+      The <code>~/.bashrc</code> row surprises people, so here it is. Ubuntu's default
+      <code>.bashrc</code> returns immediately when the shell is not interactive, so a line appended
+      to it only affects <code>bash -i</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> echo 'export PATH=$HOME/.local/bin:$PATH' &gt;&gt; ~/.bashrc    <span class="c"># mytool lives there</span>
+<span class="p">#</span> bash -c mytool;  echo "exit=$?"
+<span class="o">bash: line 1: mytool: command not found
+exit=127</span>
+<span class="p">#</span> bash -lc mytool; echo "exit=$?"
+<span class="o">bash: line 1: mytool: command not found
+exit=<span class="hl">127</span></span>
+<span class="p">#</span> bash -ic mytool 2&gt;/dev/null; echo "exit=$?"
+<span class="o">mytool ok
+exit=0</span></code></pre>
+
+    <h3 id="fg-hangs">Hangs: a program waiting for a human</h3>
+    <p>
+      A command that asks a question and gets no answer waits until something kills it. The
+      transcript shows the prompt as the last line and 124 (or 137) as the status, with a duration
+      equal to the tool's limit. Which programs hang depends on whether the harness gives them a
+      <span class="term" data-g="tty">TTY</span>. Exec-per-call harnesses don't, and several programs
+      notice and behave differently:
+    </p>
+    <table>
+      <tr><th>Program</th><th>No TTY (exec-per-call), observed</th><th>With a TTY (tmux-style), observed</th><th>Make it non-interactive</th></tr>
+      <tr><td><code>apt-get install tzdata</code></td><td>Hangs at <code>Geographic area:</code> → 124 when stdin is held open (<a href="15-packages-reproducibility.html#tzdata">p15</a>)</td><td>Same prompt</td><td><code>DEBIAN_FRONTEND=noninteractive</code>; <code>-y</code> alone does not silence debconf<a class="cite" href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html" title="apt-get(8), Debian manpages: options -y and --no-install-recommends; debconf(7)">[apt-get(8)]</a></td></tr>
+      <tr><td><code>git commit</code> (no <code>-m</code>)</td><td><code>error: Terminal is dumb, but EDITOR unset</code>, exit 1</td><td>Opens an editor and waits</td><td><code>-m</code>; <code>GIT_EDITOR=true</code></td></tr>
+      <tr><td><code>git log</code>, <code>man</code></td><td>No <span class="term" data-g="pager">pager</span>: output printed in full</td><td>Pager waits for a key</td><td><code>GIT_PAGER=cat</code>, <code>PAGER=cat</code>, <code>git --no-pager</code></td></tr>
+      <tr><td><code>sudo true</code></td><td><code>sudo: a terminal is required to read the password</code>, exit 1</td><td><code>[sudo] password for agent:</code> — waits</td><td><code>sudo -n</code> (fail fast); better, no sudo in the sandbox</td></tr>
+      <tr><td><code>rm -i z</code></td><td>Prints the question, reads EOF, <em>silently keeps the file</em>, exit 0</td><td>Waits → 124</td><td>Don't use <code>-i</code>; <code>alias rm='rm -i'</code> in an image is a trap</td></tr>
+      <tr><td><code>ssh git@github.com</code></td><td><code>Host key verification failed.</code>, 255</td><td>Host-key question waits → 124</td><td><code>-o BatchMode=yes</code>; pre-seed <code>known_hosts</code></td></tr>
+    </table>
+    <p>
+      Two lessons in that table. First, a TTY is not neutral: the reference agent in Terminal-Bench,
+      Terminus 2, drives a real terminal through tmux precisely so the model can use interactive
+      programs — vim, pagers, arrow keys — and it therefore inherits every "waits for a key"
+      failure in the right-hand
+      column.<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Terminal-Bench paper and Harbor Terminus 2 source: tmux headless terminal">[Terminal-Bench]</a>
+      Second, the <code>rm -i</code> row is worse than a hang: it exits 0 and did nothing. Output
+      changes too: <code>ls</code> prints one name per line into a pipe but columns with colour
+      escape codes into a TTY, and progress bars either vanish or fill the output window.
+    </p>
+
+    <h3 id="fg-packages">Packages and Python</h3>
+    <table>
+      <tr><th>What you see</th><th>Mechanism</th><th>Usually</th><th>Fix</th></tr>
+      <tr><td><code>E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 132 (apt-get)</code>, 100</td><td>Two package operations at once; often the agent's own earlier call still running in the background after a tool timeout (<a href="15-packages-reproducibility.html">p15</a>)</td><td>Model, or a harness that leaves timed-out children alive (<a href="09-processes.html">p9</a>)</td><td>Wait for the other process; never delete the lock file</td></tr>
+      <tr><td><code>apt-get update</code> exits 0 with <code>W: … Temporary failure resolving</code>, then <code>E: Unable to locate package curl</code>, 100</td><td>No network; update only <em>warns</em>, the package lists stay empty, so install blames the name</td><td>Correct policy (<code>--network none</code>) misread as a typo</td><td>Read the update's warnings; decide whether the task should need the network</td></tr>
+      <tr><td><code>curl: (77) error setting certificate file: /etc/ssl/certs/ca-certificates.crt</code></td><td>Fresh image, <code>--no-install-recommends curl</code>: no CA bundle, so every HTTPS call fails<a class="cite" href="https://curl.se/docs/manpage.html" title="curl(1) exit codes; 77 = problem reading the SSL CA cert">[curl(1)]</a></td><td>Environment defect</td><td>Install <code>ca-certificates</code> in the image</td></tr>
+      <tr><td><code>error: externally-managed-environment</code>, 1</td><td>PEP 668 marker file on Ubuntu 24.04's system Python<a class="cite" href="https://peps.python.org/pep-0668/#marking-an-interpreter-as-using-an-external-package-manager" title="PEP 668 – Marking Python base environments as externally managed">[PEP 668]</a></td><td>Model fluency</td><td>A venv — which on Ubuntu needs <code>python3-venv</code>, or <code>python3 -m venv</code> fails with <code>ensurepip is not available</code></td></tr>
+    </table>
+
+    <h3 id="fg-resources">Resources, network, filesystem</h3>
+    <table>
+      <tr><th>What you see</th><th>Mechanism</th><th>Usually</th><th>Fix</th></tr>
+      <tr><td><code>Killed</code>, 137</td><td>SIGKILL: an <span class="term" data-g="oom-killer">OOM kill</span>, a timeout's KILL, a CPU rlimit (<a href="10-signals-exit-codes.html#one-thirty-seven">p10</a>). Not proof of OOM — and an OOM-killed child can leave the container exiting 0 with <code>OOMKilled=true</code></td><td>Depends on the counter</td><td>Read <code>memory.events</code> and <code>docker inspect</code>, not the number</td></tr>
+      <tr><td><code>bash: fork: retry: Resource temporarily unavailable</code> ×4, then fails</td><td><code>pids.max</code> reached (<a href="12-resources-and-limits.html#pids-and-fds">p12</a>)</td><td>Environment defect if the budget is too small for the task</td><td>Raise the limit; check <code>pids.events</code></td></tr>
+      <tr><td><code>No space left on device</code></td><td>Disk or tmpfs full (<a href="12-resources-and-limits.html#disk">p12</a>)</td><td>Environment, unless the agent filled it</td><td><code>df -h</code> on the path it wrote to</td></tr>
+      <tr><td><code>Read-only file system</code>; <code>docker cp</code> refused with <code>container rootfs is marked read-only</code></td><td>A <span class="term" data-g="read-only-mount">read-only mount</span> (<a href="14-mounts-and-filesystems.html">p14</a>)</td><td>Correct policy, unless the task needs to write there</td><td>Write to the writable volume; harnesses must copy files in via a writable path</td></tr>
+      <tr><td><code>curl: (6) Could not resolve host</code> / <code>(7) Failed to connect</code> / <code>(28) Connection timed out</code></td><td>DNS / nothing listening or refused / packets dropped (<a href="18-dns-http-tls.html">p18</a>)</td><td>Policy if egress is meant to be closed; else environment</td><td>The reachability probe (<a href="19-firewalls-and-egress.html">p19</a>)</td></tr>
+    </table>
+
+    <h3 id="fg-shell">The shell between calls</h3>
+    <p>
+      Under an exec-per-call harness every tool call is a new <code>bash -c</code>. Nothing that
+      lives in a shell survives to the next call: the working directory, exported variables,
+      an activated venv. The model sees success and assumes state:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker exec lt-27-box bash -c 'cd /tmp &amp;&amp; export FOO=1 &amp;&amp; pwd &amp;&amp; echo "FOO=$FOO"'
+<span class="o">/tmp
+FOO=1</span>
+<span class="p">$</span> docker exec lt-27-box bash -c 'pwd; echo "FOO=${FOO:-unset}"'
+<span class="o">/
+FOO=unset</span></code></pre>
+    <p>
+      Background processes are the opposite case: they <em>can</em> survive the call, but only
+      if they are launched right. A server started with <code>&amp; </code> and its output
+      redirected outlives a plain <code>docker exec</code> (re-parented to PID 1). The same server
+      dies when the call's <code>timeout</code> fires, because GNU <code>timeout</code> signals the
+      whole process group, or when a TTY session closes and sends SIGHUP (<a href="09-processes.html#job-control">p9</a>):
+    </p>
+<pre class="term"><code><span class="p">$</span> docker exec lt-27-box bash -c 'timeout 3 bash -c "python3 -m http.server 8003 &gt;/dev/null 2&gt;&amp;1 &amp; echo started; sleep 30"; echo "exit=$?"; curl -sS localhost:8003 -o /dev/null'
+<span class="o">started
+exit=124
+curl: (7) Failed to connect to localhost port 8003 after 0 ms: Couldn't connect to server</span></code></pre>
+    <p>
+      Finally, files written by <span class="term" data-g="here-document">here-document</span>. A
+      model that writes code with an unquoted <code>&lt;&lt;EOF</code> hands every <code>$</code>
+      in that code to the shell first. <code>$0</code> became <code>bash</code>, <code>$HOME</code>
+      became <code>/root</code>, and <code>\$5</code> lost its backslash; quoting the delimiter,
+      <code>&lt;&lt;'EOF'</code>, writes the text verbatim
+      (<a href="04-streams-pipes-redirection.html#here-docs">p4</a>):
+    </p>
+<pre class="term"><code><span class="p">#</span> cat &gt; fix.py &lt;&lt;EOF
+print(f"usage: $0 FILE -&gt; {len(words)} words, cost \$5, home $HOME")
+EOF
+<span class="p">#</span> cat fix.py
+<span class="o">print(f"usage: <span class="hl">bash</span> FILE -&gt; {len(words)} words, cost $5, home <span class="hl">/root</span>")</span></code></pre>
+    <p>
+      Two more quiet ones. GNU <code>grep -E '\d+'</code> does not mean "digits": ERE has no
+      <code>\d</code>, and <code>printf 'run 12\nrun d\n' | grep -E 'run \d+'</code> prints
+      <code>run d</code> and exits 0 — use <code>[0-9]</code> or <code>grep -P</code>
+      (<a href="../appendices/d-regex.html">Appendix D</a>). And a container's clock is UTC unless
+      told otherwise, with <code>LANG</code> unset: a task that checks a date or sorts text can
+      disagree with the author's laptop.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — reading the model's narration instead of the output</span>
+      <p>Models summarise their own tool results ("tests pass now") and the summary is sometimes
+      wrong: a status of 0 from <code>cmd | tail</code> is <code>tail</code>'s
+      (<a href="04-streams-pipes-redirection.html#pipefail">p4</a>), <code>rm -i</code> exits 0 having
+      deleted nothing, and <code>apt-get update</code> exits 0 offline. Code the <em>tool
+      results</em>, not the assistant turns.</p>
+    </div>
+
+    <h2 id="triage">The triage procedure</h2>
+    <p>
+      Given a failed rollout, work outward from the last call, and write down which statements are
+      <em>observed</em> and which are <em>hypotheses</em>:
+    </p>
+    <ol>
+      <li><strong>Exit status</strong> of the last failing call, decoded (<a href="10-signals-exit-codes.html#decoder">p10</a>, <a href="../appendices/b-exit-codes-signals.html">Appendix B</a>). 124/137/143 mean the run was cut; 126/127 mean the command never ran.</li>
+      <li><strong>The last lines of stderr</strong> — and whether you are seeing the whole output or a truncated tail.</li>
+      <li><strong>Duration vs the limit.</strong> A call that took exactly the tool timeout was waiting or throttled; a 137 after two seconds was not a timeout.</li>
+      <li><strong>Environment counters</strong>, from outside the transcript: <code>memory.events</code>, <code>pids.events</code>, <code>df</code>, <code>docker inspect … State</code>.</li>
+      <li><strong>Reproduce</strong>: <code>docker exec -u &lt;same user&gt; -w &lt;same dir&gt;</code> the same argv, with no TTY, in a fresh copy of the same image. If it fails the same way for you, it is not the model's doing.</li>
+    </ol>
+    <div class="evals">
+      <span class="label">In eval work — navigate</span>
+      <p><strong>Step 5 is what turns a story into evidence.</strong> "The agent couldn't install
+      pytest" is a hypothesis about the model; "<code>pip</code> is absent from the image, and
+      <code>pip install</code> from a fresh container as uid 1001 also exits 127" is an observation
+      about the environment. Anthropic's rule is not to take scores at face value "until someone
+      digs into the details of the eval and reads some
+      transcripts";<a class="cite" href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" title="Anthropic Engineering, Demystifying evals for AI agents, 9 Jan 2026">[Anthropic: Agent Evals]</a>
+      reading them with this procedure is how you find the task that fails for every model for the
+      same Linux reason — a broken task, not a hard one. The sibling course covers
+      <a href="../../../evals/evals-tut/pages/04-error-analysis.html">error analysis</a> in general.</p>
+    </div>
+
+    <h2 id="coding-scheme">A coding scheme, and failure accounting</h2>
+    <p>
+      Error analysis needs categories fixed in advance. For terminal rollouts, five cover almost
+      everything this page has shown:
+    </p>
+    <table>
+      <tr><th>Code</th><th>Meaning</th><th>Example from the field guide</th><th>Counts against</th></tr>
+      <tr><td><strong>MC</strong> model-capability</td><td>The model didn't know how to solve the task</td><td>Wrong algorithm, tests fail with status 1</td><td>The model</td></tr>
+      <tr><td><strong>MF</strong> model-Linux-fluency</td><td>The model knew the fix but fumbled the box</td><td>Unquoted heredoc, <code>pytest</code> when the README says <code>unittest</code>, state assumed across calls</td><td>The model — but report separately</td></tr>
+      <tr><td><strong>ED</strong> environment-defect</td><td>The box made a valid approach fail</td><td>No CA bundle, <code>pids.max</code> of 3, missing tool the task promised</td><td>The benchmark</td></tr>
+      <tr><td><strong>HD</strong> harness-defect</td><td>The harness lost or mangled the run</td><td>Truncated output, killed background children, container exit code recorded as the rollout's</td><td>The benchmark</td></tr>
+      <tr><td><strong>IV</strong> integrity-violation</td><td>The "pass" didn't come from doing the task</td><td>Fix copied from git history (<a href="26-environment-integrity.html">p26</a>)</td><td>Neither: it's a hole to close and a rate to report</td></tr>
+    </table>
+    <p>
+      MF and ED must be separated before any score is reported, because they look the same in a
+      transcript — a command fails — and they move in opposite directions when you fix the
+      environment. Terminal-Bench 2.1 is the worked case: fixing 28 of 89 tasks (changed external
+      dependencies, resource budgets too small for a valid solution, a misspecified test) moved one
+      agent from 58.0% to 70.1% with no model
+      change.<a class="cite" href="https://www.tbench.ai/news/terminal-bench-2-1" title="Terminal-Bench 2.1 release post, 6 May 2026 (Claude Code + Claude Opus 4.6)">[Terminal-Bench]</a>
+      On resources alone, Anthropic measured Terminal-Bench 2.0's infrastructure error rate falling
+      from 5.8% under strict limits to 0.5% uncapped, and concluded that leaderboard gaps under 3
+      points "deserve skepticism until the eval configuration is documented and
+      matched."<a class="cite" href="https://www.anthropic.com/engineering/infrastructure-noise" title="Anthropic Engineering, Quantifying infrastructure noise in agentic coding evals, 5 Feb 2026">[Anthropic: Infra Noise]</a>
+    </p>
+    <p>
+      Then account for every rollout. Each scheduled rollout ends in exactly one recorded outcome —
+      passed, failed (MC/MF), or not completed (ED/HD, timeouts, kills) — and none is dropped. An
+      invented run of 100 rollouts, 80 on easy tasks and 20 on hard ones, where infrastructure
+      failures hit hard tasks harder (they run longer and use more memory):
+    </p>
+    <table>
+      <tr><th></th><th>Scheduled</th><th>Not completed (infra)</th><th>Completed</th><th>Correct</th></tr>
+      <tr><td>Easy tasks</td><td>80</td><td>4</td><td>76</td><td>60</td></tr>
+      <tr><td>Hard tasks</td><td>20</td><td>8</td><td>12</td><td>3</td></tr>
+      <tr><td><strong>Total</strong></td><td>100</td><td>12</td><td>88</td><td>63</td></tr>
+    </table>
+    <p>
+      Reported three ways: <code>correct/scheduled</code> = 63/100 = 0.63;
+      <code>correct/completed</code> = 63/88 ≈ 0.72; <code>completed/scheduled</code> = 0.88. The
+      middle number is the tempting one, and it is biased: the rollouts that fell out were
+      disproportionately hard ones, so the completed set is easier than the benchmark. Hard tasks
+      are 20% of what was scheduled but only 14% (12/88) of what completed. A runner that "drops
+      infrastructure errors" has silently changed the task mix. Publish all three, with counts per
+      category, and pick the primary metric before looking (page 10's
+      <a href="10-signals-exit-codes.html#failure-accounting">account.py</a> does the arithmetic for
+      a <code>results.jsonl</code>).
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — design and measure</span>
+      <p><strong>Put the code in the rollout record.</strong> Add a <code>failure_code</code> field
+      (MC/MF/ED/HD/IV/none) beside <code>exit_code</code>, <code>oom_killed</code>,
+      <code>timed_out</code> and <code>duration_s</code>. Code ED and HD first, from counters and
+      reproduction, because they can be decided mechanically; then fix those tasks and re-run
+      before arguing about MC vs MF. A model that loses 10 points to MF on your benchmark and 2 on
+      another is telling you something real about terminal fluency — but only once ED is out of
+      the numerator.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>The codes are judgments. Is <code>pytest: command not found</code> MF or ED? It depends on
+      what the task promised — which is why the scheme needs written rules ("a tool the task
+      instructions name is the environment's responsibility") and a second coder on a sample, not
+      a feeling per transcript.</p>
+    </div>
+
+    <h2 id="practice">Practice: three transcripts</h2>
+    <p>
+      Each transcript is constructed for wordfreq-bench, but every command's output is real, run
+      against the course's images. Classify each with the scheme, and say what evidence you would
+      add before recording it.
+    </p>
+    <div class="card">
+      <p><strong>Transcript A</strong> — hardened sandbox (<code>run-hardened.sh</code>), task README says <em>Run the visible tests with <code>PYTHONPATH=. python3 -m unittest discover -s tests</code></em>.</p>
+<pre class="term"><code><span class="p">$</span> cd /app &amp;&amp; pytest
+<span class="o">bash: line 1: pytest: command not found</span>           <span class="c"># exit 127</span>
+<span class="p">$</span> pip install pytest
+<span class="o">bash: line 1: pip: command not found</span>              <span class="c"># exit 127</span>
+<span class="p">$</span> cd /app &amp;&amp; python3 -m pytest
+<span class="o">/usr/bin/python3: No module named pytest</span>          <span class="c"># exit 1</span>
+<span class="c">[model: "The environment is broken; I cannot run tests." Ends turn.]</span></code></pre>
+      <details class="solution"><summary>Classification</summary>
+        <p><strong>MF</strong>, model-Linux-fluency. The environment matched its promise: the README
+        names <code>unittest</code>, and running that exact command in the same sandbox prints
+        <code>Ran 1 test … OK</code> with exit 0. Three calls hit the most common failure
+        Terminal-Bench found (not installed / not on PATH), and the model's "environment is broken"
+        is narration, not evidence. Record it as a fail, coded MF. Had the README said "run
+        pytest", the same transcript would be ED.</p>
+      </details>
+    </div>
+    <div class="card">
+      <p><strong>Transcript B</strong> — a sandbox from a colleague's new launcher. First call, 15 s:</p>
+<pre class="term"><code><span class="p">$</span> cd /app &amp;&amp; python3 -m unittest discover -s tests 2&gt;&amp;1 | tail -3
+<span class="o">bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: Resource temporarily unavailable</span>          <span class="c"># exit 254</span>
+<span class="p">$</span> ls /app | wc -l
+<span class="o">bash: fork: retry: Resource temporarily unavailable
+…</span>                                                   <span class="c"># exit 254</span></code></pre>
+      <details class="solution"><summary>Classification</summary>
+        <p><strong>ED</strong>, environment-defect. <code>fork</code> failing with EAGAIN on a
+        trivial pipeline is the pids limit (<a href="12-resources-and-limits.html">page 12</a>).
+        Discriminating evidence, from outside: <code>docker inspect --format
+        '{{.HostConfig.PidsLimit}}'</code> printed <code>3</code>, and in the container
+        <code>pids.max</code> is 3 and <code>pids.events</code> reads <code>max 10</code>. The agent
+        never had a chance. Record as not-completed, infrastructure; fix the launcher; re-run every
+        rollout it started — they share the cause, so they are not independent failures.</p>
+      </details>
+    </div>
+    <div class="card">
+      <p><strong>Transcript C</strong> — sloppy build (<code>wordfreq-bench:sloppy</code>). Final tests pass.</p>
+<pre class="term"><code><span class="p">#</span> git log --all --oneline | head -5
+<span class="o">bb4b24a wordfreq: initial import
+6301071 count words case-insensitively, ignore punctuation (fixes #12)</span>
+<span class="p">#</span> git show upstream-fix:wordfreq.py &gt; wordfreq.py &amp;&amp; git status --short
+<span class="o"> M wordfreq.py</span>
+<span class="p">#</span> python3 -m unittest discover -s tests 2&gt;&amp;1 | tail -3
+<span class="o">Ran 1 test in 0.001s
+
+OK</span></code></pre>
+      <details class="solution"><summary>Classification</summary>
+        <p><strong>IV</strong>, integrity-violation — and an environment bug, not a model skill.
+        The pass came from the fix commit shipped in the image's git history
+        (<a href="26-environment-integrity.html#git-history">page 26</a>). Record it as a pass the
+        grader gave <em>and</em> flag it; report the cheat rate beside the pass rate; close the
+        surface (export the tree without <code>.git</code>) and re-run. Whether it is "cheating"
+        depends on the instructions; that it measures nothing about fixing the bug does not.</p>
+      </details>
+    </div>
+
+    <div class="check"><span class="label">Check your understanding</span>
+      <p>
+        On your benchmark, model X fails 14 of 200 rollouts with exit 124 on the agent's
+        <code>apt-get install</code>; model Y has none, because it always passes
+        <code>DEBIAN_FRONTEND=noninteractive</code>. A colleague proposes removing those 14 rollouts
+        as "infrastructure noise" and comparing <code>correct/completed</code>. What do you say?
+      </p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>
+          <strong>Observed:</strong> 14 timeouts, all at an <code>apt-get install</code>, only for X.
+          <strong>Hypothesis to test:</strong> they are the tzdata (or another debconf) prompt.
+          Discriminate by reading the last stdout lines (<code>Geographic area:</code>?) and
+          reproducing the exact argv in a fresh container without a TTY. If confirmed, this is not
+          infrastructure noise: the same environment let Y succeed, so it is
+          <strong>MF</strong> — a real difference in Linux fluency — and dropping the rollouts would
+          erase exactly the difference being measured, and bias X's conditional score upward if
+          those tasks are harder. Keep them as failures coded MF, report all three ratios, and
+          separately decide whether the benchmark <em>wants</em> to measure debconf fluency — if not,
+          set <code>DEBIAN_FRONTEND</code> in the image (an ED fix) and re-run both models.
+        </p>
+      </details>
+    </div>
+
+    <div class="lab"><span class="label">Lab</span>
+      <p>Container lab. Setup: <code>docker run -d --name lt-27-lab ubuntu:24.04 sleep 3600</code>. Remove it at the end with <code>docker rm -f lt-27-lab</code>.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Show that working directory and exports don't survive between two <code>docker exec</code> calls.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec lt-27-lab bash -c 'cd /tmp &amp;&amp; export FOO=1 &amp;&amp; pwd'
+<span class="o">/tmp</span>
+<span class="p">$</span> docker exec lt-27-lab bash -c 'pwd; echo "FOO=${FOO:-unset}"'
+<span class="o">/
+FOO=unset</span></code></pre>
+          <p>Each exec is a new process with the container's default cwd and environment.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Without a network, what do <code>apt-get update</code> and then <code>apt-get install -y curl</code> exit with? Write both numbers down first. Run: <code>docker run --rm --network none ubuntu:24.04 bash -c 'apt-get update &gt;/dev/null 2&gt;&amp;1; echo "update=$?"; apt-get install -y curl 2&gt;&amp;1 | tail -1; echo "install=${PIPESTATUS[0]}"'</code>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="o">update=0
+E: Unable to locate package curl
+install=100</span></code></pre>
+          <p>The update only warns about failed fetches; the error surfaces one step later with a misleading message.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> What does <code>printf 'run 12\nrun d\n' | grep -E 'run \d+'</code> print in the container? Then fix the pattern.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec lt-27-lab bash -c "printf 'run 12\nrun d\n' | grep -E 'run \d+'"
+<span class="o">run d</span>
+<span class="p">$</span> docker exec lt-27-lab bash -c "printf 'run 12\nrun d\n' | grep -E 'run [0-9]+'"
+<span class="o">run 12</span></code></pre>
+          </details></li>
+        <li><strong>Hangs vs no TTY.</strong> Run <code>docker exec lt-27-lab bash -c 'touch /tmp/z; rm -i /tmp/z; echo "exit=$?"; ls /tmp/z'</code>. Did anything hang? Was the file removed? What would a transcript-reader conclude from the exit status alone?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="o">rm: remove regular empty file '/tmp/z'? exit=0
+/tmp/z</span></code></pre>
+          <p>No hang: with no TTY, <code>rm</code> read end-of-file as "no". Exit 0 and the file is still there — the status alone says success.</p>
+          </details></li>
+        <li><strong>Eval task.</strong> A harness reports a rollout's final call <code>curl -sS https://pypi.org/simple/ -o /dev/null</code> failed with 77 in a sandbox built <code>FROM ubuntu:24.04</code> plus <code>apt-get install -y --no-install-recommends curl</code>. Code it MF or ED, and prove it by reproduction.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 bash -c 'apt-get update -qq &amp;&amp; apt-get install -y -qq --no-install-recommends curl &gt;/dev/null 2&gt;&amp;1; curl -sS https://example.com -o /dev/null; echo "exit=$?"'
+<span class="o">curl: (77) error setting certificate file: /etc/ssl/certs/ca-certificates.crt
+exit=77</span></code></pre>
+          <p>ED: the image has no CA bundle, so every HTTPS call fails for every model. Fix: add <code>ca-certificates</code> to the image and re-run.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Merrill, Shaw, Carlini et al., "Terminal-Bench: Benchmarking Agents on Hard, Realistic Tasks in Command Line Interfaces", arXiv:2601.11868 (Jan 2026), §4.5 and Terminus 2 description. <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a></li>
+        <li>Terminal-Bench 2.1 release post, 6 May 2026. <a href="https://www.tbench.ai/news/terminal-bench-2-1">tbench.ai/news/terminal-bench-2-1</a></li>
+        <li>Segato (Anthropic), "Quantifying infrastructure noise in agentic coding evals", 5 Feb 2026. <a href="https://www.anthropic.com/engineering/infrastructure-noise">anthropic.com/engineering/infrastructure-noise</a></li>
+        <li>Anthropic, "Demystifying evals for AI agents", 9 Jan 2026. <a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents">anthropic.com/engineering/demystifying-evals-for-ai-agents</a></li>
+        <li>Inspect AI docs, Sandboxing: Sandbox Limits. <a href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits">inspect.aisi.org.uk/sandboxing.html</a></li>
+        <li>apt-get(8) and debconf(7), Debian bookworm manpages. <a href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html">manpages.debian.org/…/apt-get.8.en.html</a></li>
+        <li>curl(1) man page, exit codes. <a href="https://curl.se/docs/manpage.html">curl.se/docs/manpage.html</a></li>
+        <li>PEP 668 – Marking Python base environments as "externally managed". <a href="https://peps.python.org/pep-0668/">peps.python.org/pep-0668</a></li>
+        <li>Executed material: <code>research/verify/27-reading-terminal-transcripts.txt</code> (ubuntu:24.04, alpine:3.20, wordfreq-bench images); the tzdata hang is page 15's recorded run in <code>research/verify/15-packages-reproducibility.txt</code>.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

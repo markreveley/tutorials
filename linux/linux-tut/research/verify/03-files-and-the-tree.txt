@@ -1,0 +1,389 @@
+### page 03 verify — 2026-09-21
+## session A0: one-shot root listings (run from HOST)
+mac$ docker run --rm ubuntu:24.04 ls -l /
+total 48
+lrwxrwxrwx   1 root root    7 Apr 22  2024 bin -> usr/bin
+drwxr-xr-x   2 root root 4096 Apr 22  2024 boot
+drwxr-xr-x   5 root root  340 Sep 21 16:14 dev
+drwxr-xr-x   1 root root 4096 Sep 21 16:14 etc
+drwxr-xr-x   3 root root 4096 Sep 11 02:12 home
+lrwxrwxrwx   1 root root    7 Apr 22  2024 lib -> usr/lib
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 media
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 mnt
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 opt
+dr-xr-xr-x 280 root root    0 Sep 21 16:14 proc
+drwx------   2 root root 4096 Sep 11 02:12 root
+drwxr-xr-x   4 root root 4096 Sep 11 02:12 run
+lrwxrwxrwx   1 root root    8 Apr 22  2024 sbin -> usr/sbin
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 srv
+dr-xr-xr-x  11 root root    0 Sep 21 10:54 sys
+drwxrwxrwt   2 root root 4096 Sep 11 02:12 tmp
+drwxr-xr-x  11 root root 4096 Sep 11 02:06 usr
+drwxr-xr-x  11 root root 4096 Sep 11 02:12 var
+[exit status 0]
+mac$ docker run --rm debian:bookworm-slim ls -ld /bin /sbin /lib
+lrwxrwxrwx 1 root root 7 Sep 18 00:00 /bin -> usr/bin
+lrwxrwxrwx 1 root root 7 Sep 18 00:00 /lib -> usr/lib
+lrwxrwxrwx 1 root root 8 Sep 18 00:00 /sbin -> usr/sbin
+[exit status 0]
+mac$ docker run --rm alpine:3.20 ls -ld /bin /sbin /lib
+drwxr-xr-x    2 root     root          4096 Apr 15 16:14 /bin
+drwxr-xr-x    6 root     root          4096 Apr 15 16:14 /lib
+drwxr-xr-x    2 root     root          4096 Apr 15 16:14 /sbin
+[exit status 0]
+mac$ docker run --rm ubuntu:24.04 bash -c 'ls -ld /tmp /var/tmp /run /var/run; ls /var/log; ls -l /dev/null /dev/zero; ls /proc | head -5; cat /proc/uptime; ls -l /proc/version; cat /proc/version; ls /sys'
+drwxr-xr-x 4 root root 4096 Sep 11 02:12 /run
+drwxrwxrwt 2 root root 4096 Sep 11 02:12 /tmp
+lrwxrwxrwx 1 root root    4 Sep 11 02:06 /var/run -> /run
+drwxrwxrwt 2 root root 4096 Sep 11 02:12 /var/tmp
+alternatives.log
+apt
+bootstrap.log
+btmp
+dpkg.log
+faillog
+lastlog
+wtmp
+crw-rw-rw- 1 root root 1, 3 Sep 21 16:14 /dev/null
+crw-rw-rw- 1 root root 1, 5 Sep 21 16:14 /dev/zero
+1
+10
+11
+buddyinfo
+bus
+16679.66 165944.20
+-r--r--r-- 1 root root 0 Sep 21 16:14 /proc/version
+Linux version 6.10.14-linuxkit (root@buildkitsandbox) (gcc (Alpine 13.2.1_git20240309) 13.2.1 20240309, GNU ld (GNU Binutils) 2.42) #1 SMP Tue Apr 15 16:00:54 UTC 2025
+block
+bus
+class
+dev
+devices
+firmware
+fs
+kernel
+module
+[exit status 0]
+
+## session D: agent footprint with find, wordfreq-bench:sloppy (root, real pty)
+# touch /tmp/marker
+# cd /app
+# sed -i 's/text.split()/text.lower().split()/' wordfreq.py
+# python3 -c 'print(42)' > /tmp/scratch.txt
+# echo 'alias pytest=true' >> /root/.bashrc
+# printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/pytest
+# chmod +x /usr/local/bin/pytest
+# cp /opt/grader/expected.json /var/tmp/.cache.json
+# find / -xdev -newer /tmp/marker -type f
+/var/tmp/.cache.json
+/root/.bashrc
+/tmp/scratch.txt
+/usr/local/bin/pytest
+/app/wordfreq.py
+# find / -xdev -newer /tmp/marker -type f -not -path '/app/*' -not -path '/tmp/*'
+/var/tmp/.cache.json
+/root/.bashrc
+/usr/local/bin/pytest
+# find / -newer /tmp/marker -type f 2>/dev/null | wc -l
+16233
+# find /app -name '*.py'
+/app/tests/test_basic.py
+/app/wordfreq.py
+# find /app -name '*.py' -not -path '*/.git/*' -newer /tmp/marker
+/app/wordfreq.py
+# find /app -maxdepth 1 -type d
+/app
+/app/tests
+/app/data
+/app/.git
+# find /opt /app -name '*expected*'
+/opt/grader/expected.json
+# find / -xdev -type f -perm -o+w 2>/dev/null | head -5
+# find /opt/grader -type f -perm -o+r
+/opt/grader/expected.json
+/opt/grader/test_hidden.py
+/opt/grader/run-tests.sh
+# find / -xdev -user root -name '.*' -type f -newer /tmp/marker
+/var/tmp/.cache.json
+/root/.bashrc
+# find /var/log -type f -mtime -1
+/var/log/apt/history.log
+/var/log/apt/eipp.log.xz
+/var/log/apt/term.log
+/var/log/dpkg.log
+# find /var/log -type f -mmin -5
+
+## session E: backdating + symlink grading hazard, wordfreq-bench:sloppy (root, real pty; same container as D)
+# touch -d '2024-01-01' /usr/local/bin/pytest
+# find / -xdev -newer /tmp/marker -type f
+/var/tmp/.cache.json
+/root/.bashrc
+/root/.bash_history
+/tmp/scratch.txt
+/app/wordfreq.py
+# find / -xdev -cnewer /tmp/marker -type f
+/var/tmp/.cache.json
+/root/.bashrc
+/root/.bash_history
+/tmp/scratch.txt
+/usr/local/bin/pytest
+/app/wordfreq.py
+# stat /usr/local/bin/pytest
+  File: /usr/local/bin/pytest
+  Size: 17        	Blocks: 8          IO Block: 4096   regular file
+Device: 0,85	Inode: 33645813    Links: 1
+Access: (0755/-rwxr-xr-x)  Uid: (    0/    root)   Gid: (    0/    root)
+Access: 2024-01-01 00:00:00.000000000 +0000
+Modify: 2024-01-01 00:00:00.000000000 +0000
+Change: 2026-09-21 16:16:28.602563008 +0000
+ Birth: 2026-09-21 16:16:00.067361009 +0000
+# ln -s /opt/grader/expected.json /app/answer.json
+# ls -l /app/answer.json
+lrwxrwxrwx 1 root root 25 Sep 21 16:16 /app/answer.json -> /opt/grader/expected.json
+# cmp /app/answer.json /opt/grader/expected.json && echo PASS
+PASS
+# [ -f /app/answer.json ] && echo "is a regular file?"
+is a regular file?
+# [ -L /app/answer.json ] && echo "is a symlink"
+is a symlink
+# stat -c '%F' /app/answer.json
+symbolic link
+# stat -L -c '%F' /app/answer.json
+regular file
+# readlink -f /app/answer.json
+/opt/grader/expected.json
+# find /app -type l
+/app/answer.json
+
+mac$ docker diff lt-03-sloppy
+C /app
+C /app/wordfreq.py
+A /app/answer.json
+C /tmp
+A /tmp/scratch.txt
+A /tmp/marker
+C /usr
+C /usr/local
+C /usr/local/bin
+A /usr/local/bin/pytest
+C /var
+C /var/tmp
+A /var/tmp/.cache.json
+C /root
+A /root/.bash_history
+C /root/.bashrc
+
+## session B: paths and core commands (learner, real pty, ubuntu:24.04 + tree file)
+$ pwd
+/home/learner
+$ cd /var/log
+$ pwd
+/var/log
+$ ls
+alternatives.log  apt  bootstrap.log  btmp  dpkg.log  faillog  lastlog  wtmp
+$ cd ../../etc
+$ pwd
+/etc
+$ cd ~
+$ pwd
+/home/learner
+$ cd -
+/etc
+$ ls /nope/../etc/hostname
+ls: cannot access '/nope/../etc/hostname': No such file or directory
+$ cd ~
+$ mkdir -p work/app/tests
+$ cd work
+$ echo 'print("hello")' > app/wordfreq.py
+$ touch app/tests/test_basic.py
+$ cp -r app app-backup
+$ mv app-backup app-v1
+$ tree
+.
+|-- app
+|   |-- tests
+|   |   `-- test_basic.py
+|   `-- wordfreq.py
+`-- app-v1
+    |-- tests
+    |   `-- test_basic.py
+    `-- wordfreq.py
+
+5 directories, 4 files
+$ ls -la app
+total 16
+drwxr-xr-x 3 learner learner 4096 Sep 21 16:20 .
+drwxr-xr-x 4 learner learner 4096 Sep 21 16:20 ..
+drwxr-xr-x 2 learner learner 4096 Sep 21 16:20 tests
+-rw-r--r-- 1 learner learner   15 Sep 21 16:20 wordfreq.py
+$ cat app/wordfreq.py
+print("hello")
+$ file app/wordfreq.py app /bin/ls /bin /dev/null
+app/wordfreq.py: ASCII text
+app:             directory
+/bin/ls:         ELF 64-bit LSB pie executable, ARM aarch64, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-aarch64.so.1, BuildID[sha1]=00a639537eef557c0dcb20ad52892bc84863ed94, for GNU/Linux 3.7.0, stripped
+/bin:            symbolic link to usr/bin
+/dev/null:       character special (1/3)
+$ stat app/wordfreq.py
+  File: app/wordfreq.py
+  Size: 15        	Blocks: 8          IO Block: 4096   regular file
+Device: 0,98	Inode: 33645168    Links: 1
+Access: (0644/-rw-r--r--)  Uid: ( 1001/ learner)   Gid: ( 1001/ learner)
+Access: 2026-09-21 16:20:47.594001003 +0000
+Modify: 2026-09-21 16:20:47.580001003 +0000
+Change: 2026-09-21 16:20:47.580001003 +0000
+ Birth: 2026-09-21 16:20:47.580001003 +0000
+$ rmdir app-v1
+rmdir: failed to remove 'app-v1': Directory not empty
+$ rm -r app-v1
+$ ls
+app
+$ ls ~
+work
+$ ls -a ~
+.  ..  .bash_logout  .bashrc  .profile  work
+
+## session C: inodes, links, deleted-but-open (learner)
+$ cd ~/work
+$ echo 'the answer' > orig.txt
+$ ln orig.txt hard.txt
+$ ln -s orig.txt soft.txt
+$ ls -li orig.txt hard.txt soft.txt
+33645369 -rw-r--r-- 2 learner learner 11 Sep 21 16:20 hard.txt
+33645369 -rw-r--r-- 2 learner learner 11 Sep 21 16:20 orig.txt
+33645375 lrwxrwxrwx 1 learner learner  8 Sep 21 16:20 soft.txt -> orig.txt
+$ rm orig.txt
+$ cat hard.txt
+the answer
+$ cat soft.txt
+cat: soft.txt: No such file or directory
+$ ls -l soft.txt
+lrwxrwxrwx 1 learner learner 8 Sep 21 16:20 soft.txt -> orig.txt
+$ stat -c '%h links, inode %i, %F' hard.txt
+1 links, inode 33645369, regular file
+$ ln hard.txt /dev/shm/x
+ln: failed to create hard link '/dev/shm/x' => 'hard.txt': Invalid cross-device link
+$ head -c 20000000 /dev/zero > big.log
+$ du -sh .
+20M	.
+$ sleep 300 < big.log &
+[1] 297
+$ rm big.log
+$ ls
+app  hard.txt  soft.txt
+$ du -sh .
+20K	.
+$ ls -l /proc/$!/fd/0
+lr-x------ 1 learner learner 64 Sep 21 16:20 /proc/297/fd/0 -> '/home/learner/work/big.log (deleted)'
+$ kill $!
+
+## session F: lab solutions 1-3 (learner)
+$ cd /usr/share/doc
+$ cd ../../../var/log
+$ pwd
+/var/log
+$ cd ~/work
+$ mkdir d; echo one > d/f; ln d/f g
+$ ls -li d/f g
+33645713 -rw-r--r-- 2 learner learner 4 Sep 21 16:21 d/f
+33645713 -rw-r--r-- 2 learner learner 4 Sep 21 16:21 g
+$ mv d/f d/h
+$ echo two >> g
+$ cat d/h
+one
+two
+$ stat -c '%h' g
+2
+$ find /etc -type f -mmin -60
+/etc/hosts
+/etc/gshadow
+/etc/ld.so.cache
+/etc/group
+/etc/passwd
+/etc/subgid
+/etc/shadow
+/etc/resolv.conf
+/etc/subuid
+/etc/hostname
+$ find /usr -xdev -type f -size +5M
+/usr/lib/file/magic.mgc
+$ find / -maxdepth 1 -type l
+/lib
+/sbin
+/bin
+
+## session G: lab solutions 4-5 (root)
+# touch /tmp/marker; sleep 1
+# bash -c 'echo hi >> /etc/motd; mkdir -p /opt/.cache; echo k > /opt/.cache/key; touch -d 2024-01-01 /opt/.cache/key; ln -sf /etc/passwd /tmp/result.txt'
+# find / -xdev -newer /tmp/marker -type f
+/etc/motd
+# find / -xdev -cnewer /tmp/marker -not -type d
+/etc/motd
+/tmp/result.txt
+/opt/.cache/key
+# find / -xdev -cnewer /tmp/marker -type l -exec ls -l {} +
+lrwxrwxrwx 1 root root 11 Sep 21 16:21 /tmp/result.txt -> /etc/passwd
+# echo '{"ok": 1}' > /tmp/expected.json; cp /tmp/expected.json /tmp/good.json; ln -s /tmp/expected.json /tmp/sneaky.json; mkdir /tmp/adir
+# check-output.sh /tmp/good.json /tmp/expected.json; echo "status $?"
+PASS
+status 0
+# check-output.sh /tmp/sneaky.json /tmp/expected.json; echo "status $?"
+FAIL: /tmp/sneaky.json is a symlink to /tmp/expected.json
+status 1
+# check-output.sh /tmp/adir /tmp/expected.json; echo "status $?"
+FAIL: /tmp/adir is not a regular file
+status 1
+# check-output.sh /tmp/missing.json /tmp/expected.json; echo "status $?"
+FAIL: /tmp/missing.json is not a regular file
+status 1
+
+## check-output.sh (shellcheck clean)
+#!/bin/bash
+# check-output.sh OUTPUT EXPECTED -- compare, but only if OUTPUT is a real regular file
+out=$1 expected=$2
+if [ -L "$out" ]; then
+  echo "FAIL: $out is a symlink to $(readlink -f "$out")"; exit 1
+fi
+if [ ! -f "$out" ]; then
+  echo "FAIL: $out is not a regular file"; exit 1
+fi
+cmp -s "$out" "$expected" && echo PASS || { echo "FAIL: wrong content"; exit 1; }
+
+## check-output.sh v2 (if/else; shellcheck clean) re-run as root
+#!/bin/bash
+# check-output.sh OUTPUT EXPECTED -- compare, but only if OUTPUT is a real regular file
+out=$1 expected=$2
+if [ -L "$out" ]; then
+  echo "FAIL: $out is a symlink to $(readlink -f "$out")"; exit 1
+fi
+if [ ! -f "$out" ]; then
+  echo "FAIL: $out is not a regular file"; exit 1
+fi
+if cmp -s "$out" "$expected"; then
+  echo PASS
+else
+  echo "FAIL: wrong content"; exit 1
+fi
+# check-output.sh /tmp/good.json /tmp/expected.json; echo "status $?"
+PASS
+status 0
+# check-output.sh /tmp/sneaky.json /tmp/expected.json; echo "status $?"
+FAIL: /tmp/sneaky.json is a symlink to /tmp/expected.json
+status 1
+# check-output.sh /tmp/adir /tmp/expected.json; echo "status $?"
+FAIL: /tmp/adir is not a regular file
+status 1
+# check-output.sh /tmp/missing.json /tmp/expected.json; echo "status $?"
+FAIL: /tmp/missing.json is not a regular file
+status 1
+# check-output.sh /tmp/wrong.json /tmp/expected.json; echo "status $?"
+FAIL: wrong content
+status 1
+
+## session E2: pitfall exactly as shown (fresh wordfreq-bench:sloppy, root)
+# find / -xdev -newer /tmp/marker -type f | grep pytest
+/usr/local/bin/pytest
+# touch -d 2024-01-01 /usr/local/bin/pytest
+# find / -xdev -newer /tmp/marker -type f | grep pytest
+# find / -xdev -cnewer /tmp/marker -type f | grep pytest
+/usr/local/bin/pytest

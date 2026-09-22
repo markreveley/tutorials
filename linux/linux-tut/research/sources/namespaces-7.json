@@ -1,0 +1,272 @@
+{
+ "id": "namespaces-7",
+ "tag": "[namespaces(7)]",
+ "citation": {
+  "authors": "Linux man-pages project (Michael Kerrisk et al.); util-linux project",
+  "title": "namespaces(7) — overview of Linux namespaces (with pid_, network_, mount_, user_, uts_, ipc_, cgroup_, time_namespaces(7); unshare(1), nsenter(1), lsns(8))",
+  "venue": "Linux man-pages 6.19 / util-linux 2.43-devel, man7.org rendering",
+  "year": "2026",
+  "url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man7/namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/mount_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/network_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/user_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/uts_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/ipc_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/cgroup_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man7/time_namespaces.7.html",
+  "https://man7.org/linux/man-pages/man1/unshare.1.html",
+  "https://man7.org/linux/man-pages/man1/nsenter.1.html",
+  "https://man7.org/linux/man-pages/man8/lsns.8.html",
+  "https://man7.org/linux/man-pages/man4/veth.4.html",
+  "https://man7.org/linux/man-pages/man8/ip-netns.8.html",
+  "https://man7.org/linux/man-pages/man2/clone.2.html",
+  "https://docs.kernel.org/admin-guide/sysctl/net.html",
+  "https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/",
+  "https://docs.docker.com/get-started/docker-overview/",
+  "https://docs.docker.com/engine/security/",
+  "https://github.com/opencontainers/runtime-spec/blob/main/glossary.md",
+  "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Definition: a namespace wraps a global system resource in an abstraction that makes it appear to processes within it that they have their own isolated instance; one use is to implement containers",
+   "verdict": "confirmed",
+   "finding": "Verbatim the opening of namespaces(7) DESCRIPTION. The OCI runtime-spec (config-linux.md, 'Namespaces') reuses the same two sentences.",
+   "quote": "A namespace wraps a global system resource in an abstraction that makes it appear to the processes within the namespace that they have their own isolated instance of the global resource. [...] One use of namespaces is to implement containers.",
+   "location": "namespaces(7), DESCRIPTION (first paragraph)",
+   "cite_url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+  },
+  {
+   "planned": "The namespace types and what each isolates (cgroup, IPC, network, mount, PID, time, user, UTS) — exact table",
+   "verdict": "confirmed",
+   "finding": "Exactly eight types, in the man page's (alphabetical) order, as Namespace / Flag / Isolates: Cgroup / CLONE_NEWCGROUP / Cgroup root directory; IPC / CLONE_NEWIPC / System V IPC, POSIX message queues; Network / CLONE_NEWNET / Network devices, stacks, ports, etc.; Mount / CLONE_NEWNS / Mount points; PID / CLONE_NEWPID / Process IDs; Time / CLONE_NEWTIME / Boot and monotonic clocks; User / CLONE_NEWUSER / User and group IDs; UTS / CLONE_NEWUTS / Hostname and NIS domain name. Note the mount flag is CLONE_NEWNS (not CLONE_NEWMNT) — it was the first namespace. Note also the Time row: only boot and monotonic clocks, NOT the wall clock.",
+   "quote": "Cgroup CLONE_NEWCGROUP Cgroup root directory | IPC CLONE_NEWIPC System V IPC, POSIX message queues | Network CLONE_NEWNET Network devices, stacks, ports, etc. | Mount CLONE_NEWNS Mount points | PID CLONE_NEWPID Process IDs | Time CLONE_NEWTIME Boot and monotonic clocks | User CLONE_NEWUSER User and group IDs | UTS CLONE_NEWUTS Hostname and NIS domain name",
+   "location": "namespaces(7), DESCRIPTION → 'Namespace types' table (rows transcribed; 'Page' column omitted)",
+   "cite_url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+  },
+  {
+   "planned": "/proc/PID/ns/* symlinks identify namespaces; two processes are in the same namespace iff the inode numbers match",
+   "verdict": "confirmed",
+   "finding": "Confirmed, with the precise wording being 'device IDs and inode numbers' (st_dev and st_ino), and stated as an 'if' not an 'iff'. The link content is 'type:[inode]', e.g. 'uts:[4026531838]'. Entries: cgroup, ipc, mnt, net, pid, pid_for_children, time, time_for_children, user, uts. Executed: two concurrent default Docker containers had different pid/net/mnt/uts/ipc/cgroup inode numbers but the SAME user:[4026531837] and time:[4026531834] — Docker does not create user or time namespaces by default.",
+   "quote": "If two processes are in the same namespace, then the device IDs and inode numbers of their /proc/pid/ns/xxx symbolic links will be the same; an application can check this using the stat.st_dev and stat.st_ino fields returned by stat(2).",
+   "location": "namespaces(7), 'The /proc/pid/ns/ directory'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+  },
+  {
+   "planned": "A new network namespace has only a loopback interface (down); a physical device lives in exactly one netns; veth pairs connect namespaces",
+   "verdict": "corrected",
+   "finding": "The second and third parts are confirmed verbatim by network_namespaces(7) and veth(4). The FIRST part is NOT stated anywhere in network_namespaces(7), namespaces(7), clone(2), unshare(1) or ip-netns(8) (the closest is the ip-netns(8) example 'ip netns exec vpn ip link set lo up — Bring up the loopback interface in the vpn network namespace', which implies lo exists and is down). Verified by execution instead: in a fresh netns `lo` exists and is DOWN with no addresses and the routing table is empty, so even `ping 127.0.0.1` fails with 'Network unreachable'. BUT it is not always 'only' loopback: on the Docker Desktop linuxkit kernel the new namespace also contained DOWN fallback tunnel devices (tunl0, gre0, gretap0, erspan0, ip_vti0, ip6_vti0, sit0, ip6tnl0, ip6gre0). The kernel sysctl doc explains this: with net.core.fb_tunnels_only_for_init_net = 0 (the default) fallback tunnels are created in every net namespace when the module is loaded. Safe wording: 'a new network namespace starts with no usable connectivity: a loopback device that is down, no addresses, no routes (plus, on some kernels, unused fallback tunnel devices).'",
+   "quote": "A physical network device can live in exactly one network namespace. When a network namespace is freed (i.e., when the last process in the namespace terminates), its physical network devices are moved back to the initial network namespace (not to the namespace of the parent of the process).",
+   "location": "network_namespaces(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/network_namespaces.7.html"
+  },
+  {
+   "planned": "User namespaces: UID/GID mappings (uid_map), a process can be root (UID 0, full capabilities) INSIDE a user namespace while unprivileged outside; capabilities in a user ns only govern resources owned by that ns",
+   "verdict": "confirmed",
+   "finding": "All three parts confirmed by user_namespaces(7). (a) UID 0 inside / unprivileged outside: quote below. (b) A process that creates or joins a user ns 'gains a full set of capabilities in that namespace' but 'has no capabilities in the parent ... user namespace, even if the new namespace is created or joined by the root user'. (c) 'Having a capability inside a user namespace permits a process to perform operations (that require privilege) only on resources governed by that namespace.' Things not tied to any namespace (set the system time — CAP_SYS_TIME, load a kernel module — CAP_SYS_MODULE, create a device — CAP_MKNOD) can only be done with privileges in the INITIAL user namespace. (d) uid_map lines are three numbers: start ID inside, start ID outside, range length; the file is empty at creation and may be written once. Unmapped IDs show up as the overflow ID 65534.",
+   "quote": "a process can have a normal unprivileged user ID outside a user namespace while at the same time having a user ID of 0 inside the namespace; in other words, the process has full privileges for operations inside the user namespace, but is unprivileged for operations outside the namespace.",
+   "location": "user_namespaces(7), DESCRIPTION (first paragraph); see also 'Capabilities' and 'Effect of capabilities within a user namespace'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/user_namespaces.7.html"
+  },
+  {
+   "planned": "Creating namespaces other than user requires CAP_SYS_ADMIN",
+   "verdict": "confirmed",
+   "finding": "Confirmed; man page hedges with 'in most cases'. clone(2) ERRORS is unhedged: EPERM when 'CLONE_NEWCGROUP, CLONE_NEWIPC, CLONE_NEWNET, CLONE_NEWNS, CLONE_NEWPID, or CLONE_NEWUTS was specified by an unprivileged process (process without CAP_SYS_ADMIN)'. Important nuance from user_namespaces(7): the CAP_SYS_ADMIN needed is in the caller's user namespace, so an unprivileged user can create a user namespace first (no privilege needed since Linux 3.8) and then the others — 'If CLONE_NEWUSER is specified along with other CLONE_NEW* flags ... the user namespace is guaranteed to be created first'. That is how rootless containers and `unshare -r` work.",
+   "quote": "Creation of new namespaces using clone(2) and unshare(2) in most cases requires the CAP_SYS_ADMIN capability, since, in the new namespace, the creator will have the power to change global resources that are visible to other processes that are subsequently created in, or join the namespace. User namespaces are the exception: since Linux 3.8, no privilege is required",
+   "location": "namespaces(7), 'The namespaces API' (last paragraph)",
+   "cite_url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+  },
+  {
+   "planned": "There is no kernel object called a 'container': a container is a userspace convention combining namespaces + cgroups + a root filesystem + security restrictions (find best authoritative wording — namespaces(7) 'one use of namespaces is to implement containers'; possibly OCI runtime-spec)",
+   "verdict": "corrected",
+   "finding": "No primary source fetched states the negative ('there is no kernel object called a container') in those words, so do not present that sentence as a cited fact. What the sources DO say, and what authors may cite: (1) namespaces(7): 'One use of namespaces is to implement containers.' (2) OCI runtime-spec glossary, 'Container': 'An environment for executing processes with configurable isolation and resource limitations. For example, namespaces, resource limits, and mounts are all part of the container environment.' (3) Docker docs: 'A container is simply an isolated process with all of the files it needs to run.' (4) Docker Engine security: 'When you start a container with docker run, behind the scenes Docker creates a set of namespaces and control groups for the container.' Present 'a container is an ordinary process (tree) that a runtime has wrapped in namespaces + cgroups + a root filesystem + security restrictions' as a synthesis of these definitions; the 'no kernel object' phrasing is explanatory framing, supported indirectly by the fact that the kernel API surface in these pages has namespaces, cgroups, capabilities, seccomp — and no 'container' syscall or flag.",
+   "quote": "An environment for executing processes with configurable isolation and resource limitations. For example, namespaces, resource limits, and mounts are all part of the container environment.",
+   "location": "OCI runtime-spec, glossary.md, 'Container'",
+   "cite_url": "https://github.com/opencontainers/runtime-spec/blob/main/glossary.md#container"
+  },
+  {
+   "planned": "The kernel itself is NOT namespaced/shared: all containers on a host share one kernel (uname -r identical) — supports the 'shared kernel' argument of page 24",
+   "verdict": "confirmed",
+   "finding": "namespaces(7) is silent on this (it never says 'the kernel is shared'); the supporting primary wording is Docker's. Verified by execution: `uname -r` printed the identical host kernel '6.10.14-linuxkit' from ubuntu:24.04, debian:bookworm-slim and alpine:3.20 containers. Also supported by the namespace table itself: the UTS namespace isolates only 'Hostname and NIS domain name' — not the kernel release that uname(2) also reports. Caveat for Mac readers: with Docker Desktop the shared kernel is the LinuxKit VM's kernel, not macOS.",
+   "quote": "A container is simply an isolated process with all of the files it needs to run. If you run multiple containers, they all share the same kernel, allowing you to run more applications on less infrastructure.",
+   "location": "Docker Docs, 'What is a container?' → 'Containers versus virtual machines (VMs)'",
+   "cite_url": "https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Time namespaces do NOT virtualize the wall clock. They cover only CLOCK_MONOTONIC and CLOCK_BOOTTIME. So you cannot give a container its own date with a namespace; Docker's seccomp table likewise says 'Time/date is not namespaced'.",
+   "quote": "Note that time namespaces do not virtualize the CLOCK_REALTIME clock. Virtualization of this clock was avoided for reasons of complexity and overhead within the kernel.",
+   "location": "time_namespaces(7), NOTES",
+   "cite_url": "https://man7.org/linux/man-pages/man7/time_namespaces.7.html"
+  },
+  {
+   "finding": "Network namespace: full list of what is isolated.",
+   "quote": "Network namespaces provide isolation of the system resources associated with networking: network devices, IPv4 and IPv6 protocol stacks, IP routing tables, firewall rules, the /proc/net directory (which is a symbolic link to /proc/pid/net), the /sys/class/net directory, various files under /proc/sys/net, port numbers (sockets), and so on.",
+   "location": "network_namespaces(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/network_namespaces.7.html"
+  },
+  {
+   "finding": "veth: virtual Ethernet devices, always created in pairs; what goes in one end comes out the other; placing the two ends in different network namespaces is the standard way to connect namespaces.",
+   "quote": "veth devices are always created in interconnected pairs. [...] Packets transmitted on one device in the pair are immediately received on the other device. When either device is down, the link state of the pair is down.",
+   "location": "veth(4), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man4/veth.4.html"
+  },
+  {
+   "finding": "veth in network_namespaces(7): pipe-like tunnel between namespaces; destroyed when the namespace is freed.",
+   "quote": "A virtual network (veth(4)) device pair provides a pipe-like abstraction that can be used to create tunnels between network namespaces, and can be used to create a bridge to a physical network device in another namespace. When a namespace is freed, the veth(4) devices that it contains are destroyed.",
+   "location": "network_namespaces(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/network_namespaces.7.html"
+  },
+  {
+   "finding": "Why a fresh netns can contain more than lo: fallback tunnel devices are created in every net namespace by default.",
+   "quote": "Controls if fallback tunnels (like tunl0, gre0, gretap0, erspan0, sit0, ip6tnl0, ip6gre0) are automatically created. [...] (a) value = 0; respective fallback tunnels are created when module is loaded in every net namespaces (backward compatible behavior). [...] Default : 0 (for compatibility reasons)",
+   "location": "Kernel docs, admin-guide/sysctl/net, 'fb_tunnels_only_for_init_net'",
+   "cite_url": "https://docs.kernel.org/admin-guide/sysctl/net.html#fb-tunnels-only-for-init-net"
+  },
+  {
+   "finding": "PID namespaces: PIDs start at 1; the first process is the namespace's init and adopts orphans.",
+   "quote": "PIDs in a new PID namespace start at 1, somewhat like a standalone system [...] The first process created in a new namespace [...] has the PID 1, and is the \"init\" process for the namespace (see init(1)). This process becomes the parent of any child processes that are orphaned",
+   "location": "pid_namespaces(7), DESCRIPTION and 'The namespace init process'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+  },
+  {
+   "finding": "If PID 1 of a PID namespace dies, the kernel SIGKILLs everything else in it. This is why a container stops when its main process exits.",
+   "quote": "If the \"init\" process of a PID namespace terminates, the kernel terminates all of the processes in the namespace via a SIGKILL signal. This behavior reflects the fact that the \"init\" process is essential for the correct operation of a PID namespace.",
+   "location": "pid_namespaces(7), 'The namespace init process'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+  },
+  {
+   "finding": "PID 1 signal semantics inside the namespace: a signal is delivered to init only if init installed a handler for it; from an ancestor namespace SIGKILL and SIGSTOP are still forced. Explains why `kill -TERM 1` inside a container often does nothing, and why `docker stop` falls back to SIGKILL for apps that do not handle SIGTERM.",
+   "quote": "Only signals for which the \"init\" process has established a signal handler can be sent to the \"init\" process by other members of the PID namespace. This restriction applies even to privileged processes, and prevents other members of the PID namespace from accidentally killing the \"init\" process.",
+   "location": "pid_namespaces(7), 'The namespace init process'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+  },
+  {
+   "finding": "Visibility is one-way: a parent PID namespace sees the processes of its descendants (with different PIDs); the child cannot see the parent's. So the host can see and signal container processes, never the reverse. Max nesting depth 32.",
+   "quote": "a process can see (e.g., send signals with kill(2), set nice values with setpriority(2), etc.) only processes contained in its own PID namespace and in descendants of that namespace.",
+   "location": "pid_namespaces(7), 'Nesting PID namespaces'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+  },
+  {
+   "finding": "/proc reflects the PID namespace of whoever MOUNTED it, which is why `unshare --pid` needs `--mount-proc` before ps shows the new view.",
+   "quote": "A /proc filesystem shows (in the /proc/pid directories) only processes visible in the PID namespace of the process that performed the mount, even if the /proc filesystem is viewed from processes in other namespaces.",
+   "location": "pid_namespaces(7), '/proc and PID namespaces'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+  },
+  {
+   "finding": "Mount namespaces: each has its own list of mounts; a new one starts as a COPY of the creator's list; later mount/umount do not (by default) affect the other namespace.",
+   "quote": "Mount namespaces provide isolation of the list of mounts seen by the processes in each namespace instance. Thus, the processes in each of the mount namespace instances will see distinct single-directory hierarchies.",
+   "location": "mount_namespaces(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/mount_namespaces.7.html"
+  },
+  {
+   "finding": "UTS namespace: hostname and NIS domain name only; copied from the caller at creation.",
+   "quote": "UTS namespaces provide isolation of two system identifiers: the hostname and the NIS domain name. [...] Changes made to these identifiers are visible to all other processes in the same UTS namespace, but are not visible to processes in other UTS namespaces.",
+   "location": "uts_namespaces(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/uts_namespaces.7.html"
+  },
+  {
+   "finding": "IPC namespace: System V IPC objects and POSIX message queues; all objects destroyed when the last member exits.",
+   "quote": "IPC namespaces isolate certain IPC resources, namely, System V IPC objects (see sysvipc(7)) and (since Linux 2.6.30) POSIX message queues (see mq_overview(7)).",
+   "location": "ipc_namespaces(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/ipc_namespaces.7.html"
+  },
+  {
+   "finding": "Cgroup namespace: virtualizes the VIEW of cgroup paths (what /proc/pid/cgroup shows); it does not itself limit anything. Executed: inside a Docker container `cat /proc/self/cgroup` prints `0::/`.",
+   "quote": "Cgroup namespaces virtualize the view of a process's cgroups (see cgroups(7)) as seen via /proc/pid/cgroup and /proc/pid/mountinfo.",
+   "location": "cgroup_namespaces(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/cgroup_namespaces.7.html"
+  },
+  {
+   "finding": "The three namespace system calls: clone(2) creates a new process in new namespaces; unshare(2) moves the caller into new namespaces; setns(2) joins an existing namespace via an fd on /proc/pid/ns/*.",
+   "quote": "The setns(2) system call allows the calling process to join an existing namespace. The namespace to join is specified via a file descriptor that refers to one of the /proc/pid/ns files described below.",
+   "location": "namespaces(7), 'The namespaces API'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+  },
+  {
+   "finding": "Namespace lifetime: a namespace normally disappears when its last process exits; an open fd or a bind mount of the /proc/pid/ns/* file keeps it alive (this is what `ip netns add` does under /var/run/netns).",
+   "quote": "Bind mounting (see mount(2)) one of the files in this directory to somewhere else in the filesystem keeps the corresponding namespace of the process specified by pid alive even if all processes currently in the namespace terminate.",
+   "location": "namespaces(7), 'The /proc/pid/ns/ directory'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/namespaces.7.html"
+  },
+  {
+   "finding": "unshare(1): creates new namespaces then runs a program (default ${SHELL}). --fork is needed with --pid; --mount-proc mounts a fresh /proc and implies a new mount namespace.",
+   "quote": "Just before running the program, mount the proc filesystem at mountpoint (default is /proc). This is useful when creating a new PID namespace. It also implies creating a new mount namespace since the /proc mount would otherwise mess up existing programs on the system.",
+   "location": "unshare(1), OPTIONS, --mount-proc",
+   "cite_url": "https://man7.org/linux/man-pages/man1/unshare.1.html"
+  },
+  {
+   "finding": "unshare -r / --map-root-user: become 'root' in a new user namespace without any privilege.",
+   "quote": "Run the program only after the current effective user and group IDs have been mapped to the superuser UID and GID in the newly created user namespace. This makes it possible to conveniently gain capabilities needed to manage various aspects of the newly created namespaces [...] even when run unprivileged.",
+   "location": "unshare(1), OPTIONS, -r, --map-root-user",
+   "cite_url": "https://man7.org/linux/man-pages/man1/unshare.1.html"
+  },
+  {
+   "finding": "nsenter(1): run a program inside the namespaces of an existing process (-t PID, -a for all). Division of labour: unshare creates, nsenter enters.",
+   "quote": "The nsenter command executes program in the namespace(s) that are specified in the command-line options [...] If you want to create a new namespace, use unshare(1). Once created, you can run a program in it using nsenter.",
+   "location": "nsenter(1), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man1/nsenter.1.html"
+  },
+  {
+   "finding": "lsns(8): lists namespaces by inode number, reading /proc; incomplete for unprivileged users and limited to what the current /proc (PID namespace) shows; default output format is not stable for scripts.",
+   "quote": "lsns lists information about all the currently accessible namespaces or about the given namespace. The namespace identifier is an inode number. [...] Note that lsns reads information directly from the /proc filesystem and for unprivileged users it may return incomplete information.",
+   "location": "lsns(8), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man8/lsns.8.html"
+  },
+  {
+   "finding": "Docker's own description of what namespaces do for a container, and that user namespaces are supported but NOT enabled by default (root in the container is host UID 0 unless userns-remap/rootless is configured).",
+   "quote": "As of Docker 1.10 User Namespaces are supported directly by the docker daemon. This feature allows for the root user in a container to be mapped to a non uid-0 user outside the container, which can help to mitigate the risks of container breakout. This facility is available but not enabled by default.",
+   "location": "Docker Docs, Docker Engine security, 'Other kernel security features'",
+   "cite_url": "https://docs.docker.com/engine/security/#other-kernel-security-features"
+  },
+  {
+   "finding": "Docker: 'Processes running within a container cannot see, and even less affect, processes running in another container, or in the host system.' Each container gets its own network stack.",
+   "quote": "Namespaces provide the first and most straightforward form of isolation. Processes running within a container cannot see, and even less affect, processes running in another container, or in the host system.",
+   "location": "Docker Docs, Docker Engine security, 'Kernel namespaces'",
+   "cite_url": "https://docs.docker.com/engine/security/#kernel-namespaces"
+  },
+  {
+   "finding": "EXECUTED — new PID namespace: ps sees only itself as PID 1.",
+   "quote": "$ docker run --rm --privileged ubuntu:24.04 unshare --pid --fork --mount-proc ps aux\nUSER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\nroot         1  0.0  0.0   7628  3320 ?        R    06:07   0:00 ps aux",
+   "location": "executed ubuntu:24.04 (--privileged); Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — the same command in a DEFAULT (unprivileged) container fails, because the container's root lacks CAP_SYS_ADMIN.",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c 'unshare --pid --fork --mount-proc ps aux; echo exit=$?'\nunshare: unshare failed: Operation not permitted\nexit=1",
+   "location": "executed ubuntu:24.04 (default options); Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — /proc/self/ns and lsns inside a default container.",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c 'ls -l /proc/self/ns; echo; lsns'\ntotal 0\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 cgroup -> cgroup:[4026532828]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 ipc -> ipc:[4026532826]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 mnt -> mnt:[4026532824]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 net -> net:[4026532829]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 pid -> pid:[4026532827]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 pid_for_children -> pid:[4026532827]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 time -> time:[4026531834]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 time_for_children -> time:[4026531834]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 user -> user:[4026531837]\nlrwxrwxrwx 1 root root 0 Sep 21 06:07 uts -> uts:[4026532825]\n\n        NS TYPE   NPROCS PID USER COMMAND\n4026531834 time        2   1 root sh -c ls -l /proc/self/ns; echo; lsns\n4026531837 user        2   1 root sh -c ls -l /proc/self/ns; echo; lsns\n4026532824 mnt         2   1 root sh -c ls -l /proc/self/ns; echo; lsns\n4026532825 uts         2   1 root sh -c ls -l /proc/self/ns; echo; lsns\n4026532826 ipc         2   1 root sh -c ls -l /proc/self/ns; echo; lsns\n4026532827 pid         2   1 root sh -c ls -l /proc/self/ns; echo; lsns\n4026532828 cgroup      2   1 root sh -c ls -l /proc/self/ns; echo; lsns\n4026532829 net         2   1 root sh -c ls -l /proc/self/ns; echo; lsns",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — two CONCURRENT default containers (docker run -d ... sleep 60; docker exec ... readlink): six namespace types differ, user and time are shared (and are the initial namespaces). Gotcha: two containers run one AFTER the other can show identical inode numbers, because freed inode numbers get reused — compare live containers only.",
+   "quote": "# lt-R3-a\npid:[4026532827]\nnet:[4026532829]\nmnt:[4026532824]\nuts:[4026532825]\nipc:[4026532826]\ncgroup:[4026532828]\nuser:[4026531837]\ntime:[4026531834]\n# lt-R3-b\npid:[4026532694]\nnet:[4026532696]\nmnt:[4026532691]\nuts:[4026532692]\nipc:[4026532693]\ncgroup:[4026532695]\nuser:[4026531837]\ntime:[4026531834]",
+   "location": "executed ubuntu:24.04 ×2 concurrently; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — shared kernel: same `uname -r` from three different distro images.",
+   "quote": "$ docker run --rm ubuntu:24.04 uname -r\n6.10.14-linuxkit\n$ docker run --rm debian:bookworm-slim uname -r\n6.10.14-linuxkit\n$ docker run --rm alpine:3.20 uname -r\n6.10.14-linuxkit",
+   "location": "executed ubuntu:24.04, debian:bookworm-slim, alpine:3.20; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — a fresh network namespace (busybox unshare/ip in alpine, --privileged): lo is present but DOWN, no routes, even 127.0.0.1 unreachable; on this kernel fallback tunnel devices also appear (output trimmed with …).",
+   "quote": "$ docker run --rm --privileged alpine:3.20 sh -c 'unshare --net ip addr; unshare --net ip route; unshare --net ping -c1 -W1 127.0.0.1'\n1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n2: tunl0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN qlen 1000\n    link/ipip 0.0.0.0 brd 0.0.0.0\n3: gre0@NONE: <NOARP> mtu 1476 qdisc noop state DOWN qlen 1000\n…\n10: ip6gre0@NONE: <NOARP> mtu 1448 qdisc noop state DOWN qlen 1000\n(ip route printed nothing)\nPING 127.0.0.1 (127.0.0.1): 56 data bytes\nping: sendto: Network unreachable",
+   "location": "executed alpine:3.20 (--privileged); Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — user-namespace root is not real root. In a default container (this daemon runs with seccomp unconfined, see seccomp-nnp note) `unshare --user --map-root-user` succeeds; inside, id says uid=0 and CapEff is the full set, yet changing the hostname is refused because the UTS namespace is owned by the parent user namespace. With Docker's built-in seccomp profile the unshare itself is refused.",
+   "quote": "$ docker run --rm ubuntu:24.04 unshare --user --map-root-user sh -c 'id; cat /proc/self/uid_map; grep CapEff /proc/self/status; hostname x'\nuid=0(root) gid=0(root) groups=0(root)\n         0          0          1\nCapEff:\t000001ffffffffff\nhostname: you must be root to change the host name\n\n$ docker run --rm --security-opt seccomp=builtin ubuntu:24.04 unshare --user --map-root-user id\nunshare: unshare failed: Operation not permitted",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  }
+ ],
+ "teaching_notes": "Folklore corrected: (1) 'a new netns has only a down loopback' is NOT in any man page and is not literally true on kernels with tunnel modules (fallback tunl0/gre0/sit0… appear); teach 'lo, down, no routes'. (2) Time namespaces do not cover the wall clock (CLOCK_REALTIME) — you cannot fake the date for an agent with a namespace. (3) Docker by default creates pid, net, mnt, uts, ipc and cgroup namespaces but NOT user or time namespaces (executed; Docker docs: user namespaces 'available but not enabled by default') — so root in a default container is host UID 0, restrained only by capabilities/seccomp/LSM. (4) The 'iff inode numbers match' test is officially 'device IDs and inode numbers', and inode numbers are reused after a namespace is freed, so only compare live processes. (5) 'There is no container object in the kernel' is good framing but not a quotable fact; cite the OCI glossary / Docker definitions instead. (6) namespaces(7) itself never says the kernel is shared; cite Docker's 'they all share the same kernel' plus the executed uname -r. All man7 pages fetched were man-pages 6.19 (dated 2026-02-08) / util-linux 2.43-devel renderings. The R3 brief listed uts/ipc/cgroup/time pages in the title but not in urls; they were fetched too."
+}

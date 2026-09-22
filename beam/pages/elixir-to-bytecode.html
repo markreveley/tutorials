@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>From Elixir to Bytecode</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 1 · source</p>
+    <h1>From Elixir to Bytecode</h1>
+    <p class="lede">
+      Before we can ask what a value looks like in memory, we have to be honest about one thing: the BEAM
+      never runs your Elixir. It runs bytecode that a chain of compilers <em>produced</em> from your Elixir —
+      rewriting and lowering it along the way. The shape changes. Knowing how it changes is what lets the
+      rest of the ladder make sense.
+    </p>
+
+    <h2>It is a translation, not a transliteration</h2>
+    <p>
+      It's tempting to imagine each line of Elixir becoming one line of bytecode. It doesn't. Your source
+      passes through several intermediate forms, and at each step it's rewritten while preserving
+      <em>behavior</em> — not structure:
+    </p>
+
+    <pre><code>Elixir source
+   │   <span class="tok-com">macros expand · if→case · |&gt; rewritten to nested calls</span>
+   ▼
+Elixir AST  ──►  Erlang Abstract Format
+   │   <span class="tok-com">lowering</span>
+   ▼
+Core Erlang        <span class="tok-com">a small, explicit functional core</span>
+   │
+   ▼
+SSA-based forms    <span class="tok-com">optimisation: dead-code elim, inlining, register reuse</span>
+   │
+   ▼
+BEAM bytecode      <span class="tok-com">a register machine the emulator executes</span></code></pre>
+
+    <p>
+      Two consequences matter for everything that follows. First, <strong>one line of Elixir may become many
+      instructions, or several lines may collapse into fewer.</strong> Second, the bytecode speaks a
+      <em>lower-level vocabulary</em> than you ever wrote: it talks about <em>registers</em>, <em>allocating
+      heap</em>, and <em>loading literals</em> — concepts absent from your source. It's a
+      <strong>register machine</strong> <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.5</a>.
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">the same function, descending the stack</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <div class="seg" id="stageSeg">
+            <button data-s="0" class="on">Elixir (what you wrote)</button>
+            <button data-s="1">After Elixir's rewrites</button>
+            <button data-s="2">BEAM (register machine)</button>
+          </div>
+        </div>
+        <pre id="stageCode" style="min-height:230px"></pre>
+        <div class="readout" id="stageNote"></div>
+      </div>
+      <div class="viz-foot">BEAM listing is illustrative — produced conceptually, not copied from a specific <code>erlc</code> run; instruction names and order vary by OTP version and optimisation.</div>
+    </div>
+
+    <h2>"Build a tuple from these values"</h2>
+    <p>
+      Look at the last stage above. Where your Elixir said <code>{result, :ok}</code>, the bytecode says
+      something closer to: <em>allocate a tuple object on the heap with a header marking it a tuple of arity
+      2, then fill its two slots with the current values in registers.</em>
+    </p>
+    <p>
+      That phrasing is the hinge into the next rung. "Fill its slots with the current values" hides a
+      question: what <em>is</em> a value, sitting in a register, about to be written into a tuple slot? For a
+      small integer it's the number itself. For anything larger — another tuple, a map, a string — the slot
+      receives a <strong>pointer</strong> to where that thing already lives. The tuple references its
+      elements; it does not embed copies of them.
+    </p>
+
+    <div class="callout">
+      <span class="label">So the compiler does what, exactly?</span>
+      It <strong>bakes compile-time constants</strong> (a literal <code>42</code>, <code>:ok</code>, or a
+      literal tuple) into already-tagged form in the module's literal area, and it <strong>emits the
+      build-instructions</strong> for everything assembled at runtime. The actual allocation, tagging, and
+      pointer-writing happens later, in the running VM — see <a href="runtime-reads-memory.html">rung 7</a>.
+    </div>
+
+    <h2>Where this leaves us</h2>
+    <p>
+      We now have a concrete handle: the program that runs is a stream of low-level instructions, and the
+      interesting ones <em>construct</em> and <em>read</em> values in memory. To follow them, we need to know
+      what a single value looks like as bits. That's rung 2.
+    </p>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.2 (The Compiler), Ch.5 (The BEAM VM).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('elixir-to-bytecode');
+
+const STAGES = [
+  {
+    code: `<span class="tok-kw">def</span> <span class="tok-fn">classify</span>(n) <span class="tok-kw">do</span>
+  result =
+    <span class="tok-kw">if</span> n &gt; 0 <span class="tok-kw">do</span> <span class="tok-atom">:positive</span> <span class="tok-kw">else</span> <span class="tok-atom">:other</span> <span class="tok-kw">end</span>
+  {result, <span class="tok-atom">:ok</span>}
+<span class="tok-kw">end</span>`,
+    note: `Plain Elixir. <b>One</b> readable function. Note the <code>if</code> and the tuple literal — both look atomic here.`
+  },
+  {
+    code: `<span class="tok-kw">def</span> <span class="tok-fn">classify</span>(n) <span class="tok-kw">do</span>
+  result =
+    <span class="tok-com"># if is sugar — it expands to a case on a boolean</span>
+    <span class="tok-kw">case</span> n &gt; 0 <span class="tok-kw">do</span>
+      <span class="tok-atom">true</span>  -&gt; <span class="tok-atom">:positive</span>
+      <span class="tok-atom">false</span> -&gt; <span class="tok-atom">:other</span>
+    <span class="tok-kw">end</span>
+  {result, <span class="tok-atom">:ok</span>}
+<span class="tok-kw">end</span>`,
+    note: `Still Elixir, but after the language's own rewrites. <code>if</code> was never a primitive — it <b>expands</b> into <code>case</code>. (Pipes <code>|></code> similarly become nested calls.) The structure already differs from what you typed.`
+  },
+  {
+    code: `<span class="tok-com">; illustrative BEAM — a register machine</span>
+<span class="tok-fn">classify</span>/1:
+    <span class="tok-kw">is_lt</span>      <span class="tok-num">0</span>, x0     <span class="tok-com">; n &gt; 0 ?  compare register x0 to 0</span>
+    <span class="tok-kw">jump_false</span> L_other       <span class="tok-com">; branch — the case, lowered</span>
+L_pos:
+    <span class="tok-kw">move</span>      <span class="tok-atom">:positive</span>, x1
+    <span class="tok-kw">jump</span>      L_build
+L_other:
+    <span class="tok-kw">move</span>      <span class="tok-atom">:other</span>, x1
+L_build:
+    <span class="tok-kw">test_heap</span> <span class="tok-num">3</span>            <span class="tok-com">; ensure room: header + 2 slots</span>
+    <span class="tok-kw">put_tuple2</span> x0, [x1, <span class="tok-atom">:ok</span>]  <span class="tok-com">; alloc {result, :ok}; x0 ← tagged pointer</span>
+    <span class="tok-kw">return</span></code>`,
+    note: `The metal. One <code>if</code> became a <span class="ptr">compare + conditional jump + two moves</span>. The tuple literal became <code>test_heap</code> (reserve 3 words) + <code>put_tuple2</code> (allocate the block, write the slots, hand back a <span class="ptr">tagged pointer</span> in <code>x0</code>). Registers <code>x0/x1</code> appear nowhere in your source.`
+  }
+];
+
+const seg = document.getElementById('stageSeg');
+const codeEl = document.getElementById('stageCode');
+const noteEl = document.getElementById('stageNote');
+function showStage(i) {
+  seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.s === i));
+  codeEl.innerHTML = STAGES[i].code;
+  noteEl.innerHTML = STAGES[i].note;
+}
+seg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) showStage(+b.dataset.s); });
+showStage(0);
+</script>
+</body>
+</html>

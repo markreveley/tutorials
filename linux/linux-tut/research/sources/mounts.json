@@ -1,0 +1,207 @@
+{
+ "id": "mounts",
+ "tag": "[mount(8)]",
+ "citation": {
+  "authors": "util-linux project (Karel Zak et al.); Linux man-pages project",
+  "title": "mount(8) — mount a filesystem (with findmnt(8), tmpfs(5), proc_pid_mountinfo(5), chroot(2), pivot_root(2))",
+  "venue": "util-linux 2.43-devel / Linux man-pages 6.19, man7.org rendering",
+  "year": "2026",
+  "url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man8/mount.8.html",
+  "https://man7.org/linux/man-pages/man8/findmnt.8.html",
+  "https://man7.org/linux/man-pages/man5/tmpfs.5.html",
+  "https://man7.org/linux/man-pages/man2/chroot.2.html",
+  "https://man7.org/linux/man-pages/man2/pivot_root.2.html",
+  "https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html",
+  "https://man7.org/linux/man-pages/man2/mount.2.html",
+  "https://docs.kernel.org/filesystems/tmpfs.html",
+  "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+  "https://docs.docker.com/engine/storage/tmpfs/",
+  "https://github.com/opencontainers/runc/blob/main/man/runc-create.8.md"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "All files are arranged in one big tree rooted at /; mount attaches a filesystem found on some device to the tree",
+   "verdict": "confirmed",
+   "finding": "Verbatim opening of mount(8) DESCRIPTION. Also: mounting over a directory hides its previous contents ('The previous contents (if any) and owner and mode of dir become invisible').",
+   "quote": "All files accessible in a Unix system are arranged in one big tree, the file hierarchy, rooted at /. These files can be spread out over several devices. The mount command serves to attach the filesystem found on some device to the big file tree. Conversely, the umount(8) command will detach it again.",
+   "location": "mount(8), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "planned": "Mount options: ro, rw, nosuid, nodev, noexec; remount; bind mounts (mount --bind) and that a read-only bind requires remount,bind,ro (historical) or works directly on newer util-linux — get exact current wording",
+   "verdict": "confirmed",
+   "finding": "Exact current wording (util-linux 2.43-devel page). ro: 'Mount the filesystem read-only.' rw: 'Mount the filesystem read-write.' nosuid: 'Do not honor set-user-ID and set-group-ID bits or file capabilities when executing programs from this filesystem.' nodev: 'Do not interpret character or block special devices on the filesystem.' noexec: 'Do not permit direct execution of any binaries on the mounted filesystem.' defaults: 'rw, suid, dev, exec, auto, nouser, and async'. remount: 'Attempt to remount an already-mounted filesystem. This is commonly used to change the mount flags for a filesystem, especially to make a readonly filesystem writable. It does not change device or mount point.' Bind: 'Remount part of the file hierarchy somewhere else ... After this call the same contents are accessible in two places'; --bind does not include submounts (use --rbind). READ-ONLY BIND: both forms are documented. One-step: 'Since util-linux 2.27 mount permits changing the mount options by passing the relevant options along with --bind. For example: mount -o bind,ro foo foo — This feature is not supported by the Linux kernel; it is implemented in userspace by an additional mount(2) remounting system call. This solution is not atomic.' Classic two-step: 'mount --bind olddir newdir' then 'mount -o remount,bind,ro olddir newdir'. Crucial caveat: a read-only bind makes only that mountpoint read-only; the same files stay writable via the original path.",
+   "quote": "Note that a read-only bind will create a read-only mountpoint (VFS entry), but the original filesystem superblock will still be writable, meaning that the olddir will be writable, but the newdir will be read-only.",
+   "location": "mount(8), 'Bind mount operation'; option texts from FILESYSTEM-INDEPENDENT MOUNT OPTIONS",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "planned": "tmpfs lives in virtual memory (RAM+swap), contents lost on unmount; size= option, default half of RAM; counts toward the memory cgroup of the writer? (verify in kernel cgroup-v2 doc: shmem/tmpfs charged to memory cgroup)",
+   "verdict": "confirmed",
+   "finding": "All parts confirmed. tmpfs(5): contents 'reside in virtual memory', 'can employ swap space when physical memory pressure demands it', consumes only what it stores, 'If a tmpfs filesystem is unmounted, its contents are discarded (lost).' size= 'The default, when neither size nor nr_blocks is specified, is size=50%' (of physical RAM; % suffix = 'percentage of physical RAM'). Memory-cgroup charging: kernel cgroup-v2 doc counts tmpfs in memory.stat 'file' ('Amount of memory used to cache filesystem data, including tmpfs and shared memory') and 'shmem' ('... swap-backed, such as tmpfs, shm segments, shared anonymous mmap()s'), and 'A memory area is charged to the cgroup which instantiated it'. Docker says it outright: 'Because tmpfs stores data in memory, that usage counts against the container's memory cgroup limit ... filling the mount can still OOM the container.' Verified by execution: in a --memory 64m container with a 200 MB tmpfs, dd of 100 MB was OOM-killed at shmem≈64 MB; memory.events oom_kill went to 1. So the tmpfs size= is NOT the effective cap inside a memory-limited container.",
+   "quote": "Because tmpfs stores data in memory, that usage counts against the container's memory cgroup limit (`--memory` / Compose `mem_limit`). Setting a large `tmpfs-size` (or host-mounted tmpfs) does not give the container extra RAM outside that limit — filling the mount can still OOM the container.",
+   "location": "Docker Docs, 'tmpfs mounts' (intro); tmpfs defaults: tmpfs(5) 'Mount options'; accounting: Kernel docs cgroup-v2 'memory.stat'",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/"
+  },
+  {
+   "planned": "chroot changes the root directory of the calling process; it is NOT intended as a security mechanism / to sandbox a process — exact man page wording; pivot_root is what container runtimes use",
+   "verdict": "confirmed",
+   "finding": "chroot(2) exact wording in quote. It requires CAP_SYS_CHROOT; does not change the cwd; does not close open fds; the man page gives the classic root escape: 'mkdir foo; chroot foo; cd ..'. pivot_root(2): 'changes the root mount in the mount namespace of the calling process ... moves the root mount to the directory put_old and makes new_root the new root mount'; needs CAP_SYS_ADMIN in the user namespace owning the mount namespace; NOTES: 'A modern use is to set up a root filesystem during the creation of a container.' The man page documents the pivot_root(\".\", \".\") + umount2(\".\", MNT_DETACH) idiom, which leaves the old root unmounted and unreachable. That runc (Docker's default OCI runtime) uses pivot_root by default is shown by its --no-pivot flag: 'Do not use pivot root to jail process inside rootfs. This should not be used except in exceptional circumstances, and may be unsafe from the security standpoint.'",
+   "quote": "This call changes an ingredient in the pathname resolution process and does nothing else. In particular, it is not intended to be used for any kind of security purpose, neither to fully sandbox a process nor to restrict filesystem system calls.",
+   "location": "chroot(2), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chroot.2.html"
+  },
+  {
+   "planned": "/proc/self/mountinfo is the kernel's authoritative list; findmnt renders it as a tree; findmnt -T path, findmnt -O ro",
+   "verdict": "confirmed",
+   "finding": "Confirmed in substance; 'authoritative' is the author's word, not the man pages'. What they say: proc_pid_mountinfo(5): the file 'contains information about mounts in the process's mount namespace' and supersedes /proc/pid/mounts, supplying what that older file lacks (propagation state, bind-mount root, mount/parent IDs, per-mount vs per-superblock options). findmnt(8): can search /etc/fstab, /etc/mtab or /proc/self/mountinfo; -k/--kernel 'Reads information about filesystems from the kernel. This is the default output'; 'prints all mounted filesystems in the tree-like format by default'. -T/--target path: 'findmnt displays the filesystem for the given path' (walks up path elements to the mountpoint). -O/--options list filters by mount option; man-page example: 'findmnt --poll=remount -t ext3 -O ro'. mount(8) itself now says its listing mode 'is maintained for backward compatibility only ... use findmnt(8), especially in your scripts', and that a userspace /etc/mtab 'cannot reliably work with namespaces, containers' (so /etc/mtab is a symlink to /proc/mounts — executed). Note the view is per mount namespace: a container's mountinfo shows only the container's mounts.",
+   "quote": "This file contains information about mounts in the process's mount namespace (see mount_namespaces(7)). It supplies various information (e.g., propagation state, root of mount for bind mounts, identifier for each mount and its parent) that is missing from the (older) /proc/pid/mounts file",
+   "location": "proc_pid_mountinfo(5), DESCRIPTION; findmnt(8) DESCRIPTION and OPTIONS (-k, -T, -O)",
+   "cite_url": "https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "mountinfo line format — 11 fields: mount ID, parent ID, major:minor, root, mount point, per-mount options, optional fields (shared/master/…), '-' separator, fs type, mount source, per-superblock options. Read-only status can differ between field 6 (this mount) and field 11 (the filesystem).",
+   "quote": "36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw,errors=continue (1)(2)(3) (4) (5) (6) (7) (8) (9) (10) (11)",
+   "location": "proc_pid_mountinfo(5), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html"
+  },
+  {
+   "finding": "Bind mounts leave no trace of being 'bind': it is just another mount of the same filesystem; single files can be bind-mounted too (what Docker does for /etc/hosts, /etc/resolv.conf).",
+   "quote": "It is important to understand that \"bind\" does not create any second-class or special node in the kernel VFS. The \"bind\" is just another operation to attach a filesystem. There is nowhere stored information that the filesystem has been attached by a \"bind\" operation. [...] One can also remount a single file (on a single file).",
+   "location": "mount(8), 'Bind mount operation'",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "finding": "One-step read-only bind: exact wording and the non-atomic caveat (there is a window in which the bind is writable).",
+   "quote": "Since util-linux 2.27 mount permits changing the mount options by passing the relevant options along with --bind. For example: mount -o bind,ro foo foo This feature is not supported by the Linux kernel; it is implemented in userspace by an additional mount(2) remounting system call. This solution is not atomic.",
+   "location": "mount(8), 'Bind mount operation'",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "finding": "Classic two-step read-only bind.",
+   "quote": "The alternative (classic) way to create a read-only bind mount is to use the remount operation, for example: mount --bind olddir newdir mount -o remount,bind,ro olddir newdir",
+   "location": "mount(8), 'Bind mount operation'",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "finding": "ro on a bind/rbind is not recursive with the classic syscall: submounts under a read-only bind may still be writable unless ro=recursive (util-linux ≥ 2.39 + mount_setattr(2)) is used.",
+   "quote": "The classic mount(2) system call does not allow to change mount options recursively (for example with -o rbind,ro). The recursive semantic is possible with a new mount_setattr(2) kernel system call and it's supported since libmount from util-linux v2.39 by a new experimental \"recursive\" option argument (e.g. -o rbind,ro=recursive).",
+   "location": "mount(8), 'Bind mount operation'",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "finding": "Option definitions, verbatim.",
+   "quote": "nodev Do not interpret character or block special devices on the filesystem. [...] noexec Do not permit direct execution of any binaries on the mounted filesystem. [...] nosuid Do not honor set-user-ID and set-group-ID bits or file capabilities when executing programs from this filesystem.",
+   "location": "mount(8), FILESYSTEM-INDEPENDENT MOUNT OPTIONS",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "finding": "noexec blocks only DIRECT execution — mount(8)'s own word — so `sh /mnt/script.sh` or `python file.py` still work on a noexec mount.",
+   "quote": "Do not permit direct execution of any binaries on the mounted filesystem.",
+   "location": "mount(8), FILESYSTEM-INDEPENDENT MOUNT OPTIONS → noexec",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "finding": "Mounting needs root by default; mount(8) lists mounts when run with no arguments but recommends findmnt for scripts.",
+   "quote": "The listing mode is maintained for backward compatibility only. For more robust and customizable output use findmnt(8), especially in your scripts.",
+   "location": "mount(8), 'Listing the mounts'",
+   "cite_url": "https://man7.org/linux/man-pages/man8/mount.8.html"
+  },
+  {
+   "finding": "findmnt default output is not a stable interface; use -o columns (and -n, --raw) in scripts.",
+   "quote": "The command prints all mounted filesystems in the tree-like format by default. The default output, is subject to change. So whenever possible, you should avoid using default output in your scripts. Always explicitly define expected columns by using --output columns-list",
+   "location": "findmnt(8), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man8/findmnt.8.html"
+  },
+  {
+   "finding": "tmpfs properties list.",
+   "quote": "The filesystem can employ swap space when physical memory pressure demands it. • The filesystem consumes only as much physical memory and swap space as is required to store the current contents of the filesystem.",
+   "location": "tmpfs(5), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man5/tmpfs.5.html"
+  },
+  {
+   "finding": "tmpfs default size and inode limits.",
+   "quote": "The default, when neither size nor nr_blocks is specified, is size=50%. [...] nr_inodes=inodes The maximum number of inodes for this instance. The default is half of the number of your physical RAM pages",
+   "location": "tmpfs(5), 'Mount options'",
+   "cite_url": "https://man7.org/linux/man-pages/man5/tmpfs.5.html"
+  },
+  {
+   "finding": "Kernel doc: tmpfs lives in the page cache, shows up as Shmem in /proc/meminfo and 'Shared' in free(1); /dev/shm is a tmpfs for POSIX shared memory.",
+   "quote": "Since tmpfs lives completely in the page cache and optionally on swap, all tmpfs pages will be shown as \"Shmem\" in /proc/meminfo and \"Shared\" in free(1).",
+   "location": "Kernel docs, Tmpfs",
+   "cite_url": "https://docs.kernel.org/filesystems/tmpfs.html"
+  },
+  {
+   "finding": "Docker tmpfs mounts: default size 50% of host RAM; default mode 1777; not shareable between containers; removed when the container stops.",
+   "quote": "`tmpfs-size` Size of the tmpfs mount in bytes. If unset, the default maximum size of a tmpfs volume is 50% of the host's total RAM. `tmpfs-mode` File mode of the tmpfs in octal. For instance, `700` or `0770`. Defaults to `1777` or world-writable.",
+   "location": "Docker Docs, 'tmpfs mounts' → 'Options for --mount'",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/"
+  },
+  {
+   "finding": "chroot(2): who may call it, and the cwd/fd escape routes.",
+   "quote": "This call does not change the current working directory [...]. In particular, the superuser can escape from a \"chroot jail\" by doing: mkdir foo; chroot foo; cd ..; This call does not close open file descriptors, and such file descriptors may allow access to files outside the chroot tree.",
+   "location": "chroot(2), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chroot.2.html"
+  },
+  {
+   "finding": "pivot_root(2) definition and container use.",
+   "quote": "pivot_root() changes the root mount in the mount namespace of the calling process. More precisely, it moves the root mount to the directory put_old and makes new_root the new root mount. [...] A modern use is to set up a root filesystem during the creation of a container.",
+   "location": "pivot_root(2), DESCRIPTION and NOTES",
+   "cite_url": "https://man7.org/linux/man-pages/man2/pivot_root.2.html"
+  },
+  {
+   "finding": "runc uses pivot_root by default; --no-pivot is flagged as potentially unsafe.",
+   "quote": "--no-pivot: Do not use pivot root to jail process inside rootfs. This should not be used except in exceptional circumstances, and may be unsafe from the security standpoint.",
+   "location": "runc, man/runc-create.8.md, OPTIONS",
+   "cite_url": "https://github.com/opencontainers/runc/blob/main/man/runc-create.8.md"
+  },
+  {
+   "finding": "EXECUTED — findmnt -T / in a container: root is an overlay mount (output cut at 400 chars; on this host the lower/upper dirs are containerd snapshots, not /var/lib/docker/overlay2).",
+   "quote": "$ docker run --rm ubuntu:24.04 findmnt -T /\nTARGET SOURCE  FSTYPE  OPTIONS\n/      overlay overlay rw,relatime,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/54777/fs:/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/54488/fs,upperdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/54778/fs,workdir=…",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — the full mount tree of a default container (columns cut at 160 chars, container ID shortened): masked /proc paths (tmpfs[/null] over /proc/kcore, /proc/keys, …), read-only /proc/sys, /sys and cgroup2, tmpfs /dev, 64 MB /dev/shm, and three single-file bind mounts from the host's ext4.",
+   "quote": "$ docker run --rm ubuntu:24.04 findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS\nTARGET                  SOURCE                 FSTYPE  OPTIONS\n/                       overlay                overlay rw,relatime,lowerdir=…\n|-/proc                 proc                   proc    rw,nosuid,nodev,noexec,relatime\n| |-/proc/bus           proc[/bus]             proc    ro,nosuid,nodev,noexec,relatime\n| |-/proc/fs            proc[/fs]              proc    ro,…\n| |-/proc/irq           proc[/irq]             proc    ro,…\n| |-/proc/sys           proc[/sys]             proc    ro,…\n| |-/proc/sysrq-trigger proc[/sysrq-trigger]   proc    ro,…\n| |-/proc/interrupts    tmpfs[/null]           tmpfs   rw,nosuid,size=65536k,…\n| |-/proc/kcore         tmpfs[/null]           tmpfs   rw,nosuid,size=65536k,…\n| |-/proc/keys          tmpfs[/null]           tmpfs   rw,nosuid,size=65536k,…\n| |-/proc/timer_list    tmpfs[/null]           tmpfs   rw,nosuid,size=65536k,…\n| `-/proc/scsi          tmpfs                  tmpfs   ro,relatime\n|-/dev                  tmpfs                  tmpfs   rw,nosuid,size=65536k,…\n| |-/dev/pts            devpts                 devpts  rw,nosuid,noexec,…\n| |-/dev/mqueue         mqueue                 mqueue  rw,nosuid,nodev,noexec,…\n| `-/dev/shm            shm                    tmpfs   rw,nosuid,nodev,noexec,…\n|-/sys                  sysfs                  sysfs   ro,nosuid,nodev,noexec,…\n| |-/sys/firmware       tmpfs                  tmpfs   ro,relatime\n| `-/sys/fs/cgroup      cgroup                 cgroup2 ro,nosuid,nodev,noexec,…\n|-/etc/resolv.conf      /dev/vda1[/docker/containers/<id>/resolv.conf] ext4 rw,relatime,discard\n|-/etc/hostname         /dev/vda1[/docker/containers/<id>/hostname]    ext4 rw,relatime,discard\n`-/etc/hosts            /dev/vda1[/docker/containers/<id>/hosts]       ext4 rw,relatime,discard",
+   "location": "executed ubuntu:24.04 (SOURCE column tidied, options trimmed with …); Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — which mounts are read-only in a default container.",
+   "quote": "$ docker run --rm ubuntu:24.04 findmnt -O ro -o TARGET,FSTYPE\nTARGET              FSTYPE\n/proc/bus           proc\n/proc/fs            proc\n/proc/irq           proc\n/proc/sys           proc\n/proc/sysrq-trigger proc\n/proc/scsi          tmpfs\n/sys                sysfs\n|-/sys/firmware     tmpfs\n`-/sys/fs/cgroup    cgroup2",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — auditing 'is the root read-only?': docker run --read-only.",
+   "quote": "$ docker run --rm --read-only ubuntu:24.04 sh -c 'findmnt -n -o TARGET,FSTYPE,VFS-OPTIONS -T /; touch /x'\n/      overlay ro,relatime\ntouch: cannot touch '/x': Read-only file system",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — raw mountinfo lines and /etc/mtab symlink inside a container (first line cut at 150 chars).",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c 'head -3 /proc/self/mountinfo; ls -l /etc/mtab'\n349 198 0:79 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/54834/f…\n351 349 0:141 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw\n352 349 0:142 / /dev rw,nosuid - tmpfs tmpfs rw,size=65536k,mode=755\nlrwxrwxrwx 1 root root 12 Sep 21 06:14 /etc/mtab -> /proc/mounts",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — mount fails in a default container (exit status 32) and works with --cap-add SYS_ADMIN.",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c 'mount -t tmpfs none /mnt; echo exit=$?'\nmount: /mnt: permission denied.\n       dmesg(1) may have more information after failed mount system call.\nexit=32\n$ docker run --rm --cap-add SYS_ADMIN ubuntu:24.04 sh -c 'mount -t tmpfs none /mnt; echo exit=$?; findmnt /mnt'\nexit=0\nTARGET SOURCE FSTYPE OPTIONS\n/mnt   none   tmpfs  rw,relatime",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — tmpfs is charged to the container's memory cgroup: a 200 MB tmpfs in a 64 MB container; writing 100 MB gets dd OOM-killed (137) with shmem at the 64 MB limit. `docker inspect` afterwards: OOMKilled=true.",
+   "quote": "$ docker run --memory 64m --memory-swap 64m --tmpfs /t:size=200m ubuntu:24.04 sh -c 'dd if=/dev/zero of=/t/big bs=1M count=100; echo exit=$?; cat /sys/fs/cgroup/memory.max; grep -E \"^(shmem|file) \" /sys/fs/cgroup/memory.stat; grep oom_kill /sys/fs/cgroup/memory.events'\nKilled\nexit=137\n67108864\nfile 64851968\nshmem 64851968\noom_kill 1",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — within the limit, tmpfs writes appear byte-for-byte in memory.stat shmem; and Docker's --tmpfs applies nosuid,nodev,noexec by default.",
+   "quote": "$ docker run --rm --memory 64m --tmpfs /t:size=200m ubuntu:24.04 sh -c 'grep -E \"^shmem \" /sys/fs/cgroup/memory.stat; dd if=/dev/zero of=/t/f bs=1M count=20 2>/dev/null; grep -E \"^shmem \" /sys/fs/cgroup/memory.stat; df -h /t | tail -1; findmnt -n /t'\nshmem 0\nshmem 20971520\ntmpfs           200M   20M  180M  10% /t\n/t     tmpfs  tmpfs  rw,nosuid,nodev,noexec,relatime,size=204800k",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  }
+ ],
+ "teaching_notes": "Everything planned is confirmed; the valuable precision is: (1) read-only bind mounts — both the one-step `-o bind,ro` (util-linux ≥ 2.27, 'not atomic') and the classic two-step are current, and EITHER way only the new mountpoint is read-only ('the olddir will be writable') and submounts are not covered unless ro=recursive; important for 'are the tests really read-only?' audits. (2) tmpfs default size is 50% of RAM but inside a memory-limited container the real cap is the memory cgroup — Docker now says this explicitly, and the executed OOM demo proves it; a big scratch tmpfs can get an agent's process OOM-killed. (3) chroot(2) wording is strong and quotable: 'not intended to be used for any kind of security purpose'. (4) 'authoritative list' is the author's gloss; the man pages say mountinfo describes the mounts 'in the process's mount namespace' and findmnt reads the kernel by default. (5) noexec only stops direct execution. (6) Docker's default container mount tree (executed) is a ready-made audit exhibit: masked /proc files, ro /sys, ro cgroup2, bind-mounted /etc/hosts|hostname|resolv.conf."
+}

@@ -1,0 +1,370 @@
+=== page 23 verification, 2026-09-21
+$ ./run-hardened.sh lt-23-rollout
+ca17c7778af67358cc02fb1a38c1229dd9abc132d9884171621387d6e72939d2
+[exit=0]
+$ docker exec lt-23-rollout id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+[exit=0]
+$ docker exec lt-23-rollout python3 wordfreq.py data/sample.txt
+3 The
+3 the
+2 on
+[exit=0]
+$ docker exec lt-23-rollout bash -c 'ls -la /app | head -5; touch /app/ok && echo app-writable; touch /etc/x; touch /home/agent/x'
+total 24
+drwxr-xr-x 4 agent agent 4096 Sep 21 16:12 .
+drwxr-xr-x 1 root  root  4096 Sep 21 16:12 ..
+-rw-r--r-- 1 agent agent  276 Sep 21 06:08 README.md
+drwxr-xr-x 2 agent agent 4096 Sep 21 16:12 data
+app-writable
+touch: cannot touch '/etc/x': Read-only file system
+touch: cannot touch '/home/agent/x': Read-only file system
+[exit=1]
+$ docker exec lt-23-rollout grep -E 'CapEff|CapBnd|NoNewPrivs|Seccomp:' /proc/self/status
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	0
+[exit=0]
+$ docker exec lt-23-rollout bash -c 'grep -E " / | /app | /tmp " /proc/mounts | cut -c1-110'
+overlay / overlay ro,relatime,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlay
+tmpfs /tmp tmpfs rw,nosuid,nodev,noexec,relatime,size=65536k 0 0
+/dev/vda1 /app ext4 rw,relatime,discard 0 0
+[exit=0]
+$ docker exec lt-23-rollout cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max
+536870912
+100000 100000
+128
+[exit=0]
+$ ./grade.sh lt-23-rollout /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-results.jsonl
+[exit=1]
+$ docker cp /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/fix.py lt-23-rollout:/tmp/fix.py
+Error response from daemon: container rootfs is marked read-only
+[exit=1]
+$ docker exec lt-23-rollout python3 /tmp/fix.py
+python3: can't open file '/tmp/fix.py': [Errno 2] No such file or directory
+[exit=2]
+$ ./grade.sh lt-23-rollout /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-results.jsonl
+[exit=1]
+$ cat /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-results.jsonl
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.002s  FAILED (failures=2) "}
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}
+[exit=0]
+
+=== docker cp vs read-only; stdin workaround
+$ docker cp /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/fix.py lt-23-rollout:/app/fix.py
+[exit=0]
+$ docker exec -i lt-23-rollout bash -c 'cat > /tmp/fix.py' < /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/fix.py
+[exit=0]
+$ docker exec lt-23-rollout python3 /tmp/fix.py
+[exit=0]
+$ docker exec lt-23-rollout python3 wordfreq.py data/sample.txt
+7 the
+2 cat
+2 end
+[exit=0]
+$ docker stop -t 2 lt-23-rollout
+lt-23-rollout
+[exit=0]
+$ ./grade.sh lt-23-rollout /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-results.jsonl
+[exit=1]
+$ tail -1 /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-results.jsonl
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}
+[exit=0]
+$ docker inspect --format '{{range .Mounts}}{{.Type}} {{.Name}} -> {{.Destination}} rw={{.RW}}{{println}}{{end}}' lt-23-rollout
+volume 9f72df6d11862fb50173f343c163d2465e33c1bf3ee1021d5824f9c708385e3e -> /app rw=true
+
+[exit=0]
+$ docker rm -v lt-23-rollout
+lt-23-rollout
+[exit=0]
+$ docker volume ls -q | wc -l
+       0
+[exit=0]
+
+=== verify script: hardened vs default sloppy
+$ ./run-hardened.sh lt-23-h
+5e938e14c7ee3d2b9c0cf23552d5d6dbac36ec780abc02dcd160397128155bb2
+[exit=0]
+$ docker exec -i lt-23-h bash -s < ../verify/23-verify-sandbox.sh
+PASS  not root (uid 1001)
+PASS  effective capabilities empty
+PASS  bounding set empty
+PASS  no_new_privs set
+PASS  root filesystem mounted read-only
+PASS  cannot write outside /app and /tmp
+PASS  /tmp writable
+PASS  /app writable
+PASS  no route off the box
+PASS  memory limit set (536870912)
+PASS  pids limit set (128)
+PASS  cpu limit set (100000 100000)
+PASS  no Docker socket in the box
+PASS  no grader or solution files visible
+0 check(s) failed
+[exit=0]
+$ docker run -d --name lt-23-s wordfreq-bench:sloppy
+228edea4e505a2cdc681055bc33aa9b710d114dcdf1b4fa84f76f1f370650426
+[exit=0]
+$ docker exec -i lt-23-s bash -s < ../verify/23-verify-sandbox.sh
+FAIL  not root (uid 0)
+FAIL  effective capabilities empty
+FAIL  bounding set empty
+FAIL  no_new_privs set
+FAIL  root filesystem mounted read-only
+FAIL  cannot write outside /app and /tmp
+PASS  /tmp writable
+PASS  /app writable
+FAIL  no route off the box
+FAIL  memory limit set (max)
+FAIL  pids limit set (max)
+FAIL  cpu limit set (max 100000)
+PASS  no Docker socket in the box
+PASS  no grader or solution files visible
+10 check(s) failed
+[exit=1]
+$ docker rm -f -v lt-23-h lt-23-s
+lt-23-h
+lt-23-s
+[exit=0]
+
+=== verify script v2 (two check bugs fixed): hardened vs default sloppy
+$ ./run-hardened.sh lt-23-h
+c9db15865508ccd9e112311ec8c132d76d4b37f0792415c98910c4e2f8bef2df
+[exit=0]
+$ docker exec -i lt-23-h bash -s < ../verify/23-verify-sandbox.sh
+PASS  not root (uid 1001)
+PASS  effective capabilities empty
+PASS  bounding set empty
+PASS  no_new_privs set
+PASS  root filesystem mounted read-only
+PASS  /etc, /usr, /home not writable
+PASS  /tmp writable
+PASS  /app writable
+PASS  no route off the box
+PASS  memory limit set (536870912)
+PASS  pids limit set (128)
+PASS  cpu limit set (100000 100000)
+PASS  no Docker socket in the box
+PASS  no grader directory in the box
+0 check(s) failed
+[exit=0]
+$ docker run -d --name lt-23-s wordfreq-bench:sloppy
+65f9ab94b3773c126fc875fbdfb86c49eccb2141b150856ff1ce72b14e0320d2
+[exit=0]
+$ docker exec -i lt-23-s bash -s < ../verify/23-verify-sandbox.sh
+FAIL  not root (uid 0)
+FAIL  effective capabilities empty
+FAIL  bounding set empty
+FAIL  no_new_privs set
+FAIL  root filesystem mounted read-only
+FAIL  /etc, /usr, /home not writable
+PASS  /tmp writable
+PASS  /app writable
+FAIL  no route off the box
+FAIL  memory limit set (max)
+FAIL  pids limit set (max)
+FAIL  cpu limit set (max 100000)
+PASS  no Docker socket in the box
+FAIL  no grader directory in the box
+11 check(s) failed
+[exit=1]
+$ docker rm -f -v lt-23-h lt-23-s
+lt-23-h
+lt-23-s
+[exit=0]
+
+=== rung 1: non-root
+$ docker run --rm -u root wordfreq-bench:hardened bash -c 'echo pwned >> /etc/passwd && echo root-wrote-it'
+root-wrote-it
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened bash -c 'echo pwned >> /etc/passwd'
+bash: line 1: /etc/passwd: Permission denied
+[exit=1]
+$ docker run --rm wordfreq-bench:hardened bash -c 'apt-get install -y git 2>&1 | tail -2'
+E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?
+[exit=0]
+
+=== rung 2: cap-drop
+$ docker run --rm -u root wordfreq-bench:hardened grep -E 'CapEff|CapBnd' /proc/self/status
+CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened grep -E 'CapEff|CapBnd' /proc/self/status
+CapEff:	0000000000000000
+CapBnd:	00000000a80425fb
+[exit=0]
+$ docker run --rm --cap-drop ALL wordfreq-bench:hardened grep -E 'CapEff|CapBnd' /proc/self/status
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+[exit=0]
+$ docker run --rm -u root --cap-drop ALL wordfreq-bench:hardened bash -c 'id -u; chown agent /etc/hostname; cat /etc/shadow | head -1'
+0
+chown: changing ownership of '/etc/hostname': Operation not permitted
+root:*:20707:0:99999:7:::
+[exit=0]
+$ docker run --rm -u root --cap-drop ALL --cap-add CHOWN wordfreq-bench:hardened bash -c 'chown agent /etc/hostname && echo chown-ok'
+chown-ok
+[exit=0]
+
+=== rung 3: no-new-privileges (setuid copy of id, made by root beforehand)
+$ docker run -d --name lt-23-nnp0 -u root wordfreq-bench:hardened
+d2e7c50c55a1ba74730870b73aba245199e5d030f035089e959c946ae7b2afae
+[exit=0]
+$ docker run -d --name lt-23-nnp1 -u root --security-opt no-new-privileges wordfreq-bench:hardened
+34bc4d12f326f6bd5242c27355d4e56dba07a3b6fa892c3d50d48e1e26acd0f1
+[exit=0]
+$ docker exec lt-23-nnp0 bash -c 'cp /usr/bin/id /usr/local/bin/rootid && chmod u+s /usr/local/bin/rootid && ls -l /usr/local/bin/rootid'
+-rwsr-xr-x 1 root root 67952 Sep 21 16:14 /usr/local/bin/rootid
+[exit=0]
+$ docker exec -u agent lt-23-nnp0 /usr/local/bin/rootid
+uid=1001(agent) gid=1001(agent) euid=0(root) groups=1001(agent)
+[exit=0]
+$ docker exec -u agent lt-23-nnp0 grep NoNewPrivs /proc/self/status
+NoNewPrivs:	0
+[exit=0]
+$ docker exec lt-23-nnp1 bash -c 'cp /usr/bin/id /usr/local/bin/rootid && chmod u+s /usr/local/bin/rootid && ls -l /usr/local/bin/rootid'
+-rwsr-xr-x 1 root root 67952 Sep 21 16:14 /usr/local/bin/rootid
+[exit=0]
+$ docker exec -u agent lt-23-nnp1 /usr/local/bin/rootid
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+[exit=0]
+$ docker exec -u agent lt-23-nnp1 grep NoNewPrivs /proc/self/status
+NoNewPrivs:	1
+[exit=0]
+$ docker rm -f lt-23-nnp0 lt-23-nnp1
+lt-23-nnp0
+lt-23-nnp1
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened find / -xdev -perm -4000 -type f 2>/dev/null
+/usr/bin/chfn
+/usr/bin/newgrp
+/usr/bin/umount
+/usr/bin/passwd
+/usr/bin/chsh
+/usr/bin/mount
+/usr/bin/su
+/usr/bin/gpasswd
+[exit=1]
+
+=== rung 4: read-only costs
+$ docker run --rm --read-only --tmpfs /tmp:size=64m wordfreq-bench:hardened bash -c 'PYTHONPATH=. python3 -m unittest discover -s tests 2>&1 | tail -1; ls /app/__pycache__'
+OK
+ls: cannot access '/app/__pycache__': No such file or directory
+[exit=2]
+$ docker run --rm --read-only --tmpfs /tmp:size=64m wordfreq-bench:hardened bash -c 'python3 -m venv /home/agent/venv 2>&1 | tail -1'
+Error: [Errno 30] Read-only file system: '/home/agent/venv'
+[exit=0]
+$ docker run --rm --read-only --tmpfs /tmp:size=64m wordfreq-bench:hardened bash -c 'head -c 100m /dev/zero > /tmp/big; ls -lh /tmp/big | cut -d" " -f5'
+head: error writing 'standard output': No space left on device
+64M
+[exit=0]
+
+=== rung 5: network none
+$ docker run --rm --network none wordfreq-bench:hardened bash -c 'cat /proc/net/route; python3 -c "import socket; socket.create_connection((\"1.1.1.1\", 443), 3)" 2>&1 | tail -1'
+Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT                                                       
+OSError: [Errno 101] Network is unreachable
+[exit=0]
+
+=== rung 6: pids limit (safe: 100 sleeps under --pids-limit 50 --memory 128m)
+$ docker run --rm --pids-limit 50 --memory 128m wordfreq-bench:hardened bash -c 'for i in $(seq 1 100); do sleep 3 & done 2>&1 | sort | uniq -c; cat /sys/fs/cgroup/pids.events'
+      4 bash: fork: retry: Resource temporarily unavailable
+max 4
+[exit=0]
+
+=== rung 7: outside-in check of the never-list
+$ ./run-hardened.sh lt-23-h
+327edab44b8f8ad2732e6648979151c6ef073f6cddb22ea454c83cbeadef5c74
+[exit=0]
+$ docker inspect --format 'privileged={{.HostConfig.Privileged}} pid={{.HostConfig.PidMode}} net={{.HostConfig.NetworkMode}} binds={{json .HostConfig.Binds}} capdrop={{json .HostConfig.CapDrop}} secopt={{json .HostConfig.SecurityOpt}} ro={{.HostConfig.ReadonlyRootfs}} user={{.Config.User}}' lt-23-h
+privileged=false pid= net=none binds=null capdrop=["ALL"] secopt=["no-new-privileges"] ro=true user=agent
+[exit=0]
+$ docker exec lt-23-h ls -l /var/run/docker.sock
+ls: cannot access '/var/run/docker.sock': No such file or directory
+[exit=2]
+$ docker cp /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/fix.py lt-23-h:/tmp/fix.py
+Error response from daemon: container rootfs is marked read-only
+[exit=1]
+$ docker rm -f -v lt-23-h
+lt-23-h
+[exit=0]
+
+=== compose equivalent
+$ cat compose.yaml
+name: lt-23-task
+services:
+  default:
+    image: wordfreq-bench:hardened
+    user: agent
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+    volumes: ["/app"]            # anonymous volume: writable, removed by `down -v`
+    network_mode: none
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    init: true
+[exit=0]
+$ docker compose up -d 2>&1 | tail -1
+ Container lt-23-task-default-1  Started
+[exit=0]
+$ docker compose exec -T default bash -s < /Users/mark/dev/repos/_do/evals/courses/linux/linux-tut/research/verify/23-verify-sandbox.sh | tail -4
+PASS  cpu limit set (100000 100000)
+PASS  no Docker socket in the box
+PASS  no grader directory in the box
+0 check(s) failed
+[exit=0]
+$ docker compose down -v 2>&1 | tail -1
+ Container lt-23-task-default-1  Removed
+[exit=0]
+
+=== oracle re-validation under the hardened policy
+$ ./run-hardened.sh lt-23-oracle
+44f4eb7ed035468a56e3fe77b41d28945241973c5bb50077de1d266d7c063357
+[exit=0]
+$ docker exec -i lt-23-oracle bash -c 'cat > /tmp/fix.py' < /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/fix.py && docker exec lt-23-oracle python3 /tmp/fix.py
+[exit=0]
+$ rm -f /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-oracle.jsonl; ./grade.sh lt-23-oracle /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-oracle.jsonl; cat /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt23-oracle.jsonl
+{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.002s  OK "}
+[exit=0]
+$ docker rm -f -v lt-23-oracle
+lt-23-oracle
+[exit=0]
+$ docker ps -a --filter name=lt-23 --format '{{.Names}}'
+[exit=0]
+
+=== labs 3 and 5
+$ ./run-hardened.sh lt-23-h1
+faf0b281d910ad0c0da4686c42b2a7bade1d115db710d433fc03ffd9feaccaaf
+[exit=0]
+$ docker exec lt-23-h1 bash -c 'python3 -m venv --without-pip /tmp/venv && /tmp/venv/bin/python -V'
+Python 3.12.3
+[exit=0]
+$ docker exec lt-23-h1 bash -c 'ls -l /tmp/venv/bin/ | head -5'
+total 24
+-rw-r--r-- 1 agent agent 9033 Sep 21 16:20 Activate.ps1
+-rw-r--r-- 1 agent agent 2006 Sep 21 16:20 activate
+-rw-r--r-- 1 agent agent  905 Sep 21 16:20 activate.csh
+-rw-r--r-- 1 agent agent 2180 Sep 21 16:20 activate.fish
+[exit=0]
+$ docker exec lt-23-h1 bash -c 'printf "#!/bin/sh
+echo ran
+" > /tmp/t.sh; chmod +x /tmp/t.sh; /tmp/t.sh; sh /tmp/t.sh'
+bash: line 1: /tmp/t.sh: Permission denied
+ran
+[exit=0]
+$ docker rm -f -v lt-23-h1
+lt-23-h1
+[exit=0]
+$ docker run -d --name lt-23-s1 wordfreq-bench:sloppy
+37abb40b6df935d46055195f953688fe7d0dfa856f8aad11d60323a2832d6d30
+[exit=0]
+$ docker inspect --format 'privileged={{.HostConfig.Privileged}} net={{.HostConfig.NetworkMode}} capdrop={{json .HostConfig.CapDrop}} secopt={{json .HostConfig.SecurityOpt}} ro={{.HostConfig.ReadonlyRootfs}} user={{.Config.User}} mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}}' lt-23-s1
+privileged=false net=bridge capdrop=null secopt=null ro=false user= mem=0 pids=<nil>
+[exit=0]
+$ docker rm -f lt-23-s1
+lt-23-s1
+[exit=0]

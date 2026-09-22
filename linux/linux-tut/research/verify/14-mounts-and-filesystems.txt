@@ -1,0 +1,265 @@
+### 14 verification — 2026-09-21T16:17:15Z — Docker 28.1.1
+## A. default container: findmnt
+$ docker run --rm ubuntu:24.04 findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS
+TARGET                  SOURCE                                                                                                     FSTYPE  OPTIONS
+/                       overlay                                                                                                    overlay rw,relatime,lowerdir=/var/lib/desktop-containerd/daemon/io.co
+|-/proc                 proc                                                                                                       proc    rw,nosuid,nodev,noexec,relatime
+| |-/proc/bus           proc[/bus]                                                                                                 proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/fs            proc[/fs]                                                                                                  proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/irq           proc[/irq]                                                                                                 proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/sys           proc[/sys]                                                                                                 proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/sysrq-trigger proc[/sysrq-trigger]                                                                                       proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/interrupts    tmpfs[/null]                                                                                               tmpfs   rw,nosuid,size=65536k,mode=755
+| |-/proc/kcore         tmpfs[/null]                                                                                               tmpfs   rw,nosuid,size=65536k,mode=755
+| |-/proc/keys          tmpfs[/null]                                                                                               tmpfs   rw,nosuid,size=65536k,mode=755
+| |-/proc/timer_list    tmpfs[/null]                                                                                               tmpfs   rw,nosuid,size=65536k,mode=755
+| `-/proc/scsi          tmpfs                                                                                                      tmpfs   ro,relatime
+|-/dev                  tmpfs                                                                                                      tmpfs   rw,nosuid,size=65536k,mode=755
+| |-/dev/pts            devpts                                                                                                     devpts  rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=666
+| |-/dev/mqueue         mqueue                                                                                                     mqueue  rw,nosuid,nodev,noexec,relatime
+| `-/dev/shm            shm                                                                                                        tmpfs   rw,nosuid,nodev,noexec,relatime,size=65536k
+|-/sys                  sysfs                                                                                                      sysfs   ro,nosuid,nodev,noexec,relatime
+| |-/sys/firmware       tmpfs                                                                                                      tmpfs   ro,relatime
+| `-/sys/fs/cgroup      cgroup                                                                                                     cgroup2 ro,nosuid,nodev,noexec,relatime
+|-/etc/resolv.conf      /dev/vda1[/docker/containers/b8d4506f0fbf23e0a8bdcb8f950a6dd5099a30f4e69aa393acc56bc470e41933/resolv.conf] ext4    rw,relatime,discard
+|-/etc/hostname         /dev/vda1[/docker/containers/b8d4506f0fbf23e0a8bdcb8f950a6dd5099a30f4e69aa393acc56bc470e41933/hostname]    ext4    rw,relatime,discard
+`-/etc/hosts            /dev/vda1[/docker/containers/b8d4506f0fbf23e0a8bdcb8f950a6dd5099a30f4e69aa393acc56bc470e41933/hosts]       ext4    rw,relatime,discard
+## A2. df -hT, lsblk, mount|head, mountinfo
+$ df -hT
+Filesystem     Type     Size  Used Avail Use% Mounted on
+overlay        overlay 1007G  6.7G  949G   1% /
+tmpfs          tmpfs     64M     0   64M   0% /dev
+shm            tmpfs     64M     0   64M   0% /dev/shm
+/dev/vda1      ext4    1007G  6.7G  949G   1% /etc/hosts
+tmpfs          tmpfs    3.9G     0  3.9G   0% /proc/scsi
+tmpfs          tmpfs    3.9G     0  3.9G   0% /sys/firmware
+$ lsblk
+NAME   MAJ:MIN RM   SIZE RO TYPE MOUNTPOINTS
+nbd0    43:0    0     0B  0 disk 
+nbd1    43:32   0     0B  0 disk 
+nbd2    43:64   0     0B  0 disk 
+nbd3    43:96   0     0B  0 disk 
+nbd4    43:128  0     0B  0 disk 
+nbd5    43:160  0     0B  0 disk 
+nbd6    43:192  0     0B  0 disk 
+nbd7    43:224  0     0B  0 disk 
+vda    254:0    0     1T  0 disk 
+`-vda1 254:1    0  1024G  0 part /etc/hosts
+                                 /etc/hostname
+                                 /etc/resolv.conf
+vdb    254:16   0 537.4M  1 disk 
+nbd8    43:256  0     0B  0 disk 
+nbd9    43:288  0     0B  0 disk 
+nbd10   43:320  0     0B  0 disk 
+nbd11   43:352  0     0B  0 disk 
+nbd12   43:384  0     0B  0 disk 
+nbd13   43:416  0     0B  0 disk 
+nbd14   43:448  0     0B  0 disk 
+nbd15   43:480  0     0B  0 disk 
+exit=0
+$ mount | head -3
+overlay on / type overlay (rw,relatime,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/55339/fs:/var/lib/desktop-co
+proc on /proc type proc (rw,nosuid,nodev,noexec,relatime)
+tmpfs on /dev type tmpfs (rw,nosuid,size=65536k,mode=755)
+$ head -2 /proc/self/mountinfo
+388 258 0:82 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/daemon/io.containerd.snapshotter.v1.overlayfs/snapshots/55339/fs:/var/lib
+390 388 0:149 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw
+$ findmnt -T /etc/hosts
+TARGET     SOURCE                                                                                               FSTYPE OPTIONS
+/etc/hosts /dev/vda1[/docker/containers/195588246fd6c4f65a6ab8c13eaea0a98b1c00be2ef0ebcbfe18a01cd4de9e6d/hosts] ext4   rw,relatime,discard
+$ findmnt -T /usr/bin/env -o TARGET,FSTYPE
+TARGET FSTYPE
+/      overlay
+$ findmnt -n -o TARGET,FSTYPE,VFS-OPTIONS -T /
+/      overlay rw,relatime
+
+## B. eval-shaped layout: read-only root, tmpfs /tmp, volume /app, tests bind-mounted ro
+$ docker run -d --name lt-14-box --read-only --tmpfs /tmp:size=64m --mount type=volume,dst=/app --mount type=bind,src=$PWD/tests,dst=/tests,readonly wordfreq-bench:hardened
+4968b2a41ae9f20b265df18fc3d186fbeae0945634c19211cb94d6ac6595dc9d
+$ docker exec lt-14-box findmnt -o TARGET,FSTYPE,VFS-OPTIONS | grep -E "^/ |/app|/tmp|/tests"
+TARGET                  SOURCE                                                                                                                       FSTYPE    VFS-OPTIONS
+/                       overlay                                                                                                                      overlay   ro,relatime
+|-/proc                 proc                                                                                                                         proc      rw,nosuid,nodev,noexec,relatime
+|-/dev                  tmpfs                                                                                                                        tmpfs     rw,nosuid
+|-/sys                  sysfs                                                                                                                        sysfs     ro,nosuid,nodev,noexec,relatime
+|-/tmp                  tmpfs                                                                                                                        tmpfs     rw,nosuid,nodev,noexec,relatime
+|-/tests                /run/host_mark/private[/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt14/tests] fakeowner ro,nosuid,nodev,relatime
+$ (as agent) id; touch /x; touch /tests/x; touch /app/x; touch /tmp/x; echo rc
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+touch: cannot touch '/x': Read-only file system
+exit=1
+touch: cannot touch '/tests/x': Read-only file system
+exit=1
+exit=0
+exit=0
+touch: cannot touch '/etc/x': Read-only file system
+exit=1
+$ (as root) same
+0
+touch: cannot touch '/tests/x': Read-only file system
+exit=1
+chmod: changing permissions of '/tests': Read-only file system
+exit=1
+mount: /tests: permission denied.
+       dmesg(1) may have more information after failed mount system call.
+exit=32
+{"the": 3}
+$ findmnt -O ro -o TARGET,FSTYPE (non-proc/sys)
+TARGET                FSTYPE
+/                     overlay
+|-/proc/bus           proc
+|-/proc/fs            proc
+|-/proc/irq           proc
+|-/proc/sys           proc
+|-/proc/sysrq-trigger proc
+|-/proc/scsi          tmpfs
+|-/sys                sysfs
+| |-/sys/firmware     tmpfs
+| `-/sys/fs/cgroup    cgroup2
+|-/tests              fakeowner
+|-/etc/resolv.conf    ext4
+|-/etc/hostname       ext4
+`-/etc/hosts          ext4
+$ findmnt -T /tests/expected.json -n -o TARGET,VFS-OPTIONS ; findmnt -T /app/wordfreq.py -n -o TARGET,FSTYPE,VFS-OPTIONS
+/tests ro,nosuid,nodev,relatime
+/app   ext4   rw,relatime
+$ docker inspect mounts
+volume /app RW=true
+bind /tests RW=false
+{"/tmp":"size=64m"} ReadonlyRootfs=true
+## B2. permission denied vs read-only: a non-root user on a writable fs
+touch: cannot touch '/etc/x': Permission denied
+exit=1
+lt-14-box
+
+## B3. the four lines that matter, one findmnt call
+$ docker exec lt-14-box findmnt -n -o TARGET,FSTYPE,VFS-OPTIONS / /app /tmp /tests  (one per call)
+/      overlay ro,relatime
+/app   ext4   rw,relatime
+/tmp   tmpfs  rw,nosuid,nodev,noexec,relatime
+/tests fakeowner ro,nosuid,nodev,relatime
+
+## C. tmpfs: ENOSPC when the tmpfs is smaller than the memory limit; OOM when larger
+$ docker run --rm --memory 256m --tmpfs /scratch:size=32m ubuntu:24.04 bash -c "dd if=/dev/zero of=/scratch/big bs=1M count=100; echo exit=\$?; df -h /scratch | tail -1"
+dd: error writing '/scratch/big': No space left on device
+33+0 records in
+32+0 records out
+33554432 bytes (34 MB, 32 MiB) copied, 0.0370601 s, 905 MB/s
+exit=1
+tmpfs            32M   32M     0 100% /scratch
+$ docker run --name lt-14-oom --memory 64m --memory-swap 64m --tmpfs /scratch:size=200m ubuntu:24.04 bash -c "dd ...; echo exit=\$?; grep shmem memory.stat; grep oom_kill memory.events"
+OOMKilled=true ExitCode=137
+
+## D. bind mounts by hand (--cap-add SYS_ADMIN)
++ mkdir -p /srv/tests /mnt/view
++ echo secret-test
++ mount --bind /srv/tests /mnt/view
++ ls /mnt/view
+t.py
++ mount -o remount,bind,ro /mnt/view
++ findmnt -n -o TARGET,SOURCE,VFS-OPTIONS /mnt/view
+/mnt/view overlay[/srv/tests] ro,relatime
++ echo tamper
+bash: line 8: /mnt/view/t.py: Read-only file system
++ echo exit=1
++ echo tamper
++ echo exit=0
++ cat /mnt/view/t.py
+exit=1
+exit=0
+secret-test
+tamper
++ mkdir /mnt/two
++ mount -o bind,ro /srv/tests /mnt/two
++ findmnt -n -o TARGET,VFS-OPTIONS /mnt/two
+/mnt/two ro,relatime
++ mount -o remount,bind,rw /mnt/view
+exit=0
++ echo hi
++ echo exit=0
+
+## E. overlay by hand (--privileged, on a tmpfs)
++ mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/upper,workdir=/mnt/work /mnt/merged
++ ls merged
++ ls upper
+a.txt
+b.txt
++ echo changed
++ rm merged/b.txt
++ echo new
++ ls -l upper
+total 8
+-rw-r--r-- 1 root root   17 Sep 21 16:18 a.txt
+c--------- 2 root root 0, 0 Sep 21 16:18 b.txt
+-rw-r--r-- 1 root root    4 Sep 21 16:18 c.txt
++ ls merged
+a.txt
+c.txt
++ cat lower/a.txt lower/b.txt
+original
+keep
+
+## F. a named volume carries state between "rollouts"
+$ docker run --rm -v lt-14-work:/work ubuntu:24.04 bash -c "echo answer-from-rollout-1 > /work/notes.txt"
+$ docker run --rm -v lt-14-work:/work ubuntu:24.04 cat /work/notes.txt
+answer-from-rollout-1
+lt-14-work
+
+## C2. OOM rerun x2 (bash) and x1 (sh)
+--- shell=bash
+container exit=137
+OOMKilled=true ExitCode=137
+--- shell=bash
+container exit=137
+OOMKilled=true ExitCode=137
+--- shell=sh
+exit=137
+Killed
+tmpfs           200M   62M  139M  31% /scratch
+shmem 64823296
+oom_kill 1
+container exit=0
+OOMKilled=true ExitCode=0
+
+## G. lab checks
+$ docker run --rm ubuntu:24.04 findmnt -n -o FSTYPE,SOURCE -T /etc/hostname
+ext4
+$ lab2: --read-only --tmpfs /tmp
+touch: cannot touch '/x': Read-only file system
+/x exit=1
+/tmp/x exit=0
+/dev/shm/x exit=0
+touch: cannot touch '/var/tmp/x': Read-only file system
+/var/tmp/x exit=1
+touch: cannot touch '/root/x': Read-only file system
+/root/x exit=1
+ 3.8G
+bash: line 2: /tmp/s.sh: Permission denied
+exit=126
+ran
+$ lab5: tests mounted without ro
+$ docker run --rm -v "$PWD/tests":/tests ubuntu:24.04 bash -c "echo pass > /tests/test_hidden.py"; cat tests/test_hidden.py
+assert True
+$ with :ro
+exit=1
+bash: line 1: /tests/test_hidden.py: Read-only file system
+/tests ro,nosuid,nodev,relatime
+assert count("The the") == {"the": 2}
+assert count("The the") == {"the": 2}
+$ inspect a running one
+/tests RW=false
+
+
+## H. exact commands as shown on page
+touch: cannot touch '/x': Read-only file system
+/x exit=1
+/tmp/x exit=0
+/dev/shm/x exit=0
+touch: cannot touch '/var/tmp/x': Read-only file system
+/var/tmp/x exit=1
+bash: line 2: /tmp/s.sh: Permission denied
+exit=126
+ran
+touch: cannot touch '/etc/x': Read-only file system
+touch: cannot touch '/tests/x': Read-only file system
+exit=0

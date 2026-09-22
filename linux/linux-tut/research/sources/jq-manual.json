@@ -1,0 +1,121 @@
+{
+ "id": "jq-manual",
+ "tag": "[jq Manual]",
+ "citation": {
+  "authors": "jq contributors (jqlang)",
+  "title": "jq 1.8 Manual",
+  "venue": "jqlang.org",
+  "year": "2025",
+  "url": "https://jqlang.org/manual/"
+ },
+ "fetched_urls": [
+  "https://jqlang.org/manual/",
+  "https://jqlang.github.io/jq/manual/",
+  "https://jqlang.org/manual/v1.7/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "jq processes a stream of JSON values, so it reads JSONL (one object per line) natively; -c compact output; -r raw strings; -s slurp; select(), group_by, length; exit status with -e",
+   "verdict": "confirmed",
+   "finding": "Confirmed with one wording caveat: the manual never uses the terms 'JSONL' or 'NDJSON'; it says input is 'a sequence of whitespace-separated JSON values' each passed through the filter one at a time — JSONL is a special case (values may equally be on one line or pretty-printed across many). -c: one JSON object per output line. -r: string results written without JSON quotes. -s: read the entire input stream into one large array and run the filter once. select(f): passes input unchanged if f is true, else no output. group_by(.foo): input must be an ARRAY (so JSONL needs -s first); output sorted by the key. length: array elements / object key-value pairs / string codepoints / |number| / null=0. -e: exit 0 if last output was neither false nor null, 1 if it was false or null, 4 if no valid result was ever produced; without -e: 2 usage/system error, 3 compile error, 0 otherwise. Text identical in the 1.7 and 1.8 manuals.",
+   "quote": "jq filters run on a stream of JSON data. The input to jq is parsed as a sequence of whitespace-separated JSON values which are passed through the provided filter one at a time. The output(s) of the filter are written to standard output, as a sequence of newline-separated JSON data.",
+   "location": "Invoking jq",
+   "cite_url": "https://jqlang.org/manual/#invoking-jq"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "-e exit status, exact text.",
+   "quote": "Sets the exit status of jq to 0 if the last output value was neither false nor null, 1 if the last output value was either false or null, or 4 if no valid result was ever produced.",
+   "location": "Invoking jq, --exit-status / -e",
+   "cite_url": "https://jqlang.org/manual/#invoking-jq"
+  },
+  {
+   "fact": "Exit statuses without -e.",
+   "quote": "Normally jq exits with 2 if there was any usage problem or system error, 3 if there was a jq program compile error, or 0 if the jq program ran.",
+   "location": "Invoking jq, --exit-status / -e",
+   "cite_url": "https://jqlang.org/manual/#invoking-jq"
+  },
+  {
+   "fact": "Observed exit statuses, including one the option text does not list: malformed JSON input exits 5.",
+   "quote": "echo null | jq . -> 0 ; echo null | jq -e . -> 1 ; echo false | jq -e . -> 1 ; echo '{\"a\":1}' | jq -e .a -> 0 ; jq -e 'select(.a==2)' (no output) -> 4 ; echo '{bad' | jq . -> 'jq: parse error: Invalid numeric literal at line 2, column 0' status 5 ; jq '.[' -> 'jq: 1 compile error' status 3 ; jq . /nonexistent -> 'Could not open file' status 2",
+   "location": "executed ubuntu:24.04 (apt jq 1.7)"
+  },
+  {
+   "fact": "A malformed line mid-stream: jq emits the values before it, then stops with status 5 — later valid lines are NOT processed.",
+   "quote": "$ printf '{\"a\":1}\\n{bad\\n{\"a\":3}\\n' | jq -c . -> {\"a\":1} / jq: parse error: Invalid numeric literal at line 3, column 0 / status 5",
+   "location": "executed ubuntu:24.04 (apt jq 1.7)"
+  },
+  {
+   "fact": "--slurp exact text.",
+   "quote": "Instead of running the filter for each JSON object in the input, read the entire input stream into a large array and run the filter just once.",
+   "location": "Invoking jq, --slurp / -s",
+   "cite_url": "https://jqlang.org/manual/#invoking-jq"
+  },
+  {
+   "fact": "--raw-output exact text.",
+   "quote": "With this option, if the filter's result is a string then it will be written directly to standard output rather than being formatted as a JSON string with quotes. This can be useful for making jq filters talk to non-JSON-based systems.",
+   "location": "Invoking jq, --raw-output / -r",
+   "cite_url": "https://jqlang.org/manual/#invoking-jq"
+  },
+  {
+   "fact": "--compact-output exact text.",
+   "quote": "By default, jq pretty-prints JSON output. Using this option will result in more compact output by instead putting each JSON object on a single line.",
+   "location": "Invoking jq, --compact-output / -c",
+   "cite_url": "https://jqlang.org/manual/#invoking-jq"
+  },
+  {
+   "fact": "select exact text.",
+   "quote": "The function select(f) produces its input unchanged if f returns true for that input, and produces no output otherwise. It's useful for filtering lists: [1,2,3] | map(select(. >= 2)) will give you [2,3].",
+   "location": "Builtin operators and functions, select(boolean_expression)"
+  },
+  {
+   "fact": "group_by exact text.",
+   "quote": "group_by(.foo) takes as input an array, groups the elements having the same .foo field into separate arrays, and produces all of these arrays as elements of a larger array, sorted by the value of the .foo field.",
+   "location": "Builtin operators and functions, group_by(path_expression)"
+  },
+  {
+   "fact": "length semantics — the classic JSONL trap: without -s, `jq length results.jsonl` prints the number of KEYS in each object, not the number of records.",
+   "quote": "The length of an array is the number of elements. The length of an object is the number of key-value pairs. The length of null is zero.",
+   "location": "Builtin operators and functions, length; executed: jq 'length' r.jsonl -> 3 3 3 (keys per object); jq -s 'length' r.jsonl -> 3 (records)"
+  },
+  {
+   "fact": "--arg passes a shell value in safely as a string variable (avoids splicing shell variables into the program text).",
+   "quote": "If you run jq with --arg foo bar, then $foo is available in the program and has the value \"bar\". Note that value will be treated as a string, so --arg foo 123 will bind $foo to \"123\".",
+   "location": "Invoking jq, --arg name value"
+  },
+  {
+   "fact": "Always single-quote the jq program in the shell.",
+   "quote": "As a general rule it's best to always quote (with single-quote characters on Unix shells) the jq program, as too many characters with special meaning to jq are also shell meta-characters.",
+   "location": "Invoking jq"
+  },
+  {
+   "fact": ".foo on a missing key yields null rather than an error — silent nulls in analysis pipelines.",
+   "quote": ".foo produces the value at the key \"foo\" if the key is present, or null otherwise.",
+   "location": "Basic filters, Object Identifier-Index: .foo"
+  },
+  {
+   "fact": "-n (null input) and -R (raw input: each line as a string) exist; -R with -s gives the whole input as one string.",
+   "quote": "Don't parse the input as JSON. Instead, each line of text is passed to the filter as a string. If combined with --slurp, then the entire input is passed to the filter as a single long string.",
+   "location": "Invoking jq, --raw-input / -R"
+  },
+  {
+   "fact": "@csv / @tsv format an array as a CSV/TSV row (use with -r).",
+   "quote": "The input must be an array, and it is rendered as CSV with double quotes for strings, and quotes escaped by repetition.",
+   "location": "Format strings and escaping, @csv; executed: jq -r '[.id,.model,.pass] | @csv' -> 1,\"a\",true"
+  },
+  {
+   "fact": "Worked JSONL session (3-record results file).",
+   "quote": "$ jq -c 'select(.pass)' r.jsonl -> {\"id\":1,\"model\":\"a\",\"pass\":true}\n$ jq '.model' r.jsonl -> \"a\" \"b\" \"a\" ; with -r -> a b a\n$ jq -sc 'group_by(.model) | map({model: .[0].model, n: length, passed: (map(select(.pass)) | length)})' r.jsonl -> [{\"model\":\"a\",\"n\":2,\"passed\":1},{\"model\":\"b\",\"n\":1,\"passed\":0}]\n$ echo '{\"a\":1} {\"a\":2}' | jq -c . -> {\"a\":1} / {\"a\":2}",
+   "location": "executed ubuntu:24.04 (apt jq 1.7)"
+  },
+  {
+   "fact": "jq is not preinstalled in ubuntu:24.04; `apt-get install jq` gives jq 1.7 (reported by `jq --version` as jq-1.7). The default manual URL documents 1.8; a versioned 1.7 manual exists at /manual/v1.7/ and the passages cited here are identical in both.",
+   "quote": "$ jq --version -> jq-1.7",
+   "location": "executed ubuntu:24.04 (apt jq 1.7)"
+  }
+ ],
+ "teaching_notes": "The manual supports 'jq reads JSONL natively' only via the phrase 'whitespace-separated JSON values' — it never says JSONL; phrase it that way. Two traps worth teaching: (1) `jq length file.jsonl` counts keys per object, not records — you need -s (or `wc -l`); (2) jq stops at the first malformed line with status 5 after already emitting earlier output, and status 5 for parse errors is observed behaviour, not listed in the -e paragraph (the manual mentions 5 only as halt_error's default). jqlang.github.io/jq/manual/ serves the same page as jqlang.org/manual/ (byte-identical on fetch)."
+}

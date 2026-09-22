@@ -1,0 +1,371 @@
+# page 09 verification - 2026-09-21 - container lt-09-lab = ubuntu:24.04 + procps psmisc tmux python3, PID 1 = bash (docker run -dit), user learner uid 1001
+# sessions driven through a real pty with expect (docker exec -it -u learner lt-09-lab bash); TERM=dumb
+
+##### session A
+spawn docker exec -it -u learner -e TERM=dumb lt-09-lab bash
+learner@f61749bdc43c:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ echo $$
+15
+$ sleep 300 &
+[1] 23
+$ ps -ef --forest
+UID        PID  PPID  C STIME TTY          TIME CMD
+learner     15     0  0 16:29 pts/1    00:00:00 bash
+learner     23    15  0 16:29 pts/1    00:00:00  \_ sleep 300
+learner     24    15  0 16:29 pts/1    00:00:00  \_ ps -ef --forest
+root         1     0  0 16:29 pts/0    00:00:00 bash
+$ pstree -p
+bash(1)
+$ pstree -p $$
+bash(15)-+-pstree(26)
+         `-sleep(23)
+$ bash -c 'echo "child: I am $$, my parent is $PPID"'
+child: I am 27, my parent is 15
+$ bash -c 'echo "before exec: $$"; exec ps -o pid,ppid,comm -p $$'
+before exec: 28
+  PID  PPID COMMAND
+   28    15 ps
+$ cd /tmp; export COLOUR=plum; ulimit -Sn 512
+$ bash -c 'pwd; echo $COLOUR; ulimit -Sn; id -un'
+/tmp
+plum
+512
+learner
+$ kill %1
+$ cd /tmp
+[1]+  Terminated              sleep 300  (wd: /)
+(wd now: /tmp)
+$ python3 -m http.server 8000 >/tmp/server.log 2>&1 &
+[1] 30
+$ sleep 1; ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   4296  3488 pts/0    Ss+  16:29   0:00 bash
+learner     15  0.0  0.0   4816  3936 pts/1    Ss   16:29   0:00 bash
+learner     30  5.9  0.2  25744 18460 pts/1    S    16:29   0:00 python3 -m http
+learner     32  0.0  0.0   7628  3532 pts/1    R+   16:29   0:00 ps aux
+$ ps -eo pid,ppid,user,stat,rss,etime,time,args
+  PID  PPID USER     STAT   RSS     ELAPSED     TIME COMMAND
+    1     0 root     Ss+   3488       00:01 00:00:00 bash
+   15     0 learner  Ss    3936       00:01 00:00:00 bash
+   30    15 learner  S    18460       00:01 00:00:00 python3 -m http.server 8000
+   33    15 learner  R+    3468       00:00 00:00:00 ps -eo pid,ppid,user,stat,r
+$ top -bn1 | head -12
+top - 16:29:41 up  4:53,  0 user,  load average: 1.08, 1.05, 0.68
+Tasks:   5 total,   1 running,   4 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  0.0 us,  0.0 sy,  0.0 ni, 99.2 id,  0.8 wa,  0.0 hi,  0.0 si,  0.0 st 
+MiB Mem :   7837.3 total,   4494.9 free,    796.2 used,   2745.4 buff/cache     
+MiB Swap:   1024.0 total,   1024.0 free,      0.0 used.   7041.1 avail Mem 
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+    1 root      20   0    4296   3488   2976 S   0.0   0.0   0:00.00 bash
+   15 learner   20   0    4816   3936   3040 S   0.0   0.0   0:00.00 bash
+   30 learner   20   0   25744  18460   9372 S   0.0   0.2   0:00.06 python3
+   34 learner   20   0    8488   4544   2624 R   0.0   0.1   0:00.00 top
+   35 learner   20   0    2280   1152   1152 S   0.0   0.0   0:00.00 head
+$ pgrep -a python
+30 python3 -m http.server 8000
+$ pgrep http.server; echo "rc=$?"
+rc=1
+$ pgrep -f http.server; echo "rc=$?"
+30
+rc=0
+$ PID=$(pgrep -f http.server)
+$ tr '\0' ' ' < /proc/$PID/cmdline; echo
+python3 -m http.server 8000 
+$ ls -l /proc/$PID/cwd /proc/$PID/exe
+lrwxrwxrwx 1 learner learner 0 Sep 21 16:29 /proc/30/cwd -> /tmp
+lrwxrwxrwx 1 learner learner 0 Sep 21 16:29 /proc/30/exe -> /usr/bin/python3.12
+$ ls -l /proc/$PID/fd
+total 0
+lrwx------ 1 learner learner 64 Sep 21 16:29 0 -> /dev/pts/1
+l-wx------ 1 learner learner 64 Sep 21 16:29 1 -> /tmp/server.log
+l-wx------ 1 learner learner 64 Sep 21 16:29 2 -> /tmp/server.log
+lrwx------ 1 learner learner 64 Sep 21 16:29 3 -> 'socket:[191132]'
+$ grep -E '^(Name|State|Pid|PPid|Uid|VmRSS|Threads)' /proc/$PID/status
+Name:	python3
+State:	S (sleeping)
+Pid:	30
+PPid:	15
+Uid:	1001	1001	1001	1001
+VmRSS:	   18460 kB
+Threads:	1
+$ <o "${p#/proc/} $(tr '\0' ' ' < "$p/cmdline")"; done
+1 bash 
+15 bash 
+30 python3 -m http.server 8000 
+$ cat /proc/1/environ
+cat: /proc/1/environ: Permission denied
+$ kill $PID
+$ exit
+exit
+
+##### session C
+spawn docker exec -it -u learner -e TERM=dumb lt-09-lab bash
+learner@f61749bdc43c:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ sleep 600 &
+[1] 59
+$ sleep 700
+^Z
+[2]+  Stopped                 sleep 700
+$ jobs -l
+[1]-    59 Running                 sleep 600 &
+[2]+    60 Stopped                 sleep 700
+$ bg %2
+[2]+ sleep 700 &
+$ ps -o pid,stat,args
+  PID STAT COMMAND
+   51 Ss   bash
+   59 S    sleep 600
+   60 S    sleep 700
+   61 R+   ps -o pid,stat,args
+$ fg %1
+sleep 600
+^C
+$ echo "rc=$?"
+rc=130
+$ kill %2
+$ jobs
+[2]+  Running                 sleep 700 &
+[2]+  Terminated              sleep 700
+$ sleep 800 &
+[1] 62
+$ (sleep 300 &)
+$ ps -o pid,ppid,stat,args -C sleep
+  PID  PPID STAT COMMAND
+   62    51 S    sleep 800
+   64     1 S    sleep 300
+$ exit
+exit
+
+##### after session C exited (typed exit):
+$ docker exec lt-09-lab ps -eo pid,ppid,user,stat,args
+  PID  PPID USER     STAT COMMAND
+    1     0 root     Ss+  bash
+   62     1 learner  S    sleep 800
+   64     1 learner  S    sleep 300
+   66     0 root     Rs   ps -eo pid,ppid,user,stat,args
+
+##### session F
+--- hup-demo.sh:
+#!/bin/bash
+# Three background jobs in a terminal; then the terminal goes away.
+tmux new-session -d -s demo
+tmux send-keys -t demo 'sleep 800 &' Enter
+tmux send-keys -t demo 'nohup sleep 900 >/dev/null 2>&1 &' Enter
+tmux send-keys -t demo 'sleep 1000 & disown' Enter
+sleep 1
+ps -o pid,ppid,stat,args -C sleep
+tmux kill-session -t demo
+sleep 1
+echo '--- after the terminal closed:'
+ps -o pid,ppid,stat,args -C sleep
+--- toolcall.py:
+import subprocess, time
+
+def tool_call(cmd, timeout=5):
+    """What a harness does: run one command, capture both streams."""
+    t0 = time.time()
+    try:
+        r = subprocess.run(["bash", "-c", cmd], capture_output=True,
+                           text=True, timeout=timeout)
+        out = f"exit={r.returncode} stdout={r.stdout!r}"
+    except subprocess.TimeoutExpired:
+        out = "TIMEOUT"
+    print(f"{time.time() - t0:4.1f}s  {out}  <- {cmd}")
+
+tool_call("sleep 3 & echo started")
+tool_call("sleep 3 >/dev/null 2>&1 & echo started")
+tool_call("sleep 30 & echo started")
+--- zombie.py:
+import os, time
+
+pid = os.fork()            # from here on there are two processes
+if pid == 0:
+    os._exit(7)            # the child: exits at once with status 7
+print(f"parent {os.getpid()} made child {pid} and is not calling wait()")
+time.sleep(60)             # the parent: alive, but never collects the status
+spawn docker exec -it -u learner -e TERM=dumb lt-09-lab bash
+learner@f61749bdc43c:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ /tmp/hup-demo.sh
+  PID  PPID STAT COMMAND
+   97    90 S    sleep 800
+   99    90 S    sleep 900
+  100    90 S    sleep 1000
+--- after the terminal closed:
+  PID  PPID STAT COMMAND
+   99     1 S    sleep 900
+  100     1 S    sleep 1000
+$ pkill sleep
+$ python3 /tmp/toolcall.py
+ 3.0s  exit=0 stdout='started\n'  <- sleep 3 & echo started
+ 0.0s  exit=0 stdout='started\n'  <- sleep 3 >/dev/null 2>&1 & echo started
+ 5.0s  TIMEOUT  <- sleep 30 & echo started
+$ ps -o pid,ppid,stat,etime,args -C sleep
+  PID  PPID STAT     ELAPSED COMMAND
+  114     1 S          00:05 sleep 30
+$ pkill sleep
+$ python3 /tmp/zombie.py &
+[1] 117
+$ sleep 1; ps -o pid,ppid,stat,args
+parent 117 made child 119 and is not calling wait()
+  PID  PPID STAT COMMAND
+   78     0 Ss   bash
+  117    78 S    python3 /tmp/zombie.py
+  119   117 Z    [python3] <defunct>
+  120    78 R+   ps -o pid,ppid,stat,args
+$ Z=$(pgrep -P $!); echo $Z
+119
+$ wc -c < /proc/$Z/cmdline
+0
+$ grep -E '^(State|PPid)' /proc/$Z/status
+State:	Z (zombie)
+PPid:	117
+$ kill -9 $Z; echo "rc=$?"; ps -o pid,stat,args -p $Z
+rc=0
+  PID STAT COMMAND
+  119 Z    [python3] <defunct>
+$ kill %1
+$ sleep 1; ps -o pid,ppid,stat,args
+[1]+  Terminated              python3 /tmp/zombie.py
+  PID  PPID STAT COMMAND
+   78     0 Ss   bash
+  126    78 R+   ps -o pid,ppid,stat,args
+$ exit
+exit
+
+##### session C2 (orphan; rerun with a 1 s pause because ps raced the subshell's exec in session C)
+spawn docker exec -it -u learner -e TERM=dumb lt-09-lab bash
+learner@f61749bdc43c:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ sleep 800 &
+[1] 135
+$ (sleep 300 &)
+$ sleep 1; ps -o pid,ppid,stat,args -C sleep
+  PID  PPID STAT COMMAND
+  135   127 S    sleep 800
+  137     1 S    sleep 300
+$ exit
+exit
+$ docker exec lt-09-lab ps -eo pid,ppid,user,stat,args   # after typed exit
+  PID  PPID USER     STAT COMMAND
+    1     0 root     Ss+  bash
+  135     1 learner  S    sleep 800
+  137     1 learner  S    sleep 300
+  140     0 root     Rs   ps -eo pid,ppid,user,stat,args
+
+##### docker-side (host prompt)
+$ docker run -d --name lt-09-z1 ubuntu:24.04 sh -c '(sleep 1 &); exec sleep 120'
+$ docker run -d --init --name lt-09-z2 ubuntu:24.04 sh -c '(sleep 1 &); exec sleep 120'
+$ docker exec lt-09-z1 ps -eo pid,ppid,stat,args
+  PID  PPID STAT COMMAND
+    1     0 Ss   sleep 120
+    8     1 Z    [sleep] <defunct>
+    9     0 Rs   ps -eo pid,ppid,stat,args
+$ docker exec lt-09-z2 ps -eo pid,ppid,stat,args
+  PID  PPID STAT COMMAND
+    1     0 Ss   /sbin/docker-init -- sh -c (sleep 1 &); exec sleep 120
+    7     1 S    sleep 120
+   10     0 Rs   ps -eo pid,ppid,stat,args
+$ docker top lt-09-z2
+UID                 PID                 PPID                C                   STIME               TTY                 TIME                CMD
+root                61490               61467               0                   16:31               ?                   00:00:00            /sbin/docker-init -- sh -c (sleep 1 &); exec sleep 120
+root                61503               61490               0                   16:31               ?                   00:00:00            sleep 120
+$ docker run --rm ubuntu:24.04 ps -ef
+UID        PID  PPID  C STIME TTY          TIME CMD
+root         1     0 25 16:31 ?        00:00:00 ps -ef
+$ docker run --rm debian:bookworm-slim ps -ef; echo exit=$?
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "ps": executable file not found in $PATH: unknown
+
+Run 'docker run --help' for more information
+exit=127
+$ docker run --rm alpine:3.20 ps -ef
+PID   USER     TIME  COMMAND
+    1 root      0:00 ps -ef
+
+##### leftover process in a reused container
+$ docker exec -u learner lt-09-lab bash -c 'cd /tmp; python3 -m http.server 8000 >/tmp/r1.log 2>&1 & sleep 1; echo rollout-1 done'
+rollout-1 done
+$ docker exec -u learner lt-09-lab bash -c 'cd /tmp; python3 -m http.server 8000 2>&1 | tail -1'
+OSError: [Errno 98] Address already in use
+$ docker exec lt-09-lab ps -eo pid,ppid,user,etime,args
+  PID  PPID USER         ELAPSED COMMAND
+    1     0 root           01:52 bash
+  158     1 learner        00:01 python3 -m http.server 8000
+  168     0 root           00:00 ps -eo pid,ppid,user,etime,args
+
+##### lab solutions
+--- ex2
+187
+  PID  PPID COMMAND
+  187     1 sleep 250
+--- ex3 (debian slim, no ps)
+lr-x------ 1 root root 64 Sep 21 16:31 /proc/7/fd/3 -> /etc/hostname
+1 sh -c tail -f /etc/hostname >/dev/null & sleep 1; ls -l /proc/[0-9]*/fd/* 2>/dev/null | grep hostname; for p in /proc/[0-9]*; do echo "${p#/proc/} $(tr " " " " < "$p/cmdline")"; done 
+7 tail -f /etc/hostname 
+--- ex4 (agent claims server started)
+Server started on port 8000
+195 bash -c cd /tmp; python3 -m http.server 8000 --bind 10.9.9.9 >/dev/null 2>&1 &  echo "Server started on port 8000"; sleep 1; pgrep -af http.server; echo "pgrep rc=$?"; python3 -m http.server 8000 --bind 10.9.9.9 2>&1 | tail -1 python3 -c "import urllib.request as u; print(u.urlopen(\"http://127.0.0.1:8000/\", timeout=3).status)" 2>&1 | tail -1
+pgrep rc=0
+OSError: [Errno 99] Cannot assign requested address
+urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
+
+##### lab ex4 rerun interactively + pgrep -f self-match pitfall
+spawn docker exec -it -u learner -e TERM=dumb lt-09-lab bash
+learner@f61749bdc43c:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ cd /tmp
+$ python3 -m http.server 8000 --bind 10.9.9.9 >/dev/null 2>&1 &
+[1] 216
+$ echo "Server started on port 8000"
+Server started on port 8000
+$ pgrep -af http.server; echo "rc=$?"
+216 python3 -m http.server 8000 --bind 10.9.9.9
+rc=0
+$ jobs
+[1]+  Running                 python3 -m http.server 8000 --bind 10.9.9.9 > /dev/null 2>&1 &
+$ <27.0.0.1:8000/", timeout=3).status)' 2>&1 | tail -1
+urllib.error.URLError: <urlopen error [Errno 111] Connection refused>
+[1]+  Exit 1                  python3 -m http.server 8000 --bind 10.9.9.9 > /dev/null 2>&1
+$ python3 -m http.server 8000 --bind 10.9.9.9 2>&1 | tail -1
+OSError: [Errno 99] Cannot assign requested address
+$ bash -c 'pgrep -af http.server; echo "rc=$?"'
+222 bash -c pgrep -af http.server; echo "rc=$?"
+rc=0
+$ bash -c 'pgrep -af "[h]ttp.server"; echo "rc=$?"'
+rc=1
+$ python3 -m http.server 8000 >/tmp/server.log 2>&1 &
+[1] 226
+$ <lopen("http://127.0.0.1:8000/", timeout=3).status)'
+200
+$ kill %2
+bash: kill: %2: no such job
+$ exit
+exit
+
+##### lab ex3, interactive bash as PID 1 in debian:bookworm-slim (docker attach)
+spawn docker attach lt-09-deb
+PS1='# '
+[Kroot@de3f6fa0f67c:/# PS1='# '
+[?2004l[?2004h
+[?2004lbash: ps: command not found
+[?2004h
+[?2004l[1] 8
+[?2004h
+[?2004l1 bash 
+8 tail -f /etc/hostname 
+[?2004h
+[?2004llr-x------ 1 root root 64 Sep 21 21:07 /proc/8/fd/3 -> /etc/hostname
+[?2004h(docker attach approach hung; rerun via docker exec -it into a 'docker run -dit debian:bookworm-slim bash' container)
+(eval):1: command not found: timeout
+spawn docker exec -it -u root -e TERM=dumb lt-09-deb bash
+root@1abe5c8afe59:/# PS1='\$ '; bind 'set enable-bracketed-paste off'
+# ps -ef
+bash: ps: command not found
+# tail -f /etc/hostname >/dev/null &
+[1] 14
+# <o "${p#/proc/} $(tr '\0' ' ' < "$p/cmdline")"; done
+1 bash 
+14 tail -f /etc/hostname 
+7 bash 
+# ls -l /proc/[0-9]*/fd/* 2>/dev/null | grep hostname
+lr-x------ 1 root root 64 Sep 21 21:07 /proc/14/fd/3 -> /etc/hostname
+# exit
+exit

@@ -1,0 +1,62 @@
+{
+  "id": "swe-bench-docker",
+  "tag": "[SWE-bench]",
+  "citation": {
+    "authors": "Carlos E. Jimenez, John Yang, et al. (SWE-bench team)",
+    "title": "SWE-bench: Containerized Evaluation Harness report (27 June 2024), Docker Setup Guide, Evaluation Guide, Harness reference; and Jimenez et al., 'SWE-bench: Can Language Models Resolve Real-World GitHub Issues?' (ICLR 2024)",
+    "venue": "github.com/SWE-bench/SWE-bench docs + swebench.com; arXiv:2310.06770",
+    "year": "2024 (report); docs current as of v5.0.1, 2026",
+    "url": "https://www.swebench.com/SWE-bench/guides/docker_setup/"
+  },
+  "fetched_urls": [
+    "https://www.swebench.com/SWE-bench/guides/docker_setup/",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/main/docs/guides/docker_setup.md",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/main/docs/guides/evaluation.md",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/main/docs/reference/harness.md",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/main/docs/guides/datasets.md",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/main/README.md",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/main/docs/20240627_docker/README.md (404 on main)",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/v3.0.0/docs/20240627_docker/README.md (200 — the June 2024 report, retrieved at tag v3.0.0)",
+    "https://raw.githubusercontent.com/SWE-bench/SWE-bench/v4.1.0/swebench/harness/test_spec/python.py",
+    "https://arxiv.org/html/2310.06770 (v3, 11 Nov 2024)"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "June 2024: SWE-bench moved to a fully containerized Docker harness for reproducible evaluation; motivation (environment inconsistencies across machines produced differing results) — exact wording",
+      "verdict": "confirmed",
+      "finding": "Report titled 'Containerized Evaluation Harness', dated June 27, 2024, signed 'Carlos & John', done 'in collaboration with the Preparedness team at OpenAI'. The original harness used conda environments, which the authors call 'underspecified' in hindsight; evaluation 'remained sensitive to discrepancies originating from different platforms and user-specific configurations, leading to inconsistent results'. New harness: per-sample Docker images with Python virtual environments. Validation numbers: with the gold patch, 99.78% (2289/2294) of SWE-bench tasks and 100% (300/300) of SWE-bench Lite resolve correctly. Requires swebench>=2.0. URL NOTE: the report's old path docs/20240627_docker/README.md now 404s on the main branch (the repo README still links to it); it is retrievable at tagged versions, e.g. https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md — cite that.",
+      "quote": "In the original setup, we hypothesized that `conda` environments would be enough to enforce reproducible evaluation. In hindsight, it is underspecified. [...] However, SWE-bench evaluation remained sensitive to discrepancies originating from different platforms and user-specific configurations, leading to inconsistent results.",
+      "location": "docs/20240627_docker/README.md (tag v3.0.0), opening section; repo README news item '[Jun. 27, 2024]'",
+      "cite_url": "https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md"
+    },
+    {
+      "planned": "Three-layer images: base → environment (~60 python envs) → instance images; disk/resource requirements the docs state (e.g. ~120 GB free, 16 GB RAM, 8 cores; --cache_level; max_workers guidance)",
+      "verdict": "confirmed",
+      "finding": "Three layers: (1) base image — common dependencies for all evaluations; (2) environment images — Python environments shared by multiple instances, '~60 images' ('about 60 of these - or 100GB of images' in the 2024 report); (3) instance images — specific dependencies and source code per task. README resource guidance (current): x86_64 machine, at least 120GB free storage, 16GB RAM, 8 CPU cores; arm64 support 'experimental'. cache_level: none / base (~120GB during run), env = default (~100GB), instance (~2,000GB, fastest). max_workers: 'fewer than min(0.75 * os.cpu_count(), 24)' — 6 workers for 8 cores, 12 for 16 cores (the 2024 report said 'fewer than 28 workers'; the current docs say 24 — use 24). Docker Desktop on macOS: allocate at least 8 CPUs, 16GB RAM, 120GB disk image. The v5 README notes that on an M-series Mac images must be built locally with Docker Buildx (--task-repo).",
+      "quote": "We recommend running on an `x86_64` machine with at least 120GB of free storage, 16GB of RAM, and 8 CPU cores. We recommend using fewer than `min(0.75 * os.cpu_count(), 24)` for `--max_workers`.",
+      "location": "repo README > Set Up (warning box); Docker Setup Guide > Docker Resource Management, Cache Level Configuration, Performance Optimization",
+      "cite_url": "https://github.com/SWE-bench/SWE-bench#-set-up"
+    },
+    {
+      "planned": "Grading = apply model patch inside the instance container, run the repo's tests, compare FAIL_TO_PASS and PASS_TO_PASS against the log — a state-based check run by shell inside Linux",
+      "verdict": "confirmed",
+      "finding": "Harness steps (docs): Setup (prepare Docker images) → Patch Application → Test Execution → Grading → Reporting. Paper App. A.4: the test log is parsed by a repository-specific parser into a test→status mapping; a task is solved iff ALL FAIL_TO_PASS and PASS_TO_PASS tests are found with pass status; a missing test counts as fail; if the patch fails to apply (after one automatic repair attempt) or the test command fails, score 0. FAIL_TO_PASS = tests that change from fail to pass with the reference fix; PASS_TO_PASS = tests that pass before and after. Per-instance artefacts written to logs/evaluation/<run_id>/<model>/<instance_id>/: report.json, test_output.txt, run_instance.log, eval.sh ('The script that ran the tests'), patch.diff. The harness has a per-instance --timeout (seconds) and an --open_file_limit option.",
+      "quote": "we check that all FAIL_TO_PASS and PASS_TO_PASS tests are found and have a pass status in the evaluation test-to-status mapping. If a test is missing or has a non-pass status, it is considered a fail status. As defined and used in the main paper, a task is considered solved if all tests across FAIL_TO_PASS and PASS_TO_PASS pass.",
+      "location": "arXiv 2310.06770v3 Appendix A.4 Evaluation Procedure ('Evaluation Metrics Calculation'); docs/reference/harness.md > Evaluation Process; docs/guides/evaluation.md > Understanding Evaluation Results",
+      "cite_url": "https://arxiv.org/html/2310.06770v3"
+    }
+  ],
+  "extra_findings": [
+    "Infrastructure failure is a first-class result category in the current harness. results.json fields include 'Instances with errors' ('No result could be produced at all' — usual causes: 'a patch that did not apply, a container that did not start, or a run that timed out'), 'Instances with likely infrastructure failures' ('Failed for an environment reason, such as a browser that never started'), 'Instances with ambiguous failures' ('Failed for a reason that could be the environment or the patch'), and 'Unstopped containers, Unremoved images' ('Docker leftovers, not results'). (docs/guides/evaluation.md > What the counts mean)",
+    "Quote: 'While a run is going you see a line like `40 ran successfully, 0 failed`. That counts crashes in the harness. A failed evaluation is not a crash: the harness catches the problem, writes it to the log, and carries on.' — so '0 failed' does not mean every instance was graded; read run_instance.log. (docs/guides/evaluation.md)",
+    "Logs: 'logs/build_images: Docker build logs; logs/evaluation: Evaluation run logs'; run summary at logs/evaluation/<run_id>/results.json. (docs/reference/harness.md > Log Files)",
+    "Gold-patch validation is the harness's own health check: `--predictions_path gold` runs the ground-truth patches; on a fresh machine anything below ~100% resolved is an environment problem, not a model problem. 2024 numbers: 2289/2294 and 300/300. (June 2024 report; harness.md > Verifying Gold Patches)",
+    "Speed guidance from the 2024 report: 'On a 16-core machine with max_workers=12, it should be possible to run evaluation on SWE-bench Lite in about 30 minutes when using the env cache level and under 15 minutes when using the instance cache level.' 'Using a much larger number of workers will likely slow down the evaluation process.'",
+    "Linux post-install step the docs require: add your user to the docker group (sudo groupadd docker; sudo usermod -aG docker $USER; newgrp docker). Disk cleanup commands the docs teach: docker system df, docker container prune, docker image prune, docker system prune (-a). (Docker Setup Guide)",
+    "Instance image build script (v4.1.0, swebench/harness/test_spec/python.py): git clone → `chmod -R 777 <repo>` ('So nonroot user can run tests') → git reset --hard <base_commit> → remove origin, future tags, reflog, gc (see swe-bench-git-leak note). The eval script resets test files with `git checkout <base_commit> <test_files>` and applies the test patch with `git apply -v -` via heredoc BEFORE running tests — so an agent editing the named test files does not change grading.",
+    "Cloud option: '[Jan. 11, 2025] Thanks to Modal, you can now run evaluations entirely on the cloud' (--modal flag). (repo README news)"
+  ],
+  "teaching_notes": "The cleanest primary-source statement that 'works on my conda' was not reproducible enough for a benchmark, and that per-task Docker images were the fix — with a number (99.78% gold-patch resolution) showing even the fixed harness is not perfect. The old report URL is dead on main; cite the v3.0.0 tag. The max_workers ceiling changed from 28 (2024 report) to 24 (current README/docs). The current harness explicitly separates 'unresolved' from 'errors' / 'likely infrastructure failures' / 'ambiguous failures', which is exactly the course's model-failure-vs-box-failure distinction. Grading detail worth teaching: the eval script re-checks-out the test files and applies the test patch itself before running, a simple integrity measure."
+}

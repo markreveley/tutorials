@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Is an Eval? · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · Foundations</p>
+    <h1>What is an eval?</h1>
+    <p class="lede">
+      The word covers everything from a one-line regex check to a benchmark that moves billion-dollar
+      valuations. Underneath, it's always the same four-part machine. This page defines that machine,
+      then draws the distinctions — eval vs benchmark, capability vs product, offline vs online — that
+      the rest of the course depends on.
+    </p>
+
+    <h2 id="definition">The four-part machine</h2>
+    <p>
+      An <span class="term" data-g="eval">eval</span> is a <strong>repeatable measurement procedure</strong>
+      for an AI system. Strip away the tooling and every eval consists of:
+    </p>
+    <div class="diagram">┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐
+│  1. TASK   │ → │  2. DATA   │ → │ 3. GRADER  │ → │ 4. METRIC  │
+│ what the   │   │ the inputs │   │ scores one │   │ aggregates │
+│ system     │   │ you test   │   │ output:    │   │ scores into│
+│ must do    │   │ it on      │   │ pass/fail, │   │ a number   │
+│            │   │ (samples)  │   │ 0–1, A>B…  │   │ you report │
+└────────────┘   └────────────┘   └────────────┘   └────────────┘</div>
+    <ul>
+      <li><strong>A task definition</strong> — what the system is being asked to do, stated precisely
+        enough that "did it succeed?" has an answer.</li>
+      <li><strong>A <span class="term" data-g="dataset">dataset</span></strong> — the collection of
+        inputs (each one a <span class="term" data-g="sample">sample</span>) the task is attempted on.
+        Sometimes each sample carries an expected answer — a
+        <span class="term" data-g="ground-truth">ground truth</span> — and sometimes it can't.</li>
+      <li><strong>A <span class="term" data-g="grader">grader</span></strong> — the thing that looks at
+        one output and produces a judgment. It might be five lines of Python, a human expert, or
+        another LLM. Choosing and validating graders is most of Modules 2 and 3.</li>
+      <li><strong>A <span class="term" data-g="metric">metric</span></strong> — the rule that turns many
+        per-sample judgments into the number you report: percent passing, average score, win rate.</li>
+    </ul>
+    <p>
+      The "repeatable" in the definition is load-bearing. A colleague pasting prompts into a chat window
+      and nodding is performing <em>assessment</em>, but not an eval: nothing guarantees that next month's
+      nod measures the same thing as today's. Repeatability is what lets you compare two prompts, two
+      models, or two weeks — and comparison is the entire point.
+    </p>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Once you see the four-part shape, you can decompose any eval you meet — and every dispute about
+      an eval's trustworthiness is a dispute about one of the four parts. Is the <em>data</em>
+      representative (or leaked into training)? Is the <em>grader</em> right (or biased)? Does the
+      <em>metric</em> summarize honestly (or hide variance)? Does the <em>task</em> measure what we
+      actually care about? Those four questions generate Modules 2 through 6 of this course.</p>
+    </div>
+
+    <h2 id="worked-example">One eval, dissected: HumanEval</h2>
+    <p>
+      To make the anatomy concrete, here is one famous eval taken apart. HumanEval, introduced by OpenAI
+      alongside the Codex model in 2021, measures whether a model can write working Python
+      functions.<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Evaluating Large Language Models Trained on Code">[HumanEval]</a>
+    </p>
+    <div class="card">
+      <p><strong>Task:</strong> given a function signature and docstring, write the function body.</p>
+      <p><strong>Data:</strong> 164 hand-written programming problems. Hand-written for a reason the
+      authors state plainly: models train on huge swaths of GitHub, "which already contains solutions to
+      problems from a variety of sources" — reusing existing problems would test memory, not
+      ability.<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, §2.2">[HumanEval]</a>
+      (This is your first sighting of <span class="term" data-g="contamination">contamination</span>,
+      the subject of <a href="21-contamination.html">Module 6</a>.)</p>
+      <p><strong>Grader:</strong> run the generated code against unit tests — an average of 7.7 tests per
+      problem. The output passes or it doesn't. No human opinion involved.</p>
+      <p><strong>Metric:</strong> the fraction of problems solved, reported as
+      <span class="term" data-g="pass-at-k">pass@k</span> — the probability that at least one of
+      <i>k</i> attempts passes (<a href="18-pass-at-k.html">Module 5</a> covers how to estimate it
+      without fooling yourself).</p>
+    </div>
+    <p>
+      The most instructive part of the paper is a road not taken. The obvious cheap grader for generated
+      code is textual similarity to a reference solution — the BLEU score, borrowed from machine
+      translation. The authors tested it and showed that the BLEU scores of <em>correct</em> and
+      <em>incorrect</em> solutions to the same problem overlap heavily — incorrect solutions can look
+      textually closer to the reference than correct ones — concluding that "improvements in BLEU score
+      may not indicate improved rates of functional correctness in
+      practice."<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, §3.4 and Figure 8">[HumanEval]</a>
+      The grader they shipped instead — actually executing the code — is more expensive and required a
+      sandbox, but it measures the thing that matters.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Choosing a grader because it's easy to compute rather than because it tracks success is the
+      original sin of evaluation. Surface similarity between an output and a reference — BLEU, ROUGE,
+      embedding cosine — rarely separates good outputs from bad ones in real applications. Practitioner
+      consensus has converged on the same verdict as the HumanEval authors: similarity metrics are "not
+      useful for evaluating LLM outputs in most AI applications," surviving mainly as debugging signals
+      for retrieval.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a></p>
+    </div>
+
+    <h2 id="eval-vs-benchmark">Eval vs benchmark</h2>
+    <p>
+      A <span class="term" data-g="benchmark">benchmark</span> is an eval that has been
+      <em>standardized and shared</em> so that results are comparable across teams, models, and papers.
+      HumanEval is a benchmark; the regex suite your team runs in CI is an eval but not a benchmark.
+      The distinction matters because sharing changes the incentives: once a benchmark is public,
+      models are tuned toward it, its data leaks into training corpora, and its numbers become marketing
+      — pressures a private eval never faces. Benchmarks are scientific instruments operating in a
+      hostile environment, which is why this course spends a whole module
+      (<a href="20-validity.html">Module 6</a>) on how they degrade.
+    </p>
+
+    <h2 id="capability-vs-product">Capability evals vs product evals</h2>
+    <p>
+      The deeper split is in what question the eval answers.
+    </p>
+    <table>
+      <tr><th></th><th><span class="term" data-g="capability-eval">Capability eval</span></th><th><span class="term" data-g="product-eval">Product eval</span></th></tr>
+      <tr><td>Question</td><td>How good is the <em>model</em>?</td><td>Does my <em>application</em> work for my users?</td></tr>
+      <tr><td>Data comes from</td><td>Curated public task sets</td><td>Your own users' real interactions</td></tr>
+      <tr><td>Definition of "good"</td><td>Fixed by benchmark authors</td><td>Your domain expert's judgment</td></tr>
+      <tr><td>Comparable across teams?</td><td>Yes — that's the point</td><td>No — and it doesn't matter</td></tr>
+      <tr><td>Main threats</td><td>Contamination, saturation, gaming</td><td>Unrepresentative data, unvalidated graders</td></tr>
+    </table>
+    <p>
+      These two cultures barely overlap, and advice from one can be wrong in the other. The most common
+      crossover mistake is grabbing generic, capability-style metrics off the shelf — "helpfulness,"
+      "coherence" — and using them as product evals. Eugene Yan, whose practitioner writing is a spine
+      source for this course, tested this directly and found that off-the-shelf evals "barely correlate
+      with application-specific performance and aren't discriminative enough to use in
+      production."<a class="cite" href="https://eugeneyan.com/writing/evals/" title="Yan 2024, Task-Specific LLM Evals that Do &amp; Don't Work">[Yan]</a>
+      Husain and Shankar's FAQ is blunter still: generic ready-made metrics "waste time and create false
+      confidence," with one carve-out — using them as exploration signals to surface interesting traces,
+      never as quality measures.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+    </p>
+    <div class="callout">
+      <span class="label">Why this matters</span>
+      <p>When someone says "the new model scored 92," your first response should be: on which layer?
+      A capability score predicts your product's behavior only loosely — your prompts, data, tools, and
+      definition of success all differ from the benchmark's. High benchmark scores get models onto your
+      shortlist; only your own product eval decides which one ships.</p>
+    </div>
+
+    <h2 id="offline-vs-online">Offline vs online</h2>
+    <p>
+      One more axis. An <span class="term" data-g="offline-eval">offline eval</span> runs against a fixed
+      dataset before deployment — in development, in CI, on demand. An
+      <span class="term" data-g="online-eval">online eval</span> measures the live system on real traffic:
+      sampled production scoring, user feedback signals, or a full
+      <span class="term" data-g="a-b-test">A/B test</span>. Husain's three-level scheme for product
+      evaluation maps onto this axis: Level 1, unit-test-style assertions; Level 2, human and model
+      evaluation of logged <span class="term" data-g="trace">traces</span>; Level 3, A/B testing — with
+      Level 3 explicitly deferred until "your AI product is suitable for showing to real
+      users."<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+      Offline evals are fast, cheap, and safe; online evals are the only ground truth about real users.
+      Mature teams run both, wired together: production failures become offline test cases
+      (<a href="07-evals-in-the-lifecycle.html">page 7</a>).
+    </p>
+
+    <h2 id="where-next">Where this goes</h2>
+    <p>
+      You now have the vocabulary: task, data, grader, metric; benchmark; capability vs product; offline
+      vs online. <a href="02-anatomy-of-an-eval.html">The next page</a> goes one level deeper into the
+      machinery — the <em>harness</em> that executes an eval, and why reading harness code is a
+      professional skill. Then <a href="03-types-of-evaluators.html">page 3</a> takes up the grader box,
+      which turns out to be where most of the difficulty lives.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Mark Chen et al., "Evaluating Large Language Models Trained on Code," arXiv:2107.03374, 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+        <li>Hamel Husain, "Your AI Product Needs Evals," hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a></li>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+        <li>Eugene Yan, "Task-Specific LLM Evals that Do &amp; Don't Work," eugeneyan.com, March 2024. <a href="https://eugeneyan.com/writing/evals/">eugeneyan.com/writing/evals</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

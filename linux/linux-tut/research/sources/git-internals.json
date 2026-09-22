@@ -1,0 +1,63 @@
+{
+  "id": "git-internals",
+  "tag": "[Pro Git]",
+  "citation": {
+    "authors": "Scott Chacon, Ben Straub (Pro Git); the Git project (reference manual)",
+    "title": "Pro Git, 2nd ed., ch. 10 Git Internals (Git Objects; Git References; Maintenance and Data Recovery) + git reference manual: git-log, git-clone, git-gc, git-reflog, git-fsck, git-archive, gitglossary",
+    "venue": "git-scm.com (Apress book, CC BY-NC-SA; manual pages 'last updated in 2.52.0' for git-gc)",
+    "year": "2014 (book, continuously updated online); manual fetched 2026",
+    "url": "https://git-scm.com/book/en/v2/Git-Internals-Maintenance-and-Data-Recovery"
+  },
+  "fetched_urls": [
+    "https://git-scm.com/book/en/v2/Git-Internals-Git-Objects",
+    "https://git-scm.com/book/en/v2/Git-Internals-Git-References",
+    "https://git-scm.com/book/en/v2/Git-Internals-Maintenance-and-Data-Recovery",
+    "https://git-scm.com/docs/git-log",
+    "https://git-scm.com/docs/git-clone",
+    "https://git-scm.com/docs/git-gc",
+    "https://git-scm.com/docs/git-reflog",
+    "https://git-scm.com/docs/git-fsck",
+    "https://git-scm.com/docs/git-archive",
+    "https://git-scm.com/docs/gitglossary"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Commits reachable from ANY ref (branches, tags, remotes, stash) are shown by `git log --all`; unreachable objects persist in .git/objects until gc prunes them (default expiry 2 weeks for loose unreachable objects; reflog entries 90/30 days) and can be found with git fsck --lost-found / reflog",
+      "verdict": "confirmed",
+      "finding": "git-log: --all = 'Pretend as if all the refs in refs/, along with HEAD, are listed on the command line as <commit>' — that covers refs/heads, refs/tags, refs/remotes and refs/stash because they all live under refs/. It does NOT include reflog-only commits (that is the separate --reflog option: 'Pretend as if all objects mentioned by reflogs are listed on the command line'). git-gc: --prune=<date> 'Prune loose objects older than date (default is 2 weeks ago, overridable by the config variable gc.pruneExpire)'; gc.reflogExpire 'defaults to 90 days'; gc.reflogExpireUnreachable (entries not reachable from the current tip) 'defaults to 30 days'; gc.auto default 6700 loose objects. gc keeps anything referenced by branches, tags, the index, remote-tracking branches, reflogs, and 'anything else in the refs/* namespace'. Recovery tools: git reflog (data in .git/logs/), and git fsck: '--lost-found Write dangling objects into .git/lost-found/commit/ or .git/lost-found/other/'. NOTE Pro Git's prose is looser than the manual: it says gc 'removes objects that aren't reachable from any commit and are a few months old' and 'around 7,000 loose objects or more than 50 packfiles' — cite the manual's exact defaults (2 weeks; 6700) instead. Executed check (ubuntu:24.04, git 2.43.0): after deleting the branch and tag pointing at a 'fix' commit, `git log --all` no longer showed it, but `git reflog` still listed it and `git fsck --lost-found` printed 'dangling commit c703679…', and `git show` on that hash still displayed the fix; only after `git reflog expire --expire=now --all` AND `git gc --prune=now` did `git cat-file -t <hash>` fail with 'could not get object info'.",
+      "quote": "In particular, it will keep not only objects referenced by your current set of branches and tags, but also objects referenced by the index, remote-tracking branches, reflogs (which may reference commits in branches that were later amended or rewound), and anything else in the refs/* namespace.",
+      "location": "git-gc(1) NOTES; git-gc(1) OPTIONS --prune and CONFIGURATION gc.pruneExpire / gc.reflogExpire / gc.reflogExpireUnreachable / gc.auto; git-log(1) --all, --reflog; git-fsck(1) --lost-found; executed ubuntu:24.04",
+      "cite_url": "https://git-scm.com/docs/git-gc"
+    },
+    {
+      "planned": "Checking out an old commit does not remove newer objects from .git",
+      "verdict": "confirmed",
+      "finding": "Follows from the object model (Pro Git: 'Git is a content-addressable filesystem... at the core of Git is a simple key-value data store'; objects live in .git/objects; 'a branch in Git [is] a simple pointer or reference to the head of a line of work'; HEAD is normally a symbolic ref and in 'detached HEAD' state holds a SHA-1). Checkout only moves HEAD and rewrites the working tree; nothing in the docs says it deletes objects, and gc only prunes UNREACHABLE objects. Verified by execution (ubuntu:24.04, git 2.43.0): with HEAD checked out at the base commit, `git log --oneline` shows only the base, while `git log --oneline --all` still shows the later fix commit, and `git count-objects -v` reports all 6 loose objects present.",
+      "quote": "$ git log --oneline            (after `git checkout <base>`)\n17ed2ad base: has bug\n$ git log --oneline --all\nc703679 Fix the bug (the answer)\n17ed2ad base: has bug",
+      "location": "executed ubuntu:24.04 (git 2.43.0 from apt); background: Pro Git 10.2 Git Objects, 10.3 Git References (The HEAD)",
+      "cite_url": "https://git-scm.com/book/en/v2/Git-Internals-Git-References"
+    },
+    {
+      "planned": "git clone --depth 1 creates a shallow clone with truncated history; a cleaner fix is building the task repo from an exported tree (git archive) so no future objects exist",
+      "verdict": "confirmed",
+      "finding": "git-clone: '--depth=<depth> Create a shallow clone with a history truncated to the specified number of commits. Implies --single-branch unless --no-single-branch is given'. CAVEAT for eval use: --depth truncates the PAST from the tip of the branch you clone; it does not by itself give you a repo that stops at an older base commit, so it is not a fix for future-history leakage on its own (you would need to fetch exactly the base commit). git-archive: 'Creates an archive of the specified format containing the tree structure for the named tree, and writes it out to the standard output' — the output is a tar/zip of files with no .git directory (when given a commit ID, the commit ID is stored in a pax header, readable with git get-tar-commit-id — a small metadata leak of the hash only). Executed (ubuntu:24.04): `git archive <base> | tar -x -C /clean && ls -A /clean` printed only `f.txt` — no .git. The 'cleaner fix' judgement is the course's; the docs only describe behaviour. Trade-off to state: an archive export also removes PAST history, which some tasks legitimately need (see swe-bench-git-leak note: SWE-bench chose to keep past history and past tags).",
+      "quote": "Create a shallow clone with a history truncated to the specified number of commits. Implies --single-branch unless --no-single-branch is given to fetch the histories near the tips of all branches.",
+      "location": "git-clone(1) OPTIONS --depth; git-archive(1) DESCRIPTION; executed ubuntu:24.04",
+      "cite_url": "https://git-scm.com/docs/git-clone"
+    }
+  ],
+  "extra_findings": [
+    "Glossary definitions to use verbatim: reachable — 'All of the ancestors of a given commit are said to be \"reachable\" from that commit. More generally, one object is reachable from another if we can reach the one from the other by a chain that follows tags to whatever they tag, commits to their parents or trees, and trees to the trees or blobs that they contain.' unreachable object — 'An object which is not reachable from a branch, tag, or any other reference.' dangling object — 'An unreachable object which is not reachable even from other unreachable objects'. (gitglossary(7))",
+    "Reflog basics (Pro Git): 'As you're working, Git silently records what your HEAD is every time you change it. Each time you commit or change branches, the reflog is updated.' 'Because the reflog data is kept in the .git/logs/ directory...' — so `rm -Rf .git/logs/` removes it; the book then recovers the lost commit with `git fsck --full`, which 'shows you all objects that aren't pointed to by another object' (output lines like 'dangling commit ab1afef…'). (Pro Git 10.7 Data Recovery)",
+    "git reflog expire: '--expire=<time> Prune entries older than the specified time... defaults to 90 days. --expire=all prunes entries regardless of their age'; '--expire-unreachable=<time> ... defaults to 30 days'. 'This is typically not used directly by end users — instead, see git-gc'. (git-reflog(1))",
+    "git fsck: by default uses 'the index file, all SHA-1 references in the refs namespace, and all reflogs (unless --no-reflogs is given) as heads'; '--unreachable Print out objects that exist but that aren't reachable from any of the reference nodes'; '--dangling ... (default)'. Observed in the executed run: `git fsck --lost-found` reported the fix commit as dangling even while the reflog still referenced it (git 2.43.0) — i.e. it is a quick way to find reflog-only commits. (git-fsck(1); executed ubuntu:24.04)",
+    "--prune=now safety warning: '--prune=now prunes loose objects regardless of their age and increases the risk of corruption if another process is writing to the repository concurrently'. Fine in an image build (single process), which is where SWE-bench runs it. (git-gc(1) --prune)",
+    "Automatic gc: 'When common porcelain operations that create objects are run, they will check whether the repository has grown substantially since the last maintenance, and if so run git gc automatically.' Setting gc.auto to 0 disables it. So in a short-lived task container, unreachable 'future' objects will essentially never be pruned on their own: the 2-week grace period far exceeds a trial. (git-gc(1) DESCRIPTION, gc.auto)",
+    "Refs are files: Pro Git shows `.git/refs/heads`, `.git/refs/tags`, and creating a branch with `git update-ref refs/heads/master <sha>`; remote-tracking refs live under refs/remotes. Deleting a remote (`git remote remove origin`) removes those refs but not the objects they pointed to. (Pro Git 10.3; object persistence verified by the executed run above)",
+    "Other clone options relevant to building task repos: --single-branch ('Clone only the history leading to the tip of a single branch'), --no-tags, --shallow-since=<date> ('Create a shallow clone with a history after the specified time'). (git-clone(1))",
+    "Full executed transcript (ubuntu:24.04, git 2.43.0): after `git branch -D main; git tag -d v2.0` → `git log --oneline --all` shows only '17ed2ad base: has bug'; `git reflog` still shows 'c703679 HEAD@{1}: commit: Fix the bug (the answer)'; `git fsck --lost-found` → 'dangling commit c70367925825aef79d6e861ffb1b91489f255ded'; after `git reflog expire --expire=now --all` fsck still reports it and `git show --stat --oneline c703679` prints the fix; after `git gc -q --prune=now`, fsck prints nothing and `git cat-file -t c703679…` → 'fatal: git cat-file: could not get object info'."
+  ],
+  "teaching_notes": "Use the manual pages for numbers, Pro Git for the mental model. Folklore corrected: Pro Git's 'a few months old' and 'around 7,000' are approximations; the manual says loose unreachable objects are pruned after 2 weeks (gc.pruneExpire), reflog entries after 90 days (30 if unreachable from the tip), and auto-gc triggers at 6700 loose objects. Key teaching chain for the integrity page, each step verified by execution: checkout of an old commit hides nothing (`git log --all`); deleting refs hides it from `--all` but not from `git reflog` or `git fsck --lost-found`; expiring the reflog still leaves the object readable by hash; only gc --prune=now removes it. That is exactly the sequence in SWE-bench's v4.1.0 fix. `--depth 1` is not a fix for future leakage by itself; git archive gives a .git-free tree but also discards past history that some tasks need."
+}

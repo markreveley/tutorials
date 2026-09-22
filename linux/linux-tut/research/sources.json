@@ -1,0 +1,391 @@
+{
+  "description": "Citation universe for the linux-tut course. Every fact-about-the-world in the course (defaults, guarantees, numbers, incidents, quotes) must trace to one of these primary sources, verified by fetching the actual source. Each entry lists claims the course intends to make; the verification agent must mark each confirmed / corrected / unverifiable against the fetched text, with quote and location. 'group' assigns the source to a research agent. Verification agents may add sources in their group if a planned claim is better supported elsewhere (primary sources only).",
+  "note_format": {
+    "id": "same as below",
+    "tag": "short inline citation tag, e.g. [signal(7)]",
+    "citation": { "authors": "", "title": "", "venue": "", "year": "", "url": "canonical URL to cite" },
+    "fetched_urls": ["every URL actually fetched"],
+    "fetched_on": "YYYY-MM-DD",
+    "access": "full | partial | failed",
+    "claims": [
+      { "planned": "the planned claim", "verdict": "confirmed | corrected | unverifiable", "finding": "what the source actually says, precisely, with numbers", "quote": "exact quote ≤60 words", "location": "section / heading / man page section", "cite_url": "deep link if different from canonical" }
+    ],
+    "extra_findings": ["verified facts not planned but useful to the course, each with quote+location"],
+    "teaching_notes": "what this source uniquely offers; folklore it contradicts"
+  },
+  "sources": [
+    { "id": "bash-manual", "group": "R1", "tag": "[Bash Manual]", "title": "GNU Bash Reference Manual", "urls": ["https://www.gnu.org/software/bash/manual/bash.html"], "planned_claims": [
+      "Exit status: 0 is success, non-zero failure; range 0-255; command not found returns 127; found but not executable returns 126; a command terminated by fatal signal N returns 128+N",
+      "Pipeline exit status is that of the last command unless pipefail is set; with pipefail it is the last (rightmost) command to exit non-zero",
+      "set -e (errexit) semantics and its documented exceptions (conditions in if/while, && || lists, non-final pipeline commands, negated commands)",
+      "set -u (nounset) treats unset variables as an error on expansion",
+      "Redirection semantics: order matters, `>file 2>&1` vs `2>&1 >file`; `&>` shorthand; here-documents and here-strings; /dev/fd, /dev/tcp special filenames",
+      "Quoting: single quotes preserve literally; double quotes preserve all but $ ` \\ (and ! with history); word splitting and filename expansion happen on unquoted expansions",
+      "Builtins such as cd, export, source exist because they must change the shell's own state",
+      "Startup files: login vs interactive non-login vs non-interactive shells (which of /etc/profile, ~/.bash_profile, ~/.bashrc, BASH_ENV are read) — matters because harness `bash -c` shells read none of the interactive ones",
+      "Command search order: functions, builtins, then PATH lookup; hash table"
+    ]},
+    { "id": "posix-shell", "group": "R1", "tag": "[POSIX]", "title": "POSIX.1-2017/2024 Shell Command Language & Utilities (The Open Group Base Specifications)", "urls": ["https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html", "https://pubs.opengroup.org/onlinepubs/9799919799/"], "planned_claims": [
+      "POSIX specifies exit status 127 for command not found and 126 for found-but-not-executable, and >128 for signal termination",
+      "Standard streams: stdin 0, stdout 1, stderr 2",
+      "sh is the portable shell language; bash features (arrays, [[ ]], pipefail historically) are extensions — check whether pipefail was added in POSIX.1-2024"
+    ]},
+    { "id": "coreutils", "group": "R1", "tag": "[Coreutils]", "title": "GNU Coreutils manual", "urls": ["https://www.gnu.org/software/coreutils/manual/coreutils.html"], "planned_claims": [
+      "timeout: sends TERM by default; exit status 124 on timeout; 125 if timeout itself fails; 126/127 for not-executable/not-found; 137 when KILL is sent (-k / -s KILL) ; --kill-after behaviour; --preserve-status",
+      "uniq only collapses ADJACENT duplicate lines, hence sort | uniq",
+      "sort is locale-dependent; LC_ALL=C gives byte ordering (reproducibility point)",
+      "rm: -r, -f semantics; --preserve-root is default (rm -rf / refused)",
+      "ls -l output fields; chmod symbolic and numeric modes; chown syntax; mktemp; tee; head/tail -f; wc; cut; tr; env; nohup; stat; df/du; readlink/realpath"
+    ]},
+    { "id": "shellcheck", "group": "R1", "tag": "[ShellCheck]", "title": "ShellCheck wiki / README", "urls": ["https://www.shellcheck.net/wiki/", "https://github.com/koalaman/shellcheck"], "planned_claims": [
+      "ShellCheck is a static analysis tool for sh/bash scripts",
+      "SC2086 (double quote to prevent globbing and word splitting) wording; SC2164 (cd … || exit); SC2046; SC2155"
+    ]},
+    { "id": "jq-manual", "group": "R1", "tag": "[jq Manual]", "title": "jq Manual", "urls": ["https://jqlang.org/manual/", "https://jqlang.github.io/jq/manual/"], "planned_claims": [
+      "jq processes a stream of JSON values, so it reads JSONL (one object per line) natively; -c compact output; -r raw strings; -s slurp; select(), group_by, length; exit status with -e"
+    ]},
+    { "id": "fhs", "group": "R1", "tag": "[FHS]", "title": "Filesystem Hierarchy Standard 3.0", "urls": ["https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html"], "planned_claims": [
+      "Purpose of /bin /sbin /etc /home /root /var /var/log /tmp /usr /usr/local /opt /proc /sys /dev /run /srv /mnt /media as specified",
+      "/tmp contents need not persist between boots / program invocations; /var/tmp is preserved between reboots",
+      "/etc holds host-specific configuration; /var holds variable data; /usr is shareable read-only data"
+    ]},
+    { "id": "hier-7", "group": "R1", "tag": "[hier(7)]", "title": "hier(7) and file-hierarchy(7)", "urls": ["https://man7.org/linux/man-pages/man7/hier.7.html", "https://man7.org/linux/man-pages/man7/file-hierarchy.7.html"], "planned_claims": ["Linux-specific descriptions of the tree incl. /run, /proc, /sys; /usr merge (bin -> usr/bin symlinks) on modern distros"] },
+    { "id": "inode-7", "group": "R1", "tag": "[inode(7)]", "title": "inode(7), link(2), symlink(7), path_resolution(7)", "urls": ["https://man7.org/linux/man-pages/man7/inode.7.html", "https://man7.org/linux/man-pages/man7/symlink.7.html", "https://man7.org/linux/man-pages/man7/path_resolution.7.html", "https://man7.org/linux/man-pages/man2/unlink.2.html"], "planned_claims": [
+      "An inode holds file metadata (type, mode, owner uid/gid, size, timestamps, link count) but NOT the filename; names live in directories",
+      "Hard link = another name for the same inode; file data is freed when link count reaches 0 AND no process has it open (unlink(2)) — explains 'deleted but still using disk'",
+      "Symlink permissions are ignored / always 0777; permission of the target applies; dangling symlinks",
+      "path_resolution: search (execute) permission needed on every directory in the path"
+    ]},
+    { "id": "credentials-7", "group": "R1", "tag": "[credentials(7)]", "title": "credentials(7), passwd(5), shadow(5), group(5)", "urls": ["https://man7.org/linux/man-pages/man7/credentials.7.html", "https://man7.org/linux/man-pages/man5/passwd.5.html", "https://man7.org/linux/man-pages/man5/shadow.5.html", "https://man7.org/linux/man-pages/man5/group.5.html"], "planned_claims": [
+      "Processes carry real, effective, saved UIDs/GIDs and supplementary groups; the kernel checks numeric IDs, names are just a lookup in /etc/passwd",
+      "UID 0 is the superuser; privilege is tied to effective UID 0 (traditionally) and to capabilities",
+      "/etc/passwd format: seven colon-separated fields (name:password:UID:GID:GECOS:directory:shell); world-readable; password field 'x' means hash is in /etc/shadow",
+      "/etc/shadow readable only by root (and shadow group); fields",
+      "A child process inherits its parent's credentials"
+    ]},
+    { "id": "chmod-umask", "group": "R1", "tag": "[chmod(2)]", "title": "chmod(2), chmod(1), umask(2), chown(2), sticky/setuid semantics", "urls": ["https://man7.org/linux/man-pages/man2/chmod.2.html", "https://man7.org/linux/man-pages/man1/chmod.1.html", "https://man7.org/linux/man-pages/man2/umask.2.html", "https://man7.org/linux/man-pages/man2/chown.2.html", "https://man7.org/linux/man-pages/man2/execve.2.html"], "planned_claims": [
+      "Mode bits and octal values: S_ISUID 04000, S_ISGID 02000, S_ISVTX 01000, rwx for user/group/other 0400..0001",
+      "Permission check uses exactly ONE class: owner if UID matches, else group if a GID matches, else other (so owner with 0 perms is denied even if 'other' allows) — find authoritative wording (path_resolution(7) or inode(7) or POSIX)",
+      "Directory bits: r = list names, w = create/delete entries, x = search/traverse; deleting a file needs write on the DIRECTORY, not the file",
+      "Sticky bit on a directory restricts deletion to file owner, directory owner, or privileged process (why /tmp is 1777)",
+      "umask clears bits from the mode requested at creation: files typically created 0666 & ~umask, dirs 0777 & ~umask; common default 022",
+      "Only a privileged process (CAP_CHOWN) may change a file's owner; owner may change group to one they belong to",
+      "Set-user-ID: execve sets effective UID to file owner; ignored for scripts on Linux; ignored under nosuid mounts and no_new_privs",
+      "Root (CAP_DAC_OVERRIDE) bypasses read/write/execute permission checks (execute only if some x bit is set) — cite capabilities(7)"
+    ]},
+    { "id": "sudo", "group": "R1", "tag": "[sudo(8)]", "title": "sudo(8) / sudoers(5) manual", "urls": ["https://www.sudo.ws/docs/man/sudo.man/", "https://www.sudo.ws/docs/man/sudoers.man/"], "planned_claims": [
+      "sudo executes a command as another user (default root) according to the sudoers policy; NOPASSWD tag; sudo -l lists what the invoking user may run; env_reset default resets environment",
+      "Official minimal images (ubuntu, debian) do not ship sudo — verify by running, not from docs"
+    ]},
+
+    { "id": "signal-7", "group": "R2", "tag": "[signal(7)]", "title": "signal(7), kill(2), kill(1)", "urls": ["https://man7.org/linux/man-pages/man7/signal.7.html", "https://man7.org/linux/man-pages/man2/kill.2.html", "https://man7.org/linux/man-pages/man1/kill.1.html"], "planned_claims": [
+      "SIGKILL and SIGSTOP cannot be caught, blocked, or ignored",
+      "Signal numbers on x86/ARM: HUP 1, INT 2, QUIT 3, KILL 9, SEGV 11, PIPE 13, ALRM 14, TERM 15, CHLD 17, CONT 18, STOP 19, TSTP 20; default dispositions (Term/Core/Ign/Stop)",
+      "kill(1) sends TERM by default; kill -0 tests existence/permission; negative PID signals a process group",
+      "Permission to signal: sender needs CAP_KILL or matching real/effective UID",
+      "SIGPIPE is sent when writing to a pipe with no reader (explains `yes | head`)"
+    ]},
+    { "id": "pid1", "group": "R2", "tag": "[pid_namespaces(7)]", "title": "PID 1 semantics: pid_namespaces(7); Docker --init / tini", "urls": ["https://man7.org/linux/man-pages/man7/pid_namespaces.7.html", "https://docs.docker.com/reference/cli/docker/container/run/", "https://github.com/krallin/tini"], "planned_claims": [
+      "In a PID namespace the first process is PID 1 ('init'); orphans are reparented to it; if it terminates the kernel SIGKILLs all other processes in the namespace",
+      "Signals for which PID 1 has not installed a handler are not delivered to it from inside the namespace (so an app running as PID 1 ignores SIGTERM unless it handles it); from the parent namespace only SIGKILL/SIGSTOP are forced",
+      "docker run --init runs an init (tini) as PID 1 that forwards signals and reaps zombies",
+      "docker stop sends SIGTERM (or STOPSIGNAL) then SIGKILL after a grace period, default 10 seconds"
+    ]},
+    { "id": "fork-exec-wait", "group": "R2", "tag": "[fork(2)]", "title": "fork(2), execve(2), wait(2), exit(3), environ(7)", "urls": ["https://man7.org/linux/man-pages/man2/fork.2.html", "https://man7.org/linux/man-pages/man2/execve.2.html", "https://man7.org/linux/man-pages/man2/wait.2.html", "https://man7.org/linux/man-pages/man3/exit.3.html", "https://man7.org/linux/man-pages/man7/environ.7.html"], "planned_claims": [
+      "fork creates a child that is a copy of the parent incl. open file descriptors and environment; execve replaces the program image, keeping PID, open fds (unless close-on-exec), and the environment passed to it",
+      "A terminated child remains a zombie until the parent wait()s; zombies hold a PID/table slot but no memory; orphans are adopted by init (or nearest subreaper)",
+      "Only the low 8 bits of the exit status are available to the parent (status & 0xFF) — hence 0-255",
+      "environ: array of name=value strings, inherited by children via exec; by convention uppercase; a child cannot change its parent's environment"
+    ]},
+    { "id": "proc-5", "group": "R2", "tag": "[proc(5)]", "title": "proc(5) and its sub-pages (proc_pid_environ, proc_pid_status, proc_pid_fd, proc_pid_cmdline, proc_meminfo, proc_loadavg)", "urls": ["https://man7.org/linux/man-pages/man5/proc.5.html", "https://man7.org/linux/man-pages/man5/proc_pid_environ.5.html", "https://man7.org/linux/man-pages/man5/proc_pid_cmdline.5.html", "https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html", "https://man7.org/linux/man-pages/man5/proc_loadavg.5.html", "https://man7.org/linux/man-pages/man5/proc_meminfo.5.html"], "planned_claims": [
+      "/proc is a pseudo-filesystem exposing kernel data structures; /proc/PID/ directories per process",
+      "/proc/PID/environ holds the INITIAL environment set at exec, NUL-separated; readable subject to ptrace access mode check (same user or root)",
+      "/proc/PID/cmdline is world-readable by default → secrets passed as command-line arguments are visible to every user via ps; hidepid mount option can restrict",
+      "/proc/PID/fd is a directory of symlinks to open files; /proc/PID/cwd, /proc/PID/exe, /proc/PID/status fields (Uid, Gid, VmRSS, CapEff, NoNewPrivs, Seccomp)",
+      "/proc/loadavg: 1, 5, 15 minute load averages count runnable AND uninterruptible (D state) tasks",
+      "/proc/meminfo MemAvailable definition vs MemFree"
+    ]},
+    { "id": "rlimits", "group": "R2", "tag": "[getrlimit(2)]", "title": "getrlimit(2)/setrlimit(2), bash ulimit", "urls": ["https://man7.org/linux/man-pages/man2/getrlimit.2.html"], "planned_claims": [
+      "Resource limits have soft and hard values; unprivileged process can lower hard limit irreversibly and raise soft up to hard; inherited across fork, preserved across exec",
+      "RLIMIT_NOFILE, RLIMIT_NPROC (per real UID, not per process tree), RLIMIT_AS, RLIMIT_CPU (SIGXCPU then SIGKILL), RLIMIT_FSIZE (SIGXFSZ), RLIMIT_CORE",
+      "rlimits are per-process, unlike cgroup limits which apply to a group — contrast for page 12/21"
+    ]},
+    { "id": "oom", "group": "R2", "tag": "[Kernel: cgroup-v2]", "title": "Kernel docs: cgroup v2 memory controller & OOM; Docker resource constraints", "urls": ["https://docs.kernel.org/admin-guide/cgroup-v2.html", "https://docs.docker.com/engine/containers/resource_constraints/", "https://man7.org/linux/man-pages/man5/proc_pid_oom_score.5.html"], "planned_claims": [
+      "memory.max is a hard limit; if usage reaches it and cannot be reclaimed, the OOM killer is invoked in the cgroup",
+      "memory.events has oom and oom_kill counters — the authoritative way to tell that a container's process was OOM-killed; memory.current, memory.peak, memory.high (throttle), memory.swap.max",
+      "OOM-killed process receives SIGKILL → exit status 137 seen by shell/Docker; docker inspect State.OOMKilled field",
+      "Docker: by default a container has no resource constraints; -m/--memory, --memory-swap semantics (if --memory set and --memory-swap unset, swap = same amount again → total 2x), --cpus, --pids-limit",
+      "cpu.max format 'quota period' (e.g. '150000 100000' = 1.5 CPUs); CPU limit throttles rather than kills; cpu.stat nr_throttled/throttled_usec",
+      "pids.max limits number of processes; fork fails with EAGAIN when reached (fork-bomb containment)",
+      "cgroup v2 single unified hierarchy mounted at /sys/fs/cgroup; a process belongs to exactly one cgroup; /proc/PID/cgroup shows it; controllers listed in cgroup.controllers"
+    ]},
+    { "id": "systemd", "group": "R2", "tag": "[systemd]", "title": "systemd documentation: systemd(1), systemctl(1), journalctl(1), systemd.service(5), systemd-journald", "urls": ["https://www.freedesktop.org/software/systemd/man/latest/systemd.html", "https://www.freedesktop.org/software/systemd/man/latest/systemctl.html", "https://www.freedesktop.org/software/systemd/man/latest/journalctl.html", "https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html", "https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html", "https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html"], "planned_claims": [
+      "systemd is the system and service manager running as PID 1 on most mainstream distros; units (service, socket, timer, mount, target); unit file search paths /etc/systemd/system overrides /usr/lib/systemd/system",
+      "systemctl status/start/stop/enable/disable/list-units --type=service / --failed; enable ≠ start",
+      "journald collects stdout/stderr of services, syslog, kernel messages; journalctl -u UNIT, -b, -f, -p err, --since, -k; storage volatile (/run/log/journal) vs persistent (/var/log/journal) per Storage= setting",
+      "Stopping a service: KillMode=control-group default, SIGTERM then SIGKILL after TimeoutStopSec (default 90s)",
+      "Restart= policies; services run in their own cgroup (systemd-cgls)",
+      "Typical Docker containers do NOT run systemd; PID 1 is the app, logs go to container stdout/stderr → docker logs (cite Docker docs for logging: json-file default driver)"
+    ]},
+    { "id": "procps", "group": "R2", "tag": "[ps(1)]", "title": "procps-ng: ps(1), top(1), free(1), uptime(1), pgrep/pkill", "urls": ["https://man7.org/linux/man-pages/man1/ps.1.html", "https://man7.org/linux/man-pages/man1/top.1.html", "https://man7.org/linux/man-pages/man1/free.1.html"], "planned_claims": [
+      "ps process state codes: R running/runnable, S interruptible sleep, D uninterruptible sleep, Z zombie, T stopped; ps aux vs ps -ef columns (RSS in KiB, VSZ, STAT, TTY '?')",
+      "free: 'available' column is the estimate of memory available for new applications, not 'free'; buff/cache is reclaimable",
+      "top summary fields: load average, us/sy/id/wa/st CPU states"
+    ]},
+    { "id": "strace", "group": "R2", "tag": "[strace(1)]", "title": "strace(1); syscalls(2) intro", "urls": ["https://man7.org/linux/man-pages/man1/strace.1.html", "https://man7.org/linux/man-pages/man2/syscalls.2.html", "https://man7.org/linux/man-pages/man2/intro.2.html"], "planned_claims": [
+      "A system call is the fundamental interface between an application and the Linux kernel; strace traces system calls and signals; -f follows forks; -e trace=… filters; requires ptrace permission (blocked by default Docker seccomp? verify: Docker default seccomp allows ptrace on kernels ≥4.8)"
+    ]},
+
+    { "id": "namespaces-7", "group": "R3", "tag": "[namespaces(7)]", "title": "namespaces(7) and per-type pages: mount_namespaces(7), network_namespaces(7), user_namespaces(7), uts_namespaces(7), ipc_namespaces(7), cgroup_namespaces(7), time_namespaces(7); unshare(1), nsenter(1), lsns(8)", "urls": ["https://man7.org/linux/man-pages/man7/namespaces.7.html", "https://man7.org/linux/man-pages/man7/mount_namespaces.7.html", "https://man7.org/linux/man-pages/man7/network_namespaces.7.html", "https://man7.org/linux/man-pages/man7/user_namespaces.7.html", "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html", "https://man7.org/linux/man-pages/man1/unshare.1.html", "https://man7.org/linux/man-pages/man1/nsenter.1.html", "https://man7.org/linux/man-pages/man8/lsns.8.html"], "planned_claims": [
+      "Definition: a namespace wraps a global system resource in an abstraction that makes it appear to processes within it that they have their own isolated instance; one use is to implement containers",
+      "The namespace types and what each isolates (cgroup, IPC, network, mount, PID, time, user, UTS) — exact table",
+      "/proc/PID/ns/* symlinks identify namespaces; two processes are in the same namespace iff the inode numbers match",
+      "A new network namespace has only a loopback interface (down); a physical device lives in exactly one netns; veth pairs connect namespaces",
+      "User namespaces: UID/GID mappings (uid_map), a process can be root (UID 0, full capabilities) INSIDE a user namespace while unprivileged outside; capabilities in a user ns only govern resources owned by that ns",
+      "Creating namespaces other than user requires CAP_SYS_ADMIN",
+      "There is no kernel object called a 'container': a container is a userspace convention combining namespaces + cgroups + a root filesystem + security restrictions (find best authoritative wording — namespaces(7) 'one use of namespaces is to implement containers'; possibly OCI runtime-spec)",
+      "The kernel itself is NOT namespaced/shared: all containers on a host share one kernel (uname -r identical) — supports the 'shared kernel' argument of page 24"
+    ]},
+    { "id": "cgroups-7", "group": "R3", "tag": "[cgroups(7)]", "title": "cgroups(7)", "urls": ["https://man7.org/linux/man-pages/man7/cgroups.7.html"], "planned_claims": [
+      "Definition: control groups allow processes to be organized into hierarchical groups whose usage of resources can be limited and monitored; interface is a pseudo-filesystem (cgroupfs)",
+      "cgroups v1 vs v2: v2 unified hierarchy; controllers available in v2 (cpu, memory, io, pids, cpuset, …)",
+      "Namespaces control what a process can SEE; cgroups control how much it can USE (teaching framing — mark as framing, but confirm the two definitions support it)"
+    ]},
+    { "id": "capabilities-7", "group": "R3", "tag": "[capabilities(7)]", "title": "capabilities(7)", "urls": ["https://man7.org/linux/man-pages/man7/capabilities.7.html"], "planned_claims": [
+      "Linux divides the privileges traditionally associated with superuser into distinct units (capabilities) that can be independently enabled/disabled, per-thread",
+      "CAP_SYS_ADMIN is overloaded ('the new root'), includes mount(2), etc. — exact man page wording",
+      "What these allow: CAP_NET_RAW (raw sockets → ping, packet sniffing), CAP_NET_ADMIN, CAP_NET_BIND_SERVICE (ports <1024), CAP_DAC_OVERRIDE, CAP_DAC_READ_SEARCH, CAP_CHOWN, CAP_KILL, CAP_SETUID, CAP_SYS_PTRACE, CAP_SYS_MODULE, CAP_SYS_CHROOT, CAP_MKNOD",
+      "Capability sets: permitted, effective, inheritable, bounding, ambient; /proc/PID/status CapEff etc; capsh --decode / getpcaps"
+    ]},
+    { "id": "seccomp-nnp", "group": "R3", "tag": "[seccomp(2)]", "title": "seccomp(2); kernel docs: seccomp_filter, no_new_privs; Docker seccomp profile docs", "urls": ["https://man7.org/linux/man-pages/man2/seccomp.2.html", "https://docs.kernel.org/userspace-api/seccomp_filter.html", "https://docs.kernel.org/userspace-api/no_new_privs.html", "https://docs.docker.com/engine/security/seccomp/"], "planned_claims": [
+      "seccomp filter mode lets a process install a BPF filter restricting which system calls it (and its children) may make; reduces kernel attack surface; kernel docs say it is 'not a sandbox' by itself",
+      "no_new_privs: once set, execve cannot grant privileges (setuid/setgid bits and file capabilities have no effect); inherited, cannot be unset",
+      "Docker's default seccomp profile is an allowlist that 'disables around 44 system calls out of 300+' — verify the current number and wording; examples of blocked calls (mount, reboot, kexec_load, init_module, keyctl…)",
+      "--security-opt seccomp=unconfined disables; --privileged disables seccomp"
+    ]},
+    { "id": "apparmor-docker", "group": "R3", "tag": "[Docker: AppArmor]", "title": "Docker AppArmor security profiles", "urls": ["https://docs.docker.com/engine/security/apparmor/"], "planned_claims": ["Docker auto-generates and loads a default profile 'docker-default' for containers on AppArmor-enabled hosts; it is 'moderately protective'"] },
+    { "id": "mounts", "group": "R3", "tag": "[mount(8)]", "title": "mount(8), findmnt(8), mount(2), tmpfs(5), proc_pid_mountinfo(5), chroot(2), pivot_root(2)", "urls": ["https://man7.org/linux/man-pages/man8/mount.8.html", "https://man7.org/linux/man-pages/man8/findmnt.8.html", "https://man7.org/linux/man-pages/man5/tmpfs.5.html", "https://man7.org/linux/man-pages/man2/chroot.2.html", "https://man7.org/linux/man-pages/man2/pivot_root.2.html", "https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html"], "planned_claims": [
+      "All files are arranged in one big tree rooted at /; mount attaches a filesystem found on some device to the tree",
+      "Mount options: ro, rw, nosuid, nodev, noexec; remount; bind mounts (mount --bind) and that a read-only bind requires remount,bind,ro (historical) or works directly on newer util-linux — get exact current wording",
+      "tmpfs lives in virtual memory (RAM+swap), contents lost on unmount; size= option, default half of RAM; counts toward the memory cgroup of the writer? (verify in kernel cgroup-v2 doc: shmem/tmpfs charged to memory cgroup)",
+      "chroot changes the root directory of the calling process; it is NOT intended as a security mechanism / to sandbox a process — exact man page wording; pivot_root is what container runtimes use",
+      "/proc/self/mountinfo is the kernel's authoritative list; findmnt renders it as a tree; findmnt -T path, findmnt -O ro"
+    ]},
+    { "id": "overlayfs", "group": "R3", "tag": "[Kernel: overlayfs]", "title": "Kernel docs: Overlay Filesystem; Docker overlay2/ storage driver docs (or containerd image store)", "urls": ["https://docs.kernel.org/filesystems/overlayfs.html", "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/", "https://docs.docker.com/engine/storage/drivers/"], "planned_claims": [
+      "Overlayfs merges an upper (writable) and one or more lower (read-only) directory trees; modifications go to upper; first write to a lower file triggers copy-up of the whole file; deletions recorded as whiteouts",
+      "Docker images are stacks of read-only layers; a container adds a thin writable layer on top; writable-layer data is deleted with the container; containers from the same image share the lower layers",
+      "Deleting a file in a later layer does NOT remove it from the image: it remains in the earlier layer and can be extracted (critical for solution leakage / secrets in images) — find Docker docs wording (Dockerfile best practices / build secrets docs)",
+      "Current default storage in Docker Engine 28/29: overlay2 vs containerd image store (verify what is default for fresh installs)"
+    ]},
+
+    { "id": "rfc1918", "group": "R4", "tag": "[RFC 1918]", "title": "RFC 1918 Address Allocation for Private Internets; RFC 4632 CIDR; RFC 6890/5735 special-purpose (127/8, 169.254/16); RFC 6598 (100.64/10)", "urls": ["https://www.rfc-editor.org/rfc/rfc1918", "https://www.rfc-editor.org/rfc/rfc4632", "https://www.rfc-editor.org/rfc/rfc6890", "https://www.rfc-editor.org/rfc/rfc3927"], "planned_claims": [
+      "Private ranges: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16",
+      "127.0.0.0/8 loopback; 169.254.0.0/16 link-local",
+      "CIDR prefix notation: /n = n leading network bits; a /24 has 256 addresses"
+    ]},
+    { "id": "cloud-metadata", "group": "R4", "tag": "[AWS: IMDS]", "title": "Cloud instance metadata service docs (AWS IMDS; GCP metadata server)", "urls": ["https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html", "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html", "https://cloud.google.com/compute/docs/metadata/overview"], "planned_claims": [
+      "Instance metadata is served at link-local 169.254.169.254 and can include temporary IAM role credentials → a sandboxed agent on a cloud VM with open egress to that address can read the host's cloud credentials; IMDSv2 requires a session token (PUT) and has a hop limit (default 1) that blocks containers one hop away — verify exact defaults"
+    ]},
+    { "id": "iproute2", "group": "R4", "tag": "[ip(8)]", "title": "iproute2: ip(8), ip-address(8), ip-route(8), ip-link(8), ss(8), veth(4)", "urls": ["https://man7.org/linux/man-pages/man8/ip.8.html", "https://man7.org/linux/man-pages/man8/ip-route.8.html", "https://man7.org/linux/man-pages/man8/ss.8.html", "https://man7.org/linux/man-pages/man4/veth.4.html", "https://man7.org/linux/man-pages/man7/ip.7.html"], "planned_claims": [
+      "ip addr / ip route / ip link usage and output fields; `ip route get ADDR` shows the route the kernel would use; default route = 'default via GW dev IF'",
+      "ss -tulpn flags meaning (tcp, udp, listening, processes, numeric); State/Local Address:Port columns; process column requires privilege for others' sockets",
+      "veth devices are created in pairs; packets sent on one are received on the other; used to connect network namespaces",
+      "ip(7): ports below 1024 are privileged (need CAP_NET_BIND_SERVICE) subject to net.ipv4.ip_unprivileged_port_start; INADDR_ANY (0.0.0.0) binds all interfaces; INADDR_LOOPBACK",
+      "net-tools (ifconfig, netstat, route) is deprecated/unmaintained in favour of iproute2 — find a primary statement (Debian wiki / net-tools page) or mark unverifiable"
+    ]},
+    { "id": "tcp-udp", "group": "R4", "tag": "[tcp(7)]", "title": "tcp(7), udp(7), RFC 9293 (TCP), RFC 768 (UDP), RFC 6335 (port ranges)", "urls": ["https://man7.org/linux/man-pages/man7/tcp.7.html", "https://man7.org/linux/man-pages/man7/udp.7.html", "https://www.rfc-editor.org/rfc/rfc6335", "https://www.rfc-editor.org/rfc/rfc9293"], "planned_claims": [
+      "TCP: reliable, ordered, connection-oriented byte stream; UDP: connectionless, unreliable datagrams",
+      "Port ranges: System 0-1023, User 1024-49151, Dynamic/Private 49152-65535 (RFC 6335); Linux ephemeral default range from ip_local_port_range 32768-60999",
+      "Connection refused = RST from a reachable host with no listener; timeout = packets dropped (firewall DROP or no route) — find authoritative support (RFC 9293 reset generation; connect(2) ECONNREFUSED/ETIMEDOUT)"
+    ]},
+    { "id": "dns", "group": "R4", "tag": "[resolv.conf(5)]", "title": "resolv.conf(5), hosts(5), nsswitch.conf(5), dig(1) (BIND 9 docs), RFC 1034/1035, systemd-resolved", "urls": ["https://man7.org/linux/man-pages/man5/resolv.conf.5.html", "https://man7.org/linux/man-pages/man5/hosts.5.html", "https://man7.org/linux/man-pages/man5/nsswitch.conf.5.html", "https://bind9.readthedocs.io/en/latest/manpages.html", "https://www.freedesktop.org/software/systemd/man/latest/systemd-resolved.service.html", "https://docs.docker.com/engine/network/"], "planned_claims": [
+      "resolv.conf: nameserver (max 3), search, options ndots; nsswitch 'hosts: files dns' order means /etc/hosts wins before DNS",
+      "dig output sections (QUESTION, ANSWER, status NOERROR/NXDOMAIN/SERVFAIL, SERVER line); dig +short; dig bypasses nsswitch//etc/hosts (queries DNS directly) while getent hosts uses the system resolver path",
+      "DNS uses UDP and TCP port 53; record types A, AAAA, CNAME, MX, TXT, NS",
+      "Ubuntu uses systemd-resolved stub at 127.0.0.53",
+      "Docker: containers on user-defined networks use embedded DNS server at 127.0.0.11; default bridge copies host resolv.conf; containers resolve each other by name only on user-defined networks",
+      "DNS as an egress channel: DNS queries leave the sandbox even when HTTP is blocked unless resolver access is also controlled (framing; look for a primary source on DNS tunnelling/exfiltration e.g. MITRE ATT&CK T1071.004) "
+    ]},
+    { "id": "curl", "group": "R4", "tag": "[curl(1)]", "title": "curl man page / Everything curl", "urls": ["https://curl.se/docs/manpage.html", "https://everything.curl.dev/", "https://curl.se/libcurl/c/libcurl-errors.html"], "planned_claims": [
+      "curl -v shows connection, TLS handshake, request (>) and response (<) headers; -s -S -f -L -o -I -m/--max-time --connect-timeout; -f makes HTTP errors (≥400) return exit 22",
+      "curl exit codes: 6 couldn't resolve host, 7 failed to connect, 28 operation timeout, 35 SSL connect error, 60 peer certificate cannot be authenticated — perfect mapping from symptom to network layer",
+      "Proxy environment variables: http_proxy (lowercase only for http), HTTPS_PROXY, NO_PROXY honoured by curl",
+      "--cacert / -k(--insecure) semantics; CA bundle"
+    ]},
+    { "id": "tls-http", "group": "R4", "tag": "[RFC 8446]", "title": "TLS 1.3 RFC 8446 (intro only); HTTP semantics RFC 9110 (status code classes); ca-certificates package; update-ca-certificates(8)", "urls": ["https://www.rfc-editor.org/rfc/rfc8446", "https://www.rfc-editor.org/rfc/rfc9110", "https://manpages.debian.org/bookworm/ca-certificates/update-ca-certificates.8.en.html"], "planned_claims": [
+      "TLS goals: authentication (server always, via certificate), confidentiality, integrity (RFC 8446 §1)",
+      "HTTP status classes 1xx–5xx; methods GET/POST; 407 Proxy Authentication Required; 403 vs 404",
+      "System trust store on Debian/Ubuntu: /etc/ssl/certs/ca-certificates.crt built by update-ca-certificates from /usr/local/share/ca-certificates; minimal images lack the ca-certificates package so HTTPS fails with a certificate error until installed (verify by running)",
+      "A TLS-intercepting egress proxy requires its CA to be installed in the sandbox trust store; SNI is visible in cleartext enabling hostname allowlists without decryption (RFC 8446 / RFC 6066)"
+    ]},
+    { "id": "netfilter", "group": "R4", "tag": "[nftables]", "title": "nftables wiki, nft(8), iptables(8), Docker packet filtering docs", "urls": ["https://wiki.nftables.org/wiki-nftables/index.php/Main_Page", "https://wiki.nftables.org/wiki-nftables/index.php/Quick_reference-nftables_in_10_minutes", "https://www.netfilter.org/projects/nftables/manpage.html", "https://man7.org/linux/man-pages/man8/iptables.8.html", "https://docs.docker.com/engine/network/packet-filtering-firewalls/", "https://docs.docker.com/engine/network/drivers/none/", "https://docs.docker.com/engine/network/drivers/bridge/"], "planned_claims": [
+      "nftables replaces iptables/ip6tables/arptables/ebtables; tables → chains → rules; base chains attach to hooks (prerouting, input, forward, output, postrouting) with a policy (accept/drop)",
+      "Default-deny = chain policy drop + explicit accept rules; stateful rule 'ct state established,related accept'",
+      "DROP vs REJECT: drop is silent (client times out), reject sends an error (client fails fast)",
+      "Docker manipulates iptables/nftables itself; rules for containers must go in the DOCKER-USER chain; published ports bypass ufw-style INPUT rules (Docker docs wording)",
+      "--network none: container has only a loopback interface; docker network create --internal creates a network with no external connectivity; default bridge docker0, containers NATed (masquerade) to the host's address; inter-container communication (icc) on default bridge is enabled by default",
+      "Containers on the same bridge network can reach each other and typically the host's bridge gateway address (host services bound to 0.0.0.0) — verify wording; host.docker.internal on Docker Desktop"
+    ]},
+    { "id": "tcpdump-ping", "group": "R4", "tag": "[tcpdump(1)]", "title": "tcpdump(1), ping(8), traceroute(8), nc (ncat/openbsd netcat)", "urls": ["https://www.tcpdump.org/manpages/tcpdump.1.html", "https://man7.org/linux/man-pages/man8/ping.8.html", "https://man7.org/linux/man-pages/man8/traceroute.8.html"], "planned_claims": [
+      "tcpdump -i IF -n, filter expressions (host, port, tcp/udp); needs CAP_NET_RAW/root",
+      "ping uses ICMP ECHO_REQUEST; ICMP blocked ≠ host down; ping needing CAP_NET_RAW or ping_group_range (unprivileged ICMP sockets)",
+      "traceroute uses increasing TTL and ICMP time exceeded"
+    ]},
+
+    { "id": "docker-run", "group": "R5", "tag": "[Docker: run]", "title": "Docker docs: docker container run reference; running containers", "urls": ["https://docs.docker.com/reference/cli/docker/container/run/", "https://docs.docker.com/engine/containers/run/", "https://docs.docker.com/reference/cli/docker/container/exec/", "https://docs.docker.com/reference/cli/docker/container/stop/"], "planned_claims": [
+      "Flags and exact semantics: --rm, -it, -d, --name, -e/--env-file, -u/--user, -w, -v/--mount (type=bind,readonly), --read-only, --tmpfs, --network, --memory, --cpus, --pids-limit, --cap-drop/--cap-add, --security-opt no-new-privileges, --privileged, --init, --entrypoint, --ulimit",
+      "Docker exit codes: 125 docker daemon/run error, 126 contained command cannot be invoked, 127 contained command not found, otherwise the contained command's exit code",
+      "docker exec runs a new process in a running container's namespaces; -u, -w, -e flags; exec'd processes are not restarted with the container; exec default user = container's user",
+      "--privileged gives all capabilities, lifts device cgroup limits, disables seccomp/AppArmor confinement — exact doc wording"
+    ]},
+    { "id": "docker-security", "group": "R5", "tag": "[Docker: security]", "title": "Docker Engine security; rootless mode; userns-remap; protect the Docker daemon socket", "urls": ["https://docs.docker.com/engine/security/", "https://docs.docker.com/engine/security/rootless/", "https://docs.docker.com/engine/security/userns-remap/", "https://docs.docker.com/engine/security/protect-access/"], "planned_claims": [
+      "Four major security areas Docker docs list: intrinsic kernel security (namespaces, cgroups), daemon attack surface, container config loopholes, kernel hardening features",
+      "Daemon requires root (unless rootless) → 'only trusted users should be allowed to control your Docker daemon'; access to the socket/docker group is root-equivalent on the host (exact wording; the bind-mount-/ example in the docs)",
+      "Default capability set: Docker starts containers with a restricted set — list exactly which capabilities are retained by default (from run reference or moby source defaults: CHOWN, DAC_OVERRIDE, FSETID, FOWNER, MKNOD, NET_RAW, SETGID, SETUID, SETFCAP, SETPCAP, NET_BIND_SERVICE, SYS_CHROOT, KILL, AUDIT_WRITE) — verify list and count against current docs",
+      "By default, root in a container is the SAME uid 0 as root on the host unless userns-remap/rootless is used",
+      "Rootless mode runs daemon and containers inside a user namespace as a non-root user; limitations list"
+    ]},
+    { "id": "dockerfile", "group": "R5", "tag": "[Docker: Dockerfile]", "title": "Dockerfile reference; Building best practices; build secrets; multi-stage; image digests", "urls": ["https://docs.docker.com/reference/dockerfile/", "https://docs.docker.com/build/building/best-practices/", "https://docs.docker.com/build/building/secrets/", "https://docs.docker.com/build/building/multi-stage/", "https://docs.docker.com/reference/cli/docker/image/pull/", "https://docs.docker.com/build/cache/"], "planned_claims": [
+      "Instructions FROM, RUN, COPY, ADD, WORKDIR, ENV, ARG, USER, ENTRYPOINT vs CMD (exec vs shell form; shell form runs under /bin/sh -c so the app is not PID 1 / does not receive signals), HEALTHCHECK, STOPSIGNAL",
+      "Each RUN/COPY/ADD creates a layer; build cache invalidation rules; `apt-get update && apt-get install` must be in the same RUN (cache-busting rationale, exact doc wording); version pinning recommendation",
+      "Pin base image by digest (FROM image@sha256:…) for reproducibility: tags are mutable, digests immutable (exact wording)",
+      "ARG and ENV values persist in image metadata/history → don't use them for secrets; use --mount=type=secret; docker history / docker inspect reveal them",
+      "USER instruction: if not set, the default user is root; best-practice text about running as non-root",
+      "Multi-stage builds copy only artifacts into the final image — a way to keep build-time material (incl. reference solutions/tests) out of the task image"
+    ]},
+    { "id": "docker-storage", "group": "R5", "tag": "[Docker: storage]", "title": "Docker storage: volumes, bind mounts, tmpfs mounts", "urls": ["https://docs.docker.com/engine/storage/", "https://docs.docker.com/engine/storage/volumes/", "https://docs.docker.com/engine/storage/bind-mounts/", "https://docs.docker.com/engine/storage/tmpfs/"], "planned_claims": [
+      "Volumes vs bind mounts vs tmpfs mounts: definitions, lifecycle (volumes persist after container removal; anonymous volumes and --rm)",
+      "Bind mounts are read-write by default: container processes can modify the HOST filesystem (docs' warning wording); readonly / :ro option; bind mount obscures existing container contents at the mount point",
+      "tmpfs mounts: memory only, not shared between containers, Linux only; size option"
+    ]},
+    { "id": "docker-compose", "group": "R5", "tag": "[Compose]", "title": "Compose file reference (services, networks)", "urls": ["https://docs.docker.com/reference/compose-file/services/", "https://docs.docker.com/reference/compose-file/networks/", "https://docs.docker.com/compose/how-tos/networking/"], "planned_claims": [
+      "Service keys: image, build, command, init, user, read_only, cap_drop, security_opt, network_mode: none, networks, mem_limit / deploy.resources.limits, cpus, pids_limit, tmpfs, volumes (read_only), environment, healthcheck, depends_on",
+      "By default Compose creates one network for the app; every service joins and is reachable by service name",
+      "networks: internal: true creates an externally isolated network"
+    ]},
+    { "id": "docker-logs-inspect", "group": "R5", "tag": "[Docker: logs]", "title": "Docker logging & inspect", "urls": ["https://docs.docker.com/engine/logging/", "https://docs.docker.com/engine/logging/configure/", "https://docs.docker.com/reference/cli/docker/inspect/"], "planned_claims": [
+      "docker logs shows the container's STDOUT and STDERR (of PID 1's process tree writing to those streams); default logging driver json-file; no log rotation by default with json-file (disk-fill risk) — exact wording",
+      "docker inspect exposes Config.Env (environment variables, incl. any secrets passed with -e), Mounts, HostConfig (Memory, CapDrop, ReadonlyRootfs, NetworkMode, Privileged), State.ExitCode, State.OOMKilled"
+    ]},
+    { "id": "apt-dpkg", "group": "R5", "tag": "[apt-get(8)]", "title": "Debian apt-get(8), apt(8), dpkg(1), dpkg-query(1), apt_preferences(5), sources.list(5); snapshot.debian.org; snapshot.ubuntu.com", "urls": ["https://manpages.debian.org/bookworm/apt/apt-get.8.en.html", "https://manpages.debian.org/bookworm/apt/apt.8.en.html", "https://manpages.debian.org/bookworm/dpkg/dpkg.1.en.html", "https://manpages.debian.org/bookworm/apt/sources.list.5.en.html", "https://snapshot.debian.org/", "https://snapshot.ubuntu.com/", "https://ubuntu.com/blog/ubuntu-snapshot-service"], "planned_claims": [
+      "apt-get update resynchronizes package index files from sources; install pkg=version pins a version; apt is the interactive front-end whose CLI 'may change' — scripts should use apt-get (exact wording from apt(8))",
+      "-y, --no-install-recommends, DEBIAN_FRONTEND=noninteractive (debconf(7)) to avoid interactive prompts hanging a build/agent",
+      "dpkg -l lists installed packages and versions; dpkg -S path finds owning package; dpkg -L lists files; /var/lib/dpkg/status; dpkg lock (/var/lib/dpkg/lock-frontend) — the 'Could not get lock' error when two apt processes run",
+      "Distribution repos only carry the CURRENT version of a package in a release pocket: an old pinned version can disappear, breaking rebuilds → snapshot.debian.org 'wayback machine' for the archive; snapshot.ubuntu.com for Ubuntu 23.10+ with APT snapshot option",
+      "Official Docker images strip apt lists (/var/lib/apt/lists) so apt-get install fails before apt-get update — verify by running"
+    ]},
+    { "id": "pip-repro", "group": "R5", "tag": "[pip]", "title": "pip docs: requirements files, repeatable installs, hash-checking; PEP 668 externally-managed-environment; venv docs", "urls": ["https://pip.pypa.io/en/stable/topics/repeatable-installs/", "https://pip.pypa.io/en/stable/topics/secure-installs/", "https://peps.python.org/pep-0668/", "https://docs.python.org/3/library/venv.html"], "planned_claims": [
+      "Pinning with == and hash-checking mode (--require-hashes) for repeatable installs; pins must cover transitive dependencies",
+      "PEP 668: distro Pythons marked EXTERNALLY-MANAGED make `pip install` fail with 'externally-managed-environment' on Debian 12/Ubuntu 23.04+; remedy is a venv (or --break-system-packages) — a very common agent stumbling block",
+      "venv creates an isolated environment with its own site-packages; activation just edits PATH"
+    ]},
+    { "id": "alpine", "group": "R5", "tag": "[Alpine]", "title": "Alpine Linux docs/wiki: about, apk, musl vs glibc, BusyBox", "urls": ["https://alpinelinux.org/about/", "https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper", "https://wiki.alpinelinux.org/wiki/BusyBox", "https://wiki.musl-libc.org/functional-differences-from-glibc.html", "https://busybox.net/about.html"], "planned_claims": [
+      "Alpine is built around musl libc and BusyBox; default shell is BusyBox ash, bash not installed by default; package manager apk (apk add, apk add --no-cache)",
+      "BusyBox combines tiny versions of many common UNIX utilities into a single executable, with fewer options than GNU counterparts",
+      "glibc-linked binaries / manylinux Python wheels do not run on musl without compatibility layers (musllinux wheels exist: PEP 656)"
+    ]},
+
+    { "id": "gvisor", "group": "R6", "tag": "[gVisor]", "title": "gVisor documentation: What is gVisor, architecture guide, security model, performance guide", "urls": ["https://gvisor.dev/docs/", "https://gvisor.dev/docs/architecture_guide/intro/", "https://gvisor.dev/docs/architecture_guide/security/", "https://gvisor.dev/docs/architecture_guide/performance/", "https://gvisor.dev/docs/user_guide/compatibility/"], "planned_claims": [
+      "gVisor is an application kernel, written in Go (memory-safe), implementing a substantial portion of the Linux system call interface in userspace; runsc is its OCI runtime (drop-in for runc with Docker/Kubernetes)",
+      "Sentry intercepts application syscalls so the app never talks to the host kernel directly; Gofer mediates filesystem access; the Sentry itself uses a restricted set of host syscalls under seccomp",
+      "Trade-offs: syscall-heavy and I/O-heavy workloads pay overhead; not every syscall/feature is implemented (compatibility)",
+      "Security model statement: defends against kernel exploits via the syscall surface; what it does NOT protect against (e.g. hardware side channels, network-level policy is still yours)"
+    ]},
+    { "id": "firecracker", "group": "R6", "tag": "[Firecracker]", "title": "Firecracker: NSDI'20 paper (Agache et al.), firecracker-microvm.github.io, design.md, snapshot docs, jailer docs", "urls": ["https://www.usenix.org/conference/nsdi20/presentation/agache", "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf", "https://firecracker-microvm.github.io/", "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md", "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md", "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/random-for-clones.md", "https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md"], "planned_claims": [
+      "Firecracker is a VMM using KVM to create microVMs; minimal device model (virtio-net, virtio-block, serial, minimal keyboard controller; no BIOS/PCI in classic design); written in Rust; powers AWS Lambda and Fargate",
+      "Headline numbers: boots to user space in ≤125 ms; <5 MiB memory overhead per microVM; creation rate up to 150 microVMs/sec/host — verify each against site and paper",
+      "Paper's argument: containers share the host kernel and rely on syscall filtering trade-offs (compatibility vs security); VMs give stronger isolation with a narrow interface; Firecracker aims for both isolation and low overhead — exact quotes from §2",
+      "Jailer: defence in depth — the VMM process itself is chrooted, namespaced, cgroup'd, seccomp-filtered, runs unprivileged",
+      "Snapshots capture full guest memory + device state; docs WARN that resuming the same snapshot multiple times duplicates state that must be unique (entropy/RNG state, identifiers, tokens), and that secrets in guest memory are in the snapshot file — exact wording",
+      "Each microVM has its own guest kernel → a guest kernel exploit does not directly give the host; the attack surface is KVM + the VMM's small device model"
+    ]},
+    { "id": "kata-ch", "group": "R6", "tag": "[Kata]", "title": "Kata Containers and Cloud Hypervisor docs (brief context only)", "urls": ["https://katacontainers.io/", "https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md", "https://www.cloudhypervisor.org/", "https://github.com/cloud-hypervisor/cloud-hypervisor"], "planned_claims": [
+      "Kata runs each container/pod inside a lightweight VM with its own kernel while presenting an OCI-compatible runtime; supports multiple hypervisors (QEMU, Cloud Hypervisor, Firecracker)",
+      "Cloud Hypervisor: open-source VMM on KVM (and MSHV), Rust, focused on modern cloud workloads, minimal emulation"
+    ]},
+    { "id": "kvm", "group": "R6", "tag": "[Kernel: KVM]", "title": "KVM kernel documentation / linux-kvm.org", "urls": ["https://docs.kernel.org/virt/kvm/index.html", "https://linux-kvm.org/page/Main_Page", "https://docs.kernel.org/virt/kvm/api.html"], "planned_claims": [
+      "KVM is a Linux kernel module that turns Linux into a hypervisor using hardware virtualization extensions (Intel VT-x / AMD-V; ARM virt extensions); exposed as /dev/kvm; userspace VMM (QEMU, Firecracker, Cloud Hypervisor) drives it",
+      "Nested virtualization is needed to use KVM inside a cloud VM; bare metal hosts expose it directly (supports: why microVM sandboxes usually need bare metal or nested-virt instances)"
+    ]},
+    { "id": "oci", "group": "R6", "tag": "[OCI Runtime Spec]", "title": "Open Container Initiative: runtime-spec, image-spec; runc README; containerd", "urls": ["https://github.com/opencontainers/runtime-spec/blob/main/spec.md", "https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md", "https://github.com/opencontainers/image-spec/blob/main/spec.md", "https://github.com/opencontainers/runc", "https://opencontainers.org/about/overview/"], "planned_claims": [
+      "OCI defines runtime-spec (how to run a 'filesystem bundle'), image-spec (layers, manifest, config, content-addressed by digest) and distribution-spec",
+      "config-linux lists namespaces, cgroups, capabilities, seccomp, maskedPaths/readonlyPaths as the knobs a runtime applies — i.e. a container = these kernel features configured together",
+      "runc is the reference low-level runtime; Docker → containerd → runc chain"
+    ]},
+    { "id": "aisi-sandboxing", "group": "R6", "tag": "[AISI: Sandboxing]", "title": "UK AI Security Institute: 'The Inspect Sandboxing Toolkit' blog post and related sandboxing guidance", "urls": ["https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations", "https://www.aisi.gov.uk/work/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations", "https://github.com/UKGovernmentBEIS/aisi-sandboxing", "https://inspect.aisi.org.uk/sandboxing.html"], "planned_claims": [
+      "AISI frames sandbox requirements along three axes: tooling (what the agent can use), host isolation (protection of the host from the agent), network isolation (what it can reach) — verify exact axes and level definitions",
+      "AISI provides sandbox plugins beyond Docker: Kubernetes (k8s) and Proxmox (VMs), and why (scale; stronger isolation for e.g. cyber evals / full VMs / Windows)",
+      "Statements on why Docker alone may be insufficient for high-risk agentic evals (shared kernel / container escape)",
+      "Any guidance on choosing isolation level by risk (threat-model-driven)"
+    ]},
+    { "id": "o1-docker-incident", "group": "R6", "tag": "[o1 System Card]", "title": "OpenAI o1 System Card (Sept/Dec 2024), cybersecurity CTF section: misconfigured Docker API incident", "urls": ["https://openai.com/index/openai-o1-system-card/", "https://cdn.openai.com/o1-system-card-20241205.pdf", "https://cdn.openai.com/o1-system-card.pdf", "https://arxiv.org/abs/2412.16720"], "planned_claims": [
+      "During a CTF eval the challenge container failed to start; the model scanned the network, found the Docker daemon API exposed on the evaluation host due to a misconfiguration, listed containers, and started a new instance of the challenge container with a command that printed the flag, reading it via container logs — verify every step and the exact wording",
+      "OpenAI's framing: the eval infrastructure remained secure by design (VM boundary) despite the container-level misconfiguration; noted as instrumental convergence / benign-but-instructive",
+      "This is an ENVIRONMENT flaw that changed what the task measured — the flag was obtained without solving the intended challenge"
+    ]},
+
+    { "id": "inspect-sandbox", "group": "R7", "tag": "[Inspect]", "title": "Inspect AI docs: Sandboxing, Tools (bash/python/text_editor/bash_session), Agent Bridge, extensions (sandbox providers), eval logs", "urls": ["https://inspect.aisi.org.uk/sandboxing.html", "https://inspect.aisi.org.uk/tools-standard.html", "https://inspect.aisi.org.uk/tools.html", "https://inspect.aisi.org.uk/extensions.html", "https://inspect.aisi.org.uk/agent-bridge.html", "https://inspect.aisi.org.uk/reference/inspect_ai.util.html"], "planned_claims": [
+      "Sandbox environments are how Inspect runs model-generated code/tool calls in isolation; built-in providers: 'local' (no isolation) and 'docker'; others via extensions (k8s, proxmox, podman, modal, daytona etc. — list what docs list today)",
+      "SandboxEnvironment API: exec(cmd: list[str], input, cwd, env, user, timeout, …) → ExecResult(success, returncode, stdout, stderr); read_file / write_file; output limit (10 MiB?) and OutputLimitExceededError — verify exact current signature and limits",
+      "Docker provider: with no compose file Inspect uses a default config (python image? `network_mode: none`? init: true? cpu/mem limits?) — get exact default compose YAML from the docs",
+      "Compose conventions: service named 'default' is the primary sandbox; `x-local`; images must keep running (command: tail -f /dev/null); per-sample compose projects; cleanup and `inspect sandbox cleanup docker`; --no-sandbox-cleanup for debugging and how to `docker exec` into it",
+      "bash() tool: timeout param, user param; tool timeouts vs sample time_limit/working_limit; what the model sees on timeout",
+      "Files/setup: Sample.files copied into sandbox, Sample.setup script; scorers can exec in the sandbox AFTER the agent is done (state-based grading) — and the integrity implication that anything in the sandbox was writable by the agent",
+      "Resource guidance: max_sandboxes default (2 * cpu count?), max_subprocesses, max_samples — verify",
+      "Agent bridge / sandbox agent bridge: running external agents (Claude Code, Codex CLI) inside the sandbox with model calls proxied back to Inspect — what this means for network policy"
+    ]},
+    { "id": "terminal-bench", "group": "R7", "tag": "[Terminal-Bench]", "title": "Terminal-Bench: paper (arXiv, Jan 2026) + tbench.ai docs + Harbor framework docs. NOTE: sibling course has verified notes at ../../evals/evals-tut/research/sources/terminal-bench.json — read first, re-verify anything reused, extend for Linux-specific details", "urls": ["https://www.tbench.ai/", "https://www.tbench.ai/docs", "https://arxiv.org/abs/2601.11868", "https://github.com/laude-institute/terminal-bench", "https://harborframework.com/", "https://github.com/laude-institute/harbor"], "planned_claims": [
+      "Task anatomy: instruction, Docker environment (Dockerfile/compose), test script(s), oracle solution; tests are copied in and run AFTER the agent finishes (verify: are tests absent from the container during the agent run?)",
+      "The harness connects the agent to a terminal in the container (tmux session; keystroke-sending + screen capture for some agents) — exact mechanism",
+      "Reported headline results: frontier agents' resolve rate on Terminal-Bench 2.0 at publication (exact numbers, models, date) — shows terminal competence is unsolved",
+      "Paper's failure analysis: categories of failure relevant to Linux fluency (e.g. command errors, timeouts, environment/dependency problems) with numbers if present",
+      "Task quality process: manual review hours, oracle-solution validation, checks for cheating/shortcuts (e.g. tests verifying behaviour not file presence), resource/time limits per task",
+      "Harbor: successor harness; supports cloud sandbox providers (Daytona, Modal, E2B…) — list per docs"
+    ]},
+    { "id": "swe-bench-docker", "group": "R7", "tag": "[SWE-bench]", "title": "SWE-bench containerized evaluation harness docs + paper. Sibling notes: ../../evals/evals-tut/research/sources/swe-bench.json, swe-bench-verified.json, swe-bench-critiques.json", "urls": ["https://www.swebench.com/SWE-bench/guides/docker_setup/", "https://github.com/SWE-bench/SWE-bench/blob/main/docs/20240627_docker/README.md", "https://github.com/SWE-bench/SWE-bench", "https://arxiv.org/abs/2310.06770", "https://www.swebench.com/SWE-bench/guides/evaluation/"], "planned_claims": [
+      "June 2024: SWE-bench moved to a fully containerized Docker harness for reproducible evaluation; motivation (environment inconsistencies across machines produced differing results) — exact wording",
+      "Three-layer images: base → environment (~60 python envs) → instance images; disk/resource requirements the docs state (e.g. ~120 GB free, 16 GB RAM, 8 cores; --cache_level; max_workers guidance)",
+      "Grading = apply model patch inside the instance container, run the repo's tests, compare FAIL_TO_PASS and PASS_TO_PASS against the log — a state-based check run by shell inside Linux"
+    ]},
+    { "id": "swe-bench-git-leak", "group": "R7", "tag": "[SWE-bench #465]", "title": "SWE-bench GitHub issue on agents reading future repository state via git (Sept 2025) and maintainers' response", "urls": ["https://github.com/SWE-bench/SWE-bench/issues/465", "https://github.com/SWE-bench/SWE-bench/issues"], "planned_claims": [
+      "Issue reports that agents (examples with specific models) ran commands such as `git log --all` and found future commits/fixes in the task container because the repo's later history (branches, tags, reflog, origin refs) was still present",
+      "Maintainers' stated fix: remove future repo state (refs, tags, reflog, origins…) from images; their assessment of how prevalent the exploit was in submitted trajectories",
+      "Exact issue number/title/date/author — the number 465 is from memory and MUST be verified; correct the id/tag if different"
+    ]},
+    { "id": "git-internals", "group": "R7", "tag": "[Pro Git]", "title": "Pro Git / git docs: objects, refs, reflog, gc, shallow clones", "urls": ["https://git-scm.com/book/en/v2/Git-Internals-Git-Objects", "https://git-scm.com/book/en/v2/Git-Internals-Git-References", "https://git-scm.com/book/en/v2/Git-Internals-Maintenance-and-Data-Recovery", "https://git-scm.com/docs/git-log", "https://git-scm.com/docs/git-clone", "https://git-scm.com/docs/git-gc"], "planned_claims": [
+      "Commits reachable from ANY ref (branches, tags, remotes, stash) are shown by `git log --all`; unreachable objects persist in .git/objects until gc prunes them (default expiry 2 weeks for loose unreachable objects; reflog entries 90/30 days) and can be found with git fsck --lost-found / reflog",
+      "Checking out an old commit does not remove newer objects from .git",
+      "git clone --depth 1 creates a shallow clone with truncated history; a cleaner fix is building the task repo from an exported tree (git archive) so no future objects exist"
+    ]},
+    { "id": "metr-reward-hacking", "group": "R7", "tag": "[METR]", "title": "METR, 'Recent Frontier Models Are Reward Hacking' (June 2025). Sibling notes: ../../evals/evals-tut/research/sources/metr.json (different METR doc, check)", "urls": ["https://metr.org/blog/2025-06-05-recent-reward-hacking/"], "planned_claims": [
+      "Documented behaviours: models modifying tests or scoring code, accessing an existing implementation/answer, monkey-patching the evaluator, searching the call stack for the grader's reference answer — list the concrete examples the post gives",
+      "Reported rates of reward hacking by task family (e.g. RE-Bench vs HCAST) with exact numbers and models",
+      "Models often acknowledged the behaviour was not what the user intended when asked — exact finding",
+      "Which exploits were ENVIRONMENT-enabled (grader/answers reachable from the agent's process/filesystem) — the course's point: the filesystem and process boundary IS the integrity boundary"
+    ]},
+    { "id": "impossiblebench", "group": "R7", "tag": "[ImpossibleBench]", "title": "ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases (Zhong, Raghunathan, Carlini, 2025)", "urls": ["https://arxiv.org/abs/2510.20270"], "planned_claims": [
+      "Design: tasks made impossible by making tests conflict with the spec, so any pass implies cheating; cheating rate is the metric",
+      "Headline cheating rates by model (exact numbers)",
+      "Cheating strategies taxonomy (modify tests, overload operators, special-casing, record state)",
+      "Mitigation finding relevant to Linux: hiding tests or making test files READ-ONLY reduces cheating — exact numbers and caveats (read-only access effect vs hiding tests effect on legit performance)"
+    ]},
+    { "id": "reward-hack-sandbox-policies", "group": "R7", "tag": "[TBD]", "title": "Lookup: arXiv 2606.08960 (reported to describe benchmark hardening as 'manual and reactive' and propose adversarial hacker-fixer loops) and 'reward-hack-bench' (reported: 8 tasks under 7 sandbox policies). Existence and content are UNVERIFIED leads from the course owner's notes.", "urls": ["https://arxiv.org/abs/2606.08960"], "planned_claims": [
+      "Find whether these exist; if so record title/authors/date, the 'manual and reactive' quote in context, the proposed method, and any result relating SANDBOX POLICY (network, filesystem permissions, read-only mounts) to cheat rate. If not found, write the note with access: failed and say so — authors will then not use it."
+    ]},
+    { "id": "anthropic-agent-evals", "group": "R7", "tag": "[Anthropic: Agent Evals]", "title": "Anthropic Engineering, 'Demystifying evals for AI agents' (Jan 2026)", "urls": ["https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"], "planned_claims": [
+      "Statements about environment stability/isolation: each trial should start from a clean environment; shared state between runs (leftover files, cached data, resource exhaustion) causes correlated failures / inflated results — exact wording",
+      "Statements about infrastructure flakiness vs model failure, reading transcripts, and grading outcomes (environment state) vs the agent's claims",
+      "Any concrete anecdote about an eval environment bug or an agent exploiting the environment (e.g. inspecting git history) — exact wording"
+    ]},
+    { "id": "humaneval-sandbox", "group": "R7", "tag": "[HumanEval]", "title": "Chen et al. 2021, Evaluating LLMs Trained on Code, §2.3 Sandbox for executing generated programs. Sibling notes: ../../evals/evals-tut/research/sources/humaneval.json", "urls": ["https://arxiv.org/abs/2107.03374"], "planned_claims": [
+      "OpenAI ran untrusted generated code in a gVisor-based sandbox, with network access disabled except what was needed (eBPF firewall rules) — exact wording of §2.3 incl. the stated goal ('prevent these programs from modifying, gaining persistence on, accessing sensitive resources on, or exfiltrating data from a host or network')"
+    ]},
+    { "id": "osworld-env", "group": "R7", "tag": "[OSWorld]", "title": "OSWorld (Xie et al. 2024): environment infrastructure. Sibling notes: ../../evals/evals-tut/research/sources/osworld.json", "urls": ["https://arxiv.org/abs/2404.07972", "https://os-world.github.io/", "https://github.com/xlang-ai/OSWorld"], "planned_claims": [
+      "OSWorld runs tasks in full virtual machines (Ubuntu primary; VMware/VirtualBox/Docker-with-KVM/AWS providers) and resets via VM snapshots; grading via execution-based scripts that inspect final VM state (134 evaluation functions) — verify numbers",
+      "Why VMs rather than containers: needs a full desktop OS / GUI"
+    ]},
+    { "id": "linux-journey", "group": "R7", "tag": "[Linux Journey]", "title": "Linux Journey (free learning site) — used ONLY as a further-practice pointer", "urls": ["https://linuxjourney.com/", "https://labex.io/linuxjourney"], "planned_claims": [
+      "Confirm the site is live (Sept 2026), its current URL/ownership (it was reported to have moved under LabEx), and the names of its lesson tracks (Command Line, Text-Fu, User Management, Permissions, Processes, Packages, The Filesystem, Process Utilization, Logging, Init, Networking…) so pages can point at matching lessons"
+    ]}
+  ]
+}

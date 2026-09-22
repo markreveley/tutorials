@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Namespaces: What a Container Really Is · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Containers &amp; Isolation</p>
+    <h1>Namespaces: what a container really is</h1>
+    <p class="lede">
+      "Container" sounds like a thing. On Linux it is a recipe: an ordinary process, started with a
+      restricted view of the system. This page builds that view by hand, one namespace at a time, so
+      that "what can the agent see?" becomes a question you answer by reading numbers out of
+      <code>/proc</code> rather than by trusting the word "sandbox".
+    </p>
+
+    <h2 id="the-claim">A container is a process with four things done to it</h2>
+    <p>
+      Here is this course's framing, and it is a framing rather than a quotation: <em>the kernel has
+      no object called a container</em>. Look through the kernel interfaces in this module and you
+      will find namespaces, cgroups, capabilities, seccomp filters and mounts — and no
+      "create container" call. What the primary sources do say fits that reading. The Linux manual:
+      "One use of namespaces is to implement
+      containers."<a class="cite" href="https://man7.org/linux/man-pages/man7/namespaces.7.html" title="namespaces(7), Linux man-pages, DESCRIPTION">[namespaces(7)]</a>
+      The Open Container Initiative's runtime specification defines a
+      <span class="term" data-g="container">container</span> as "An environment for executing
+      processes with configurable isolation and resource limitations. For example, namespaces,
+      resource limits, and mounts are all part of the container
+      environment."<a class="cite" href="https://github.com/opencontainers/runtime-spec/blob/main/glossary.md#container" title="OCI Runtime Specification, glossary.md, 'Container'">[OCI Runtime Spec]</a>
+      Docker's beginner docs: "A container is simply an isolated process with all of the files it
+      needs to
+      run."<a class="cite" href="https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/" title="Docker Docs, What is a container?">[Docker: what-is-a-container]</a>
+      And its security page: "When you start a container with <code>docker run</code>, behind the
+      scenes Docker creates a set of namespaces and control groups for the
+      container."<a class="cite" href="https://docs.docker.com/engine/security/" title="Docker Docs, Docker Engine security">[Docker: security]</a>
+    </p>
+    <div class="diagram">                an ordinary process (bash, python, the agent's shell)
+                                      │
+   ┌──────────────────┬───────────────┴──┬───────────────────┐
+   │ (a) NAMESPACES   │ (b) CGROUPS      │ (c) ROOT          │ (d) REDUCED
+   │ a restricted     │ a restricted     │ FILESYSTEM        │ PRIVILEGE
+   │ VIEW: which PIDs,│ BUDGET: memory,  │ a different "/"   │ capabilities,
+   │ mounts, network, │ CPU, number of   │ unpacked from     │ seccomp, LSM,
+   │ hostname exist   │ processes        │ an image          │ no_new_privs
+   ├──────────────────┼──────────────────┼───────────────────┼──────────────
+   │ this page        │ page 21          │ this page, 14, 22 │ page 21
+   └──────────────────┴──────────────────┴───────────────────┴──────────────
+            all of it enforced by ONE shared kernel  (page 24)</div>
+    <p>
+      The practical pay-off of dissolving the word: each ingredient can be inspected separately, and
+      each can be <em>missing</em> separately. A task definition that says <code>pid: host</code> has
+      quietly removed one wall while the thing is still called a container.
+    </p>
+
+    <h2 id="namespaces">Namespaces: the kernel's eight views</h2>
+    <p>
+      A <span class="term" data-g="namespace">namespace</span> "wraps a global system resource in an
+      abstraction that makes it appear to the processes within the namespace that they have their own
+      isolated instance of the global
+      resource."<a class="cite" href="https://man7.org/linux/man-pages/man7/namespaces.7.html" title="namespaces(7), DESCRIPTION, first paragraph">[namespaces(7)]</a>
+      Global resource means things like "the list of process IDs" or "the hostname": normally there
+      is one per machine, held by the <span class="term" data-g="kernel">kernel</span>. There are
+      exactly eight
+      types:<a class="cite" href="https://man7.org/linux/man-pages/man7/namespaces.7.html" title="namespaces(7), 'Namespace types' table">[namespaces(7)]</a>
+    </p>
+    <table>
+      <thead><tr><th>Namespace</th><th>Isolates (man page wording)</th><th>In <code>/proc/PID/ns</code></th><th>Docker creates one by default?</th></tr></thead>
+      <tbody>
+        <tr><td>PID</td><td>Process IDs</td><td><code>pid</code></td><td>yes</td></tr>
+        <tr><td>Mount</td><td>Mount points</td><td><code>mnt</code></td><td>yes</td></tr>
+        <tr><td>Network</td><td>Network devices, stacks, ports, etc.</td><td><code>net</code></td><td>yes</td></tr>
+        <tr><td>UTS</td><td>Hostname and NIS domain name</td><td><code>uts</code></td><td>yes</td></tr>
+        <tr><td>IPC</td><td>System V IPC, POSIX message queues</td><td><code>ipc</code></td><td>yes</td></tr>
+        <tr><td>Cgroup</td><td>Cgroup root directory</td><td><code>cgroup</code></td><td>yes</td></tr>
+        <tr><td>User</td><td>User and group IDs</td><td><code>user</code></td><td><strong>no</strong></td></tr>
+        <tr><td>Time</td><td>Boot and monotonic clocks</td><td><code>time</code></td><td><strong>no</strong></td></tr>
+      </tbody>
+    </table>
+    <p>
+      The last column is not from a man page; it is what two running default containers show, below,
+      and it matches Docker's statement that user namespaces are "available but not enabled by
+      default."<a class="cite" href="https://docs.docker.com/engine/security/#other-kernel-security-features" title="Docker Docs, Docker Engine security: Other kernel security features">[Docker: security]</a>
+      Every process is always in one namespace of each type. "Not in a container" just means "in the
+      initial ones".
+    </p>
+
+    <h3 id="proc-ns">Reading a process's namespaces</h3>
+    <p>
+      Each process has a directory <code>/proc/PID/ns</code> of symbolic links, one per type. The
+      link text is <code>type:[inode number]</code>, and the number is the namespace's identity. Set
+      up this page's lab first — a throwaway container with full privileges, because creating
+      namespaces needs a capability that default containers lack (more below). Never use
+      <code>--privileged</code> for a task container; here it is your workbench.
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-ns --privileged --hostname lab ubuntu:24.04 sleep infinity
+<span class="p">$</span> docker exec lt-ns bash -c 'apt-get update -qq &amp;&amp; apt-get install -y -qq --no-install-recommends procps iproute2 iputils-ping'
+<span class="p">$</span> docker exec -it lt-ns bash
+<span class="p">#</span> ls -l /proc/self/ns
+<span class="o">total 0
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 cgroup -&gt; cgroup:[4026532963]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 ipc -&gt; ipc:[4026532961]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 mnt -&gt; mnt:[4026532959]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 net -&gt; net:[4026532964]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 pid -&gt; pid:[4026532962]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 pid_for_children -&gt; pid:[4026532962]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 time -&gt; time:[4026531834]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 time_for_children -&gt; time:[4026531834]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 user -&gt; user:[4026531837]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 uts -&gt; uts:[4026532960]</span></code></pre>
+    <p>
+      The test for "are these two processes in the same namespace?" is official: "If two processes
+      are in the same namespace, then the device IDs and inode numbers of their
+      <code>/proc/pid/ns/xxx</code> symbolic links will be the
+      same."<a class="cite" href="https://man7.org/linux/man-pages/man7/namespaces.7.html" title="namespaces(7), 'The /proc/pid/ns/ directory'">[namespaces(7)]</a>
+      Here are two default containers running at the same time, read from inside each:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-a ubuntu:24.04 sleep 300; docker run -d --name lt-b ubuntu:24.04 sleep 300
+<span class="p">$</span> docker exec lt-a bash -c 'for n in pid net mnt uts ipc cgroup user time; do readlink /proc/1/ns/$n; done | paste -sd" "'
+<span class="o">pid:[4026533772] net:[4026533774] mnt:[4026533769] uts:[4026533770] ipc:[4026533771] cgroup:[4026533773] <span class="hl">user:[4026531837] time:[4026531834]</span></span>
+<span class="p">$</span> docker exec lt-b bash -c '…same…'
+<span class="o">pid:[4026533907] net:[4026533909] mnt:[4026533904] uts:[4026533905] ipc:[4026533906] cgroup:[4026533908] <span class="hl">user:[4026531837] time:[4026531834]</span></span></code></pre>
+    <p>
+      Six walls each, and two shared rooms: both containers — and the lab above, and the host — are
+      in the same user and time namespaces.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — comparing a live process with a dead one</span>
+      <p>The inode number of a namespace that has been freed can be handed to the next namespace
+      created. Run two containers one <em>after</em> the other and they may print identical numbers
+      while never having shared anything. Only compare processes that are alive at the same
+      moment.</p>
+    </div>
+
+    <h2 id="by-hand">Building the view by hand</h2>
+    <p>
+      <code>unshare</code> runs a program in newly created namespaces; <code>nsenter</code> runs one
+      inside the namespaces of an existing
+      process.<a class="cite" href="https://man7.org/linux/man-pages/man1/nsenter.1.html" title="nsenter(1), DESCRIPTION: 'If you want to create a new namespace, use unshare(1)…'">[nsenter(1)]</a>
+      Those two commands, plus <code>lsns</code> to list, are the whole toolkit.
+    </p>
+
+    <h3 id="pid-ns">PID: a private process list</h3>
+<pre class="term"><code><span class="p">#</span> unshare --pid --fork --mount-proc bash
+<span class="p">#</span> echo $$
+<span class="o">1</span>
+<span class="p">#</span> ps aux
+<span class="o">USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   4032  2896 ?        S    16:30   0:00 bash
+root         2  100  0.0   7628  3532 ?        R    16:30   0:00 ps aux</span>
+<span class="p">#</span> exit</code></pre>
+    <p>
+      In a new <span class="term" data-g="pid-namespace">PID namespace</span> numbering starts again at
+      1, and the first process is that namespace's
+      <span class="term" data-g="pid-1">PID 1</span>, with the init duties and signal quirks from
+      <a href="10-signals-exit-codes.html">page 10</a>.<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7), 'The namespace init process'">[pid_namespaces(7)]</a>
+      Two flags need explaining. <code>--fork</code>: the process that calls unshare stays in its old
+      PID namespace; only its <em>children</em> land in the new one (that is the
+      <code>pid_for_children</code> link above), so unshare must fork before running bash.
+      <code>--mount-proc</code>: <code>ps</code> reads <code>/proc</code>, and a <code>/proc</code>
+      "shows … only processes visible in the PID namespace of the process that performed the
+      mount."<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7), '/proc and PID namespaces'">[pid_namespaces(7)]</a>
+      Without a fresh mount you are PID 1 staring at the old list (the lab has you try it).
+    </p>
+    <p>
+      Visibility is one-way. A process "can see … only processes contained in its own PID namespace
+      and in descendants of that
+      namespace."<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7), 'Nesting PID namespaces'">[pid_namespaces(7)]</a>
+      So the outside sees in, under different numbers. Start a box in the background and look at it
+      from the lab shell:
+    </p>
+<pre class="term"><code><span class="p">#</span> unshare --pid --fork --mount-proc --uts --net --ipc bash -c 'hostname box; sleep 600 &amp; sleep 600 &amp; exec sleep 900' &amp;
+<span class="p">#</span> ps -eo pid,ppid,args --forest
+<span class="o">  PID  PPID COMMAND
+  335     0 unshare --pid --fork --mount-proc --uts --net --ipc bash -c hostname box; …
+  341   335  \_ sleep 900
+  343   341      \_ sleep 600
+  344   341      \_ sleep 600
+    1     0 sleep infinity</span>
+<span class="p">#</span> grep NSpid /proc/341/status
+<span class="o">NSpid:	341	1</span></code></pre>
+    <div class="diagram">  lab's PID namespace  pid:[4026532962]        box's  pid:[4026532692]
+  ┌─────────────────────────────────────┐     ┌──────────────────────┐
+  │ 1    sleep infinity                 │     │                      │
+  │ 335  unshare …                      │     │                      │
+  │ 341  sleep 900  ──── same process ──┼────▶│ 1  sleep 900 (init)  │
+  │ 343  sleep 600  ────────────────────┼────▶│ 3  sleep 600         │
+  │ 344  sleep 600  ────────────────────┼────▶│ 4  sleep 600         │
+  └─────────────────────────────────────┘     └──────────────────────┘
+        sees and can signal everything ──▶       sees only itself</div>
+    <p>
+      This is the geometry of every agent sandbox: the harness side can watch and kill the agent's
+      processes; the agent's side cannot even list the harness's — provided the grader really is
+      outside (<a href="26-environment-integrity.html">page 26</a>).
+    </p>
+
+    <h3 id="uts-net-mnt">UTS, network, mount</h3>
+<pre class="term"><code><span class="p">#</span> unshare --uts bash -c 'hostname sandbox-7; hostname; readlink /proc/self/ns/uts'
+<span class="o">sandbox-7
+uts:[4026534037]</span>
+<span class="p">#</span> hostname; readlink /proc/self/ns/uts
+<span class="o">lab
+uts:[4026532960]</span></code></pre>
+    <p>
+      The <span class="term" data-g="uts-namespace">UTS namespace</span> holds two strings, hostname
+      and NIS domain name, and nothing else — remember that for the end of the page. A new
+      <span class="term" data-g="network-namespace">network namespace</span> is more dramatic: it has
+      its own devices, addresses, routing table, firewall rules and port
+      numbers,<a class="cite" href="https://man7.org/linux/man-pages/man7/network_namespaces.7.html" title="network_namespaces(7), DESCRIPTION">[network_namespaces(7)]</a>
+      and it starts with no usable connectivity at all:
+    </p>
+<pre class="term"><code><span class="p">#</span> unshare --net bash
+<span class="p">#</span> ip -br addr
+<span class="o">lo               <span class="hl">DOWN</span>
+tunl0@NONE       DOWN
+…
+ip6gre0@NONE     DOWN</span>
+<span class="p">#</span> ip route                      <span class="c"># prints nothing: no routes</span>
+<span class="p">#</span> ping -c1 -W1 127.0.0.1
+<span class="o">ping: connect: Network is unreachable</span>
+<span class="p">#</span> ip link set lo up; ping -c1 -W1 127.0.0.1 | tail -2
+<span class="o">1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.268/0.268/0.268/0.000 ms</span>
+<span class="p">#</span> exit</code></pre>
+    <p>
+      A loopback device that is down, no addresses, no routes: even <code>127.0.0.1</code> is
+      unreachable until someone brings <code>lo</code> up. (The <code>tunl0</code>…<code>ip6gre0</code>
+      lines are unused "fallback tunnel" devices that some kernels, including Docker Desktop's, create
+      in every network namespace; a stock server may show only
+      <code>lo</code>.<a class="cite" href="https://docs.kernel.org/admin-guide/sysctl/net.html#fb-tunnels-only-for-init-net" title="Kernel docs, sysctl/net: fb_tunnels_only_for_init_net">[Kernel: sysctl/net]</a>)
+      This is what <code>--network none</code> gives a container
+      (<a href="19-firewalls-and-egress.html">page 19</a>). Everything a normal container has beyond
+      it was added from outside by the runtime: one end of a virtual cable — veth devices "are always
+      created in interconnected
+      pairs"<a class="cite" href="https://man7.org/linux/man-pages/man4/veth.4.html" title="veth(4), DESCRIPTION">[veth(4)]</a> —
+      pushed into the namespace, an address, a default route
+      (<a href="16-addresses-and-routes.html">page 16</a>; concepts in
+      <a href="../../../networking/networking-tut/pages/14-containers.html">Networking for LLM Evals,
+      lesson 14</a>).
+    </p>
+<pre class="term"><code><span class="p">#</span> unshare --mount bash -c 'mount -t tmpfs tmpfs /mnt; echo secret &gt; /mnt/note; ls /mnt; findmnt /mnt'
+<span class="o">note
+TARGET SOURCE FSTYPE OPTIONS
+/mnt   tmpfs  tmpfs  rw,relatime</span>
+<span class="p">#</span> ls /mnt; findmnt /mnt; echo "exit=$?"
+<span class="o">exit=1</span></code></pre>
+    <p>
+      A <span class="term" data-g="mount-namespace">mount namespace</span> is a private copy of the
+      mount table from <a href="14-mounts-and-filesystems.html">page 14</a>: it starts as a copy of
+      the creator's, then
+      diverges.<a class="cite" href="https://man7.org/linux/man-pages/man7/mount_namespaces.7.html" title="mount_namespaces(7), DESCRIPTION">[mount_namespaces(7)]</a>
+      The tmpfs and its file existed for the processes inside and for nobody else. That is why
+      <code>findmnt</code> inside a task container lists only the container's mounts, and why audit
+      question 2 must be asked from inside each box.
+    </p>
+
+    <h3 id="nsenter">Entering: what <code>docker exec</code> amounts to</h3>
+<pre class="term"><code><span class="p">#</span> nsenter -t 341 -a bash -c 'hostname; ps -eo pid,ppid,args'
+<span class="o">box
+  PID  PPID COMMAND
+    1     0 sleep 900
+    3     1 sleep 600
+    4     1 sleep 600
+    5     <span class="hl">0</span> ps -eo pid,ppid,args</span></code></pre>
+    <p>
+      <code>-t 341 -a</code> means "join all the namespaces of process 341" (the kernel call is
+      <code>setns(2)</code><a class="cite" href="https://man7.org/linux/man-pages/man7/namespaces.7.html" title="namespaces(7), 'The namespaces API'">[namespaces(7)]</a>).
+      Note the newcomer's parent: PPID 0, because its real parent is outside and has no number in
+      here. Docker documents <code>docker exec</code> only as "runs a new command in a running
+      container";<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/exec/" title="Docker Docs, docker container exec: Description">[Docker: run]</a>
+      what you can observe is the same signature — in <code>lt-a</code>, an exec'd
+      <code>ps</code> shows PPID 0 and the same <code>pid:</code> and <code>mnt:</code> inode numbers
+      as the container's PID 1. When you debug a rollout with <code>docker exec</code>, you are a
+      process injected into the agent's view, not a login to a machine.
+    </p>
+
+    <h3 id="teardown">Teardown for free</h3>
+<pre class="term"><code><span class="p">#</span> kill -9 341; sleep 1; pgrep -a sleep
+<span class="o">1 sleep infinity</span>
+<span class="p">#</span> bash -c 'sleep 601 &amp; sleep 601 &amp; sleep 1'; sleep 2; pgrep -a sleep   <span class="c"># same thing, no namespace</span>
+<span class="o">1 sleep infinity
+387 sleep 601
+388 sleep 601</span>
+<span class="p">#</span> pkill -f 'sleep 601'            <span class="c"># clean up by hand — which is the point</span></code></pre>
+    <p>
+      "If the 'init' process of a PID namespace terminates, the kernel terminates all of the
+      processes in the namespace via a SIGKILL
+      signal."<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7), 'The namespace init process'">[pid_namespaces(7)]</a>
+      Killing one process took both background sleeps with it. Without the namespace the same
+      children were simply orphaned (<a href="09-processes.html">page 9</a>) and kept running.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — why container rollouts don't leak processes</span>
+      <p>An agent starts a dev server on port 8000, forgets it, and the episode ends. On a
+      bare-process runner that server survives into the next
+      <span class="term" data-g="rollout">rollout</span>, which then fails with "Address already in
+      use" — shared state between samples that were supposed to be independent, scored as a model
+      failure. With one container per rollout, removing the container ends PID 1 and the kernel
+      kills everything else in the namespace. If you ever see leftovers, that is evidence the
+      processes were started <em>outside</em> the rollout's PID namespace; record those runs as
+      infrastructure failures, not as wrong answers.</p>
+    </div>
+
+    <h2 id="rootfs">A different root: chroot, then pivot_root</h2>
+    <p>
+      Ingredient (c) is older than namespaces. <span class="term" data-g="chroot">chroot</span>
+      changes what <code>/</code> means for a process. With a static BusyBox
+      (<code>apt-get install busybox-static</code>) a "root filesystem" can be two files:
+    </p>
+<pre class="term"><code><span class="p">#</span> mkdir -p /jail/bin &amp;&amp; cp /usr/bin/busybox /jail/bin/ &amp;&amp; echo "hello from the jail" &gt; /jail/README
+<span class="p">#</span> chroot /jail /bin/busybox sh -c '/bin/busybox ls -l /; /bin/busybox ls /etc; /bin/busybox hostname'
+<span class="o">total 8
+-rw-r--r--    1 0        0               20 Sep 21 16:27 README
+drwxr-xr-x    2 0        0             4096 Sep 21 16:27 bin
+ls: /etc: No such file or directory
+lab</span></code></pre>
+    <p>
+      An image is this idea scaled up: a directory tree with a distribution's files in it. But look
+      at the last line — same hostname, because chroot changed nothing except path lookup. Its man
+      page is blunt: "This call changes an ingredient in the pathname resolution process and does
+      nothing else. In particular, it is not intended to be used for any kind of security purpose,
+      neither to fully sandbox a process nor to restrict filesystem system
+      calls."<a class="cite" href="https://man7.org/linux/man-pages/man2/chroot.2.html" title="chroot(2), DESCRIPTION">[chroot(2)]</a>
+      Container runtimes use <code>pivot_root</code> instead, which swaps the root mount of a mount
+      namespace so the old root can be unmounted and become unreachable; its man page notes "A modern
+      use is to set up a root filesystem during the creation of a
+      container,"<a class="cite" href="https://man7.org/linux/man-pages/man2/pivot_root.2.html" title="pivot_root(2), NOTES">[pivot_root(2)]</a>
+      and <span class="term" data-g="runc">runc</span> labels its opt-out flag "may be unsafe from the
+      security
+      standpoint."<a class="cite" href="https://github.com/opencontainers/runc/blob/main/man/runc-create.8.md" title="runc-create(8), --no-pivot">[runc]</a>
+      A "chroot sandbox" in a home-grown harness is a finding for your audit.
+    </p>
+
+    <h2 id="userns">User namespaces: root inside, nobody outside</h2>
+    <p>
+      Why did the lab need <code>--privileged</code>? Creating namespaces "in most cases requires the
+      <code>CAP_SYS_ADMIN</code> <span class="term" data-g="capability">capability</span>";
+      "User namespaces are the exception: since Linux 3.8, no privilege is
+      required."<a class="cite" href="https://man7.org/linux/man-pages/man7/namespaces.7.html" title="namespaces(7), 'The namespaces API'">[namespaces(7)]</a>
+      Default containers lack that capability (<a href="21-cgroups-capabilities-seccomp.html">page
+      21</a>): there <code>unshare --uts true</code> prints <code>unshare: unshare failed: Operation
+      not permitted</code>. A <span class="term" data-g="user-namespace">user namespace</span> maps
+      user IDs, so a process can have "a normal unprivileged user ID outside a user namespace while
+      at the same time having a user ID of 0 inside the
+      namespace."<a class="cite" href="https://man7.org/linux/man-pages/man7/user_namespaces.7.html" title="user_namespaces(7), DESCRIPTION">[user_namespaces(7)]</a>
+      As an unprivileged user (<code>useradd -m learner</code>, then
+      <code>docker exec -it -u learner lt-ns bash</code>):
+    </p>
+<pre class="term"><code><span class="p">$</span> id
+<span class="o">uid=1001(learner) gid=1001(learner) groups=1001(learner)</span>
+<span class="p">$</span> unshare --user --map-root-user bash
+<span class="p">#</span> id; cat /proc/self/uid_map; grep CapEff /proc/self/status
+<span class="o">uid=0(root) gid=0(root) groups=0(root)
+         0       1001          1
+CapEff:	000001ffffffffff</span>
+<span class="p">#</span> hostname x; touch /etc/x
+<span class="o">hostname: you must be root to change the host name
+touch: cannot touch '/etc/x': Permission denied</span></code></pre>
+    <p>
+      <code>uid_map</code> reads "ID 0 in here is ID 1001 out there, for a range of 1." The full
+      capability mask is real but applies "only on resources governed by that
+      namespace"<a class="cite" href="https://man7.org/linux/man-pages/man7/user_namespaces.7.html" title="user_namespaces(7), 'Effect of capabilities within a user namespace'">[user_namespaces(7)]</a>:
+      the hostname belongs to a UTS namespace owned by the outer user namespace, and
+      <code>/etc</code> belongs to the real root, so both refuse. (With Docker's own seccomp profile
+      active, even this <code>unshare</code> is refused.)
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — Docker does not do this by default</span>
+      <p>The identical <code>user:[4026531837]</code> everywhere on this page is the point: a default
+      Docker container shares the host's user namespace, and "The default user within a container is
+      root (uid = 0)."<a class="cite" href="https://docs.docker.com/engine/containers/run/" title="Docker Docs, Running containers: User">[Docker: run]</a>
+      Remapping container root "to a non uid-0 user outside the container" exists,
+      but "is available but not enabled by
+      default."<a class="cite" href="https://docs.docker.com/engine/security/#other-kernel-security-features" title="Docker Docs, Docker Engine security: Other kernel security features">[Docker: security]</a>
+      So root in a default container <em>is</em> the host's uid 0, held back only by the privilege
+      reductions of page 21. The daemon-level fixes (userns-remap, rootless) are on
+      <a href="23-hardening-containers.html#daemon-level">page 23</a>.</p>
+    </div>
+
+    <h2 id="not-namespaced">What is not namespaced</h2>
+<pre class="term"><code><span class="p">$</span> for i in ubuntu:24.04 debian:bookworm-slim alpine:3.20; do docker run --rm $i uname -r; done
+<span class="o">6.10.14-linuxkit
+6.10.14-linuxkit
+6.10.14-linuxkit</span>
+<span class="p">$</span> docker run --rm --memory 256m --cpus 1 ubuntu:24.04 bash -c 'cat /proc/uptime; nproc; grep MemTotal /proc/meminfo'
+<span class="o">17487.79 173670.87
+10
+MemTotal:        8025424 kB</span>
+<span class="p">$</span> docker run --rm ubuntu:24.04 date -s 2030-01-01
+<span class="o">Tue Jan  1 00:00:00 UTC 2030
+date: cannot set date: Operation not permitted</span></code></pre>
+    <p>
+      Three "distributions", one kernel: the UTS namespace covers the hostname, not the kernel
+      release. Docker says it plainly — containers "all share the same
+      kernel"<a class="cite" href="https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/" title="Docker Docs, What is a container? — Containers versus virtual machines">[Docker: what-is-a-container]</a>
+      (on a Mac, the kernel of Docker Desktop's hidden Linux VM). A container born a second ago
+      reports almost five hours of uptime, ten CPUs and 8 GB of RAM despite its limits, because much
+      of <code>/proc</code> describes the machine, not the namespace
+      (<a href="12-resources-and-limits.html">page 12</a>). And the wall clock is global: time
+      namespaces "do not virtualize the <code>CLOCK_REALTIME</code>
+      clock,"<a class="cite" href="https://man7.org/linux/man-pages/man7/time_namespaces.7.html" title="time_namespaces(7), NOTES">[time_namespaces(7)]</a>
+      so you cannot give an agent a fake date with a namespace; the refusal above is a missing
+      capability protecting a shared clock. Namespaces restrict what a process can <em>name</em>.
+      Every system call still lands in the one kernel, with all its bugs — which is why
+      <a href="24-isolation-ladder.html">page 24</a> exists.
+    </p>
+
+    <h2 id="eval-work">Reading the walls of someone else's task</h2>
+    <p>
+      The OCI spec gives the rule that makes this auditable: "If a namespace type is not specified in
+      the namespaces array, the container MUST inherit the runtime namespace of that
+      type."<a class="cite" href="https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#namespaces" title="OCI Runtime Specification, config-linux.md, Namespaces">[OCI Runtime Spec]</a>
+      A wall exists only if someone asked for it, and Docker's flags can un-ask:
+      <code>--pid=host</code> is "use the host's PID namespace inside the
+      container,"<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#pid" title="Docker Docs, docker container run: PID settings (--pid)">[Docker: run]</a>
+      and Compose's <code>network_mode: host</code> "Gives the container raw access to the host's
+      network
+      interface."<a class="cite" href="https://docs.docker.com/reference/compose-file/services/#network_mode" title="Compose file reference, services: network_mode">[Compose]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 bash -c 'ls -d /proc/[0-9]* | wc -l; readlink /proc/self/ns/net; hostname'
+<span class="o">3
+net:[4026534044]
+4dc01296fbee</span>
+<span class="p">$</span> docker run --rm --pid=host ubuntu:24.04 bash -c 'ls -d /proc/[0-9]* | wc -l'
+<span class="o"><span class="hl">264</span></span>
+<span class="p">$</span> docker run --rm --network=host ubuntu:24.04 bash -c 'readlink /proc/self/ns/net; hostname'
+<span class="o">net:[<span class="hl">4026531840</span>]
+docker-desktop</span></code></pre>
+    <p>
+      264 processes instead of 3: every process on the (VM) host, other rollouts and the container
+      runtime included. And <code>4026531840</code> is the network namespace of the host's own PID 1:
+      every listening port on the host is now on the agent's <code>localhost</code>.
+    </p>
+    <table>
+      <thead><tr><th>In a task's run line or compose file</th><th>Wall removed</th><th>What the agent gains</th></tr></thead>
+      <tbody>
+        <tr><td><code>--pid=host</code> / <code>pid: host</code></td><td>PID</td><td>Sees (and as root may signal) every host process, including other rollouts and graders</td></tr>
+        <tr><td><code>--network=host</code> / <code>network_mode: host</code></td><td>network</td><td>The host's interfaces, routes and localhost services; egress rules aimed at the container's network no longer apply</td></tr>
+        <tr><td><code>--pid</code>/<code>--network container:X</code>, <code>service:X</code></td><td>between two containers</td><td>Deliberate sharing (sidecars). Fine — unless X is the grader</td></tr>
+        <tr><td><code>--privileged</code> / <code>privileged: true</code></td><td>none directly</td><td>The power to make and enter namespaces and mount things: the walls stand but the door is open (<a href="23-hardening-containers.html#never-list">page 23</a>)</td></tr>
+      </tbody>
+    </table>
+    <div class="evals">
+      <span class="label">In eval work — navigate: "what can the agent see?" has a numeric answer</span>
+      <p>From outside, without trusting the task author:
+      <code>docker inspect X --format 'pid={{.HostConfig.PidMode}} net={{.HostConfig.NetworkMode}} privileged={{.HostConfig.Privileged}}'</code>
+      printed <code>pid= net=bridge privileged=false</code> for <code>lt-a</code> (empty means
+      private) and <code>privileged=true</code> for this page's lab. For proof rather than
+      configuration, compare inode numbers: if the grader's <code>pid:[…]</code> equals the agent's,
+      the agent can see the grader. On a real Linux host, <code>sudo lsns -t pid</code> lists every
+      PID namespace with its first process; on a Mac the nearest equivalent is an auditor container,
+      <code>docker run --rm --pid=host --cap-add SYS_PTRACE ubuntu:24.04 lsns -t pid</code> —
+      exactly the flags you would reject in a task, used here on your own machine to look
+      in. Sharing matters in practice: in a test for this page, a second container started with
+      <code>--pid container:lt-a</code> showed the same <code>pid:</code> inode as <code>lt-a</code>,
+      and root in <code>lt-a</code> ended it with one <code>kill -9</code> (exit 137).</p>
+    </div>
+    <div class="callout">
+      <span class="label">Depth triage</span>
+      <p><strong>Learn to use:</strong> <code>/proc/PID/ns</code>, <code>lsns</code>,
+      <code>nsenter</code>, the <code>docker inspect</code> mode fields, and the grep in the lab.
+      <strong>Recognize:</strong> user namespaces and <code>uid_map</code>, <code>pivot_root</code>,
+      the IPC, cgroup and time namespaces. <strong>Leave to a specialist:</strong> writing a
+      container runtime, mount propagation, configuring userns-remap across a fleet.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A team runs a 300-task web-dev benchmark on a big bare-metal box: each rollout is a fresh
+      working directory and a fresh Unix user, no containers. Pass rate is 58% for the first hundred
+      tasks run and 44% for the last hundred; many late transcripts contain "Address already in use".
+      A colleague proposes reporting the first-hundred figure as "the clean number". What do you
+      establish first?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Observed:</strong> a pass rate that falls with run order, and a port-conflict
+      message. <strong>Supposed:</strong> that processes leaked by earlier rollouts hold the ports —
+      plausible, since nothing on this runner kills a rollout's descendants, but not yet shown; later
+      tasks might just be harder. Discriminating evidence: on the host,
+      <code>ss -ltnp</code> and <code>ps -eo pid,user,lstart,args</code> — listeners owned by
+      <em>earlier</em> rollouts' users, started before the failing rollout began, confirm the leak;
+      re-running the last hundred first, on a rebooted box, separates order from difficulty. If
+      confirmed, those failures are infrastructure outcomes: report correct/scheduled,
+      correct/completed and completed/scheduled separately rather than picking the flattering
+      subset, fix the runner (a PID and network namespace per rollout — i.e. a container — makes the
+      teardown a kernel guarantee), and re-run. The first-hundred number is not clean either: it is
+      a different, order-selected sample.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong>, using the privileged <code>lt-ns</code> container from
+      <a href="#proc-ns">above</a> (root shell: <code>docker exec -it lt-ns bash</code>). Finish with
+      <code>docker rm -f lt-ns lt-a lt-b</code>.</p>
+      <ol>
+        <li>Reproduce the PID namespace. Then predict: without <code>--mount-proc</code>, what does
+        <code>echo $$</code> print, and does <code>ls /proc | grep -c '^[0-9]'</code> give the same
+        count as with it?
+        <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> unshare --pid --fork --mount-proc bash -c 'echo $$; ls /proc | grep -c "^[0-9]"'
+<span class="o">1
+3</span>
+<span class="p">#</span> unshare --pid --fork bash -c 'echo $$; ls /proc | grep -c "^[0-9]"'
+<span class="o">1
+7</span></code></pre>
+        <p>Still PID 1 — the namespace is real — but the old <code>/proc</code> was mounted by a
+        process in the outer namespace, so it lists the outer processes (your count will differ).
+        <code>ps</code> may even fail with <code>fatal library error, lookup self</code>, because
+        <code>/proc/self</code> cannot resolve a process the old mount has no number for.</p>
+        </details></li>
+        <li>Give a process its own hostname, and prove by inode number that it left your UTS
+        namespace but not your network namespace.
+        <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> readlink /proc/self/ns/uts /proc/self/ns/net
+<span class="o">uts:[4026532960]
+net:[4026532964]</span>
+<span class="p">#</span> unshare --uts bash -c 'hostname sandbox-7; hostname; readlink /proc/self/ns/uts /proc/self/ns/net'
+<span class="o">sandbox-7
+uts:[4026534037]
+net:[4026532964]</span></code></pre>
+        <p>Your numbers will differ; the pattern — uts changed, net identical — will not.</p>
+        </details></li>
+        <li>Predict before running: in a fresh network namespace, does <code>ping -c1 127.0.0.1</code>
+        work? Make it work with one command.
+        <details class="solution"><summary>Solution</summary>
+        <p>No: <code>ping: connect: Network is unreachable</code>, because <code>lo</code> is DOWN
+        and there are no routes. <code>ip link set lo up</code> fixes it (full session in
+        <a href="#uts-net-mnt">the network section</a>). A task that tests a local server under
+        <code>--network none</code> works only because the runtime brings <code>lo</code> up.</p>
+        </details></li>
+        <li>Start the three-sleep "box" from <a href="#pid-ns">the PID section</a>, find the
+        outside PID of its init with <code>pgrep -f '^sleep 900'</code>, enter it with
+        <code>nsenter</code>, then kill its PID 1 from outside and show nothing survives.
+        <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> P=$(pgrep -f '^sleep 900'); echo $P
+<span class="o">465</span>
+<span class="p">#</span> nsenter -t $P -a bash -c 'hostname; ps -eo pid,ppid,args'
+<span class="o">box
+  PID  PPID COMMAND
+    1     0 sleep 900
+    3     1 sleep 600
+    4     1 sleep 600
+    5     0 ps -eo pid,ppid,args</span>
+<span class="p">#</span> kill -9 $P; sleep 1; pgrep -f 'sleep [69]00'; echo "exit=$?"
+<span class="o">exit=1</span></code></pre>
+        <p><code>pgrep</code> finds nothing (exit status 1): both <code>sleep 600</code> processes
+        died with their namespace's init.</p>
+        </details></li>
+        <li><strong>Eval task.</strong> You are reviewing a contributed task. Save this as
+        <code>compose.yaml</code> and write one <code>grep</code> that flags every line that removes
+        a wall or opens a door. Which finding is worst?
+<pre><code>services:
+  default:
+    image: task-netdebug:1.4
+    command: sleep infinity
+    network_mode: host
+    pid: host
+    mem_limit: 2g
+  grader:
+    image: task-netdebug-grader:1.4
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock</code></pre>
+        <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> grep -nE 'privileged|(pid|ipc|network_mode|userns_mode): *"?host|docker\.sock' compose.yaml
+<span class="o">5:    network_mode: host
+6:    pid: host
+10:    privileged: true
+12:      - /var/run/docker.sock:/var/run/docker.sock</span></code></pre>
+        <p>Lines 5–6 are on the <em>agent's</em> service: it shares the host's network and process
+        list, so other rollouts and host services are visible and reachable, and any egress policy
+        attached to a container network does not apply. That is the worst for validity. Lines 10–12
+        are on the grader — dangerous for the host (the socket is covered on
+        <a href="23-hardening-containers.html#never-list">page 23</a>) but not directly in the
+        agent's hands. Ask the author what the task actually needs; "debug the network" tasks
+        usually need one capability (page 21), not the host's namespaces. A grep is a first pass —
+        confirm with <code>docker inspect</code> on the running containers.</p>
+        </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>namespaces(7), Linux man-pages 6.19. <a href="https://man7.org/linux/man-pages/man7/namespaces.7.html">man7.org/…/namespaces.7.html</a></li>
+        <li>pid_namespaces(7). <a href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html">man7.org/…/pid_namespaces.7.html</a></li>
+        <li>network_namespaces(7); veth(4). <a href="https://man7.org/linux/man-pages/man7/network_namespaces.7.html">man7.org/…/network_namespaces.7.html</a>, <a href="https://man7.org/linux/man-pages/man4/veth.4.html">…/veth.4.html</a></li>
+        <li>mount_namespaces(7); user_namespaces(7); time_namespaces(7). <a href="https://man7.org/linux/man-pages/man7/mount_namespaces.7.html">…/mount_namespaces.7.html</a>, <a href="https://man7.org/linux/man-pages/man7/user_namespaces.7.html">…/user_namespaces.7.html</a>, <a href="https://man7.org/linux/man-pages/man7/time_namespaces.7.html">…/time_namespaces.7.html</a></li>
+        <li>nsenter(1), unshare(1), util-linux. <a href="https://man7.org/linux/man-pages/man1/nsenter.1.html">man7.org/…/nsenter.1.html</a></li>
+        <li>chroot(2); pivot_root(2). <a href="https://man7.org/linux/man-pages/man2/chroot.2.html">man7.org/…/chroot.2.html</a>, <a href="https://man7.org/linux/man-pages/man2/pivot_root.2.html">…/pivot_root.2.html</a></li>
+        <li>runc, runc-create(8) manual. <a href="https://github.com/opencontainers/runc/blob/main/man/runc-create.8.md">github.com/opencontainers/runc/…/runc-create.8.md</a></li>
+        <li>Linux kernel documentation, /proc/sys/net (fb_tunnels_only_for_init_net). <a href="https://docs.kernel.org/admin-guide/sysctl/net.html#fb-tunnels-only-for-init-net">docs.kernel.org/admin-guide/sysctl/net.html</a></li>
+        <li>Open Container Initiative, Runtime Specification: glossary.md and config-linux.md. <a href="https://github.com/opencontainers/runtime-spec/blob/main/glossary.md#container">github.com/opencontainers/runtime-spec/…/glossary.md</a>, <a href="https://github.com/opencontainers/runtime-spec/blob/main/config-linux.md#namespaces">…/config-linux.md</a></li>
+        <li>Docker Docs, "What is a container?" <a href="https://docs.docker.com/get-started/docker-concepts/the-basics/what-is-a-container/">docs.docker.com/get-started/…/what-is-a-container/</a></li>
+        <li>Docker Docs, Docker Engine security. <a href="https://docs.docker.com/engine/security/">docs.docker.com/engine/security/</a></li>
+        <li>Docker Docs, docker container run / exec reference. <a href="https://docs.docker.com/reference/cli/docker/container/run/">docs.docker.com/reference/cli/docker/container/run/</a>, <a href="https://docs.docker.com/reference/cli/docker/container/exec/">…/exec/</a></li>
+        <li>Docker Docs, Compose file reference: services. <a href="https://docs.docker.com/reference/compose-file/services/">docs.docker.com/reference/compose-file/services/</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

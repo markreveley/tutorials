@@ -1,0 +1,339 @@
+{
+ "id": "dockerfile",
+ "tag": "[Docker: Dockerfile]",
+ "citation": {
+  "authors": "Docker Inc.",
+  "title": "Dockerfile reference; Building best practices; Build secrets; Multi-stage builds; docker image pull; Docker build cache",
+  "venue": "Docker Docs",
+  "year": "2026 (living document)",
+  "url": "https://docs.docker.com/reference/dockerfile/"
+ },
+ "fetched_urls": [
+  "https://docs.docker.com/reference/dockerfile/ (as .md)",
+  "https://docs.docker.com/build/building/best-practices/ (as .md)",
+  "https://docs.docker.com/build/building/secrets/ (as .md)",
+  "https://docs.docker.com/build/building/multi-stage/ (as .md)",
+  "https://docs.docker.com/reference/cli/docker/image/pull/ (as .md)",
+  "https://docs.docker.com/build/cache/ (as .md)",
+  "https://docs.docker.com/build/cache/invalidation/ (as .md)",
+  "https://docs.docker.com/build/building/variables/ (as .md)",
+  "https://docs.docker.com/build/concepts/dockerfile/ (as .md)",
+  "https://docs.docker.com/get-started/docker-concepts/building-images/understanding-image-layers/ (as .md)"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Instructions FROM, RUN, COPY, ADD, WORKDIR, ENV, ARG, USER, ENTRYPOINT vs CMD (exec vs shell form; shell form runs under /bin/sh -c so the app is not PID 1 / does not receive signals), HEALTHCHECK, STOPSIGNAL",
+   "verdict": "confirmed",
+   "finding": "RUN, CMD and ENTRYPOINT each have exec form (JSON array, double quotes, no shell) and shell form (string, run by the default shell, which on Linux is [\"/bin/sh\", \"-c\"], changeable with SHELL). For shell-form ENTRYPOINT the docs say explicitly: it is started 'as a subcommand of /bin/sh -c, which does not pass signals', the executable 'will not be the container's PID 1, and will not receive Unix signals', and 'doesn't receive a SIGTERM from docker stop'; the worked example shows docker stop taking ~10 s and falling back to SIGKILL. Remedy in docs: exec form (preferred), or prefix with `exec`. STOPSIGNAL default SIGTERM. HEALTHCHECK defaults: interval 30s, timeout 30s, start-period 0s, start-interval 5s, retries 3; exit 0 healthy, 1 unhealthy, 2 reserved.",
+   "quote": "It also starts your `ENTRYPOINT` as a subcommand of `/bin/sh -c`, which does not pass signals. This means that the executable will not be the container's `PID 1`, and will not receive Unix signals. In this case, your executable doesn't receive a `SIGTERM` from `docker stop <container>`.",
+   "location": "Dockerfile reference > ENTRYPOINT",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#entrypoint"
+  },
+  {
+   "planned": "Each RUN/COPY/ADD creates a layer; build cache invalidation rules; `apt-get update && apt-get install` must be in the same RUN (cache-busting rationale, exact doc wording); version pinning recommendation",
+   "verdict": "corrected",
+   "finding": "CORRECTION (folklore): the old best-practices sentence 'Only the instructions RUN, COPY, ADD create layers' is GONE from current docs. Current wording: 'Each instruction in this Dockerfile translates to a layer in your final image' (build cache page) and 'Each layer is the result of a build instruction' (Dockerfile concepts); the RUN reference says RUN 'will execute any commands to create a new layer'. In practice (executed): FROM alpine + COPY + RUN rm produced 3 filesystem layer tarballs; metadata instructions (CMD/ENV/ARG) appear in `docker history` with size 0B. Safe phrasing: every instruction is a build step recorded in history; RUN/COPY/ADD add filesystem content. Cache rules confirmed: instruction compared to cached layer; ADD/COPY/RUN --mount=type=bind use a checksum of file metadata (mtime ignored); for RUN 'just the command string itself is used to find a match'; once invalidated all subsequent instructions rebuild. apt-get rationale confirmed verbatim (see quote): with `RUN apt-get update` alone, a later edited install line reuses the cached update layer, giving outdated packages or failures. Version pinning (`package-foo=1.3.*`) recommended as cache busting + fewer surprises.",
+   "quote": "Always combine `RUN apt-get update` with `apt-get install` in the same `RUN` statement. [...] Using `apt-get update` alone in a `RUN` statement causes caching issues and subsequent `apt-get install` instructions to fail.",
+   "location": "Building best practices > Dockerfile instructions > RUN > apt-get",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#apt-get"
+  },
+  {
+   "planned": "Pin base image by digest (FROM image@sha256:...) for reproducibility: tags are mutable, digests immutable (exact wording)",
+   "verdict": "confirmed",
+   "finding": "'Image tags are mutable' is the docs' exact phrase. The docs do not literally say 'digests are immutable' in the best-practices section; they say pinning to a digest means 'you're guaranteed to always use the same image version, even if a publisher replaces the tag with a new image'. The pull reference heading calls a digest an 'immutable identifier'. Recommended form keeps tag AND digest: FROM alpine:3.21@sha256:... . Docs also state the cost: 'you're opting out of automated security fixes'.",
+   "quote": "Image tags are mutable, meaning a publisher can update a tag to point to a new image. [...] By pinning your images to a digest, you're guaranteed to always use the same image version, even if a publisher replaces the tag with a new image.",
+   "location": "Building best practices > Pin base image versions",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#pin-base-image-versions"
+  },
+  {
+   "planned": "ARG and ENV values persist in image metadata/history -> don't use them for secrets; use --mount=type=secret; docker history / docker inspect reveal them",
+   "verdict": "confirmed",
+   "finding": "Build secrets page: 'Build arguments and environment variables are inappropriate for passing secrets to your build, because they persist in the final image.' ARG reference warning: build args 'are visible in the docker history command and in max mode provenance attestations'. ENV reference: ENV values 'persist when a container is run' and 'You can view the values using docker inspect'. Nuance: ARG 'is not embedded in the image and is not available in the final container' as an env var - but it IS in history. Remedy: docker build --secret id=...,src=... plus RUN --mount=type=secret,id=... (default path /run/secrets/<id>). Verified by execution (extra_findings).",
+   "quote": "Build arguments and environment variables are inappropriate for passing secrets to your build, because they persist in the final image. Instead, you should use secret mounts or SSH mounts, which expose secrets to your builds securely.",
+   "location": "Build secrets (intro)",
+   "cite_url": "https://docs.docker.com/build/building/secrets/"
+  },
+  {
+   "planned": "USER instruction: if not set, the default user is root; best-practice text about running as non-root",
+   "verdict": "corrected",
+   "finding": "The Dockerfile reference USER section does NOT say the default is root (it only defines USER as setting 'the default user and group for the remainder of the current stage', used for RUN and at runtime for ENTRYPOINT/CMD). The 'default is root' statement lives in the Running containers page ('The default user within a container is root (uid = 0)') and the Compose `user` key ('If it's not set, then root') - cite [Docker: run] / [Compose] for it. Best-practice text confirmed: 'If a service can run without privileges, use USER to change to a non-root user', create the user with groupadd/useradd, consider explicit UID/GID, avoid sudo (suggests gosu).",
+   "quote": "If a service can run without privileges, use `USER` to change to a non-root user. Start by creating the user and group in the Dockerfile with something like the following example: RUN groupadd -r postgres && useradd --no-log-init -r -g postgres postgres",
+   "location": "Building best practices > Dockerfile instructions > USER",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#user"
+  },
+  {
+   "planned": "Multi-stage builds copy only artifacts into the final image - a way to keep build-time material (incl. reference solutions/tests) out of the task image",
+   "verdict": "confirmed",
+   "finding": "Docs confirm the mechanism (each FROM starts a new stage; COPY --from copies selected artifacts; everything else is left behind; --target stops at a stage). The application to eval task images (keeping reference solutions/tests out) is the course's inference, not in the docs - present it as such. The executed layer-recovery demo below shows why 'COPY then RUN rm' is NOT a substitute.",
+   "quote": "With multi-stage builds, you use multiple `FROM` statements in your Dockerfile. Each `FROM` instruction can use a different base, and each of them begins a new stage of the build. You can selectively copy artifacts from one stage to another, leaving behind everything you don't want in the final image.",
+   "location": "Multi-stage builds > Use multi-stage builds",
+   "cite_url": "https://docs.docker.com/build/building/multi-stage/#use-multi-stage-builds"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Exec vs shell form definitions.",
+   "quote": "The exec form makes it possible to avoid shell string munging, and to invoke commands using a specific command shell, or any other executable. It uses a JSON array syntax [...] The shell form automatically uses a command shell, whereas the exec form does not.",
+   "location": "Dockerfile reference > Shell and exec form",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#shell-and-exec-form"
+  },
+  {
+   "finding": "Exec form is JSON: double quotes only.",
+   "quote": "The exec form is parsed as a JSON array, which means that you must use double-quotes (\") around words, not single-quotes (').",
+   "location": "Dockerfile reference > Exec form",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#exec-form"
+  },
+  {
+   "finding": "Default shell.",
+   "quote": "The default shell on Linux is `[\"/bin/sh\", \"-c\"]`, and on Windows is `[\"cmd\", \"/S\", \"/C\"]`. The `SHELL` instruction must be written in JSON form in a Dockerfile.",
+   "location": "Dockerfile reference > SHELL",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#shell"
+  },
+  {
+   "finding": "Shell-form ENTRYPOINT remedy: exec.",
+   "quote": "To ensure that `docker stop` will signal any long running `ENTRYPOINT` executable correctly, you need to remember to start it with `exec`: FROM ubuntu ENTRYPOINT exec top -b",
+   "location": "Dockerfile reference > Shell form ENTRYPOINT example",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#shell-form-entrypoint-example"
+  },
+  {
+   "finding": "Docs' demonstration of the failure: docker stop takes the full 10 s timeout then SIGKILLs.",
+   "quote": "If you then run `docker stop test`, the container will not exit cleanly - the `stop` command will be forced to send a `SIGKILL` after the timeout: [...] real 0m 10.19s",
+   "location": "Dockerfile reference > Shell form ENTRYPOINT example",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#shell-form-entrypoint-example"
+  },
+  {
+   "finding": "CMD/ENTRYPOINT interaction table: shell-form CMD alone runs '/bin/sh -c exec_cmd p1_cmd'; exec ENTRYPOINT + exec CMD runs 'exec_entry p1_entry exec_cmd p1_cmd'; shell-form ENTRYPOINT ignores CMD. Neither set = 'error, not allowed'.",
+   "quote": "| **CMD exec_cmd p1_cmd** | /bin/sh -c exec_cmd p1_cmd | /bin/sh -c exec_entry p1_entry | exec_entry p1_entry /bin/sh -c exec_cmd p1_cmd |",
+   "location": "Dockerfile reference > Understand how CMD and ENTRYPOINT interact",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#understand-how-cmd-and-entrypoint-interact"
+  },
+  {
+   "finding": "CMD rules: only the last CMD counts; RUN vs CMD.",
+   "quote": "Don't confuse `RUN` with `CMD`. `RUN` actually runs a command and commits the result; `CMD` doesn't execute anything at build time, but specifies the intended command for the image.",
+   "location": "Dockerfile reference > CMD (NOTE)",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#cmd"
+  },
+  {
+   "finding": "ENTRYPOINT exec form is 'the preferred form'; docker run args are appended to exec-form ENTRYPOINT and override CMD; --entrypoint overrides.",
+   "quote": "Command line arguments to `docker run <image>` will be appended after all elements in an exec form `ENTRYPOINT`, and will override all elements specified using `CMD`.",
+   "location": "Dockerfile reference > ENTRYPOINT",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#entrypoint"
+  },
+  {
+   "finding": "FROM syntax incl. digest; ARG is the only instruction allowed before FROM; each FROM clears state.",
+   "quote": "FROM [--platform=<platform>] <image>[@<digest>] [AS <name>] [...] `ARG` is the only instruction that may precede `FROM` in the Dockerfile.",
+   "location": "Dockerfile reference > FROM",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#from"
+  },
+  {
+   "finding": "RUN definition.",
+   "quote": "The `RUN` instruction will execute any commands to create a new layer on top of the current image. The added layer is used in the next step in the Dockerfile.",
+   "location": "Dockerfile reference > RUN",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#run"
+  },
+  {
+   "finding": "RUN cache is not time-aware.",
+   "quote": "The cache for `RUN` instructions isn't invalidated automatically during the next build. The cache for an instruction like `RUN apt-get dist-upgrade -y` will be reused during the next build. The cache for `RUN` instructions can be invalidated by using the `--no-cache` flag",
+   "location": "Dockerfile reference > Cache invalidation for RUN instructions",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#cache-invalidation-for-run-instructions"
+  },
+  {
+   "finding": "Cache rule for RUN = command string only.",
+   "quote": "Aside from the `ADD` and `COPY` commands, cache checking doesn't look at the files in the container to determine a cache match. For example, when processing a `RUN apt-get -y update` command the files updated in the container aren't examined to determine if a cache hit exists. In that case just the command string itself is used to find a match.",
+   "location": "Build cache invalidation > General rules",
+   "cite_url": "https://docs.docker.com/build/cache/invalidation/#general-rules"
+  },
+  {
+   "finding": "Cache rule for COPY/ADD: metadata checksum, mtime ignored.",
+   "quote": "The modification time of a file (`mtime`) is not taken into account when calculating the cache checksum. If only the `mtime` of the copied files have changed, the cache is not invalidated.",
+   "location": "Build cache invalidation > General rules",
+   "cite_url": "https://docs.docker.com/build/cache/invalidation/#general-rules"
+  },
+  {
+   "finding": "Downstream invalidation.",
+   "quote": "Once a layer changes, then all downstream layers need to be rebuilt as well. Even if they wouldn't build anything differently, they still need to re-run.",
+   "location": "Docker build cache > How the build cache works",
+   "cite_url": "https://docs.docker.com/build/cache/#how-the-build-cache-works"
+  },
+  {
+   "finding": "Current 'layer' wording (replaces the RUN/COPY/ADD-only folklore).",
+   "quote": "Docker images consist of layers. Each layer is the result of a build instruction in the Dockerfile. Layers are stacked sequentially, and each one is a delta representing the changes applied to the previous layer.",
+   "location": "Build concepts > Dockerfile",
+   "cite_url": "https://docs.docker.com/build/concepts/dockerfile/"
+  },
+  {
+   "finding": "Layers are immutable; each is a set of filesystem changes (additions, deletions, modifications).",
+   "quote": "container images are composed of layers. And each of these layers, once created, are immutable. [...] Each layer in an image contains a set of filesystem changes - additions, deletions, or modifications.",
+   "location": "Understanding the image layers",
+   "cite_url": "https://docs.docker.com/get-started/docker-concepts/building-images/understanding-image-layers/"
+  },
+  {
+   "finding": "apt-get explanation paragraph (the why).",
+   "quote": "Docker sees the initial and modified instructions as identical and reuses the cache from previous steps. As a result the `apt-get update` isn't executed because the build uses the cached version. Because the `apt-get update` isn't run, your build can potentially get an outdated version of the `curl` and `nginx` packages.",
+   "location": "Building best practices > apt-get",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#apt-get"
+  },
+  {
+   "finding": "Cache busting and version pinning wording; NOTE the docs' motive is freshness ('installs the latest package versions'), which is the opposite of reproducibility - for reproducible eval images authors need pinning + snapshot (see apt-dpkg note).",
+   "quote": "Using `RUN apt-get update && apt-get install -y --no-install-recommends` ensures your Dockerfile installs the latest package versions with no further coding or manual intervention. This technique is known as cache busting. You can also achieve cache busting by specifying a package version. This is known as version pinning.",
+   "location": "Building best practices > apt-get",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#apt-get"
+  },
+  {
+   "finding": "Version pinning benefit.",
+   "quote": "Version pinning forces the build to retrieve a particular version regardless of what's in the cache. This technique can also reduce failures due to unanticipated changes in required packages.",
+   "location": "Building best practices > apt-get",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#apt-get"
+  },
+  {
+   "finding": "rm -rf /var/lib/apt/lists/* in the same RUN; official Debian/Ubuntu images auto-run apt-get clean.",
+   "quote": "when you clean up the apt cache by removing `/var/lib/apt/lists` it reduces the image size, since the apt cache isn't stored in a layer. [...] Official Debian and Ubuntu images automatically run `apt-get clean`, so explicit invocation is not required.",
+   "location": "Building best practices > apt-get",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#apt-get"
+  },
+  {
+   "finding": "Tag drift example.",
+   "quote": "At one point in time, the `3.21` tag might point to version 3.21.1 of the image. If you rebuild the image 3 months later, the same tag might point to a different version, such as 3.21.4. [...] The downside with this is that you're not guaranteed to get the same for every build.",
+   "location": "Building best practices > Pin base image versions",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#pin-base-image-versions"
+  },
+  {
+   "finding": "Digest pin syntax and its cost.",
+   "quote": "FROM alpine:3.21@sha256:a8560b36e8b8210634f77d9f7f9efd7ffa463e380b75e2e74aff4511df3ef88c [...] And you're opting out of automated security fixes, which is likely something you want to get.",
+   "location": "Building best practices > Pin base image versions",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#pin-base-image-versions"
+  },
+  {
+   "finding": "Pull by digest = 'immutable identifier'; pins the image.",
+   "quote": "Pull an image by digest (immutable identifier) [...] When pulling an image by digest, you specify exactly which version of an image to pull. Doing so, allows you to \"pin\" an image to that version, and guarantee that the image you're using is always the same.",
+   "location": "docker image pull > Pull an image by digest (immutable identifier)",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/image/pull/#pull-an-image-by-digest-immutable-identifier"
+  },
+  {
+   "finding": "ARG warning (exact).",
+   "quote": "It isn't recommended to use build arguments for passing secrets such as user credentials, API tokens, etc. Build arguments are visible in the `docker history` command and in `max` mode provenance attestations, which are attached to the image by default if you use the Buildx GitHub Actions and your GitHub repository is public.",
+   "location": "Dockerfile reference > ARG (WARNING)",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#arg"
+  },
+  {
+   "finding": "ARG vs ENV persistence.",
+   "quote": "Unlike `ENV`, an `ARG` variable is not embedded in the image and is not available in the final container.",
+   "location": "Dockerfile reference > ARG",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#arg"
+  },
+  {
+   "finding": "Build args persist in metadata/history.",
+   "quote": "They may persist in the image metadata, as provenance attestations and in the image history, which is why they're not suitable for holding secrets.",
+   "location": "Build variables > Build arguments",
+   "cite_url": "https://docs.docker.com/build/building/variables/#build-arguments"
+  },
+  {
+   "finding": "ENV persistence and inspectability.",
+   "quote": "The environment variables set using `ENV` will persist when a container is run from the resulting image. You can view the values using `docker inspect`, and change them using `docker run --env <key>=<value>`.",
+   "location": "Dockerfile reference > ENV",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#env"
+  },
+  {
+   "finding": "ENV layers: unsetting later does not remove the value.",
+   "quote": "Each `ENV` line creates a new intermediate layer, just like `RUN` commands. This means that even if you unset the environment variable in a future layer, it still persists in this layer and its value can be dumped.",
+   "location": "Building best practices > ENV",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#env"
+  },
+  {
+   "finding": "ENV DEBIAN_FRONTEND warning and the recommended alternatives.",
+   "quote": "setting `ENV DEBIAN_FRONTEND=noninteractive` changes the behavior of `apt-get`, and may confuse users of your image. If an environment variable is only needed during build [...] RUN DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y ... Or using `ARG`, which is not persisted in the final image: ARG DEBIAN_FRONTEND=noninteractive",
+   "location": "Dockerfile reference > ENV",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#env"
+  },
+  {
+   "finding": "Secret mount usage and default path.",
+   "quote": "$ docker build --secret id=aws,src=$HOME/.aws/credentials . [...] RUN --mount=type=secret,id=aws AWS_SHARED_CREDENTIALS_FILE=/run/secrets/aws aws s3 cp ... [...] The default file path of the secret, inside the build container, is `/run/secrets/<id>`.",
+   "location": "Build secrets > Using build secrets / Target",
+   "cite_url": "https://docs.docker.com/build/building/secrets/#using-build-secrets"
+  },
+  {
+   "finding": "Secrets are not part of the build cache.",
+   "quote": "The contents of build secrets are not part of the build cache. Changing the value of a secret doesn't result in cache invalidation.",
+   "location": "Build cache invalidation > Build secrets",
+   "cite_url": "https://docs.docker.com/build/cache/invalidation/#build-secrets"
+  },
+  {
+   "finding": "COPY vs ADD.",
+   "quote": "`COPY` supports basic copying of files into the container, from the build context or from a stage in a multi-stage build. `ADD` supports features for fetching files from remote HTTPS and Git URLs, and extracting tar files automatically when adding files from the build context.",
+   "location": "Building best practices > ADD or COPY",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#add-or-copy"
+  },
+  {
+   "finding": "RUN --mount=type=bind as a way to use a file in a RUN without it persisting in the image.",
+   "quote": "Note that bind-mounted files are only added temporarily for a single `RUN` instruction, and don't persist in the final image.",
+   "location": "Building best practices > ADD or COPY",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#add-or-copy"
+  },
+  {
+   "finding": "WORKDIR: created if missing; default /; set explicitly; use absolute paths, not RUN cd.",
+   "quote": "If not specified, the default working directory is `/`. [...] Therefore, to avoid unintended operations in unknown directories, it's best practice to set your `WORKDIR` explicitly.",
+   "location": "Dockerfile reference > WORKDIR",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#workdir"
+  },
+  {
+   "finding": "USER semantics.",
+   "quote": "The `USER` instruction sets the user name (or UID) and optionally the user group (or GID) to use as the default user and group for the remainder of the current stage. The specified user is used for `RUN` instructions and at runtime runs the relevant `ENTRYPOINT` and `CMD` commands.",
+   "location": "Dockerfile reference > USER",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#user"
+  },
+  {
+   "finding": "Avoid sudo in images.",
+   "quote": "Avoid installing or using `sudo` as it has unpredictable TTY and signal-forwarding behavior that can cause problems.",
+   "location": "Building best practices > USER",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#user"
+  },
+  {
+   "finding": "STOPSIGNAL.",
+   "quote": "The `STOPSIGNAL` instruction sets the system call signal that will be sent to the container to exit. [...] The default is `SIGTERM` if not defined. [...] It does not affect signals sent by keyboard shortcuts such as Ctrl+C, which sends `SIGINT` directly to the process",
+   "location": "Dockerfile reference > STOPSIGNAL",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#stopsignal"
+  },
+  {
+   "finding": "HEALTHCHECK defaults, states and exit codes.",
+   "quote": "- `--interval=DURATION` (default: `30s`) - `--timeout=DURATION` (default: `30s`) - `--start-period=DURATION` (default: `0s`) - `--start-interval=DURATION` (default: `5s`) - `--retries=N` (default: `3`) [...] - 0: success [...] - 1: unhealthy [...] - 2: reserved - don't use this exit code",
+   "location": "Dockerfile reference > HEALTHCHECK",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#healthcheck"
+  },
+  {
+   "finding": "RUN --network=none: build step without network.",
+   "quote": "The command is run with no network access (`lo` is still available, but is isolated to this process)",
+   "location": "Dockerfile reference > RUN --network=none",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#run---networknone"
+  },
+  {
+   "finding": "Multi-stage result.",
+   "quote": "The end result is a tiny production image with nothing but the binary inside. None of the build tools required to build the application are included in the resulting image.",
+   "location": "Multi-stage builds > Use multi-stage builds",
+   "cite_url": "https://docs.docker.com/build/building/multi-stage/#use-multi-stage-builds"
+  },
+  {
+   "finding": "Ephemeral containers principle.",
+   "quote": "The image defined by your Dockerfile should generate containers that are as ephemeral as possible. Ephemeral means that the container can be stopped and destroyed, then rebuilt and replaced with an absolute minimum set up and configuration.",
+   "location": "Building best practices > Create ephemeral containers",
+   "cite_url": "https://docs.docker.com/build/building/best-practices/#create-ephemeral-containers"
+  },
+  {
+   "finding": "EXECUTED: a file COPY'd then RUN rm'd is gone from the container but fully recoverable from the saved image layers (whiteout in the top layer, content in the middle layer). Docker 28.1.1, containerd image store, OCI layout.",
+   "quote": "$ cat Dockerfile\nFROM alpine:3.20\nCOPY solution.txt /solution.txt\nRUN rm /solution.txt\n$ docker build -q -t lt-r5-layers:1 .\n$ docker run --rm lt-r5-layers:1 ls -l /solution.txt; echo \"exit=$?\"\nls: /solution.txt: No such file or directory\nexit=1\n$ docker history --no-trunc --format '{{.CreatedBy}}\\t{{.Size}}' lt-r5-layers:1\nRUN /bin/sh -c rm /solution.txt # buildkit\t4.1kB\nCOPY solution.txt /solution.txt # buildkit\t8.19kB\nCMD [\"/bin/sh\"]\t0B\nADD alpine-minirootfs-3.20.10-aarch64.tar.gz / # buildkit\t9.49MB",
+   "location": "executed alpine:3.20 (image lt-r5-layers:1, removed afterwards)"
+  },
+  {
+   "finding": "EXECUTED (continuation): docker save + tar recovers the deleted file. manifest.json listed 3 layers; layer 2 contains solution.txt, layer 3 contains only the overlay whiteout marker .wh.solution.txt.",
+   "quote": "$ docker save lt-r5-layers:1 -o img.tar && tar -xf img.tar && ls\nblobs  index.json  manifest.json  oci-layout\n$ for l in <each entry of .[0].Layers in manifest.json>; do echo \"== $l\"; tar -tf \"$l\" | grep solution; done\n== blobs/sha256/3f26bc2dec0b515…\n== blobs/sha256/e5365ce0d59318b…\nsolution.txt\n== blobs/sha256/2b77248ec7a1884…\n.wh.solution.txt\n$ tar -xOf blobs/sha256/e5365ce0d59318b… solution.txt\nANSWER=42 (reference solution)",
+   "location": "executed alpine:3.20 (docker save of lt-r5-layers:1)"
+  },
+  {
+   "finding": "EXECUTED: --build-arg and ENV secrets are visible in docker history / docker inspect of the image.",
+   "quote": "$ printf 'FROM alpine:3.20\\nARG TOKEN\\nENV API_KEY=sk-env-999\\nRUN echo \"using $TOKEN\" > /dev/null\\n' > Dockerfile\n$ docker build -q --build-arg TOKEN=sk-arg-777 -t lt-r5-arg:1 .\n$ docker history --no-trunc --format '{{.CreatedBy}}' lt-r5-arg:1 | head -3\nRUN |1 TOKEN=sk-arg-777 /bin/sh -c echo \"using $TOKEN\" > /dev/null # buildkit\nENV API_KEY=sk-env-999\nARG TOKEN=sk-arg-777\n$ docker inspect --format '{{json .Config.Env}}' lt-r5-arg:1\n[\"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\",\"API_KEY=sk-env-999\"]",
+   "location": "executed alpine:3.20 (image lt-r5-arg:1, removed afterwards)"
+  }
+ ],
+ "teaching_notes": "Most valuable correction: the famous line 'only RUN, COPY and ADD create layers' no longer appears in Docker's docs; current wording is that each instruction translates to a layer / each layer is the result of a build instruction. Teach with the executed evidence instead: history shows every instruction, filesystem tarballs exist for FROM/COPY/RUN, metadata steps are 0B. The COPY-then-rm recovery demo is the key eval-integrity lesson (deleting a reference solution in a later layer hides it from `ls` but not from anyone with the image); multi-stage builds or RUN --mount=type=bind/secret are the documented remedies. Second correction: the Dockerfile USER section does not say 'default root' - cite the run reference or Compose `user` key. Third nuance: Docker's apt-get advice is about cache FRESHNESS ('installs the latest package versions'); reproducibility for benchmarks needs the opposite (pinned versions + snapshot archive + digest-pinned base). 'Tags are mutable' is verbatim; 'digests are immutable' is only in the pull page heading ('immutable identifier')."
+}

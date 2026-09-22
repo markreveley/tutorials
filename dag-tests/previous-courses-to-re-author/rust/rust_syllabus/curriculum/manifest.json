@@ -1,0 +1,794 @@
+{
+  "schema_version": 2,
+  "title": "Trustworthy Agent Infrastructure — Month One",
+  "authored_on": "2026-09-08",
+  "lessons": [
+    {
+      "id": "M1-01",
+      "number": 1,
+      "title": "Understand a command's result",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/01.md",
+      "prerequisites": [],
+      "capabilities": [
+        "lab_reproduction"
+      ],
+      "objective": "Run a supplied program on your Mac, distinguish its messages from its exit status, and explain what the result does and does not establish.",
+      "artifacts": [
+        "sessions/M1-01/"
+      ],
+      "resources": [
+        "git"
+      ],
+      "concept": "Reproducible observations",
+      "delivery": "agent-led",
+      "steps": {
+        "purpose": "Today's path",
+        "setup": "Starting state",
+        "prediction": "Predict before reading",
+        "teaching": "Prescribed reading, in order",
+        "experiment": "Run and observe",
+        "explain": "Explain the observed result",
+        "check": "Independent understanding check",
+        "save": "Save and close"
+      }
+    },
+    {
+      "id": "M1-02",
+      "number": 2,
+      "title": "Define the promise before choosing the machinery",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/02.md",
+      "prerequisites": [
+        "M1-01"
+      ],
+      "capabilities": [
+        "threat_boundaries"
+      ],
+      "objective": "Produce an initial threat model and a bounded build-versus-buy survey tied to the intended product.",
+      "artifacts": [
+        "labs/m1-02/comparison.md",
+        "labs/m1-02/threat-model.md",
+        "curriculum/open-questions.md"
+      ],
+      "resources": [
+        "e2b",
+        "e2bsecurity",
+        "sprites",
+        "firecracker"
+      ],
+      "concept": "Claims and threat boundaries"
+    },
+    {
+      "id": "M1-03",
+      "number": 3,
+      "title": "Follow bytes, paths, and exit status",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/03.md",
+      "prerequisites": [
+        "M1-01"
+      ],
+      "capabilities": [
+        "shell_processes"
+      ],
+      "objective": "Use shell paths and stream redirection to produce a reproducible observation without losing failure information.",
+      "artifacts": [
+        "labs/m1-03/reproduce.sh",
+        "labs/m1-03/observations.md"
+      ],
+      "resources": [
+        "journey",
+        "bandit"
+      ],
+      "concept": "Shell input and output"
+    },
+    {
+      "id": "M1-04",
+      "number": 4,
+      "title": "Observe parents, children, and signals",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/04.md",
+      "prerequisites": [
+        "M1-01",
+        "M1-03"
+      ],
+      "capabilities": [
+        "shell_processes"
+      ],
+      "objective": "Inspect a small process tree and distinguish requesting termination from observing that a process has exited.",
+      "artifacts": [
+        "labs/m1-04/process-tree.md",
+        "labs/m1-04/reproduce.sh",
+        "labs/m1-04/linux-preflight.json"
+      ],
+      "resources": [
+        "journey",
+        "procstatus",
+        "signal"
+      ],
+      "concept": "Process lifecycles"
+    },
+    {
+      "id": "M1-05",
+      "number": 5,
+      "title": "Read a small Rust program as data and control flow",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/05.md",
+      "prerequisites": [
+        "M1-01"
+      ],
+      "capabilities": [
+        "rust_ownership",
+        "rust_errors"
+      ],
+      "objective": "Read and modify variables, functions, enums, Option, and match in a small program.",
+      "artifacts": [
+        "labs/m1-05/Cargo.toml",
+        "labs/m1-05/src/main.rs",
+        "labs/m1-05/README.md",
+        "labs/m1-05/Cargo.lock"
+      ],
+      "resources": [
+        "book1",
+        "book3",
+        "book6"
+      ],
+      "concept": "Rust data and control flow"
+    },
+    {
+      "id": "M1-06",
+      "number": 6,
+      "title": "Ownership as a reviewable invariant",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/06.md",
+      "prerequisites": [
+        "M1-05"
+      ],
+      "capabilities": [
+        "rust_ownership"
+      ],
+      "objective": "Explain transfer, borrowing, and copying using three minimal Rust examples.",
+      "artifacts": [
+        "labs/m1-06/examples/",
+        "labs/m1-06/ownership-table.md"
+      ],
+      "resources": [
+        "book4"
+      ],
+      "concept": "Ownership transfer and borrowing"
+    },
+    {
+      "id": "M1-07",
+      "number": 7,
+      "title": "Checkpoint: explain the first boundaries",
+      "kind": "checkpoint",
+      "path": "curriculum/month-01/lessons/07.md",
+      "prerequisites": [
+        "M1-03",
+        "M1-04",
+        "M1-06"
+      ],
+      "capabilities": [
+        "shell_processes",
+        "rust_ownership",
+        "lab_reproduction"
+      ],
+      "objective": "Demonstrate retained shell/process and ownership understanding using unfamiliar variants.",
+      "artifacts": [
+        "labs/m1-07/checkpoint.md",
+        "labs/m1-07/reproductions/"
+      ],
+      "resources": [],
+      "concept": "Checkpoint: ownership and process boundaries"
+    },
+    {
+      "id": "M1-08",
+      "number": 8,
+      "title": "References and lifetimes at an interface",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/08.md",
+      "prerequisites": [
+        "M1-06"
+      ],
+      "capabilities": [
+        "rust_ownership"
+      ],
+      "objective": "Read a borrowed return value's lifetime contract and recognize when an owned return value is necessary.",
+      "artifacts": [
+        "labs/m1-08/examples/",
+        "labs/m1-08/interface-notes.md"
+      ],
+      "resources": [
+        "lifetimes"
+      ],
+      "concept": "Borrowed return values and lifetimes"
+    },
+    {
+      "id": "M1-09",
+      "number": 9,
+      "title": "Make failures part of the interface",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/09.md",
+      "prerequisites": [
+        "M1-05"
+      ],
+      "capabilities": [
+        "rust_errors"
+      ],
+      "objective": "Represent invalid input and IO failure without collapsing them into panic or success.",
+      "artifacts": [
+        "labs/m1-09/",
+        "labs/m1-09/error-table.md"
+      ],
+      "resources": [
+        "book9",
+        "book6"
+      ],
+      "concept": "Typed failure handling"
+    },
+    {
+      "id": "M1-10",
+      "number": 10,
+      "title": "Specify the runner before it executes",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/10.md",
+      "prerequisites": [
+        "M1-07",
+        "M1-08",
+        "M1-09"
+      ],
+      "capabilities": [
+        "execution_contract"
+      ],
+      "objective": "Define a small typed request and outcome model for fixed synthetic workloads.",
+      "artifacts": [
+        "capstone/Cargo.toml",
+        "capstone/src/lib.rs",
+        "labs/m1-10/contract.md",
+        "capstone/Cargo.lock"
+      ],
+      "resources": [
+        "command",
+        "book6",
+        "book9"
+      ],
+      "concept": "Execution requests and validation"
+    },
+    {
+      "id": "M1-11",
+      "number": 11,
+      "title": "Launch, wait, and report the actual outcome",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/11.md",
+      "prerequisites": [
+        "M1-04",
+        "M1-10"
+      ],
+      "capabilities": [
+        "execution_contract",
+        "rust_errors"
+      ],
+      "objective": "Implement one synchronous execution path that distinguishes spawn failure from a child process's exit.",
+      "artifacts": [
+        "capstone/src/lib.rs",
+        "capstone/src/main.rs",
+        "labs/m1-11/outcomes.md"
+      ],
+      "resources": [
+        "command",
+        "child"
+      ],
+      "concept": "Spawn and exit outcomes"
+    },
+    {
+      "id": "M1-12",
+      "number": 12,
+      "title": "Turn the contract into meaningful tests",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/12.md",
+      "prerequisites": [
+        "M1-11"
+      ],
+      "capabilities": [
+        "behavioral_tests"
+      ],
+      "objective": "Create focused tests that distinguish the runner's externally observable failure behaviors.",
+      "artifacts": [
+        "capstone/tests/",
+        "labs/m1-12/test-evidence.md",
+        "capstone/Cargo.lock",
+        "capstone/tests/outcomes.rs"
+      ],
+      "resources": [
+        "book11",
+        "clippy"
+      ],
+      "concept": "Tests of observable behavior"
+    },
+    {
+      "id": "M1-13",
+      "number": 13,
+      "title": "Control working directory and inherited environment",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/13.md",
+      "prerequisites": [
+        "M1-03",
+        "M1-11",
+        "M1-12"
+      ],
+      "capabilities": [
+        "execution_contract",
+        "threat_boundaries"
+      ],
+      "objective": "Make filesystem context and environment inheritance explicit at the execution boundary.",
+      "artifacts": [
+        "capstone/src/lib.rs",
+        "capstone/tests/",
+        "labs/m1-13/context-boundary.md"
+      ],
+      "resources": [
+        "command",
+        "journey"
+      ],
+      "concept": "Explicit execution context"
+    },
+    {
+      "id": "M1-14",
+      "number": 14,
+      "title": "Checkpoint: review the runner you now own",
+      "kind": "checkpoint",
+      "path": "curriculum/month-01/lessons/14.md",
+      "prerequisites": [
+        "M1-07",
+        "M1-12",
+        "M1-13"
+      ],
+      "capabilities": [
+        "execution_contract",
+        "rust_errors",
+        "behavioral_tests",
+        "threat_boundaries"
+      ],
+      "objective": "Independently review the runner's current contract, error paths, and inherited authority.",
+      "artifacts": [
+        "labs/m1-14/review.md",
+        "capstone/tests/"
+      ],
+      "resources": [],
+      "concept": "Checkpoint: the execution contract"
+    },
+    {
+      "id": "M1-15",
+      "number": 15,
+      "title": "Move work into threads and bring results back",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/15.md",
+      "prerequisites": [
+        "M1-06",
+        "M1-14"
+      ],
+      "capabilities": [
+        "rust_concurrency"
+      ],
+      "objective": "Explain ownership transfer into a thread, a join, and a channel before using concurrency in the runner.",
+      "artifacts": [
+        "labs/m1-15/",
+        "labs/m1-15/concurrency-notes.md"
+      ],
+      "resources": [
+        "book16"
+      ],
+      "concept": "Ownership across threads"
+    },
+    {
+      "id": "M1-16",
+      "number": 16,
+      "title": "Drain both streams while bounding retained output",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/16.md",
+      "prerequisites": [
+        "M1-12",
+        "M1-15"
+      ],
+      "capabilities": [
+        "rust_concurrency",
+        "bounded_io"
+      ],
+      "objective": "Capture stdout and stderr without unlimited retained output or a single-stream pipe deadlock.",
+      "artifacts": [
+        "capstone/src/lib.rs",
+        "capstone/tests/",
+        "labs/m1-16/capture-results.md",
+        "capstone/tests/capture.rs"
+      ],
+      "resources": [
+        "command",
+        "book16",
+        "child"
+      ],
+      "concept": "Concurrent pipe draining with bounded retention"
+    },
+    {
+      "id": "M1-17",
+      "number": 17,
+      "title": "A deadline is a lifecycle obligation",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/17.md",
+      "prerequisites": [
+        "M1-16"
+      ],
+      "capabilities": [
+        "deadlines_cleanup",
+        "rust_errors"
+      ],
+      "objective": "Add a direct-child deadline with explicit termination and reaping behavior.",
+      "artifacts": [
+        "capstone/src/lib.rs",
+        "capstone/tests/",
+        "labs/m1-17/deadline-timeline.md",
+        "capstone/tests/deadline.rs"
+      ],
+      "resources": [
+        "child",
+        "signal"
+      ],
+      "concept": "Deadlines and direct-child cleanup"
+    },
+    {
+      "id": "M1-18",
+      "number": 18,
+      "title": "Why direct-child cleanup is incomplete",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/18.md",
+      "prerequisites": [
+        "M1-04",
+        "M1-15",
+        "M1-17"
+      ],
+      "capabilities": [
+        "deadlines_cleanup",
+        "threat_boundaries"
+      ],
+      "objective": "Demonstrate descendant and inherited-pipe behavior, then evaluate a process group's limits.",
+      "artifacts": [
+        "labs/m1-18/tree-harness.py",
+        "labs/m1-18/cleanup-comparison.md"
+      ],
+      "resources": [
+        "pythonproc",
+        "kill",
+        "commandext"
+      ],
+      "concept": "Descendants and inherited pipes"
+    },
+    {
+      "id": "M1-19",
+      "number": 19,
+      "title": "Record actions without trusting their output",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/19.md",
+      "prerequisites": [
+        "M1-17",
+        "M1-18"
+      ],
+      "capabilities": [
+        "execution_evidence"
+      ],
+      "objective": "Emit structured run events from the runner and separate them from untrusted workload output.",
+      "artifacts": [
+        "capstone/src/lib.rs",
+        "capstone/Cargo.toml",
+        "capstone/Cargo.lock",
+        "labs/m1-19/events.jsonl",
+        "labs/m1-19/event-schema.md",
+        "labs/m1-19/spoof.py",
+        "capstone/tests/"
+      ],
+      "resources": [
+        "serdejson",
+        "command"
+      ],
+      "concept": "Event provenance"
+    },
+    {
+      "id": "M1-20",
+      "number": 20,
+      "title": "Represent an incomplete history honestly",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/20.md",
+      "prerequisites": [
+        "M1-09",
+        "M1-19"
+      ],
+      "capabilities": [
+        "execution_evidence",
+        "behavioral_tests"
+      ],
+      "objective": "Classify saved event histories as complete, incomplete, or invalid without guessing whether an external effect happened.",
+      "artifacts": [
+        "labs/m1-20/histories/",
+        "labs/m1-20/replay.md",
+        "capstone/src/history.rs",
+        "capstone/src/lib.rs",
+        "capstone/tests/history.rs"
+      ],
+      "resources": [
+        "book6",
+        "book11"
+      ],
+      "concept": "Incomplete execution histories"
+    },
+    {
+      "id": "M1-21",
+      "number": 21,
+      "title": "Checkpoint: explain bounded execution under failure",
+      "kind": "checkpoint",
+      "path": "curriculum/month-01/lessons/21.md",
+      "prerequisites": [
+        "M1-14",
+        "M1-16",
+        "M1-17",
+        "M1-18",
+        "M1-20"
+      ],
+      "capabilities": [
+        "bounded_io",
+        "deadlines_cleanup",
+        "execution_evidence",
+        "rust_concurrency"
+      ],
+      "objective": "Independently diagnose output, deadline, descendant, and incomplete-evidence failures.",
+      "artifacts": [
+        "labs/m1-21/checkpoint.md",
+        "labs/m1-21/results/"
+      ],
+      "resources": [],
+      "concept": "Checkpoint: execution under failure"
+    },
+    {
+      "id": "M1-22",
+      "number": 22,
+      "title": "Namespaces change a process's view",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/22.md",
+      "prerequisites": [
+        "M1-04",
+        "M1-21"
+      ],
+      "capabilities": [
+        "linux_namespaces",
+        "threat_boundaries"
+      ],
+      "objective": "Observe a namespace boundary and distinguish its changed view from a new guest kernel or a complete sandbox.",
+      "artifacts": [
+        "labs/m1-22/reproduce.sh",
+        "labs/m1-22/namespace-observations.md"
+      ],
+      "resources": [
+        "namespaces",
+        "unshare",
+        "seccomp"
+      ],
+      "concept": "Process views in namespaces"
+    },
+    {
+      "id": "M1-23",
+      "number": 23,
+      "title": "A network namespace starts with a different network",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/23.md",
+      "prerequisites": [
+        "M1-22"
+      ],
+      "capabilities": [
+        "linux_namespaces"
+      ],
+      "objective": "Demonstrate a network boundary using an empty named namespace and local observations.",
+      "artifacts": [
+        "labs/m1-23/reproduce.sh",
+        "labs/m1-23/network-boundary.md"
+      ],
+      "resources": [
+        "netnsconcept",
+        "netns",
+        "journey"
+      ],
+      "concept": "Network namespace reachability"
+    },
+    {
+      "id": "M1-24",
+      "number": 24,
+      "title": "Find the cgroup that accounts for the work",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/24.md",
+      "prerequisites": [
+        "M1-21",
+        "M1-22"
+      ],
+      "capabilities": [
+        "linux_cgroups"
+      ],
+      "objective": "Start one operator-controlled transient service and identify the cgroup containing its workload.",
+      "artifacts": [
+        "labs/m1-24/run-service.sh",
+        "labs/m1-24/cgroup-map.md"
+      ],
+      "resources": [
+        "systemdrun",
+        "cgroup"
+      ],
+      "concept": "Cgroup membership and accounting"
+    },
+    {
+      "id": "M1-25",
+      "number": 25,
+      "title": "Apply resource ceilings and attribute the result",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/25.md",
+      "prerequisites": [
+        "M1-24"
+      ],
+      "capabilities": [
+        "linux_cgroups",
+        "behavioral_tests"
+      ],
+      "objective": "Demonstrate a CPU quota and a memory ceiling without confusing their effects or their evidence.",
+      "artifacts": [
+        "labs/m1-25/resource-limits.sh",
+        "labs/m1-25/results.md"
+      ],
+      "resources": [
+        "systemdresources",
+        "cgroup"
+      ],
+      "concept": "Resource limits and their effects"
+    },
+    {
+      "id": "M1-26",
+      "number": 26,
+      "title": "Stop the service and account for its descendants",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/26.md",
+      "prerequisites": [
+        "M1-18",
+        "M1-24",
+        "M1-25"
+      ],
+      "capabilities": [
+        "deadlines_cleanup",
+        "linux_cgroups"
+      ],
+      "objective": "Compare direct-child termination with cleanup of a whole transient service's cgroup.",
+      "artifacts": [
+        "labs/m1-26/cleanup.sh",
+        "labs/m1-26/service-vs-child.md",
+        "capstone/src/lib.rs",
+        "capstone/src/main.rs",
+        "capstone/tests/",
+        "labs/m1-26/events/"
+      ],
+      "resources": [
+        "systemdkill",
+        "systemdrun"
+      ],
+      "concept": "Service-wide descendant cleanup"
+    },
+    {
+      "id": "M1-27",
+      "number": 27,
+      "title": "Combine the controls in one local demonstration",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/27.md",
+      "prerequisites": [
+        "M1-19",
+        "M1-23",
+        "M1-25",
+        "M1-26"
+      ],
+      "capabilities": [
+        "integrated_boundary",
+        "linux_namespaces",
+        "linux_cgroups"
+      ],
+      "objective": "Run the existing capstone through an operator-controlled service wrapper with a namespace and explicit resource limits.",
+      "artifacts": [
+        "labs/m1-27/demo.sh",
+        "labs/m1-27/control-evidence.md",
+        "capstone/README.md",
+        "capstone/src/main.rs",
+        "capstone/src/lib.rs"
+      ],
+      "resources": [
+        "systemdexec",
+        "systemdrun"
+      ],
+      "concept": "Composition of execution controls"
+    },
+    {
+      "id": "M1-28",
+      "number": 28,
+      "title": "A property test checks more than chosen examples",
+      "kind": "standalone",
+      "path": "curriculum/month-01/lessons/28.md",
+      "prerequisites": [
+        "M1-12",
+        "M1-16"
+      ],
+      "capabilities": [
+        "behavioral_tests",
+        "bounded_io"
+      ],
+      "objective": "Use generated inputs to test the retained-prefix buffer against a simple independent oracle.",
+      "artifacts": [
+        "capstone/Cargo.toml",
+        "capstone/Cargo.lock",
+        "capstone/tests/",
+        "labs/m1-28/property-evidence.md",
+        "capstone/tests/prefix_property.rs"
+      ],
+      "resources": [
+        "proptest"
+      ],
+      "concept": "Property testing against an oracle"
+    },
+    {
+      "id": "M1-29",
+      "number": 29,
+      "title": "Make the result reproducible by another person",
+      "kind": "sequential",
+      "path": "curriculum/month-01/lessons/29.md",
+      "prerequisites": [
+        "M1-27",
+        "M1-28"
+      ],
+      "capabilities": [
+        "lab_reproduction",
+        "integrated_boundary"
+      ],
+      "objective": "Reproduce the capstone and selected labs from a clean checkout with explicit environment prerequisites.",
+      "artifacts": [
+        "capstone/README.md",
+        "labs/m1-29/reproduction.md",
+        "labs/m1-29/evidence-index.md"
+      ],
+      "resources": [
+        "git",
+        "book1",
+        "systemdrun"
+      ],
+      "concept": "Reproducibility from a clean checkout"
+    },
+    {
+      "id": "M1-30",
+      "number": 30,
+      "title": "Checkpoint: demonstrate the month and choose the next boundary",
+      "kind": "checkpoint",
+      "path": "curriculum/month-01/lessons/30.md",
+      "prerequisites": [
+        "M1-02",
+        "M1-21",
+        "M1-27",
+        "M1-28",
+        "M1-29"
+      ],
+      "capabilities": [
+        "lab_reproduction",
+        "threat_boundaries",
+        "integrated_boundary",
+        "execution_evidence"
+      ],
+      "objective": "Defend the system's observed guarantees, demonstrate an unfamiliar failure, and prescribe the next foundation work from evidence.",
+      "artifacts": [
+        "labs/m1-30/month-review.md",
+        "labs/m1-30/next-boundary.md",
+        "curriculum/progress.json",
+        "curriculum/open-questions.md"
+      ],
+      "resources": [
+        "firecracker",
+        "jailer"
+      ],
+      "concept": "Checkpoint: evidence for system guarantees"
+    }
+  ]
+}

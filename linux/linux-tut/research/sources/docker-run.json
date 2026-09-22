@@ -1,0 +1,344 @@
+{
+  "id": "docker-run",
+  "tag": "[Docker: run]",
+  "citation": {
+    "authors": "Docker Inc.",
+    "title": "docker container run (CLI reference); Running containers; docker container exec; docker container stop",
+    "venue": "Docker Docs",
+    "year": "2026 (living document)",
+    "url": "https://docs.docker.com/reference/cli/docker/container/run/"
+  },
+  "fetched_urls": [
+    "https://docs.docker.com/reference/cli/docker/container/run/ (as .md)",
+    "https://docs.docker.com/engine/containers/run/ (as .md)",
+    "https://docs.docker.com/reference/cli/docker/container/exec/ (as .md)",
+    "https://docs.docker.com/reference/cli/docker/container/stop/ (as .md)",
+    "https://docs.docker.com/engine/containers/resource_constraints/ (as .md)",
+    "https://docs.docker.com/engine/network/drivers/none/ (as .md)"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Flags and exact semantics: --rm, -it, -d, --name, -e/--env-file, -u/--user, -w, -v/--mount (type=bind,readonly), --read-only, --tmpfs, --network, --memory, --cpus, --pids-limit, --cap-drop/--cap-add, --security-opt no-new-privileges, --privileged, --init, --entrypoint, --ulimit",
+      "verdict": "confirmed",
+      "finding": "All flags exist in the current options table with these one-line descriptions: --rm 'Automatically remove the container and its associated anonymous volumes when it exits'; -d 'Run container in background and print container ID'; -i 'Keep STDIN open even if not attached'; -t 'Allocate a pseudo-TTY'; --name 'Assign a name to the container'; -e 'Set environment variables'; --env-file 'Read in a file of environment variables'; -u 'Username or UID (format: <name|uid>[:<group|gid>])'; -w 'Working directory inside the container'; -v 'Bind mount a volume'; --mount 'Attach a filesystem mount to the container'; --read-only 'Mount the container's root filesystem as read only'; --tmpfs 'Mount a tmpfs directory'; --network 'Connect a container to a network'; -m 'Memory limit'; --cpus 'Number of CPUs'; --pids-limit 'Tune container pids limit (set -1 for unlimited)'; --cap-add/--cap-drop 'Add/Drop Linux capabilities'; --security-opt 'Security Options'; --privileged 'Give extended privileges to this container'; --init 'Run an init inside the container that forwards signals and reaps processes'; --entrypoint 'Overwrite the default ENTRYPOINT of the image'; --ulimit 'Ulimit options'. Detailed semantics for each are in extra_findings.",
+      "quote": "| `--rm` |  |  Automatically remove the container and its associated anonymous volumes when it exits | ... | `--init` |  | API 1.25+ Run an init inside the container that forwards signals and reaps processes | ... | `--pids-limit` |  |  Tune container pids limit (set -1 for unlimited) |",
+      "location": "docker container run > Options (table)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#options"
+    },
+    {
+      "planned": "Docker exit codes: 125 docker daemon/run error, 126 contained command cannot be invoked, 127 contained command not found, otherwise the contained command's exit code",
+      "verdict": "confirmed",
+      "finding": "Exact doc wording: 125 'indicates that the error is with Docker daemon itself'; 126 'indicates that the specified contained command can't be invoked'; 127 'indicates that the contained command can't be found'; any other code is the container command's exit code. NOTE: the example error messages printed in the docs ('Container command '/etc' could not be invoked', 'flag provided but not defined') are OLD wording; Docker 28.1.1 prints different text (see executed extra_findings) but the same codes.",
+      "quote": "Exit code `125` indicates that the error is with Docker daemon itself. [...] Exit code `126` indicates that the specified contained command can't be invoked. [...] Exit code `127` indicates that the contained command can't be found. [...] Any exit code other than `125`, `126`, and `127` represent the exit code of the provided container command.",
+      "location": "Running containers > Exit status (125 / 126 / 127 / Other exit codes)",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#exit-status"
+    },
+    {
+      "planned": "docker exec runs a new process in a running container's namespaces; -u, -w, -e flags; exec'd processes are not restarted with the container; exec default user = container's user",
+      "verdict": "corrected",
+      "finding": "Confirmed by the doc: exec 'runs a new command in a running container'; it 'only runs while the container's primary process (PID 1) is running, and it isn't restarted if the container is restarted'; flags -e/--env, --env-file, -u/--user, -w/--workdir (API 1.35+), -d, -i, -t, --privileged exist; default working directory is the container's. NOT in the doc: the word 'namespaces' never appears on the exec page (do not attribute the namespace explanation to this page - use namespaces(7)/nsenter notes), and the page does not state the default user. The default user was verified by execution instead: exec in a container started with -u 1000:1000 runs as uid 1000; -u 0 overrides to root.",
+      "quote": "The `docker exec` command runs a new command in a running container. The command you specify with `docker exec` only runs while the container's primary process (`PID 1`) is running, and it isn't restarted if the container is restarted. The command runs in the default working directory of the container.",
+      "location": "docker container exec > Description",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/exec/"
+    },
+    {
+      "planned": "--privileged gives all capabilities, lifts device cgroup limits, disables seccomp/AppArmor confinement - exact doc wording",
+      "verdict": "confirmed",
+      "finding": "The CLI reference now gives an explicit 7-item list: enables all Linux kernel capabilities; disables the default seccomp profile; disables the default AppArmor profile; disables the SELinux process label; grants access to all host devices; makes /sys read-write; makes cgroups mounts read-write. Followed by: 'the container can then do almost everything that the host can do' and a warning that it 'is not a securely sandboxed process' and 'can get a root shell on the host'.",
+      "quote": "The `--privileged` flag gives the following capabilities to a container: - Enables all Linux kernel capabilities - Disables the default seccomp profile - Disables the default AppArmor profile - Disables the SELinux process label - Grants access to all host devices - Makes `/sys` read-write - Makes cgroups mounts read-write",
+      "location": "docker container run > Escalate container privileges (--privileged)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#privileged"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "--privileged warning text (quotable).",
+      "quote": "A container with `--privileged` is not a securely sandboxed process. Containers in this mode can get a root shell on the host and take control over the system. For most use cases, this flag should not be the preferred solution.",
+      "location": "docker container run > --privileged (WARNING box)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#privileged"
+    },
+    {
+      "finding": "Older-style prose on --privileged (Running containers page): all capabilities + all devices + AppArmor/SELinux reconfigured.",
+      "quote": "The `--privileged` flag gives all capabilities to the container. When the operator executes `docker run --privileged`, Docker enables access to all devices on the host, and reconfigures AppArmor or SELinux to allow the container nearly all the same access to the host as processes running outside containers on the host. Use this flag with caution.",
+      "location": "Running containers > Runtime privilege and Linux capabilities",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities"
+    },
+    {
+      "finding": "DEFAULT CAPABILITIES as currently documented: exactly 14 are 'allowed by default and can be dropped': AUDIT_WRITE, CHOWN, DAC_OVERRIDE, FOWNER, FSETID, KILL, MKNOD, NET_BIND_SERVICE, NET_RAW, SETFCAP, SETGID, SETPCAP, SETUID, SYS_CHROOT. Matches moby source DefaultCapabilities() exactly (see docker-security note) and the executed CapEff mask below.",
+      "quote": "By default, Docker has a default list of capabilities that are kept. The following table lists the Linux capability options which are allowed by default and can be dropped. | AUDIT_WRITE | CHOWN | DAC_OVERRIDE | FOWNER | FSETID | KILL | MKNOD | NET_BIND_SERVICE | NET_RAW | SETFCAP | SETGID | SETPCAP | SETUID | SYS_CHROOT |",
+      "location": "Running containers > Runtime privilege and Linux capabilities (first table; 14 rows)",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities"
+    },
+    {
+      "finding": "Capabilities NOT granted by default (second table, 27 rows) include SYS_ADMIN, NET_ADMIN, SYS_PTRACE, SYS_MODULE, SYS_TIME, DAC_READ_SEARCH, SYS_RAWIO, BPF, PERFMON, SYS_BOOT, SYS_NICE, SYS_RESOURCE, IPC_LOCK, AUDIT_CONTROL, SYSLOG, MAC_ADMIN. Both --cap-add and --cap-drop accept ALL and an optional CAP_ prefix.",
+      "quote": "Both flags support the value `ALL`, so to allow a container to use all capabilities except for `MKNOD`: $ docker run --cap-add=ALL --cap-drop=MKNOD ... The `--cap-add` and `--cap-drop` flags accept capabilities to be specified with a `CAP_` prefix.",
+      "location": "Running containers > Runtime privilege and Linux capabilities",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities"
+    },
+    {
+      "finding": "Docs example: mount fails in a default container because CAP_SYS_ADMIN is dropped.",
+      "quote": "The following example doesn't work, because by default, Docker drops most potentially dangerous kernel capabilities, including `CAP_SYS_ADMIN ` (which is required to mount filesystems). $ docker run -t -i --rm ubuntu bash root@bc338942ef20:/# mount -t tmpfs none /mnt mount: permission denied",
+      "location": "docker container run > --privileged",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#privileged"
+    },
+    {
+      "finding": "Seccomp profile adapts to added capabilities.",
+      "quote": "The default seccomp profile will adjust to the selected capabilities, in order to allow use of facilities allowed by the capabilities, so you should not have to adjust this.",
+      "location": "Running containers > Runtime privilege and Linux capabilities (end)",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities"
+    },
+    {
+      "finding": "Default user is root (uid 0); -u overrides USER; formats accepted.",
+      "quote": "The default user within a container is `root` (uid = 0). You can set a default user to run the first process with the Dockerfile `USER` instruction. When starting a container, you can override the `USER` instruction by passing the `-u` option.",
+      "location": "Running containers > Overriding image defaults > User",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#user"
+    },
+    {
+      "finding": "-u accepts user | user:group | uid | uid:gid | user:gid | uid:group; a username must exist in the container, a numeric uid need not.",
+      "quote": "If you pass a numeric user ID, it must be in the range of 0-2147483647. If you pass a username, the user must exist in the container.",
+      "location": "Running containers > User (NOTE)",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#user"
+    },
+    {
+      "finding": "Default working directory is /; -w creates the directory if missing.",
+      "quote": "The default working directory for running binaries within a container is the root directory (`/`). [...] If the directory doesn't already exist in the container, it's created.",
+      "location": "Running containers > Working directory",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#working-directory"
+    },
+    {
+      "finding": "Environment variables Docker sets automatically in Linux containers: HOME, HOSTNAME, PATH (and TERM if a pseudo-TTY is allocated).",
+      "quote": "| `HOME` | Set based on the value of `USER` | `HOSTNAME` | The hostname associated with the container | `PATH` | Includes popular directories, such as `/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin` |",
+      "location": "Running containers > Environment variables",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#environment-variables"
+    },
+    {
+      "finding": "-e VAR with no value passes the variable through from the caller's environment; -e/--env-file override Dockerfile ENV.",
+      "quote": "Use the `-e`, `--env`, and `--env-file` flags to set simple (non-array) environment variables in the container you're running, or overwrite variables defined in the Dockerfile of the image you're running.",
+      "location": "docker container run > Set environment variables (-e, --env, --env-file)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#env"
+    },
+    {
+      "finding": "--entrypoint replaces the image ENTRYPOINT and clears the image's CMD; --entrypoint=\"\" resets it. COMMAND args after the image name override CMD and are appended to ENTRYPOINT.",
+      "quote": "Passing `--entrypoint` clears out any default command set on the image. That is, any `CMD` instruction in the Dockerfile used to build it.",
+      "location": "Running containers > Default entrypoint (NOTE)",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#default-entrypoint"
+    },
+    {
+      "finding": "--rm: by default a stopped container's filesystem persists; --rm removes container AND its anonymous volumes (not named ones).",
+      "quote": "By default, a container's file system persists even after the container exits. This makes debugging a lot easier, since you can inspect the container's final state and you retain all your data.",
+      "location": "docker container run > Clean up (--rm)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#rm"
+    },
+    {
+      "finding": "--rm volume example.",
+      "quote": "when running the following command, volume `/foo` is removed, but not `/bar`: $ docker run --rm -v /foo -v awesome:/bar busybox top",
+      "location": "docker container run > Clean up (--rm) NOTE",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#rm"
+    },
+    {
+      "finding": "--read-only semantics; combine with volumes to choose writable locations.",
+      "quote": "The `--read-only` flag mounts the container's root filesystem as read only prohibiting writes to locations other than the specified volumes for the container.",
+      "location": "docker container run > Mount volume read-only (--read-only)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#read-only"
+    },
+    {
+      "finding": "Docs themselves show that bind-mounting the Docker socket hands the container control of the host daemon.",
+      "quote": "By bind-mounting the Docker Unix socket and statically linked Docker binary [...], you give the container the full access to create and manipulate the host's Docker daemon.",
+      "location": "docker container run > Mount volume read-only (--read-only) [socket example]",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#read-only"
+    },
+    {
+      "finding": "--mount is recommended over -v though -v is not deprecated; example syntax --mount type=bind,src=/data,dst=/data.",
+      "quote": "Even though there is no plan to deprecate `--volume`, usage of `--mount` is recommended.",
+      "location": "docker container run > Add bind mounts or volumes using the --mount flag",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#mount"
+    },
+    {
+      "finding": "--tmpfs options are the Linux mount -t tmpfs -o options; example --tmpfs /run:rw,noexec,nosuid,size=65536k.",
+      "quote": "The options that you can pass to `--tmpfs` are identical to the Linux `mount -t tmpfs -o` command.",
+      "location": "docker container run > Mount tmpfs (--tmpfs)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#tmpfs"
+    },
+    {
+      "finding": "--init: docker-init (tini) becomes PID 1 and reaps zombies / forwards signals.",
+      "quote": "You can use the `--init` flag to indicate that an init process should be used as the PID 1 in the container. Specifying an init process ensures the usual responsibilities of an init system, such as reaping zombie processes, are performed inside the created container. [...] This `docker-init` binary, included in the default installation, is backed by tini.",
+      "location": "docker container run > Specify an init process",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#init"
+    },
+    {
+      "finding": "--security-opt no-new-privileges meaning.",
+      "quote": "To prevent your container processes from gaining additional privileges [...] $ docker run --security-opt no-new-privileges -it ubuntu bash This means that commands that raise privileges such as `su` or `sudo` no longer work. It also causes any seccomp filters to be applied later, after privileges have been dropped",
+      "location": "docker container run > Optional security options (--security-opt)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#security-opt"
+    },
+    {
+      "finding": "Other --security-opt values: seccomp=unconfined ('Turn off seccomp confinement'), seccomp=builtin, seccomp=profile.json, apparmor=PROFILE, label=disable, systempaths=unconfined ('Turn off confinement for system paths (masked paths, read-only paths)').",
+      "quote": "| `--security-opt=\"seccomp=unconfined\"` | Turn off seccomp confinement for the container | `--security-opt=\"seccomp=builtin\"` | Use the default (built-in) seccomp profile for the container.",
+      "location": "docker container run > --security-opt (table)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#security-opt"
+    },
+    {
+      "finding": "--ulimit format <type>=<soft>[:<hard>]; nproc is per-USER not per-container (docs warn) - use --pids-limit for a per-container process cap.",
+      "quote": "Be careful setting `nproc` with the `ulimit` flag as Linux uses `nproc` to set the maximum number of processes available to a user, not to a container.",
+      "location": "docker container run > Set ulimits in container (--ulimit) > For nproc usage",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#ulimit"
+    },
+    {
+      "finding": "Memory: default is NO limit. -m minimum is 6M. --cpus=0.000 means no limit; --cpus=1.5 == --cpu-period=100000 --cpu-quota=150000.",
+      "quote": "memory=inf, memory-swap=inf (default): There is no memory limit for the container. The container can use as much memory as needed.",
+      "location": "Running containers > User memory constraints (table)",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#user-memory-constraints"
+    },
+    {
+      "finding": "--cpus equivalence (resource constraints page).",
+      "quote": "if the host machine has two CPUs and you set `--cpus=\"1.5\"`, the container is guaranteed at most one and a half of the CPUs. This is the equivalent of setting `--cpu-period=\"100000\"` and `--cpu-quota=\"150000\"`.",
+      "location": "Resource constraints > CPU > Configure the default CFS scheduler",
+      "cite_url": "https://docs.docker.com/engine/containers/resource_constraints/#configure-the-default-cfs-scheduler"
+    },
+    {
+      "finding": "OOM behaviour.",
+      "quote": "By default, kernel kills processes in a container if an out-of-memory (OOM) error occurs. To change this behaviour, use the `--oom-kill-disable` option. Only disable the OOM killer on containers where you have also set the `-m/--memory` option.",
+      "location": "Running containers > User memory constraints",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#user-memory-constraints"
+    },
+    {
+      "finding": "STALE DOC DETAIL: the CLI reference says apps can read the limit at the cgroup-v1 path /sys/fs/cgroup/memory/memory.limit_in_bytes. On a cgroup v2 host (Ubuntu 24.04, Docker Desktop) that path does not exist; the v2 file is /sys/fs/cgroup/memory.max (executed below).",
+      "quote": "Linux sets this on the cgroup and applications in a container can query it at `/sys/fs/cgroup/memory/memory.limit_in_bytes`.",
+      "location": "docker container run > -m, --memory",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#memory"
+    },
+    {
+      "finding": "Networking default and --network none.",
+      "quote": "Containers have networking enabled by default, and they can make outgoing connections.",
+      "location": "Running containers > Container networking",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#container-networking"
+    },
+    {
+      "finding": "--network none: only loopback.",
+      "quote": "If you want to completely isolate the networking stack of a container, you can use the `--network none` flag when starting the container. Within the container, only the loopback device is created.",
+      "location": "None network driver",
+      "cite_url": "https://docs.docker.com/engine/network/drivers/none/"
+    },
+    {
+      "finding": "Default bridge vs user-defined network DNS.",
+      "quote": "The default bridge network only allows containers to communicate with each other using internal IP addresses. User-created bridge networks provide DNS resolution between containers using container names.",
+      "location": "docker container run > Connect a container to a network (--network) NOTE",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#network"
+    },
+    {
+      "finding": "docker stop: SIGTERM, grace period, then SIGKILL. Default grace 10 s on Linux (30 s Windows); -t/--timeout; -1 waits forever; signal changeable by STOPSIGNAL / --stop-signal.",
+      "quote": "The main process inside the container will receive `SIGTERM`, and after a grace period, `SIGKILL`. The first signal can be changed with the `STOPSIGNAL` instruction in the container's Dockerfile, or the `--stop-signal` option to `docker run` and `docker create`.",
+      "location": "docker container stop > Description",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/stop/"
+    },
+    {
+      "finding": "Default stop timeout.",
+      "quote": "If no default is configured for the container, the Daemon determines the default, and is 10 seconds for Linux containers, and 30 seconds for Windows containers.",
+      "location": "docker container stop > Stop container with timeout (-t, --timeout)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/stop/#timeout"
+    },
+    {
+      "finding": "docker exec needs an executable, not a shell string; exec inherits the container's creation-time env; -e vars apply only to that exec'd process.",
+      "quote": "The command must be an executable. A chained or a quoted command doesn't work. - This works: `docker exec -it my_container sh -c \"echo a && echo b\"` - This doesn't work: `docker exec -it my_container \"echo a && echo b\"`",
+      "location": "docker container exec > Description",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/exec/"
+    },
+    {
+      "finding": "exec -e scope.",
+      "quote": "These environment variables are only valid for the `sh` process started by that `docker exec` command, and aren't available to other processes running inside the container.",
+      "location": "docker container exec > Set environment variables for the exec process (--env, -e)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/exec/#env"
+    },
+    {
+      "finding": "Image digests in docker run: IMAGE[:TAG|@DIGEST].",
+      "quote": "Images using the v2 or later image format have a content-addressable identifier called a digest. As long as the input used to generate the image is unchanged, the digest value is predictable.",
+      "location": "Running containers > Image digests",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#image-digests"
+    },
+    {
+      "finding": "-d / foreground default; docker logs and docker attach work on detached containers.",
+      "quote": "When you start a container, the container runs in the foreground by default. If you want to run the container in the background instead, you can use the `--detach` (or `-d`) flag.",
+      "location": "Running containers > Foreground and background",
+      "cite_url": "https://docs.docker.com/engine/containers/run/#foreground-and-background"
+    },
+    {
+      "finding": "EXECUTED exit code 127 (Docker 28.1.1, Docker Desktop, arm64).",
+      "quote": "$ docker run --rm ubuntu:24.04 nosuchcmd; echo \"exit=$?\"\ndocker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: \"nosuchcmd\": executable file not found in $PATH: unknown\n\nRun 'docker run --help' for more information\nexit=127",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED exit code 126 (non-executable file; a directory gives 126 too with 'is a directory: unknown: permission denied').",
+      "quote": "$ docker run --rm ubuntu:24.04 /etc/passwd; echo \"exit=$?\"\ndocker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: \"/etc/passwd\": permission denied: unknown\n\nRun 'docker run --help' for more information\nexit=126",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED exit code 125 (bad docker flag) and pass-through.",
+      "quote": "$ docker run --rm --nosuchflag ubuntu:24.04 true; echo \"exit=$?\"\nunknown flag: --nosuchflag\n\nUsage:  docker run [OPTIONS] IMAGE [COMMAND] [ARG...]\n\nRun 'docker run --help' for more information\nexit=125\n$ docker run --rm ubuntu:24.04 sh -c 'exit 3'; echo \"exit=$?\"\nexit=3",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: the same 127/126 convention comes from the shell when the failure happens INSIDE a running container (so 127 in a transcript does not by itself tell you whether docker or bash produced it).",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c 'nosuchcmd; echo \"inner=$?\"; /etc/passwd; echo \"inner=$?\"'\nbash: line 1: nosuchcmd: command not found\ninner=127\nbash: line 1: /etc/passwd: Permission denied\ninner=126",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: sudo is absent in ubuntu:24.04 and the default user is root.",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c 'which sudo; echo \"which exit=$?\"; sudo true; echo \"exit=$?\"; id'\nbash: line 1: sudo: command not found\nwhich exit=1\nexit=127\nuid=0(root) gid=0(root) groups=0(root)\n(note: `which sudo` prints nothing and exits 1; the 'command not found' line is from `sudo true`, stderr ordering)",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED --read-only: exact error, and --tmpfs /tmp makes /tmp writable (mounted rw,nosuid,nodev,noexec).",
+      "quote": "$ docker run --rm --read-only ubuntu:24.04 bash -c 'touch /etc/x; echo \"exit=$?\"; echo hi > /tmp/x; echo \"exit=$?\"'\ntouch: cannot touch '/etc/x': Read-only file system\nexit=1\nbash: line 1: /tmp/x: Read-only file system\nexit=1\n$ docker run --rm --read-only --tmpfs /tmp ubuntu:24.04 bash -c 'echo hi > /tmp/x; echo \"exit=$?\"; cat /tmp/x; touch /etc/x; echo \"exit=$?\"; grep \" /tmp \" /proc/mounts'\nexit=0\nhi\ntouch: cannot touch '/etc/x': Read-only file system\nexit=1\ntmpfs /tmp tmpfs rw,nosuid,nodev,noexec,relatime 0 0",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED default capability mask = the 14 documented capabilities. 0x00000000a80425fb decodes to exactly AUDIT_WRITE, CHOWN, DAC_OVERRIDE, FOWNER, FSETID, KILL, MKNOD, NET_BIND_SERVICE, NET_RAW, SETFCAP, SETGID, SETPCAP, SETUID, SYS_CHROOT.",
+      "quote": "$ docker exec <default container> grep -i ^Cap /proc/1/status\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED --cap-drop ALL and --privileged masks.",
+      "quote": "$ docker run --rm --cap-drop ALL ubuntu:24.04 sh -c 'grep CapEff /proc/self/status; chown nobody /tmp; echo \"exit=$?\"'\nCapEff:\t0000000000000000\nchown: changing ownership of '/tmp': Operation not permitted\nexit=1\n$ docker run --rm --privileged ubuntu:24.04 grep CapEff /proc/self/status\nCapEff:\t000001ffffffffff",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED resource flags land in cgroup v2 files.",
+      "quote": "$ docker run --rm -m 256m --cpus 1.5 --pids-limit 64 ubuntu:24.04 sh -c 'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max; ls /sys/fs/cgroup/memory/memory.limit_in_bytes'\n268435456\n150000 100000\n64\nls: cannot access '/sys/fs/cgroup/memory/memory.limit_in_bytes': No such file or directory",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED no-new-privileges flag visible in /proc.",
+      "quote": "$ docker run --rm --security-opt no-new-privileges ubuntu:24.04 grep NoNewPrivs /proc/self/status\nNoNewPrivs:\t1\n$ docker run --rm ubuntu:24.04 grep NoNewPrivs /proc/self/status\nNoNewPrivs:\t0",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED docker exec default user = the container's user; -u/-w/-e work.",
+      "quote": "$ docker run -d --name lt-R5-user -u 1000:1000 -w /tmp ubuntu:24.04 sleep 120\n$ docker exec lt-R5-user sh -c 'id; pwd'\nuid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu)\n/tmp\n$ docker exec -u 0 lt-R5-user id\nuid=0(root) gid=0(root) groups=0(root)\n$ docker exec -u nobody -w /tmp -e X=1 <root container> sh -c 'id; pwd; echo X=$X'\nuid=65534(nobody) gid=65534(nogroup) groups=65534(nogroup)\n/tmp\nX=1",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED OOM kill: exit 137, and docker inspect records OOMKilled=true.",
+      "quote": "$ docker run --name lt-R5-oom -m 64m --memory-swap 64m --read-only --cap-drop ALL --network none ubuntu:24.04 sh -c 'tail /dev/zero'; echo \"exit=$?\"\nKilled\nexit=137",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "LOCAL-MACHINE CAVEAT (Docker Desktop for Mac on this authoring machine): the daemon reports seccomp profile=unconfined, so a default container shows 'Seccomp: 0'. Pages must NOT show 'Seccomp: 2' for a plain docker run on this machine; adding --security-opt seccomp=builtin yields Seccomp: 2. Also, `--network none` on Docker Desktop's LinuxKit kernel lists extra tunnel pseudo-devices (tunl0, sit0, gre0, ip6tnl0, ...) besides lo, unlike the docs' lo-only output on a normal Linux host.",
+      "quote": "$ docker info --format '{{json .SecurityOptions}} {{.CgroupVersion}}'\n[\"name=seccomp,profile=unconfined\",\"name=cgroupns\"] 2\n$ docker run --rm ubuntu:24.04 grep -i seccomp /proc/1/status\nSeccomp:\t0\nSeccomp_filters:\t0\n$ docker run --rm --security-opt seccomp=builtin ubuntu:24.04 grep -i seccomp /proc/1/status\nSeccomp:\t2\nSeccomp_filters:\t1",
+      "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1, kernel 6.10.14-linuxkit)"
+    },
+    {
+      "finding": "ADDED BY PAGE-20 AUTHOR (fetched 2026-09-21). --pid modes: 'host' uses the host's PID namespace; 'container:<name|id>' joins another container's. --uts=host likewise. Default: every container gets a PID namespace.",
+      "quote": "--pid=\"\" : Set the PID (Process) Namespace mode for the container, 'container:<name|id>': joins another container's PID namespace 'host': use the host's PID namespace inside the container [...] By default, all containers have the PID namespace enabled. PID namespace provides separation of processes.",
+      "location": "docker container run > PID settings (--pid); UTS settings (--uts)",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#pid"
+    },
+    {
+      "finding": "ADDED BY PAGE-20 AUTHOR. EXECUTED: --network=host puts the container in the VM's initial network namespace (same net inode as the VM's PID 1, hostname 'docker-desktop'); --pid=host shows every process in the VM (264 /proc/PID dirs vs 3 in a default container); a second container started with --pid container:A --network container:A has identical pid/net inode numbers to A but its own mnt/uts, and root in A can SIGKILL its PID 1 (container exits 137).",
+      "quote": "see research/verify/20-namespaces.txt",
+      "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit"
+    }
+  ],
+  "teaching_notes": "Two pages matter: the CLI reference (flag table + per-flag examples) and 'Running containers' (exit status, capabilities tables, defaults). Exit codes 125/126/127 are confirmed verbatim, but the sample error strings in the docs are outdated - use the executed Docker 28 output. The default capability list is confirmed at exactly 14 and triple-checked (docs table, moby source, live CapEff mask 0xa80425fb). --privileged now has a crisp 7-bullet list - prefer it to folklore paraphrases. Corrections to folklore: (1) the exec page never mentions namespaces and never states the default user (verified by running instead); (2) docs still cite a cgroup-v1 memory path that does not exist on cgroup-v2 hosts; (3) --ulimit nproc is per-user, not per-container - --pids-limit is the container-level control; (4) on this Docker Desktop machine seccomp is unconfined by default, so authors must run anything seccomp-related with --security-opt seccomp=builtin or describe rather than show."
+}

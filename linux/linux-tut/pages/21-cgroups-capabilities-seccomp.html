@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cgroups, Capabilities, and Seccomp · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Containers &amp; Isolation</p>
+    <h1>Cgroups, capabilities, and seccomp</h1>
+    <p class="lede">
+      Namespaces decide what a container can see. Three other kernel mechanisms decide how much it
+      may use, which of root's powers it holds, and which requests it may make of the kernel at all.
+      Each is a few lines of text you can read from inside the box — and each changes either what an
+      eval measures or what an agent can get away with.
+    </p>
+
+    <h2 id="three-walls">Three more walls, three more files to read</h2>
+    <p>
+      <a href="20-namespaces.html">Page 20</a> took "container" apart into a restricted view, a
+      restricted budget, a different root filesystem and reduced privilege. This page covers the
+      budget and the privilege. A slogan helps, as long as you know it is this course's framing and
+      not a quotation: <em>namespaces limit what a process can see; cgroups limit what it can use;
+      capabilities and seccomp limit what it can do.</em> Docker's own security page draws the same
+      line — control groups "do not play a role in preventing one container from accessing or
+      affecting the data and processes of another container, [but] they are essential to fend off
+      some denial-of-service
+      attacks."<a class="cite" href="https://docs.docker.com/engine/security/#control-groups" title="Docker Docs, Docker Engine security: Control groups">[Docker: security]</a>
+    </p>
+    <p>
+      The commands below use the lab image from <a href="01-lab-setup.html#lab-image">page 1</a>
+      (<code>lt-lab</code>: Ubuntu 24.04 plus <code>libcap2-bin</code>, <code>iproute2</code> and the
+      user <code>learner</code>, uid 1001), run from your Mac's terminal with different flags each
+      time — the flags are the experiment.
+    </p>
+
+    <h2 id="cgroups">Cgroups: the budget</h2>
+    <p>
+      Control groups "allow processes to be organized into hierarchical groups whose usage of various
+      types of resources can then be limited and monitored," through "a pseudo-filesystem called
+      cgroupfs."<a class="cite" href="https://man7.org/linux/man-pages/man7/cgroups.7.html" title="cgroups(7), DESCRIPTION">[cgroups(7)]</a>
+      So a <span class="term" data-g="cgroup">cgroup</span> is a directory; the processes in it are
+      listed in a file; its limits are more files. Version 2, which Ubuntu 24.04 and current Docker
+      use, has a single tree in which "every process in the system belongs to one and only one
+      cgroup," and children start in their parent's
+      cgroup<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html" title="Kernel docs, Control Group v2: Basic operations">[Kernel: cgroup-v2]</a>
+      — so everything an agent spawns stays inside the budget, with no way to opt out by forking.
+      Limits apply down the tree: a child group cannot exceed its
+      ancestors'.<a class="cite" href="https://man7.org/linux/man-pages/man7/cgroups.7.html" title="cgroups(7): limits 'cannot be exceeded by descendant cgroups'">[cgroups(7)]</a>
+      The enforcing components are called controllers (memory, cpu, pids, io…).
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -it --memory 256m --cpus 1.5 --pids-limit 100 lt-lab bash
+<span class="p">#</span> cat /proc/self/cgroup
+<span class="o">0::/</span>
+<span class="p">#</span> cd /sys/fs/cgroup; cat cgroup.controllers
+<span class="o">cpuset cpu io memory hugetlb pids rdma</span>
+<span class="p">#</span> for f in memory.max cpu.max pids.max memory.current memory.peak pids.current; do echo "$f: $(cat $f)"; done
+<span class="o">memory.max: <span class="hl">268435456</span>
+cpu.max: <span class="hl">150000 100000</span>
+pids.max: <span class="hl">100</span>
+memory.current: 2293760
+memory.peak: 4362240
+pids.current: 2</span>
+<span class="p">#</span> findmnt -n -o TARGET,FSTYPE,OPTIONS /sys/fs/cgroup; echo 999999999 &gt; memory.max
+<span class="o">/sys/fs/cgroup cgroup2 <span class="hl">ro</span>,nosuid,nodev,noexec,relatime
+bash: memory.max: Read-only file system</span></code></pre>
+    <p>
+      <code>0::/</code> is the cgroup namespace at work: the container sees its own group as the root
+      of the tree. The three Docker flags landed in three files:
+    </p>
+    <table>
+      <thead><tr><th>Docker flag</th><th>File</th><th>Meaning of the value</th><th>At the limit</th></tr></thead>
+      <tbody>
+        <tr><td><code>--memory 256m</code></td><td><code>memory.max</code></td><td>bytes; 256 × 1024² = 268435456. "Memory usage hard limit."</td><td>"the OOM killer is invoked in the cgroup" — a process gets SIGKILL</td></tr>
+        <tr><td><code>--cpus 1.5</code></td><td><code>cpu.max</code></td><td><code>$MAX $PERIOD</code> in microseconds: 150 ms of CPU time per 100 ms of wall time</td><td>throttled until the next period; nothing dies</td></tr>
+        <tr><td><code>--pids-limit 100</code></td><td><code>pids.max</code></td><td>"Hard limit of number of processes" (threads count too)</td><td><code>fork()</code> fails with EAGAIN</td></tr>
+      </tbody>
+    </table>
+    <p>
+      (Wording from the kernel's cgroup v2
+      documentation;<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files" title="Kernel docs, Control Group v2: memory.max, cpu.max, pids.max interface files">[Kernel: cgroup-v2]</a>
+      the <code>--cpus</code> equivalence to a 100000/150000 period/quota pair is
+      Docker's.<a class="cite" href="https://docs.docker.com/engine/containers/resource_constraints/#configure-the-default-cfs-scheduler" title="Docker Docs, Resource constraints: Configure the default CFS scheduler">[Docker: resource constraints]</a>)
+      The mount is read-only, so the agent can read its budget but not raise it. And without flags
+      there is no budget: "By default, a container has no resource
+      constraints."<a class="cite" href="https://docs.docker.com/engine/containers/resource_constraints/" title="Docker Docs, Resource constraints">[Docker: resource constraints]</a>
+      A plain <code>docker run</code> shows <code>memory.max: max</code>,
+      <code>cpu.max: max 100000</code>, <code>pids.max: max</code>.
+    </p>
+
+    <h3 id="enforcement">What hitting each limit looks like</h3>
+    <p>
+      <a href="12-resources-and-limits.html">Page 12</a> introduced these symptoms; here they are as
+      cgroup counters. CPU first — a busy loop under <code>--cpus 0.5</code>, stopped by
+      <code>timeout</code> after 3 seconds:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --cpus 0.5 lt-lab bash -c 'timeout 3 bash -c "while :; do :; done"; echo "loop exit=$?"; grep -E "nr_periods|nr_throttled|throttled_usec" /sys/fs/cgroup/cpu.stat'
+<span class="o">loop exit=124
+nr_periods 31
+nr_throttled <span class="hl">30</span>
+throttled_usec 1498849</span>
+<span class="p">$</span> docker run --rm --pids-limit 10 lt-lab bash -c 'for i in $(seq 1 15); do sleep 2 &amp; done 2&gt;&amp;1 | head -2; cat /sys/fs/cgroup/pids.events'
+<span class="o">bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+max 2</span></code></pre>
+    <p>
+      Throttled in 30 of 31 periods, for 1.5 of the 3 seconds: the loop did half the work and nobody
+      was told. A CPU-starved agent does not crash; it runs out of wall-clock time. The pids limit
+      is what contains a fork bomb, which "is likely to exhaust the number of tasks before hitting
+      memory
+      restrictions."<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#pid" title="Kernel docs, Control Group v2: PID controller">[Kernel: cgroup-v2]</a>
+      Memory is the one that kills:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --name lt-oom --memory 64m --memory-swap 64m lt-lab bash -c 'tail /dev/zero; echo "child exit=$?"; grep oom_kill /sys/fs/cgroup/memory.events; echo "carrying on"'
+<span class="o">bash: line 1:     7 Killed                  tail /dev/zero
+child exit=<span class="hl">137</span>
+oom_kill 1
+carrying on</span>
+<span class="p">$</span> docker inspect lt-oom --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'; docker rm lt-oom
+<span class="o">ExitCode=<span class="hl">0</span> OOMKilled=<span class="hl">true</span></span></code></pre>
+    <p>
+      (<code>tail /dev/zero</code> buffers an endless line; setting <code>--memory-swap</code> equal
+      to <code>--memory</code> means no swap, so the kill is prompt.) The
+      <span class="term" data-g="oom-killer">OOM killer</span> chose a process <em>inside the
+      cgroup</em> — it "is not going to kill any tasks outside of this
+      cgroup"<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files" title="Kernel docs, Control Group v2: memory.oom.group">[Kernel: cgroup-v2]</a>
+      — the child died with 137 (128 + 9, <span class="term" data-g="sigkill">SIGKILL</span>), the
+      shell carried on, and the container exited 0.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — navigate: the OOM that exits 0</span>
+      <p>This is the common shape in agentic runs: the agent's <code>pytest</code> or compiler is
+      OOM-killed, the agent's shell survives, the agent reads "Killed", flails, and the task is
+      scored as a model failure with a clean container exit code. Exit code 137 alone would not have
+      proved OOM anyway (a <code>docker stop</code> timeout also gives 137). The evidence is
+      <code>oom_kill</code> in <code>memory.events</code> — "The number of processes belonging to
+      this cgroup killed by any kind of OOM
+      killer"<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files" title="Kernel docs, Control Group v2: memory.events">[Kernel: cgroup-v2]</a>
+      — plus <code>State.OOMKilled</code> from outside and <code>memory.peak</code> against
+      <code>memory.max</code>. Have the harness record all three, plus <code>nr_throttled</code>, at
+      the end of every rollout. A rollout with <code>oom_kill &gt; 0</code> is an
+      <span class="term" data-g="infrastructure-failure">infrastructure failure</span> until someone
+      shows the task is <em>supposed</em> to fit in the limit: keep it in the scheduled denominator,
+      report it separately from wrong answers, and never quietly drop it.</p>
+    </div>
+    <div class="pitfall">
+      <span class="label">Pitfall — the limit is invisible where programs look for it</span>
+      <p>Cgroup limits do not show up in <code>/proc</code>. In a container limited to 256 MB and
+      one CPU, <code>nproc</code> printed 10 and <code>/proc/meminfo</code> reported 8 GB — the
+      machine's totals (<a href="20-namespaces.html#not-namespaced">page 20</a>). A test suite that
+      starts one worker per CPU, or a tool that sizes a cache from "free memory", overshoots and is
+      killed for it. The truth is in <code>/sys/fs/cgroup</code>.</p>
+    </div>
+
+    <h2 id="capabilities">Capabilities: root, cut into pieces</h2>
+    <p>
+      <a href="08-permissions.html">Page 8</a>'s decision procedure had a first line: if the process
+      is root, skip the checks. That is the traditional model — "Privileged processes bypass all
+      kernel permission checks." The modern kernel is finer-grained: "Linux divides the privileges
+      traditionally associated with superuser into distinct units, known as capabilities, which can
+      be independently enabled and
+      disabled."<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), DESCRIPTION">[capabilities(7)]</a>
+      Being uid 0 is how a process normally <em>gets</em> the full set; the checks themselves ask
+      about one <span class="term" data-g="capability">capability</span> at a time. The kernel on
+      this machine knows 41. A process's sets are hexadecimal masks in
+      <code>/proc/PID/status</code>;<a class="cite" href="https://man7.org/linux/man-pages/man5/proc_pid_status.5.html" title="proc_pid_status(5): CapInh, CapPrm, CapEff, CapBnd, CapAmb">[proc_pid_status(5)]</a>
+      two matter to you. <code>CapEff</code>, the effective set, is "the set of capabilities used by
+      the kernel to perform permission checks." <code>CapBnd</code>, the bounding set, limits what
+      can ever be gained by executing a
+      program.<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), 'Thread capability sets' and 'Capability bounding set'">[capabilities(7)]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm lt-lab bash -c 'grep -E "^Cap(Eff|Bnd)" /proc/self/status; capsh --decode=00000000a80425fb'
+<span class="o">CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+0x00000000a80425fb=cap_chown,cap_dac_override,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_net_bind_service,cap_net_raw,cap_sys_chroot,cap_mknod,cap_audit_write,cap_setfcap</span></code></pre>
+    <p>
+      Fourteen names — exactly the fourteen rows of Docker's table of capabilities "allowed by
+      default."<a class="cite" href="https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities" title="Docker Docs, Running containers: Runtime privilege and Linux capabilities">[Docker: run]</a>
+      Docker "drops all capabilities except those needed, an allowlist instead of a denylist
+      approach," so that "'root' within a container has much less privileges than the real
+      'root'."<a class="cite" href="https://docs.docker.com/engine/security/#linux-kernel-capabilities" title="Docker Docs, Docker Engine security: Linux kernel capabilities">[Docker: security]</a>
+      That is why root in a default container is refused things root is never refused:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm lt-lab bash -c 'id -u; mount -t tmpfs none /mnt; ip link set eth0 down; hostname x'
+<span class="o">0
+mount: /mnt: permission denied.
+       dmesg(1) may have more information after failed mount system call.
+RTNETLINK answers: <span class="hl">Operation not permitted</span>
+hostname: you must be root to change the host name</span>
+<span class="p">$</span> docker run --rm --cap-add NET_ADMIN lt-lab bash -c 'ip link set eth0 down &amp;&amp; ip -br link show eth0'
+<span class="o">eth0@if639       DOWN           6e:0b:49:5d:ac:dc &lt;BROADCAST,MULTICAST&gt;</span></code></pre>
+    <p>
+      "Operation not permitted" is the error EPERM: not "the file's mode says no" (that is EACCES,
+      "Permission denied") but "you lack the privilege for this operation" (<code>mount</code> words its EPERM message its
+      own way). Three refusals, two
+      missing capabilities: mounting and setting the hostname need <code>CAP_SYS_ADMIN</code>,
+      interface configuration needs
+      <code>CAP_NET_ADMIN</code>.<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), Capabilities list: CAP_SYS_ADMIN, CAP_NET_ADMIN">[capabilities(7)]</a>
+      It works in the other direction too. Take one capability <em>away</em> from root and page 8's
+      permission bits apply to uid 0:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --cap-drop DAC_OVERRIDE lt-lab bash -c 'id -u; ls -ld /home/learner; ls /home/learner'
+<span class="o">0
+drwxr-x--- 2 learner learner 4096 Sep 21 11:09 /home/learner
+ls: cannot open directory '/home/learner': <span class="hl">Permission denied</span></span></code></pre>
+
+    <h3 id="cap-table">The dozen worth knowing</h3>
+    <table>
+      <thead><tr><th>Capability</th><th>What it permits (capabilities(7))</th><th>Docker default?</th></tr></thead>
+      <tbody>
+        <tr><td><code>CAP_DAC_OVERRIDE</code></td><td>"Bypass file read, write, and execute permission checks."</td><td>yes</td></tr>
+        <tr><td><code>CAP_CHOWN</code></td><td>"Make arbitrary changes to file UIDs and GIDs"</td><td>yes</td></tr>
+        <tr><td><code>CAP_SETUID</code></td><td>"Make arbitrary manipulations of process UIDs" — what <code>su</code> needs</td><td>yes</td></tr>
+        <tr><td><code>CAP_KILL</code></td><td>"Bypass permission checks for sending signals"</td><td>yes</td></tr>
+        <tr><td><code>CAP_NET_BIND_SERVICE</code></td><td>"Bind a socket to Internet domain privileged ports (port numbers less than 1024)."</td><td>yes</td></tr>
+        <tr><td><code>CAP_NET_RAW</code></td><td>"Use RAW and PACKET sockets" — in practice <code>ping</code>, <code>tcpdump</code>, and packet spoofing</td><td>yes</td></tr>
+        <tr><td><code>CAP_SYS_CHROOT</code></td><td>"Use chroot(2); change mount namespaces using setns(2)."</td><td>yes</td></tr>
+        <tr><td><code>CAP_MKNOD</code></td><td>"Create special files using mknod(2)."</td><td>yes</td></tr>
+        <tr><td><code>CAP_NET_ADMIN</code></td><td>Interface configuration, firewall administration, routing tables</td><td>no</td></tr>
+        <tr><td><code>CAP_SYS_PTRACE</code></td><td>"Trace arbitrary processes using ptrace(2)"; read and write other processes' memory</td><td>no</td></tr>
+        <tr><td><code>CAP_SYS_MODULE</code></td><td>"Load and unload kernel modules" — code in the shared kernel</td><td>no</td></tr>
+        <tr><td><code>CAP_SYS_ADMIN</code></td><td><code>mount</code>, <code>umount</code>, <code>pivot_root</code>, <code>sethostname</code>, creating and entering namespaces, and much more. The man page: "It can plausibly be called 'the new root'."</td><td>no</td></tr>
+      </tbody>
+    </table>
+    <p>
+      (Definitions:<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), Capabilities list and Notes to kernel developers">[capabilities(7)]</a>;
+      defaults:<a class="cite" href="https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities" title="Docker Docs, Running containers: capability tables">[Docker: run]</a>.)
+      The flags are <code>--cap-drop</code> and <code>--cap-add</code>, both accepting
+      <code>ALL</code>. Four configurations, four masks:
+    </p>
+    <table>
+      <thead><tr><th>Run with</th><th><code>CapEff</code></th><th><code>CapBnd</code></th><th>Reading</th></tr></thead>
+      <tbody>
+        <tr><td>(default, root)</td><td><code>00000000a80425fb</code></td><td><code>00000000a80425fb</code></td><td>the 14</td></tr>
+        <tr><td><code>--user 1001</code></td><td><code>0000000000000000</code></td><td><code>00000000a80425fb</code></td><td>nothing now; the 14 still reachable by becoming root</td></tr>
+        <tr><td><code>--cap-drop ALL</code></td><td><code>0000000000000000</code></td><td><code>0000000000000000</code></td><td>nothing, ever, even for uid 0</td></tr>
+        <tr><td><code>--privileged</code></td><td><code>000001ffffffffff</code></td><td><code>000001ffffffffff</code></td><td>all 41</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The second row is the one people misread: a non-root user has an empty effective set, but the
+      ceiling is intact. <a href="23-hardening-containers.html#rung-caps">Page 23</a> turns that into
+      a hardening rung. <code>--privileged</code> is more than the last row: Docker lists seven
+      effects, among them "Enables all Linux kernel capabilities," "Disables the default seccomp
+      profile," and "Grants access to all host devices," and warns that such a container "is not a
+      securely sandboxed
+      process."<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#privileged" title="Docker Docs, docker container run: --privileged">[Docker: run]</a>
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — design: one capability can undo a mount option</span>
+      <p>A task mounts its hidden tests read-only and the author adds
+      <code>--cap-add SYS_ADMIN</code> "because the agent needs to mount things". Run as root with
+      a read-only volume at <code>/tests</code>:</p>
+<pre class="term"><code><span class="p">#</span> echo "assert True" &gt; /tests/test_hidden.py
+<span class="o">bash: /tests/test_hidden.py: Read-only file system</span>
+<span class="p">#</span> mount -o remount,rw /tests; echo "remount exit=$?"
+<span class="o">remount exit=0</span>
+<span class="p">#</span> echo "assert True" &gt; /tests/test_hidden.py &amp;&amp; cat /tests/test_hidden.py
+<span class="o">assert True</span></code></pre>
+      <p>Without <code>SYS_ADMIN</code> the same remount fails (<code>mount: /tests: permission
+      denied</code>, exit 32). A
+      <span class="term" data-g="read-only-mount">read-only mount</span> protects the grader only
+      from a process that cannot remount — so audit question 2 ("is it read-only?") is incomplete
+      without reading <code>CapEff</code>. The opposite mistake costs validity instead: a
+      network-debugging task family needs <code>ping</code> and <code>tcpdump</code>, hence
+      <code>NET_RAW</code>; drop ALL and the oracle solution fails with a permission error that gets
+      scored as model failure. Derive the policy per task family, and run the oracle under it.</p>
+    </div>
+
+    <h2 id="seccomp">Seccomp: a filter on the kernel's front door</h2>
+    <p>
+      Every request a program makes of the kernel is a
+      <span class="term" data-g="system-call">system call</span>
+      (<a href="09-processes.html">page 9</a>). <span class="term" data-g="seccomp">Seccomp</span> in
+      filter mode attaches a small program to a process that inspects each call's number and raw
+      arguments and decides: allow, or fail with an error. Filters are inherited by children and
+      "preserved across a call to
+      execve,"<a class="cite" href="https://man7.org/linux/man-pages/man2/seccomp.2.html" title="seccomp(2), SECCOMP_SET_MODE_FILTER">[seccomp(2)]</a>
+      so there is no shaking one off. The point is a smaller
+      <span class="term" data-g="attack-surface">attack surface</span>: since all containers share
+      one kernel, every reachable system call is a place a kernel bug could be. The kernel's own
+      documentation is careful about the claim: "System call filtering isn't a sandbox. It provides
+      a clearly defined mechanism for minimizing the exposed kernel
+      surface."<a class="cite" href="https://docs.kernel.org/userspace-api/seccomp_filter.html#what-it-isn-t" title="Kernel docs, Seccomp BPF: 'What it isn't'">[Kernel: seccomp]</a>
+    </p>
+    <p>
+      Docker's default profile "is an allowlist that denies access to system calls by default and
+      then allows specific system calls"; in Docker's words it "disables around 44 system calls out
+      of 300+" and is "moderately protective while providing wide application
+      compatibility."<a class="cite" href="https://docs.docker.com/engine/security/seccomp/" title="Docker Docs, Seccomp security profiles for Docker">[Docker: seccomp]</a>
+      Treat "around 44" as Docker's round figure, not a count to verify. The blocked list includes
+      <code>mount</code> ("already gated by <code>CAP_SYS_ADMIN</code>"), <code>reboot</code>,
+      <code>unshare</code>, <code>clock_settime</code> ("Time/date is not namespaced"),
+      <code>keyctl</code> (the kernel keyring "is not namespaced"), and the <code>io_uring</code>
+      calls, "Blocked due to security vulnerabilities that can be exploited to break out of
+      containers."<a class="cite" href="https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile" title="Docker Docs, Seccomp: Significant syscalls blocked by the default profile">[Docker: seccomp]</a>
+      A process's state is two more lines in <code>status</code>: <code>Seccomp</code> is 0
+      (disabled), 1 (strict) or 2
+      (filter).<a class="cite" href="https://man7.org/linux/man-pages/man5/proc_pid_status.5.html" title="proc_pid_status(5): Seccomp, Seccomp_filters, NoNewPrivs">[proc_pid_status(5)]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --security-opt seccomp=builtin lt-lab grep -E 'Seccomp' /proc/self/status
+<span class="o">Seccomp:	<span class="hl">2</span>
+Seccomp_filters:	1</span>
+<span class="p">$</span> docker run --rm lt-lab unshare --user --map-root-user id                                  <span class="c"># no filter</span>
+<span class="o">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="p">$</span> docker run --rm --security-opt seccomp=builtin lt-lab unshare --user --map-root-user id   <span class="c"># Docker's profile</span>
+<span class="o">unshare: unshare failed: <span class="hl">Operation not permitted</span></span></code></pre>
+    <div class="warn">
+      <span class="label">Caveat — check your daemon; Docker Desktop may differ from a server</span>
+      <p>On a stock Linux Docker Engine the built-in profile is the default and a plain
+      <code>docker run</code> shows <code>Seccomp: 2</code>. The Docker Desktop install used to write
+      this course reports <code>name=seccomp,profile=unconfined</code> under
+      <code>docker info --format '{{json .SecurityOptions}}'</code>, so plain containers there show
+      <code>Seccomp: 0</code> — hence the explicit <code>seccomp=builtin</code> above, which Docker
+      documents for exactly this
+      situation.<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#security-opt" title="Docker Docs, docker container run: --security-opt seccomp=builtin">[Docker: run]</a>
+      The lesson generalises: never assume a wall is up because it is "the default". Read the
+      line.</p>
+    </div>
+    <p>
+      Notice the blocked call returned the same EPERM as a missing capability. From a transcript
+      you cannot tell which wall said no — and often both would have: the profile is
+      capability-aware, so with <code>--cap-add SYS_ADMIN</code> the built-in profile lets
+      <code>mount</code> through (run it: exit 0). Defence in depth means the dangerous calls are
+      gated twice. Docker's advice on custom profiles is short: "It is not recommended to change the
+      default seccomp
+      profile."<a class="cite" href="https://docs.docker.com/engine/security/seccomp/" title="Docker Docs, Seccomp security profiles for Docker">[Docker: seccomp]</a>
+    </p>
+
+    <h3 id="no-new-privs">no_new_privs: the one-way ratchet</h3>
+    <p>
+      One loose end from the capability table: a non-root agent with an intact bounding set gets
+      everything back if it can run a <span class="term" data-g="setuid">setuid</span>-root program
+      (<a href="08-permissions.html">page 8</a>). The
+      <span class="term" data-g="no-new-privileges">no_new_privs</span> bit closes that. Once set,
+      "it is inherited across fork, clone, and execve and cannot be unset," and "the setuid and
+      setgid bits will no longer change the uid or gid; file capabilities will not add to the
+      permitted
+      set."<a class="cite" href="https://docs.kernel.org/userspace-api/no_new_privs.html" title="Kernel docs, No New Privileges Flag">[Kernel: no_new_privs]</a>
+      A setuid-root copy of <code>grep</code>, run by <code>learner</code> to read its own
+      capability mask, makes it visible:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm lt-lab bash -c 'cp /usr/bin/grep /usr/local/bin/suid-grep; chmod u+s /usr/local/bin/suid-grep; su learner -c "grep CapEff /proc/self/status; suid-grep CapEff /proc/self/status"'
+<span class="o">CapEff:	0000000000000000
+CapEff:	<span class="hl">00000000a80425fb</span></span>
+<span class="p">$</span> docker run --rm --security-opt no-new-privileges lt-lab bash -c '…same…'
+<span class="o">CapEff:	0000000000000000
+CapEff:	<span class="hl">0000000000000000</span></span></code></pre>
+    <p>
+      First run: the ordinary <code>grep</code> has nothing, the setuid one has all fourteen back.
+      Second run: the setuid bit is ignored, and <code>NoNewPrivs: 1</code> in
+      <code>status</code> says why.
+    </p>
+    <p>
+      The cost, in Docker's words: "commands that raise privileges such as <code>su</code> or
+      <code>sudo</code> no longer
+      work."<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#security-opt" title="Docker Docs, docker container run: --security-opt no-new-privileges">[Docker: run]</a>
+      The limit, in the kernel's: it "does not prevent privilege changes that do not involve
+      execve()" — a process that is already root stays
+      root.<a class="cite" href="https://docs.kernel.org/userspace-api/no_new_privs.html" title="Kernel docs, No New Privileges Flag">[Kernel: no_new_privs]</a>
+    </p>
+
+    <h3 id="lsm">AppArmor and SELinux, in one paragraph</h3>
+    <p>
+      On hosts that have it (Ubuntu, Debian and SUSE servers; not Docker Desktop's VM, so nothing to
+      demo here), <span class="term" data-g="apparmor">AppArmor</span> adds a path-based layer:
+      "Docker automatically generates and loads a default profile for containers named
+      <code>docker-default</code>,"<a class="cite" href="https://docs.docker.com/engine/security/apparmor/" title="Docker Docs, AppArmor security profiles for Docker">[Docker: AppArmor]</a>
+      whose template denies, among other things, all mounts and writes to most of
+      <code>/proc</code> and <code>/sys</code>. Red Hat-family hosts use SELinux labels for the same
+      job. Docker calls these "an extra safety net (even though it overlaps greatly with
+      capabilities)."<a class="cite" href="https://docs.docker.com/engine/security/#other-kernel-security-features" title="Docker Docs, Docker Engine security: Other kernel security features">[Docker: security]</a>
+      Recognise the name; denials show up in the host's kernel log with
+      <code>apparmor="DENIED"</code>, which is where to look when an operation fails with EPERM
+      though capabilities and seccomp both allow it.
+    </p>
+
+    <h2 id="four-walls">The four walls, and the command that reads each</h2>
+    <div class="diagram">┌──────────────── ONE SHARED KERNEL (page 24) ─────────────────────────┐
+│                                                                      │
+│  NAMESPACES — what it can SEE          ls -l /proc/self/ns ; lsns    │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ CGROUPS — what it can USE          cat /sys/fs/cgroup/          │  │
+│  │                                     {memory,cpu,pids}.max       │  │
+│  │  ┌──────────────────────────────────────────────────────────┐  │  │
+│  │  │ CAPABILITIES — which root powers   grep Cap /proc/self/   │  │  │
+│  │  │                                     status; capsh --decode│  │  │
+│  │  │  ┌────────────────────────────────────────────────────┐  │  │  │
+│  │  │  │ SECCOMP + no_new_privs (+ AppArmor/SELinux)         │  │  │  │
+│  │  │  │ which syscalls   grep -E 'Seccomp|NoNewPrivs' …     │  │  │  │
+│  │  │  │        ┌───────────────────────────┐               │  │  │  │
+│  │  │  │        │  the agent's process tree │               │  │  │  │
+│  │  │  │        └───────────────────────────┘               │  │  │  │
+│  │  │  └────────────────────────────────────────────────────┘  │  │  │
+│  │  └──────────────────────────────────────────────────────────┘  │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────┘</div>
+    <table>
+      <thead><tr><th>Seen in a transcript or log</th><th>Wall</th><th>Confirm with</th></tr></thead>
+      <tbody>
+        <tr><td><code>Killed</code>, exit 137, tests vanish mid-run</td><td>memory cgroup</td><td><code>memory.events</code> <code>oom_kill</code>; <code>State.OOMKilled</code></td></tr>
+        <tr><td>Everything slow, timeouts, no errors</td><td>cpu cgroup</td><td><code>cpu.stat</code> <code>nr_throttled</code>, <code>throttled_usec</code></td></tr>
+        <tr><td><code>fork: retry: Resource temporarily unavailable</code></td><td>pids cgroup</td><td><code>pids.events</code> <code>max</code>; <code>pids.current</code> vs <code>pids.max</code></td></tr>
+        <tr><td><code>Operation not permitted</code> as root</td><td>capability, seccomp, or LSM</td><td><code>CapEff</code> decoded; <code>Seccomp:</code>; host kernel log</td></tr>
+        <tr><td><code>su</code>/<code>sudo</code> silently not elevating</td><td>no_new_privs</td><td><code>NoNewPrivs: 1</code></td></tr>
+      </tbody>
+    </table>
+    <div class="evals">
+      <span class="label">In eval work — discuss: the sandbox policy is part of the result</span>
+      <p>These knobs are the sandbox's <em>policy</em>, and every one has two faces. Validity: a
+      memory limit converts big-but-correct solutions into failures; a CPU limit converts them into
+      timeouts; a dropped capability breaks a legitimate tool. Integrity: a missing limit lets one
+      rollout starve its neighbours; an extra capability lets the agent rewrite the grader's inputs.
+      Two runs of "the same benchmark" under different policies are different measurements. So
+      record the policy with the results — the limits, the decoded <code>CapEff</code>/<code>CapBnd</code>,
+      <code>Seccomp</code> and <code>NoNewPrivs</code>, read from inside the running
+      <span class="term" data-g="sandbox">sandbox</span> rather than copied from the config you
+      meant to apply. <a href="23-hardening-containers.html">Page 23</a> assembles the knobs into
+      a policy and a self-test.</p>
+    </div>
+    <div class="callout">
+      <span class="label">Depth triage</span>
+      <p><strong>Learn to use:</strong> the three <code>.max</code> files and their
+      <code>events</code>/<code>stat</code> counters; <code>CapEff</code>/<code>CapBnd</code> with
+      <code>capsh --decode</code>; the table of a dozen capabilities; the <code>Seccomp</code> and
+      <code>NoNewPrivs</code> lines. <strong>Recognize:</strong> the other thirty-odd capabilities
+      (look them up in <code>man 7 capabilities</code>), the permitted/inheritable/ambient sets, file
+      capabilities, <code>memory.high</code> and the io controller, AppArmor and SELinux.
+      <strong>Leave to a specialist:</strong> writing seccomp profiles or LSM policy, and designing
+      cgroup hierarchies for a cluster scheduler.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>To fit more rollouts per machine, a team changes its runner from
+      <code>--memory 8g --cpus 4</code> to <code>--memory 2g --cpus 1</code>. The pass rate on a
+      500-task coding benchmark drops from 41% to 33%, with no infrastructure errors reported: every
+      container exited 0 or with the agent's own exit code. The lead wants to publish 33% as "the
+      same benchmark, more efficiently run". What do you ask for?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Observed:</strong> an 8-point drop coinciding with a policy change, and clean
+      container exit codes. <strong>Supposed:</strong> that clean exit codes mean no infrastructure
+      failures. They don't: an OOM-killed child leaves the container exiting 0, and CPU throttling
+      produces no error at all, only slowness that surfaces as harness or test timeouts.
+      Discriminating evidence, per rollout: <code>oom_kill</code> from <code>memory.events</code>
+      and <code>State.OOMKilled</code>; <code>memory.peak</code> against the 2 GB limit;
+      <code>nr_throttled</code>/<code>throttled_usec</code>; and the share of failures that are
+      timeouts before and after. If the newly failed tasks cluster on those signals, the drop is the
+      environment, not the model. Also run the oracle solutions under the new policy — any oracle
+      that fails marks a task the policy made unsolvable. Then report honestly: the policy is part
+      of the benchmark's definition, so 33% and 41% are results on different instruments; give
+      correct/scheduled alongside completed/scheduled with resource-killed rollouts counted as
+      not completed, and decide which policy is canonical before looking at which number is
+      nicer.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> All exercises start containers from the page-1 image
+      <code>lt-lab</code>, from your Mac's terminal. Exercise 4 needs <code>ping</code>, which that
+      image lacks; add it once with
+      <code>docker run --name lt-tmp lt-lab bash -c 'apt-get update &amp;&amp; apt-get install -y iputils-ping' &amp;&amp; docker commit lt-tmp lt-lab:ping &amp;&amp; docker rm lt-tmp</code>.</p>
+      <ol>
+        <li>Start a container with <code>--memory 256m --cpus 1.5 --pids-limit 100</code> and read
+        the three limit files. Then do the arithmetic: what would <code>--memory 512m --cpus 0.25</code>
+        write?
+        <details class="solution"><summary>Solution</summary>
+        <p>The first is the session in <a href="#cgroups">the cgroups section</a>. For the second:
+        512 × 1024 × 1024 = <code>536870912</code> in <code>memory.max</code>, and a quarter of a
+        100000 µs period, <code>25000 100000</code>, in <code>cpu.max</code>. Check with
+        <code>docker run --rm --memory 512m --cpus 0.25 lt-lab cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max</code>.</p>
+        </details></li>
+        <li>Predict, then verify: in the OOM demo, what is the <em>container's</em> exit code, and
+        what does <code>docker inspect</code> say about <code>OOMKilled</code>?
+        <details class="solution"><summary>Solution</summary>
+        <p>Run the two commands from <a href="#enforcement">the enforcement section</a>:
+        <code>child exit=137</code>, <code>oom_kill 1</code>, then
+        <code>ExitCode=0 OOMKilled=true</code>. The container's exit code belongs to its PID 1
+        (bash, which survived); <code>OOMKilled</code> says some process in the cgroup was killed.
+        They are independent facts.</p>
+        </details></li>
+        <li>Decode three masks with <code>capsh --decode</code>: a default container's
+        <code>CapEff</code>, the same with <code>--cap-drop ALL --cap-add NET_BIND_SERVICE</code>,
+        and the <code>CapBnd</code> of a container run with <code>--user 1001</code>.
+        <details class="solution"><summary>Solution</summary>
+        <p>Default: <code>00000000a80425fb</code>, the fourteen names shown in
+        <a href="#capabilities">the capabilities section</a>. The <code>--user 1001</code>
+        container has <code>CapEff: 0000000000000000</code> but
+        <code>CapBnd: 00000000a80425fb</code> — the same fourteen, waiting for anything that
+        becomes root. For the middle one, run
+        <code>docker run --rm --cap-drop ALL --cap-add NET_BIND_SERVICE lt-lab bash -c 'capsh --decode=$(grep CapEff /proc/self/status | cut -f2)'</code>;
+        it names exactly one capability, <code>cap_net_bind_service</code>.</p>
+        </details></li>
+        <li>Predict: with <code>--cap-drop ALL</code>, what happens to
+        <code>ping -c1 127.0.0.1</code>? Find the smallest policy that makes it work.
+        <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm --cap-drop ALL lt-lab:ping bash -c 'ping -c1 -W1 127.0.0.1 | tail -2'
+<span class="o">bash: line 1: /usr/bin/ping: Operation not permitted</span>
+<span class="p">$</span> docker run --rm --cap-drop ALL --cap-add NET_RAW lt-lab:ping bash -c 'getcap /usr/bin/ping; ping -c1 -W1 127.0.0.1 | tail -2'
+<span class="o">/usr/bin/ping cap_net_raw=ep
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.428/0.428/0.428/0.000 ms</span></code></pre>
+        <p>Ubuntu's <code>ping</code> carries a <em>file capability</em>
+        (<code>cap_net_raw=ep</code>, shown by <code>getcap</code>) instead of being setuid. With
+        <code>NET_RAW</code> outside the bounding set, the program could not even be started — the
+        error comes from bash, not from ping. <code>--cap-drop ALL --cap-add NET_RAW</code> is the
+        minimal policy for a task family that needs it.</p>
+        </details></li>
+        <li><strong>Eval task.</strong> A task author says: "the agent runs as a non-root user, so
+        capabilities don't matter." Show with the setuid-<code>grep</code> demo why that is
+        incomplete, then write the one <code>docker run</code> line whose
+        <code>/proc/self/status</code> proves all of: non-root, empty bounding set, no_new_privs,
+        seccomp filter, memory and pids limits.
+        <details class="solution"><summary>Solution</summary>
+        <p>The demo in <a href="#no-new-privs">the no_new_privs section</a>: without the flag, a
+        setuid-root binary run by <code>learner</code> has <code>CapEff: 00000000a80425fb</code> — the
+        whole bounding set back. Then:</p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --user 1001 --cap-drop ALL --security-opt no-new-privileges --security-opt seccomp=builtin --memory 512m --pids-limit 128 lt-lab bash -c 'id -u; grep -E "CapEff|CapBnd|NoNewPrivs|Seccomp:" /proc/self/status; cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/pids.max'
+<span class="o">1001
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	2
+536870912
+128</span></code></pre>
+        <p>Seven lines of evidence, read from inside. (On a stock Linux engine
+        <code>seccomp=builtin</code> is redundant but harmless.) Page 23 grows this into a
+        PASS/FAIL self-test.</p>
+        </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>cgroups(7), Linux man-pages 6.19. <a href="https://man7.org/linux/man-pages/man7/cgroups.7.html">man7.org/…/cgroups.7.html</a></li>
+        <li>Linux kernel documentation, Control Group v2. <a href="https://docs.kernel.org/admin-guide/cgroup-v2.html">docs.kernel.org/admin-guide/cgroup-v2.html</a></li>
+        <li>capabilities(7), Linux man-pages 6.19. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html">man7.org/…/capabilities.7.html</a></li>
+        <li>proc_pid_status(5), Linux man-pages. <a href="https://man7.org/linux/man-pages/man5/proc_pid_status.5.html">man7.org/…/proc_pid_status.5.html</a></li>
+        <li>seccomp(2), Linux man-pages. <a href="https://man7.org/linux/man-pages/man2/seccomp.2.html">man7.org/…/seccomp.2.html</a></li>
+        <li>Linux kernel documentation, Seccomp BPF. <a href="https://docs.kernel.org/userspace-api/seccomp_filter.html">docs.kernel.org/userspace-api/seccomp_filter.html</a></li>
+        <li>Linux kernel documentation, No New Privileges Flag. <a href="https://docs.kernel.org/userspace-api/no_new_privs.html">docs.kernel.org/userspace-api/no_new_privs.html</a></li>
+        <li>Docker Docs, Docker Engine security. <a href="https://docs.docker.com/engine/security/">docs.docker.com/engine/security/</a></li>
+        <li>Docker Docs, Seccomp security profiles for Docker. <a href="https://docs.docker.com/engine/security/seccomp/">docs.docker.com/engine/security/seccomp/</a></li>
+        <li>Docker Docs, AppArmor security profiles for Docker. <a href="https://docs.docker.com/engine/security/apparmor/">docs.docker.com/engine/security/apparmor/</a></li>
+        <li>Docker Docs, Running containers; docker container run reference. <a href="https://docs.docker.com/engine/containers/run/">docs.docker.com/engine/containers/run/</a>, <a href="https://docs.docker.com/reference/cli/docker/container/run/">docs.docker.com/reference/cli/docker/container/run/</a></li>
+        <li>Docker Docs, Resource constraints. <a href="https://docs.docker.com/engine/containers/resource_constraints/">docs.docker.com/engine/containers/resource_constraints/</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

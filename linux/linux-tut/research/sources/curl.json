@@ -1,0 +1,156 @@
+{
+ "id": "curl",
+ "tag": "[curl(1)]",
+ "citation": {
+  "authors": "Stenberg, D. and the curl project",
+  "title": "curl(1) man page; libcurl error codes; Everything curl (proxy environment variables, exit code)",
+  "venue": "curl.se / everything.curl.dev",
+  "year": "2026 (living documents)",
+  "url": "https://curl.se/docs/manpage.html"
+ },
+ "fetched_urls": [
+  "https://curl.se/docs/manpage.html",
+  "https://curl.se/libcurl/c/libcurl-errors.html",
+  "https://everything.curl.dev/usingcurl/proxies/env.html",
+  "https://everything.curl.dev/cmdline/exitcode.html",
+  "https://everything.curl.dev/usingcurl/verbose/index.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "curl -v shows connection, TLS handshake, request (>) and response (<) headers; -s -S -f -L -o -I -m/--max-time --connect-timeout; -f makes HTTP errors (>=400) return exit 22",
+   "verdict": "confirmed",
+   "finding": "-v prefixes: \">\" header sent, \"<\" header received, \"*\" additional info, \"}\" data sent, \"{\" data received. -f: \"Fail with error code 22 and with no response body output at all for HTTP transfers returning HTTP response codes at 400 or greater\"; \"By default, curl does not consider HTTP response codes to indicate failure\"; -f \"is not fail-safe\" (401/407 can slip through); --fail-with-body keeps the body and still returns 22. -s mutes progress AND error messages; -S re-enables errors (hence -sS). -L follows 3XX Location. -I = HEAD. -m/--max-time limits the whole transfer; --connect-timeout limits only the connection phase (DNS + TCP + TLS handshakes). Executed: 404 without -f -> exit 0; with -f -> \"curl: (22) The requested URL returned error: 404\", exit 22.",
+   "quote": "(HTTP) Fail with error code 22 and with no response body output at all for HTTP transfers returning HTTP response codes at 400 or greater. ... By default, curl does not consider HTTP response codes to indicate failure.",
+   "location": "curl(1), -f, --fail",
+   "cite_url": "https://curl.se/docs/manpage.html#-f"
+  },
+  {
+   "planned": "curl exit codes: 6 couldn't resolve host, 7 failed to connect, 28 operation timeout, 35 SSL connect error, 60 peer certificate cannot be authenticated - perfect mapping from symptom to network layer",
+   "verdict": "corrected",
+   "finding": "The five codes are confirmed verbatim: 6 \"Could not resolve host\", 7 \"Failed to connect to host\", 22 (only with --fail), 28 \"Operation timeout\", 35 \"SSL connect error. The SSL handshaking failed\", 60 \"Peer certificate cannot be authenticated with known CA certificates\". All six reproduced by execution. But the mapping is NOT perfect: (a) a MISSING CA bundle gives exit 77 (\"Problem reading the SSL CA cert\"), not 60 - this is what a fresh ubuntu:24.04 without ca-certificates produces; (b) 5 = could not resolve PROXY; (c) with a proxy configured, 7 means the proxy was unreachable, not the target; (d) 7 covers both a closed port (RST) and no-route/REJECT; (e) 28 covers both --connect-timeout (dropped SYN) and --max-time (slow transfer). Also useful: 47 too many redirects, 52 empty reply from server, 56 failure receiving network data.",
+   "quote": "6 Could not resolve host. The given remote host could not be resolved. 7 Failed to connect to host. ... 28 Operation timeout. The specified time-out period was reached according to the conditions. ... 35 SSL connect error. The SSL handshaking failed. ... 60 Peer certificate cannot be authenticated with known CA certificates.",
+   "location": "curl(1), EXIT CODES",
+   "cite_url": "https://curl.se/docs/manpage.html#exit-codes"
+  },
+  {
+   "planned": "Proxy environment variables: http_proxy (lowercase only for http), HTTPS_PROXY, NO_PROXY honoured by curl",
+   "verdict": "confirmed",
+   "finding": "curl honours [scheme]_proxy / [SCHEME]_PROXY, ALL_PROXY and NO_PROXY. Case rules: either case accepted, LOWER CASE WINS when both set; http_proxy is the one exception - lowercase only (HTTP_PROXY is ignored, because CGI servers turn a client \"Proxy:\" request header into the env var HTTP_PROXY). NO_PROXY: comma-separated hosts/domains, \"*\" matches all, CIDR supported since 7.86.0, and it overrides even an explicit -x/--proxy; --noproxy in turn overrides the env var. Executed: http_proxy=http://127.0.0.1:3128 -> exit 7 (proxy used); HTTP_PROXY=... -> 200 (ignored); HTTPS_PROXY=... -> exit 7 (honoured); NO_PROXY=example.com -> 200; unresolvable proxy -> exit 5.",
+   "quote": "The environment variables can be specified in lower case or upper case. The lower case version has precedence. \"http_proxy\" is an exception as it is only available in lower case.",
+   "location": "curl(1), ENVIRONMENT",
+   "cite_url": "https://curl.se/docs/manpage.html#environment"
+  },
+  {
+   "planned": "--cacert / -k(--insecure) semantics; CA bundle",
+   "verdict": "confirmed",
+   "finding": "--cacert FILE: PEM file (may hold several CA certs) used to verify the peer, replacing the built-in default; env CURL_CA_BUNDLE (and SSL_CERT_FILE) set the same thing, SSL_CERT_DIR sets --capath. -k skips verification entirely (\"WARNING: using this option makes the transfer insecure\"). Without -k curl checks both that the cert name matches the URL hostname and that it chains to a CA in the store. Executed default bundle path on Ubuntu: /etc/ssl/certs/ca-certificates.crt (from the exit-77 error text).",
+   "quote": "(TLS) Use the specified certificate file to verify the peer. The file may contain multiple CA certificates. The certificate(s) must be in PEM format. Normally curl is built to use a default file for this, so this option is typically used to alter that default file.",
+   "location": "curl(1), --cacert",
+   "cite_url": "https://curl.se/docs/manpage.html#--cacert"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Executed: every exit code the course names, with curl's exact stderr text.",
+   "quote": "closed port       curl: (7) Failed to connect to 127.0.0.1 port 81 after 0 ms: Couldn't connect to server                 exit=7\nblackhole         curl: (28) Failed to connect to 192.0.2.1 port 80 after 3012 ms: Timeout was reached  [--connect-timeout 3]  exit=28\n--max-time 1      curl: (28) Connection timed out after 1003 milliseconds                                                exit=28\nbad name          curl: (6) Could not resolve host: no-such-host.invalid                                                 exit=6\n-f on 404         curl: (22) The requested URL returned error: 404                                                       exit=22\nhttps://example.com:80  curl: (35) OpenSSL/3.0.13: error:0A00010B:SSL routines::wrong version number                       exit=35\nself-signed       curl: (60) SSL certificate problem: self-signed certificate                                          exit=60\nunresolvable proxy curl: (5) Could not resolve proxy: proxy.invalid                                                      exit=5",
+   "location": "executed lt-r4-tools:local = ubuntu:24.04 (Docker Desktop 28.1.1, arm64; ubuntu:24.04 curl 8.5.0 (OpenSSL/3.0.13)); self-signed host was self-signed.badssl.com"
+  },
+  {
+   "finding": "Executed: fresh ubuntu:24.04, `apt-get install -y --no-install-recommends curl`, then HTTPS. Exit is 77, not 60; plain HTTP still works. apt lists ca-certificates under \"Recommended packages:\" - so a default `apt-get install curl` (recommends enabled) pulls it in, and the failure appears exactly when an image author uses --no-install-recommends (the common Dockerfile idiom).",
+   "quote": "# curl -sS https://example.com -o /dev/null\ncurl: (77) error setting certificate file: /etc/ssl/certs/ca-certificates.crt\nexit=77\n# curl -sS http://example.com -o /dev/null -w \"%{http_code}\\n\"\n200\n# apt-get install -y ca-certificates  ->  \"Updating certificates in /etc/ssl/certs...\" ; then https returns 200, exit 0",
+   "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1, arm64; ubuntu:24.04 curl 8.5.0 (OpenSSL/3.0.13))"
+  },
+  {
+   "finding": "Executed: curl under --network none (progress meter shown because no -s).",
+   "quote": "$ docker run --rm --network none lt-r4-tools:local curl https://example.com\n  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current\n                                 Dload  Upload   Total   Spent    Left  Speed\n  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0curl: (6) Could not resolve host: example.com\nexit=6",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, arm64; ubuntu:24.04 curl 8.5.0 (OpenSSL/3.0.13))"
+  },
+  {
+   "finding": "Executed: proxy env var case rules.",
+   "quote": "http_proxy=http://127.0.0.1:3128 curl http://example.com/    -> curl: (7) Failed to connect to 127.0.0.1 port 3128 ...  exit=7\nHTTP_PROXY=http://127.0.0.1:3128 curl http://example.com/    -> 200, exit=0   (uppercase ignored)\nHTTPS_PROXY=http://127.0.0.1:3128 curl https://example.com/  -> curl: (7) ... port 3128 ...  exit=7   (uppercase honoured)\nhttps_proxy=http://127.0.0.1:3128 NO_PROXY=example.com curl https://example.com/ -> 200, exit=0",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, arm64; ubuntu:24.04 curl 8.5.0 (OpenSSL/3.0.13))"
+  },
+  {
+   "finding": "Executed: curl -sv https://example.com (key lines).",
+   "quote": "* Host example.com:443 was resolved.\n*   Trying 104.20.23.154:443...\n* Connected to example.com (104.20.23.154) port 443\n* ALPN: curl offers h2,http/1.1\n* TLSv1.3 (OUT), TLS handshake, Client hello (1):\n* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384 / X25519 / id-ecPublicKey\n* Server certificate:\n> GET / HTTP/2\n> Host: example.com\n> User-Agent: curl/8.5.0\n> Accept: */*\n< HTTP/2 200",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, arm64; ubuntu:24.04 curl 8.5.0 (OpenSSL/3.0.13))"
+  },
+  {
+   "finding": "Why HTTP_PROXY uppercase is refused (CGI / \"httpoxy\" class of bug).",
+   "quote": "An incoming request to an HTTP server using a request header like Proxy: yada therefore creates the environment variable HTTP_PROXY set to contain yada before the CGI script is started. If such a CGI script runs curl, it is important that curl does not treat that as a proxy to use.",
+   "location": "Everything curl: Proxy environment variables > http_proxy in lower case only",
+   "cite_url": "https://everything.curl.dev/usingcurl/proxies/env.html"
+  },
+  {
+   "finding": "ALL_PROXY and precedence.",
+   "quote": "To set a single variable that controls all protocols, the ALL_PROXY exists. If a specific protocol variable one exists, such a one takes precedence.",
+   "location": "Everything curl: Proxy environment variables"
+  },
+  {
+   "finding": "NO_PROXY matching rules incl. CIDR and leading dot.",
+   "quote": "list of hostnames that should not go through any proxy. If set to an asterisk '*' only, it matches all hosts. Each name in this list is matched as either a domain name which contains the hostname, or the hostname itself.",
+   "location": "curl(1) ENVIRONMENT, NO_PROXY"
+  },
+  {
+   "finding": "NO_PROXY beats an explicit --proxy; env proxy = same as --proxy.",
+   "quote": "This environment variable disables use of the proxy even when specified with the --proxy option.",
+   "location": "curl(1) ENVIRONMENT, NO_PROXY"
+  },
+  {
+   "finding": "-k semantics: what verification normally checks.",
+   "quote": "When this option is not used for protocols using TLS, curl verifies the server's TLS certificate before it continues: that the certificate contains the right name which matches the hostname used in the URL and that the certificate has been signed by a CA certificate present in the cert store.",
+   "location": "curl(1), -k, --insecure"
+  },
+  {
+   "finding": "--connect-timeout scope.",
+   "quote": "Maximum time in seconds that you allow curl's connection to take. This only limits the connection phase ... The connection phase is considered complete when the DNS lookup and requested TCP, TLS or QUIC handshakes are done.",
+   "location": "curl(1), --connect-timeout"
+  },
+  {
+   "finding": "--max-time scope.",
+   "quote": "Set the maximum time in seconds that you allow each transfer to take. Prevents your batch jobs from hanging for hours due to slow networks or links going down.",
+   "location": "curl(1), -m, --max-time"
+  },
+  {
+   "finding": "-s and -S.",
+   "quote": "Silent or quiet mode. Do not show progress meter, note messages, warning messages or error messages. Makes curl mute. ... Use --show-error in addition to this option to disable progress meter but still show error messages.",
+   "location": "curl(1), -s, --silent"
+  },
+  {
+   "finding": "-f is not fail-safe; --fail-with-body.",
+   "quote": "This method is not fail-safe and there are occasions where non-successful response codes slip through, especially when authentication is involved (response codes 401 and 407).",
+   "location": "curl(1), -f, --fail"
+  },
+  {
+   "finding": "--retry: default 0 retries; transient = timeout, FTP 4xx, HTTP 408, 429, 500, 502, 503, 504, 522, 524; backoff 1 s doubling to 10 min.",
+   "quote": "Setting the number to 0 makes curl do no retries (which is the default). Transient error means either: a timeout, an FTP 4xx response code or an HTTP 408, 429, 500, 502, 503, 504, 522 or 524 response code.",
+   "location": "curl(1), --retry"
+  },
+  {
+   "finding": "--resolve as a command-line /etc/hosts.",
+   "quote": "Provide a custom address for a specific host and port pair. ... Consider it a sort of /etc/hosts alternative provided on the command line.",
+   "location": "curl(1), --resolve"
+  },
+  {
+   "finding": "Exit 77 and 5 man-page text; libcurl note that 60 absorbed the old code 51 in 7.62.0.",
+   "quote": "The remote server's SSL certificate or SSH fingerprint was deemed not OK. This error code has been unified with CURLE_SSL_CACERT since 7.62.0. Its previous value was 51.",
+   "location": "libcurl-errors, CURLE_PEER_FAILED_VERIFICATION (60)",
+   "cite_url": "https://curl.se/libcurl/c/libcurl-errors.html"
+  },
+  {
+   "finding": "libcurl wording for 7 includes proxies.",
+   "quote": "Failed to connect() to host or proxy.",
+   "location": "libcurl-errors, CURLE_COULDNT_CONNECT (7)",
+   "cite_url": "https://curl.se/libcurl/c/libcurl-errors.html"
+  },
+  {
+   "finding": "Exit code 0 only when all went as planned.",
+   "quote": "A lot of effort has gone into the project to make curl return a usable exit code when something goes wrong and it always returns 0 (zero) when the operation went as planned.",
+   "location": "Everything curl: Exit code",
+   "cite_url": "https://everything.curl.dev/cmdline/exitcode.html"
+  }
+ ],
+ "teaching_notes": "Key correction for the TLS/ca-certificates page: a fresh Ubuntu container without ca-certificates fails with curl exit 77 (\"error setting certificate file: /etc/ssl/certs/ca-certificates.crt\"), NOT 60. 60 appears when a bundle exists but does not contain the issuer (executed with a self-signed cert; by the same mechanism expected for a TLS-intercepting proxy whose CA is not installed - that case was not executed). Also: with `-s` alone curl prints nothing on failure - always teach `-sS`. \"Perfect mapping from exit code to layer\" must be softened: 7 and 28 each have two causes, and any proxy in the environment shifts 5/7 to mean the proxy. The man page text applies to current curl; ubuntu:24.04 ships 8.5.0 (NO_PROXY CIDR needs >= 7.86.0, satisfied)."
+}

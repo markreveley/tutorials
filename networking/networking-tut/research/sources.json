@@ -1,0 +1,212 @@
+[
+  {
+    "id": "foundation",
+    "title": "Systems Approach, Chapter 1: Introduction",
+    "url": "https://7e.systemsapproach.org/introduction.html",
+    "purpose": "Layering, encapsulation, resource sharing, bandwidth, and latency.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "apps",
+    "title": "Systems Approach, Chapter 2: Network Applications",
+    "url": "https://7e.systemsapproach.org/applications.html",
+    "purpose": "HTTP and the application view of a network.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "links",
+    "title": "Systems Approach, Chapter 3: Network Technology",
+    "url": "https://7e.systemsapproach.org/technology.html",
+    "purpose": "Links, switches, and Ethernet.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "routing",
+    "title": "Systems Approach, Chapter 4: Routing",
+    "url": "https://7e.systemsapproach.org/routing.html",
+    "purpose": "Forwarding and the calculation of routes.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "ip",
+    "title": "Systems Approach, Chapter 6: Federating Networks",
+    "url": "https://7e.systemsapproach.org/federation.html",
+    "purpose": "IP, prefixes, fragmentation, and address translation.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "virtual",
+    "title": "Systems Approach, Chapter 9: Virtualizing Networks",
+    "url": "https://7e.systemsapproach.org/virtual.html",
+    "purpose": "Virtual networks and overlays.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "ops",
+    "title": "Systems Approach, Chapter 10: Operating Networks",
+    "url": "https://7e.systemsapproach.org/operations.html",
+    "purpose": "Network management and observation.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "dns",
+    "title": "Systems Approach, Chapter 11: Naming",
+    "url": "https://7e.systemsapproach.org/naming.html",
+    "purpose": "Name resolution, DNS records, and caching.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "tcp",
+    "title": "Systems Approach, Chapter 12: Reliable Byte Stream",
+    "url": "https://7e.systemsapproach.org/reliable.html",
+    "purpose": "TCP connections, acknowledgment, retransmission, and flow control.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "congestion",
+    "title": "Systems Approach, Chapter 13: Congestion Control",
+    "url": "https://7e.systemsapproach.org/congestion.html",
+    "purpose": "How senders respond to shared network capacity.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "tls",
+    "title": "Systems Approach, Chapter 14: Secure Channels",
+    "url": "https://7e.systemsapproach.org/secure.html",
+    "purpose": "Encryption, authentication, certificates, and TLS.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "rpc",
+    "title": "Systems Approach, Chapter 15: Message Transactions",
+    "url": "https://7e.systemsapproach.org/message.html",
+    "purpose": "RPC, duplicate requests, and gRPC.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "http",
+    "title": "RFC 9110: HTTP Semantics",
+    "url": "https://www.rfc-editor.org/rfc/rfc9110.html",
+    "purpose": "Methods, status codes, intermediaries, and idempotence; see \u00a7\u00a79, 10.2.3, and 15.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "http3",
+    "title": "RFC 9114: HTTP/3",
+    "url": "https://www.rfc-editor.org/rfc/rfc9114.html",
+    "purpose": "HTTP over QUIC and independent streams.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "dns6",
+    "title": "RFC 3596: DNS extensions for IPv6",
+    "url": "https://www.rfc-editor.org/rfc/rfc3596.html",
+    "purpose": "AAAA records and the independence of record type from query transport.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "limits",
+    "title": "RFC 6585: Additional HTTP status codes",
+    "url": "https://www.rfc-editor.org/rfc/rfc6585.html",
+    "purpose": "The meaning and scope of HTTP 429; see \u00a74.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "cors",
+    "title": "WHATWG Fetch: CORS protocol",
+    "url": "https://fetch.spec.whatwg.org/#http-cors-protocol",
+    "purpose": "Browser cross-origin access to responses.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "sse",
+    "title": "WHATWG HTML: Server-sent events",
+    "url": "https://html.spec.whatwg.org/multipage/server-sent-events.html",
+    "purpose": "Event-stream framing; endpoint completion semantics remain application-specific.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "curl",
+    "title": "curl manual",
+    "url": "https://curl.se/docs/manpage.html",
+    "purpose": "Command options, timeout behavior, exit codes, and timing fields.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "vpc",
+    "title": "Amazon VPC: How it works",
+    "url": "https://docs.aws.amazon.com/vpc/latest/userguide/how-it-works.html",
+    "purpose": "Subnets, route tables, gateways, and network access.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "sg",
+    "title": "Amazon VPC: Security groups",
+    "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html",
+    "purpose": "Stateful allow rules for resources.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "nat",
+    "title": "Amazon VPC: NAT gateways",
+    "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html",
+    "purpose": "Outbound address translation and return traffic.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "docker",
+    "title": "Docker Engine: Networking",
+    "url": "https://docs.docker.com/engine/network/",
+    "purpose": "Network namespaces, container names, and user-defined networks.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "ports",
+    "title": "Docker Engine: Port publishing",
+    "url": "https://docs.docker.com/engine/network/port-publishing/",
+    "purpose": "Host-to-container port mappings and binding addresses.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "k8s",
+    "title": "Kubernetes: Services",
+    "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+    "purpose": "Service discovery, stable frontends, and backend endpoints.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "k8sdns",
+    "title": "Kubernetes: DNS for Services and Pods",
+    "url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+    "purpose": "Namespace-sensitive names and cluster DNS.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "policy",
+    "title": "Kubernetes: Network Policies",
+    "url": "https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+    "purpose": "Ingress/egress isolation and the need for an enforcing network plugin.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "otel",
+    "title": "OpenTelemetry: Traces",
+    "url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+    "purpose": "Spans and propagated trace context.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "python",
+    "title": "Python: http.server",
+    "url": "https://docs.python.org/3/library/http.server.html",
+    "purpose": "The standard-library server used by the local teaching lab.",
+    "accessed": "2026-09-20"
+  },
+  {
+    "id": "nccl",
+    "title": "NVIDIA: NCCL overview",
+    "url": "https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/overview.html",
+    "purpose": "Collective communication within and between GPU nodes.",
+    "accessed": "2026-09-20"
+  }
+]

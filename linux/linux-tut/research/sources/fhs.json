@@ -1,0 +1,185 @@
+{
+ "id": "fhs",
+ "tag": "[FHS]",
+ "citation": {
+  "authors": "LSB Workgroup, The Linux Foundation",
+  "title": "Filesystem Hierarchy Standard, Version 3.0",
+  "venue": "refspecs.linuxfoundation.org",
+  "year": "2015",
+  "url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html"
+ },
+ "fetched_urls": [
+  "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/index.html",
+  "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html",
+  "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch06.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Purpose of /bin /sbin /etc /home /root /var /var/log /tmp /usr /usr/local /opt /proc /sys /dev /run /srv /mnt /media as specified",
+   "verdict": "confirmed",
+   "finding": "Section titles as specified: /bin 'Essential user command binaries (for use by all users)'; /sbin 'System binaries'; /etc 'Host-specific system configuration'; /home 'User home directories (optional)'; /root 'Home directory for the root user (optional)'; /var 'variable data files'; /var/log 'Log files and directories'; /tmp 'Temporary files'; /usr 'shareable, read-only data'; /usr/local 'Local hierarchy' for the administrator's locally installed software, safe from system updates; /opt 'Add-on application software packages'; /dev 'Device files'; /run 'Run-time variable data' (cleared at boot; replaces /var/run); /srv 'Data for services provided by this system'; /mnt 'Mount point for a temporarily mounted filesystem'; /media 'Mount point for removable media'; /proc and /sys appear only in the Linux annex (6.1.5, 6.1.7) as kernel/process and kernel/system information virtual filesystems. Per-directory quotes are in extra_findings.",
+   "quote": "/bin contains commands that may be used by both the system administrator and by users, but which are required when no other filesystems are mounted (e.g. in single user mode). It may also contain commands which are used indirectly by scripts.",
+   "location": "3.4.1 /bin Purpose (and the corresponding x.y.1 Purpose sections)",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "planned": "/tmp contents need not persist between boots / program invocations; /var/tmp is preserved between reboots",
+   "verdict": "confirmed",
+   "finding": "Precisely: the REQUIREMENT for /tmp is only that programs must not assume files persist between invocations of the program; deleting /tmp at boot is a recommendation, explicitly not a requirement. For /var/tmp the requirement is firm: files 'must not be deleted when the system is booted'.",
+   "quote": "Programs must not assume that any files or directories in /tmp are preserved between invocations of the program.",
+   "location": "3.18.1 /tmp Purpose; 5.15.1 /var/tmp Purpose",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "planned": "/etc holds host-specific configuration; /var holds variable data; /usr is shareable read-only data",
+   "verdict": "confirmed",
+   "finding": "All three confirmed. Extra: an /etc 'configuration file' must be static and cannot be an executable binary. /usr 'must not be written to' in normal operation; anything host-specific or time-varying goes elsewhere. FHS classifies every directory on two axes: shareable vs unshareable, static vs variable.",
+   "quote": "/usr is the second major section of the filesystem. /usr is shareable, read-only data. That means that /usr should be shareable between various FHS-compliant hosts and must not be written to. Any information that is host-specific or varies with time is stored elsewhere.",
+   "location": "4.1 /usr Purpose; 3.7.1 /etc Purpose; 5.1 /var Purpose",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "Identity of the document: FHS Version 3.0, © 2015 The Linux Foundation, dated March 19, 2015. No newer FHS version exists at refspecs; hier(7) still cites 3.0.",
+   "quote": "Version 3.0 Copyright © 2015 The Linux Foundation ... March 19, 2015",
+   "location": "title page",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "The two classification axes.",
+   "quote": "\"Shareable\" files are those that can be stored on one host and used on others. \"Unshareable\" files are those that are not shareable. ... \"Static\" files include binaries, libraries, documentation files and other files that do not change without system administrator intervention. \"Variable\" files are files that are not static.",
+   "location": "Chapter 2 The Filesystem",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/etc.",
+   "quote": "The /etc hierarchy contains configuration files. A \"configuration file\" is a local file used to control the operation of a program; it must be static and cannot be an executable binary.",
+   "location": "3.7.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/sbin.",
+   "quote": "Utilities used for system administration (and other root-only commands) are stored in /sbin, /usr/sbin, and /usr/local/sbin. /sbin contains binaries essential for booting, restoring, recovering, and/or repairing the system in addition to the binaries in /bin.",
+   "location": "3.16.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/home: programs must not hard-code it.",
+   "quote": "/home is a fairly standard concept, but it is clearly a site-specific filesystem. The setup will differ from host to host. Therefore, no program should assume any specific location for a home directory, rather it should query for it.",
+   "location": "3.8.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/root.",
+   "quote": "The root account's home directory may be determined by developer or local preference, but this is the recommended default location.",
+   "location": "3.14.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/run: must be cleared at boot; successor to /var/run.",
+   "quote": "This directory contains system information data describing the system since it was booted. Files under this directory must be cleared (removed or truncated as appropriate) at the beginning of the boot process. The purposes of this directory were once served by /var/run.",
+   "location": "3.15.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/tmp boot-time deletion is a recommendation only.",
+   "quote": "Although data stored in /tmp may be deleted in a site-specific manner, it is recommended that files and directories located in /tmp be deleted whenever the system is booted.",
+   "location": "3.18.1 Rationale",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/var/tmp.",
+   "quote": "The /var/tmp directory is made available for programs that require temporary files or directories that are preserved between system reboots. Therefore, data stored in /var/tmp is more persistent than data in /tmp. Files and directories located in /var/tmp must not be deleted when the system is booted.",
+   "location": "5.15.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/var.",
+   "quote": "/var contains variable data files. This includes spool directories and files, administrative and logging data, and transient and temporary files.",
+   "location": "5.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/var/log.",
+   "quote": "This directory contains miscellaneous log files. Most logs must be written to this directory or an appropriate subdirectory.",
+   "location": "5.10.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/var/lib: state that programs modify while they run, specific to one host.",
+   "quote": "This hierarchy holds state information pertaining to an application or the system. State information is data that programs modify while they run, and that pertains to one specific host.",
+   "location": "5.8.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/var/cache: regenerable; can be deleted without data loss.",
+   "quote": "The application must be able to regenerate or restore the data. Unlike /var/spool, the cached files can be deleted without data loss.",
+   "location": "5.5.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/usr/bin.",
+   "quote": "This is the primary directory of executable commands on the system.",
+   "location": "4.4.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/usr/local.",
+   "quote": "The /usr/local hierarchy is for use by the system administrator when installing software locally. It needs to be safe from being overwritten when the system software is updated.",
+   "location": "4.9.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/opt.",
+   "quote": "/opt is reserved for the installation of add-on application software packages. A package to be installed in /opt must locate its static files in a separate /opt/<package> or /opt/<provider> directory tree",
+   "location": "3.13.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/srv.",
+   "quote": "/srv contains site-specific data which is served by this system.",
+   "location": "3.17.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/mnt — must not be used by installation programs.",
+   "quote": "This directory is provided so that the system administrator may temporarily mount a filesystem as needed. The content of this directory is a local issue and should not affect the manner in which any program is run.",
+   "location": "3.12.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/media.",
+   "quote": "This directory contains subdirectories which are used as mount points for removable media such as floppy disks, cdroms and zip disks.",
+   "location": "3.11.1",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  },
+  {
+   "fact": "/dev (Linux annex): /dev/null, /dev/zero and /dev/tty must exist.",
+   "quote": "/dev/null All data written to this device is discarded. A read from this device will return an EOF condition. /dev/zero This device is a source of zeroed out data. All data written to this device is discarded.",
+   "location": "6.1.3 /dev : Devices and special files",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch06.html"
+  },
+  {
+   "fact": "/proc (Linux annex).",
+   "quote": "The proc filesystem is the de-facto standard Linux method for handling process and system information, rather than /dev/kmem and other similar methods. We strongly encourage this for the storage and retrieval of process information as well as other kernel and memory information.",
+   "location": "6.1.5 /proc",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch06.html"
+  },
+  {
+   "fact": "/sys (Linux annex).",
+   "quote": "The sys filesystem is the location where information about devices, drivers, and some kernel features is exposed. Its underlying structure is determined by the particular Linux kernel being used at the moment, and is otherwise unspecified.",
+   "location": "6.1.7 /sys",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch06.html"
+  },
+  {
+   "fact": "FHS 3.0 says nothing about the /usr merge: it still specifies /bin, /sbin and /lib as directories distinct from /usr/bin etc. (it permits 'commands, or symbolic links to commands'). The merged layout on Ubuntu/Debian is documented elsewhere — see the hier-7 note.",
+   "quote": "There must be no subdirectories in /bin. The following commands, or symbolic links to commands, are required in /bin:",
+   "location": "3.4.2 /bin Requirements",
+   "cite_url": "https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html"
+  }
+ ],
+ "teaching_notes": "FHS 3.0 (2015) is the last version and is descriptive of intent, not of what a 2024 distro does: it predates the /usr merge and says /tmp clearing at boot is merely recommended. Folklore it corrects: 'FHS says /tmp is wiped on reboot' — no, the only requirement is that programs must not assume persistence between invocations; by contrast /var/tmp 'must not be deleted' at boot. /proc and /sys are in the Linux-specific annex only. For what containers actually look like (tmpfs /tmp, read-only /sys, merged /usr), pair with the hier-7 note, which also covers the UAPI.9 spec that systemd's file-hierarchy(7) now defers to."
+}

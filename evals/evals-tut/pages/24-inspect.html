@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inspect: A Harness in Depth · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 7 · Tooling</p>
+    <h1>Inspect: a harness in depth</h1>
+    <p class="lede">
+      This course's policy on tools: learn one deeply, survey the rest. The one is Inspect, the
+      open-source eval framework from the UK AI Security Institute — chosen because its architecture is
+      a clean implementation of everything Modules 1–6 taught, which makes its documentation double as
+      a course in eval design.
+    </p>
+
+    <h2 id="task-triad">The Task triad</h2>
+    <p>
+      Inspect's unit of evaluation is the <strong>Task</strong> — in the docs' words, "the fundamental
+      unit of integration for datasets, solvers, and scorers" — built from exactly three
+      components:<a class="cite" href="https://inspect.aisi.org.uk/" title="Inspect documentation, inspect.aisi.org.uk (accessed 2026-06-10)">[Inspect]</a>
+    </p>
+    <div class="diagram">Task
+ ├─ Dataset   labelled samples — input (the prompt) + target
+ │            (ideal answer, or grading guidance for a judge)
+ ├─ Solver    produces an answer per sample — a prompt chain,
+ │            or a full agent with tools in a sandbox
+ └─ Scorer    evaluates the output — string comparison,
+              model grading, or custom logic</div>
+    <p>
+      Map it back to <a href="01-what-is-an-eval.html">page 1's</a> four-part machine and the
+      correspondence is exact: dataset = data, <span class="term" data-g="solver">solver</span> = the
+      system under test plus its harness plumbing, <span class="term" data-g="scorer">scorer</span> =
+      grader, and metrics aggregate scorer output. The framework makes the anatomy explicit instead of
+      burying it in scripts — which is precisely what makes harness code auditable
+      (<a href="02-anatomy-of-an-eval.html">page 2's</a> checklist becomes "read three named
+      components").
+    </p>
+
+    <h2 id="solvers">Solvers: from one prompt to a sandboxed agent</h2>
+    <p>
+      A solver can be a simple generation step — or an agent. Inspect ships <code>react()</code>, "a
+      built-in agent that runs a reason-act-observe loop, giving the model the supplied tools until it
+      submits an answer," with built-in tools spanning bash, Python, text editing, web search, web
+      browsing, and computer use, plus custom and MCP
+      tools.<a class="cite" href="https://inspect.aisi.org.uk/" title="Inspect documentation">[Inspect]</a>
+      Because agents execute code, sandboxing is first-class: <code>sandbox='docker'</code> "runs all
+      tool calls inside an isolated Docker container" configured by a Dockerfile or compose file
+      alongside the task, with an extension API for Kubernetes, Modal, and other
+      backends.<a class="cite" href="https://inspect.aisi.org.uk/" title="Inspect documentation">[Inspect]</a>
+      Everything <a href="11-evaluating-agents.html">Module 4</a> said about environments-as-instruments
+      lands here as configuration: the environment ships <em>with</em> the task, versioned, resettable
+      per sample.
+    </p>
+
+    <h2 id="scorers">Scorers: the whole grading spectrum, named</h2>
+    <p>
+      The built-in scorer list reads like Module 1's grader taxonomy implemented one function at a
+      time:<a class="cite" href="https://inspect.aisi.org.uk/scorers.html" title="Inspect scorers documentation">[Inspect]</a>
+    </p>
+    <table>
+      <tr><th>Family</th><th>Built-ins</th><th>Course concept</th></tr>
+      <tr><td>String/code checks</td><td><code>includes()</code>, <code>match()</code>, <code>exact()</code>, <code>pattern()</code>, <code>answer()</code></td><td>Code graders (<a href="03-types-of-evaluators.html">p. 3</a>)</td></tr>
+      <tr><td>Statistical</td><td><code>f1()</code>, <code>perplexity()</code>, <code>target_perplexity()</code></td><td>Token-overlap &amp; likelihood metrics</td></tr>
+      <tr><td>Task-shaped</td><td><code>choice()</code> (pairs with the <code>multiple_choice()</code> solver), <code>math()</code></td><td>Format-aware grading (<a href="19-reproducibility.html">p. 19</a>)</td></tr>
+      <tr><td><span class="term" data-g="model-graded-scorer">Model-graded</span></td><td><code>model_graded_qa()</code>, <code>model_graded_fact()</code> — multiple grader models supported</td><td>LLM-as-judge (<a href="08-llm-as-judge.html">Module 3</a>)</td></tr>
+    </table>
+    <p>
+      Custom scorers plug in through typed interfaces (Score, Target), and — a detail with real
+      governance value — scores can be <em>edited after the fact</em> via <code>edit_score()</code>,
+      preserving edit history and recomputing aggregate metrics
+      automatically.<a class="cite" href="https://inspect.aisi.org.uk/eval-logs.html" title="Inspect eval logs documentation">[Inspect]</a>
+      That's the human-corrects-the-judge workflow of <a href="10-aligning-judges.html">page 10</a>
+      with provenance built in, instead of a spreadsheet nobody can audit later.
+    </p>
+
+    <h2 id="epochs">Epochs and reducers: Module 5, operationalized</h2>
+    <p>
+      Repeated trials aren't an afterthought: every Task takes an
+      <span class="term" data-g="epoch">epochs</span> option — "epochs to run for each dataset sample" —
+      and <em>reducers</em> that aggregate the repeated scores: mean (the default), mode, or
+      <code>pass_at_k</code>.<a class="cite" href="https://inspect.aisi.org.uk/tasks.html" title="Inspect tasks documentation">[Inspect]</a>
+      That one option encodes the statistics module: K-resampling for variance reduction
+      (<a href="16-error-bars.html">page 16</a>) and the pass@k estimator
+      (<a href="18-pass-at-k.html">page 18</a>) as configuration rather than custom analysis code.
+    </p>
+
+    <h2 id="logs">Eval logs as first-class artifacts</h2>
+    <p>
+      Where most homegrown harnesses print a number and discard the evidence, Inspect treats the log as
+      the product. Runs write to a binary <code>.eval</code> format — "typically 1/8 the size of .json
+      files," with incremental sample access so the interactive viewer (<code>inspect view</code>)
+      stays fast at any file size — and a full log-file API supports streaming reads, header-only
+      loads, and programmatic rescoring.<a class="cite" href="https://inspect.aisi.org.uk/eval-logs.html" title="Inspect eval logs documentation">[Inspect]</a>
+      Connect this to the reproducibility bundle from <a href="19-reproducibility.html">page 19</a>:
+      "always provide model outputs" stops being a discipline you maintain and becomes a side effect of
+      running the tool. The log <em>is</em> the trace archive that
+      <a href="04-error-analysis.html">error analysis</a> needs.
+    </p>
+
+    <h2 id="humans">Humans in the harness</h2>
+    <p>
+      Two human-in-the-loop features close loops this course opened. First, <strong>human
+      baselining</strong>: the <code>human_cli</code> solver puts a person in the same sandboxed task
+      the agent faces, with terminal sessions "recorded by default so that you can later view which
+      actions the user took to complete the
+      task."<a class="cite" href="https://inspect.aisi.org.uk/human-agent.html" title="Inspect human agent documentation">[Inspect]</a>
+      Remember OSWorld measuring its human ceiling at 72%, and METR's 2,529 hours of baselining — this
+      is that methodology as a built-in: same environment, same scorer, human and model directly
+      comparable. Second, <strong>approval policies</strong>: fine-grained rules for approving an
+      agent's tool calls (<code>--approval human</code>, or custom approvers that approve, reject, or
+      escalate)<a class="cite" href="https://inspect.aisi.org.uk/approval.html" title="Inspect approval documentation">[Inspect]</a>
+      — supervised evaluation for agents too dangerous or expensive to run unattended.
+    </p>
+    <div class="warn">
+      <span class="label">Two precision notes</span>
+      <p>Attribution: Inspect is published by the UK AI <em>Security</em> Institute — the body renamed
+      from "AI Safety Institute" in February 2025; older citations use the old name. And a scoping
+      note: Inspect provides human <em>baselining</em> and human <em>approval</em>; it does not ship a
+      built-in judge-vs-human agreement workflow — the TPR/TNR validation of
+      <a href="10-aligning-judges.html">page 10</a> is still yours to run (the log API gives you the
+      data to do it).</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Inspect is this course expressed as software: the four-part machine as a named triad, graders
+      as a typed spectrum, repeated trials and pass@k as configuration, logs as durable evidence,
+      humans as first-class participants. Learning it deeply isn't tool trivia — it's rehearsing the
+      concepts until they're muscle memory. The <a href="25-tooling-survey.html">next page</a> surveys
+      the rest of the ecosystem against this baseline.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>UK AI Security Institute, Inspect documentation — home, tasks, scorers, eval logs, human agent, and approval pages, inspect.aisi.org.uk (accessed 2026-06-10). <a href="https://inspect.aisi.org.uk/">inspect.aisi.org.uk</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

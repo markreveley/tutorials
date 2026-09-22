@@ -1,0 +1,159 @@
+{
+ "id": "iproute2",
+ "tag": "[ip(8)]",
+ "citation": {
+  "authors": "iproute2 project; Linux man-pages project",
+  "title": "ip(8), ip-address(8), ip-route(8), ip-link(8), ss(8) (iproute2); veth(4), ip(7), proc_sys_net_ipv4(5) (Linux man-pages 6.19)",
+  "venue": "man7.org",
+  "year": "2026",
+  "url": "https://man7.org/linux/man-pages/man8/ip.8.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man8/ip.8.html",
+  "https://man7.org/linux/man-pages/man8/ip-route.8.html",
+  "https://man7.org/linux/man-pages/man8/ip-address.8.html",
+  "https://man7.org/linux/man-pages/man8/ip-link.8.html",
+  "https://man7.org/linux/man-pages/man8/ss.8.html",
+  "https://man7.org/linux/man-pages/man4/veth.4.html",
+  "https://man7.org/linux/man-pages/man7/ip.7.html",
+  "https://man7.org/linux/man-pages/man5/proc_sys_net_ipv4.5.html",
+  "https://docs.kernel.org/networking/ip-sysctl.html",
+  "https://archlinux.org/news/deprecation-of-net-tools/",
+  "https://raw.githubusercontent.com/ecki/net-tools/master/README",
+  "https://wiki.debian.org/NetToolsDeprecation (blocked by anti-bot page)"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "ip addr / ip route / ip link usage and output fields; `ip route get ADDR` shows the route the kernel would use; default route = 'default via GW dev IF'",
+   "verdict": "confirmed",
+   "finding": "ip objects: address (\"protocol (IP or IPv6) address on a device\"), link (\"network device\"), route (\"routing table entry\"). `ip route get` \"gets a single route to a destination and prints its contents exactly as the kernel sees it\". Executed output in a default-bridge container: `default via 172.17.0.1 dev eth0` and `172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2`; `ip route get 1.1.1.1` -> `1.1.1.1 via 172.17.0.1 dev eth0 src 172.17.0.2 uid 0`. The man pages do not document the show-output fields line by line; use the executed output.",
+   "quote": "ip route get: get a single route. this command gets a single route to a destination and prints its contents exactly as the kernel sees it.",
+   "location": "ip-route(8), \"ip route get\"",
+   "cite_url": "https://man7.org/linux/man-pages/man8/ip-route.8.html"
+  },
+  {
+   "planned": "ss -tulpn flags meaning (tcp, udp, listening, processes, numeric); State/Local Address:Port columns; process column requires privilege for others' sockets",
+   "verdict": "confirmed",
+   "finding": "-t \"Display TCP sockets\", -u \"Display UDP sockets\", -l \"Display only listening sockets (these are omitted by default)\", -p \"Show processes using sockets\", -n \"Do not try to resolve service names\". Header printed by ss on Ubuntu 24.04: `Netid State Recv-Q Send-Q Local Address:Port Peer Address:PortProcess` (note \"PortProcess\" runs together). ss(8) does NOT state the privilege requirement for -p; verified by execution: root sees users:((\"nc\",pid=6,fd=3)), uid 65534 sees an empty Process column for the same socket (no error).",
+   "quote": "-l, --listening: Display only listening sockets (these are omitted by default). ... -p, --processes: Show processes using sockets. ... -n, --numeric: Do not try to resolve service names.",
+   "location": "ss(8) OPTIONS",
+   "cite_url": "https://man7.org/linux/man-pages/man8/ss.8.html"
+  },
+  {
+   "planned": "veth devices are created in pairs; packets sent on one are received on the other; used to connect network namespaces",
+   "verdict": "confirmed",
+   "finding": "Exactly as planned.",
+   "quote": "veth devices are always created in interconnected pairs. ... Packets transmitted on one device in the pair are immediately received on the other device. When either device is down, the link state of the pair is down.",
+   "location": "veth(4) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man4/veth.4.html"
+  },
+  {
+   "planned": "ip(7): ports below 1024 are privileged (need CAP_NET_BIND_SERVICE) subject to net.ipv4.ip_unprivileged_port_start; INADDR_ANY (0.0.0.0) binds all interfaces; INADDR_LOOPBACK",
+   "verdict": "corrected",
+   "finding": "ip(7) confirms: ports below 1024 are \"privileged ports\"; binding needs CAP_NET_BIND_SERVICE \"in the user namespace governing its network namespace\"; INADDR_ANY (0.0.0.0) \"means any address for socket binding\"; INADDR_LOOPBACK (127.0.0.1). BUT ip(7) in man-pages 6.19 no longer documents the sysctls (its /proc section now just says \"See proc_sys_net_ipv4(5)\") and never mentions ip_unprivileged_port_start. That sysctl is in the kernel docs: per network namespace, Default: 1024. CRUCIAL for the course: inside Docker containers the value is 0, not 1024 (executed: `cat /proc/sys/net/ipv4/ip_unprivileged_port_start` -> 0 in ubuntu:24.04 on Docker 28.1.1), so an unprivileged, capability-less process CAN bind port 80 in a container (executed: uid 65534 with empty bounding set ran `nc -l -p 80`; ss showed LISTEN 0.0.0.0:80).",
+   "quote": "The port numbers below 1024 are called privileged ports (or sometimes: reserved ports). Only a privileged process (on Linux: a process that has the CAP_NET_BIND_SERVICE capability in the user namespace governing its network namespace) may bind(2) to these sockets.",
+   "location": "ip(7) Address format",
+   "cite_url": "https://man7.org/linux/man-pages/man7/ip.7.html"
+  },
+  {
+   "planned": "net-tools (ifconfig, netstat, route) is deprecated/unmaintained in favour of iproute2",
+   "verdict": "corrected",
+   "finding": "\"Deprecated\" is supportable per distribution; \"unmaintained\" is not. Primary statements found: (1) net-tools' own README calls itself \"the legacy tools for controlling the network subsystem of the Linux kernel\" (arp, hostname, ifconfig, netstat, rarp, route); (2) Arch Linux formally deprecated net-tools in favour of iproute2 on 2011-06-08; (3) ss(8) describes itself as showing \"information similar to netstat\". Upstream net-tools still exists (GitHub ecki/net-tools has a v2.10 tag), so do not say \"unmaintained/abandoned\". The Debian wiki page NetToolsDeprecation could not be fetched (anti-bot wall). Executed: stock ubuntu:24.04 image ships neither net-tools nor iproute2 (`which ip ss` prints nothing).",
+   "quote": "This package includes the legacy tools for controlling the network subsystem of the Linux kernel. This includes arp, hostname, ifconfig, netstat, rarp and route.",
+   "location": "net-tools README (upstream repository)",
+   "cite_url": "https://github.com/ecki/net-tools/blob/master/README"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Kernel doc for ip_unprivileged_port_start (default 1024, per-namespace, 0 disables privileged ports).",
+   "quote": "This is a per-namespace sysctl. It defines the first unprivileged port in the network namespace. Privileged ports require root or CAP_NET_BIND_SERVICE in order to bind to them. To disable all privileged ports, set this to 0. They must not overlap with the ip_local_port_range. Default: 1024",
+   "location": "Kernel docs: IP Sysctl, ip_unprivileged_port_start",
+   "cite_url": "https://docs.kernel.org/networking/ip-sysctl.html"
+  },
+  {
+   "finding": "Executed: Docker overrides two net sysctls inside containers.",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c \"cat /proc/sys/net/ipv4/ip_local_port_range /proc/sys/net/ipv4/ip_unprivileged_port_start /proc/sys/net/ipv4/ping_group_range\"\n32768\t60999\n0\n0\t2147483647",
+   "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1 (linuxkit kernel 6.10.14, arm64), image ubuntu:24.04 + iproute2 (lt-r4-tools:local))"
+  },
+  {
+   "finding": "INADDR_ANY semantics on bind/listen/connect.",
+   "quote": "When INADDR_ANY is specified in the bind call, the socket will be bound to all local interfaces. When listen(2) is called on an unbound socket, the socket is automatically bound to a random free port with the local address set to INADDR_ANY.",
+   "location": "ip(7) DESCRIPTION"
+  },
+  {
+   "finding": "Special addresses list in ip(7): INADDR_LOOPBACK (127.0.0.1) \"always refers to the local host via the loopback device\"; INADDR_ANY (0.0.0.0); INADDR_BROADCAST (255.255.255.255); the whole 127/8 range is treated as loopback.",
+   "quote": "Addresses in this range (127/8) are treated as loopback addresses akin to the standardized local loopback address INADDR_LOOPBACK (127.0.0.1);",
+   "location": "ip(7) Special and reserved addresses"
+  },
+  {
+   "finding": "EACCES when binding a privileged port without the capability; EADDRINUSE when address already in use.",
+   "quote": "binding to a privileged port without superuser privileges (the CAP_NET_BIND_SERVICE capability).",
+   "location": "ip(7) ERRORS"
+  },
+  {
+   "finding": "A socket address = IP address + 16-bit port; ports belong to TCP/UDP, not IP.",
+   "quote": "An IP socket address is defined as a combination of an IP interface address and a 16-bit port number. The basic IP protocol does not supply port numbers, they are implemented by higher level protocols like udp(7) and tcp(7).",
+   "location": "ip(7) Address format"
+  },
+  {
+   "finding": "ip -br (brief) and -j (JSON) output options.",
+   "quote": "-br, -brief: Print only basic information in a tabular format for better readability. This option is currently only supported by ip addr show , ip link show & ip neigh show commands.",
+   "location": "ip(8) OPTIONS"
+  },
+  {
+   "finding": "ip -n NETNS runs the command in a named network namespace (shorthand for ip netns exec).",
+   "quote": "-n, -netns <NETNS>: switches ip to the specified network namespace NETNS.",
+   "location": "ip(8) OPTIONS"
+  },
+  {
+   "finding": "\"ip address show\" can omit \"show\"; `ip address show up` limits to active interfaces.",
+   "quote": "Shows IPv4 and IPv6 addresses assigned to all network interfaces. The 'show' subcommand can be omitted.",
+   "location": "ip-address(8) EXAMPLES"
+  },
+  {
+   "finding": "ss purpose and -a/-s/-e/-4/-x flags: -a shows listening and non-listening; -s summary; -x Unix sockets; -K kill sockets.",
+   "quote": "ss is used to dump socket statistics. It allows showing information similar to netstat. It can display more TCP and state information than other tools.",
+   "location": "ss(8) DESCRIPTION"
+  },
+  {
+   "finding": "veth creation command and moving one end into another namespace.",
+   "quote": "# ip link add <p1-name> type veth peer name <p2-name> ... or, for an existing veth pair, move one side to the other namespace: # ip link set <p2-name> netns <p2-ns>",
+   "location": "veth(4) DESCRIPTION"
+  },
+  {
+   "finding": "veth use case statement.",
+   "quote": "A particularly interesting use case is to place one end of a veth pair in one network namespace and the other end in another network namespace, thus allowing communication between network namespaces.",
+   "location": "veth(4) DESCRIPTION"
+  },
+  {
+   "finding": "Executed: default-bridge container view (the container end of a veth pair appears as eth0@ifNN).",
+   "quote": "$ ip addr  (trimmed)\n1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    inet 127.0.0.1/8 scope host lo\n    inet6 ::1/128 scope host\n11: eth0@if17: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 65535 qdisc noqueue state UP group default\n    link/ether a2:13:5a:40:43:7a brd ff:ff:ff:ff:ff:ff link-netnsid 0\n    inet 172.17.0.2/16 brd 172.17.255.255 scope global eth0\n$ ip route\ndefault via 172.17.0.1 dev eth0\n172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.2\n$ ip route get 1.1.1.1\n1.1.1.1 via 172.17.0.1 dev eth0 src 172.17.0.2 uid 0\n    cache",
+   "location": "executed lt-r4-tools:local = ubuntu:24.04 (Docker Desktop 28.1.1 (linuxkit kernel 6.10.14, arm64), image ubuntu:24.04 + iproute2 (lt-r4-tools:local))"
+  },
+  {
+   "finding": "Executed caveat: on Docker Desktop (linuxkit kernel) every container netns ALSO lists nine DOWN tunnel placeholders (tunl0@NONE, gre0@NONE, gretap0@NONE, erspan0@NONE, ip_vti0@NONE, ip6_vti0@NONE, sit0@NONE, ip6tnl0@NONE, ip6gre0@NONE) between lo and eth0 - even under --network none. They are kernel-module artefacts of the Desktop VM, not Docker networks; a native Linux Docker host normally shows only lo + eth0. Pages showing `ip addr` output should trim them with an ellipsis and say so.",
+   "quote": "$ docker run --rm --network none lt-r4-tools:local ip -br link | head -3\nlo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP>\ntunl0@NONE       DOWN           0.0.0.0 <NOARP>\ngre0@NONE        DOWN           0.0.0.0 <NOARP>",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1 (linuxkit kernel 6.10.14, arm64), image ubuntu:24.04 + iproute2 (lt-r4-tools:local))"
+  },
+  {
+   "finding": "Executed: ss -tulpn with one listener, as root vs unprivileged user.",
+   "quote": "# nc -l -p 8080 & ss -tlpn\nState  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess\nLISTEN 0      1            0.0.0.0:8080      0.0.0.0:*    users:((\"nc\",pid=6,fd=3))\n# setpriv --reuid=65534 --regid=65534 --clear-groups ss -tlpn\nLISTEN 0      1            0.0.0.0:8080      0.0.0.0:*",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1 (linuxkit kernel 6.10.14, arm64), image ubuntu:24.04 + iproute2 (lt-r4-tools:local))"
+  },
+  {
+   "finding": "Executed: in an idle default-bridge container `ss -tulpn` prints only the header; on a user-defined network it shows Docker's embedded DNS listeners on 127.0.0.11 at random high ports with no process (the listener lives in dockerd, outside the container PID namespace).",
+   "quote": "Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess\nudp   UNCONN 0      0         127.0.0.11:58743      0.0.0.0:*\ntcp   LISTEN 0      4096      127.0.0.11:34891      0.0.0.0:*",
+   "location": "executed lt-r4-tools:local on user-defined bridge (Docker Desktop 28.1.1 (linuxkit kernel 6.10.14, arm64), image ubuntu:24.04 + iproute2 (lt-r4-tools:local))"
+  },
+  {
+   "finding": "Arch Linux deprecation statement (2011).",
+   "quote": "This April marked the ten year anniversary of the last net-tools release. We decided to look at this as an opportunity to deprecate net-tools and provide alternative, and better maintained, solutions for net-tools functionality.",
+   "location": "Arch Linux News, \"Deprecation of net-tools\", 2011-06-08",
+   "cite_url": "https://archlinux.org/news/deprecation-of-net-tools/"
+  }
+ ],
+ "teaching_notes": "Two things authors must not get wrong: (1) ip(7) no longer contains the sysctl text - cite the kernel ip-sysctl doc (or proc_sys_net_ipv4(5)) for ip_local_port_range / ip_unprivileged_port_start. (2) \"ports <1024 need root\" is FALSE inside Docker containers: Docker sets net.ipv4.ip_unprivileged_port_start=0 in the container netns (executed), so the rule only holds on the host/VM. ss(8) says nothing about needing privilege for -p; the behaviour (silently empty Process column) is from execution. The stock ubuntu:24.04 image has no ip, ss, ping, curl or dig - a page must `apt-get install iproute2` first, and an agent transcript showing \"ip: command not found\" is normal."
+}

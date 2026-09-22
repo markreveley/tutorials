@@ -1,0 +1,227 @@
+# Page 08 verification. lt-08-box = wordfreq-bench:hardened; grader/ copied to /opt/grader. agent = uid 1001 (default user), ubuntu = uid 1000, root via docker exec -u 0.
+### root setup
+$ chmod 755 /tmp/run.sh
+$ chown -R root:root /opt/grader && chmod 700 /opt/grader
+$ ls -ld /opt/grader
+drwx------ 2 root root 4096 Sep 21 06:08 /opt/grader
+$ ls -l /opt/grader
+total 12
+-rw-r--r-- 1 root root  54 Sep 21 06:08 expected.json
+-rwxr-xr-x 1 root root 871 Sep 21 06:08 run-tests.sh
+-rw-r--r-- 1 root root 684 Sep 21 06:08 test_hidden.py
+### agent
+$ id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+$ ls -l /app
+total 16
+-rw-r--r-- 1 agent agent  276 Sep 21 06:08 README.md
+drwxr-xr-x 2 agent agent 4096 Sep 21 06:08 data
+drwxr-xr-x 2 agent agent 4096 Sep 21 06:08 tests
+-rw-r--r-- 1 agent agent  765 Sep 21 06:08 wordfreq.py
+$ ls -ld /app /opt/grader
+drwxr-xr-x 4 agent agent 4096 Sep 21 06:08 /app
+drwx------ 2 root  root  4096 Sep 21 06:08 /opt/grader
+$ stat -c '%A %a %U:%G %n' /app/wordfreq.py /app /opt/grader
+-rw-r--r-- 644 agent:agent /app/wordfreq.py
+drwxr-xr-x 755 agent:agent /app
+drwx------ 700 root:root /opt/grader
+$ cat /opt/grader/expected.json; echo "exit status: $?"
+cat: /opt/grader/expected.json: Permission denied
+exit status: 1
+$ ls /opt/grader; echo "exit status: $?"
+ls: cannot open directory '/opt/grader': Permission denied
+exit status: 2
+$ cd /opt/grader; echo "exit status: $?"
+/tmp/run.sh: line 5: cd: /opt/grader: Permission denied
+exit status: 1
+$ python3 -c 'open("/opt/grader/expected.json")' 2>&1 | tail -n 1
+PermissionError: [Errno 13] Permission denied: '/opt/grader/expected.json'
+$ cd /tmp && echo "secret" > own.txt && chmod 004 own.txt && ls -l own.txt
+-------r-- 1 agent agent 7 Sep 21 21:22 own.txt
+$ cat own.txt; echo "exit status: $?"
+cat: own.txt: Permission denied
+exit status: 1
+### ubuntu reads agent's 004 file
+ubuntu
+secret
+### agent 2
+$ cd /tmp && chmod u+r own.txt && ls -l own.txt && cat own.txt
+-r-----r-- 1 agent agent 7 Sep 21 21:22 own.txt
+secret
+$ cd /tmp && touch demo.sh && ls -l demo.sh
+-rw-r--r-- 1 agent agent 0 Sep 21 21:22 demo.sh
+$ cd /tmp && chmod 750 demo.sh && ls -l demo.sh
+-rwxr-x--- 1 agent agent 0 Sep 21 21:22 demo.sh
+$ cd /tmp && chmod u-x,g+w,o+r demo.sh && ls -l demo.sh && stat -c '%a' demo.sh
+-rw-rwxr-- 1 agent agent 0 Sep 21 21:22 demo.sh
+674
+$ cd /tmp && chmod a+x demo.sh && stat -c '%a %A' demo.sh
+775 -rwxrwxr-x
+$ cd /tmp && chmod go= demo.sh && stat -c '%a %A' demo.sh
+700 -rwx------
+$ chown ubuntu /tmp/demo.sh; echo "exit status: $?"
+chown: changing ownership of '/tmp/demo.sh': Operation not permitted
+exit status: 1
+$ chown root:root /app/wordfreq.py; echo "exit status: $?"
+chown: changing ownership of '/app/wordfreq.py': Operation not permitted
+exit status: 1
+$ python3 -c 'import os; os.chown("/tmp/demo.sh", 1000, 1000)' 2>&1 | tail -n 1
+PermissionError: [Errno 1] Operation not permitted: '/tmp/demo.sh'
+$ python3 -c 'open("/etc/shadow")' 2>&1 | tail -n 1
+PermissionError: [Errno 13] Permission denied: '/etc/shadow'
+$ umask
+0022
+$ cd /tmp && touch f1 && mkdir d1 && stat -c '%a %n' f1 d1
+644 f1
+755 d1
+$ cd /tmp && umask 077 && umask && touch f2 && mkdir d2 && stat -c '%a %n' f2 d2
+0077
+600 f2
+700 d2
+$ cd /tmp && umask 027 && touch f3 && mkdir d3 && stat -c '%a %n' f3 d3
+640 f3
+750 d3
+### root plants read-only file
+$ echo "reference output: do not edit" > /app/data/reference.txt && chmod 444 /app/data/reference.txt && ls -l /app/data/reference.txt
+-r--r--r-- 1 root root 30 Sep 21 21:22 /app/data/reference.txt
+$ ls -ld /app/data
+drwxr-xr-x 1 agent agent 4096 Sep 21 21:22 /app/data
+### agent 3
+$ echo "tampered" >> /app/data/reference.txt; echo "exit status: $?"
+/tmp/run.sh: line 5: /app/data/reference.txt: Permission denied
+exit status: 1
+$ rm -f /app/data/reference.txt; echo "exit status: $?"
+exit status: 0
+$ echo "whatever the agent likes" > /app/data/reference.txt && ls -l /app/data/reference.txt
+-rw-r--r-- 1 agent agent 25 Sep 21 21:22 /app/data/reference.txt
+$ mkdir -p /tmp/d && echo hi > /tmp/d/f && chmod 400 /tmp/d
+$ ls /tmp/d; echo "exit status: $?"
+f
+exit status: 0
+$ cat /tmp/d/f; echo "exit status: $?"
+cat: /tmp/d/f: Permission denied
+exit status: 1
+$ chmod 100 /tmp/d
+$ ls /tmp/d; echo "exit status: $?"
+ls: cannot open directory '/tmp/d': Permission denied
+exit status: 2
+$ cat /tmp/d/f; echo "exit status: $?"
+hi
+exit status: 0
+$ chmod 500 /tmp/d
+$ touch /tmp/d/new; echo "exit status: $?"
+touch: cannot touch '/tmp/d/new': Permission denied
+exit status: 1
+$ echo more >> /tmp/d/f; echo "exit status: $?"
+exit status: 0
+$ chmod 700 /tmp/d
+$ ls -ld /tmp
+drwxrwxrwt 1 root root 4096 Sep 21 21:22 /tmp
+$ stat -c '%a %A %U %n' /tmp
+1777 drwxrwxrwt root /tmp
+### ubuntu creates 666 file in /tmp
+-rw-rw-rw- 1 ubuntu ubuntu 13 Sep 21 21:22 /tmp/ubuntu-notes.txt
+### agent 4
+$ ls -l /tmp/ubuntu-notes.txt
+-rw-rw-rw- 1 ubuntu ubuntu 13 Sep 21 21:22 /tmp/ubuntu-notes.txt
+$ echo "agent was here" >> /tmp/ubuntu-notes.txt; echo "exit status: $?"
+exit status: 0
+$ rm -f /tmp/ubuntu-notes.txt; echo "exit status: $?"
+rm: cannot remove '/tmp/ubuntu-notes.txt': Operation not permitted
+exit status: 1
+$ mv /tmp/ubuntu-notes.txt /tmp/x; echo "exit status: $?"
+mv: cannot move '/tmp/ubuntu-notes.txt' to '/tmp/x': Operation not permitted
+exit status: 1
+$ ls -l /usr/bin/passwd
+-rwsr-xr-x 1 root root 72056 May 30  2024 /usr/bin/passwd
+$ find / -xdev -perm -4000 -type f 2>/dev/null
+/usr/bin/chfn
+/usr/bin/newgrp
+/usr/bin/umount
+/usr/bin/passwd
+/usr/bin/chsh
+/usr/bin/mount
+/usr/bin/su
+/usr/bin/gpasswd
+$ find / -xdev -perm -2000 -type f 2>/dev/null
+/usr/sbin/pam_extrausers_chkpwd
+/usr/sbin/unix_chkpwd
+/usr/bin/expiry
+/usr/bin/chage
+### FAILURE 1: parent dir 755, files 644
+drwxr-xr-x 2 root root 4096 Sep 21 06:08 /opt/grader
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}
+### variant: 711
+ls: cannot open directory '/opt/grader': Permission denied
+exit status: 2
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}
+### restore 700
+cat: /opt/grader/expected.json: Permission denied
+exit status: 1
+### FAILURE 2: agent is root
+0
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}
+# tampered
+### root and mode 000
+---------- 1 root root 19 Sep 21 21:22 /srv/r.sh
+#!/bin/sh
+echo ran
+bash: line 1: /srv/r.sh: Permission denied
+exit status: 126
+ran
+exit status: 0
+### setuid demo
+-rwsr-xr-x 1 root root 67952 Sep 21 21:22 /usr/local/bin/suid-id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+uid=1001(agent) gid=1001(agent) euid=0(root) groups=1001(agent)
+-rwsr-xr-x 1 root root 18 Sep 21 21:22 /usr/local/bin/suid.sh
+1001
+### same image with --security-opt no-new-privileges
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+### FAILURE 3: sudo (lt-07-sudo: hardened + sudo + 'agent ALL=(ALL) NOPASSWD: ALL'; /opt/grader root 700; ACL removed first)
+drwx------ 2 root root 4096 Sep 21 06:08 /opt/grader
+cat: /opt/grader/expected.json: Permission denied
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}
+### ACL (acl package installed in lt-07-sudo)
+drwxr-x---+ 2 root root 4096 Sep 21 06:08 /opt/grader
+# file: /opt/grader
+# owner: root
+# group: root
+user::rwx
+user:agent:r-x
+group::---
+mask::r-x
+other::---
+
+expected.json
+run-tests.sh
+test_hidden.py
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}
+## lab checks in lt-06-lab (ubuntu:24.04, learner uid 1001)
++(eval):2> docker exec lt-06-lab bash -c 'echo ref > /home/learner/ref.txt; chmod 444 /home/learner/ref.txt; ls -l /home/learner/ref.txt; ls -ld /home/learner'
+-r--r--r-- 1 root root 4 Sep 21 23:14 /home/learner/ref.txt
+drwxr-x--- 4 learner learner 4096 Sep 21 23:14 /home/learner
++(eval):3> docker exec -u learner lt-06-lab bash -c 'echo x >> /home/learner/ref.txt; rm -f /home/learner/ref.txt; echo "rm: $?"; echo mine > /home/learner/ref.txt; ls -l /home/learner/ref.txt'
+bash: line 1: /home/learner/ref.txt: Permission denied
+rm: 0
+-rw-r--r-- 1 learner learner 5 Sep 21 23:14 /home/learner/ref.txt
++(eval):4> docker cp research/wordfreq-bench/grader lt-06-lab:/opt/grader
++(eval):5> docker exec lt-06-lab bash -c 'ls -ld /opt/grader; ls -ln /opt/grader'
+drwxr-xr-x 2 501 dialout 4096 Sep 21 06:08 /opt/grader
+total 12
+-rw-r--r-- 1 501 20  54 Sep 21 06:08 expected.json
+-rwxr-xr-x 1 501 20 871 Sep 21 06:08 run-tests.sh
+-rw-r--r-- 1 501 20 684 Sep 21 06:08 test_hidden.py
++(eval):6> docker exec -u learner lt-06-lab bash -c 'cat /opt/grader/expected.json'
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}
++(eval):7> docker exec lt-06-lab bash -c 'chown -R root:root /opt/grader && chmod 700 /opt/grader'
++(eval):8> docker exec -u learner lt-06-lab bash -c 'cat /opt/grader/expected.json; ls /opt/grader; echo "status $?"'
+cat: /opt/grader/expected.json: Permission denied
+ls: cannot open directory '/opt/grader': Permission denied
+status 2
++(eval):9> docker exec lt-06-lab find / -xdev -perm -2000 -type f
+/usr/sbin/pam_extrausers_chkpwd
+/usr/sbin/unix_chkpwd
+/usr/bin/expiry
+/usr/bin/chage
++(eval):10> set +x

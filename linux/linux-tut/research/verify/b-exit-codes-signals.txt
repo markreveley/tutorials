@@ -1,0 +1,105 @@
+# appendix B verification 2026-09-21, ubuntu:24.04 (see also 10-signals-exit-codes.txt)
+$ 128+N sweep: for s in HUP INT QUIT ABRT KILL SEGV PIPE ALRM TERM USR1 XCPU XFSZ; do sleep 30 & kill -$s $!; wait $!; echo "$s $?"; done
+HUP 1 0
+INT 2 0
+QUIT 3 0
+ABRT 6 0
+KILL 9 0
+SEGV 11 0
+PIPE 13 0
+ALRM 14 0
+TERM 15 0
+USR1 10 0
+XCPU 24 0
+XFSZ 25 0
+$ kill -l 137; kill -l 143; kill -l 9
+KILL
+TERM
+KILL
+$ docker run --rm --nosuchflag ubuntu:24.04 true; echo exit=$?
+unknown flag: --nosuchflag
+exit=125
+exit=125
+$ docker run --rm ubuntu:24.04 /etc/passwd; echo exit=$?
+docker: Error response from daemon: failed to create task fo
+exit=126
+$ docker run --rm ubuntu:24.04 nosuchcmd; echo exit=$?
+exit=127
+$ docker run --rm ubuntu:24.04 sh -c "exit 3"; echo exit=$?
+exit=3
+$ docker run --rm ubuntu:24.04 bash -c 'sleep 30 & kill -9 $!; wait $!'; echo exit=$?
+bash: line 1:     6 Killed                  sleep 30
+exit=137
+$ docker run --rm ubuntu:24.04 bash -c 'kill -SEGV $$; echo still here'; (PID 1 has no handler)
+still here
+exit=0
+$ docker run --rm --init ubuntu:24.04 bash -c 'kill -SEGV $$; echo still here'
+exit=139
+$ python subprocess
+returncode -9 -> SIGKILL ; shell would say 137
+via shell wrapper: 137
+exit 3: 3
+FileNotFoundError: [Errno 2] No such file or directory: 'nosuchcmd'
+PermissionError: [Errno 13] Permission denied: '/etc/passwd'
+shell=True nosuchcmd: 127
+
+##### sweep redone (first attempt printed 0: $? was clobbered by a command substitution)
+$ for s in HUP INT QUIT ABRT KILL USR1 SEGV PIPE ALRM TERM XCPU XFSZ; do sleep 30 & kill -$s $!; wait $!; echo "$s $?"; done 2>/dev/null
+HUP 129
+INT 130
+QUIT 0
+ABRT 134
+KILL 137
+USR1 138
+SEGV 139
+PIPE 141
+ALRM 142
+TERM 143
+XCPU 152
+XFSZ 153
+
+##### why did the sweep print 'QUIT 0'? check dispositions of a background child of non-interactive bash
+$ bash -c 'sleep 30 & grep -E "SigIgn" /proc/$!/status; kill $!'
+SigIgn:	0000000000000006
+$ time bash -c 'sleep 5 & kill -QUIT $!; wait $!; echo $?'
+bash: line 1:   249 Quit                    sleep 5
+QUIT 131
+
+real	0m0.001s
+user	0m0.001s
+sys	0m0.000s
+$ same with INT
+
+real	0m0.001s
+user	0m0.000s
+sys	0m0.001s
+INT 130
+
+##### clean sweep: a FOREGROUND child signals itself; the shell reports 128+N; python reports -N
+SIGHUP shell=129  python=-1
+SIGINT shell=130  python=-2
+SIGQUIT shell=131  python=-3
+SIGABRT shell=134  python=-6
+SIGKILL shell=137  python=-9
+SIGUSR1 shell=138  python=-10
+SIGSEGV shell=139  python=-11
+SIGPIPE shell=0  python=-13
+SIGALRM shell=142  python=-14
+Terminated
+SIGTERM shell=143  python=-15
+SIGXCPU shell=152  python=-24
+SIGXFSZ shell=0  python=-25
+
+##### NOTES on the two sweeps above
+# 1. Background-job sweep is unreliable: SigIgn 0x6 = SIGINT+SIGQUIT ignored in an async child of non-interactive bash (documented, Bash Manual 3.7.6),
+#    but a signal sent immediately after '&' can land BEFORE the child sets that up (QUIT 131 / INT 130 above) or after (QUIT 0 in the first sweep). Race. Not used in the appendix.
+# 2. Clean sweep: 'shell=0' for SIGPIPE and SIGXFSZ. Check whether python itself ignores them:
+$ python3 -c 'print(open("/proc/self/status").read())' | grep SigIgn
+SigIgn:	0000000001001000
+#    0x1001000 = bits for signal 13 (SIGPIPE) and signal 25 (SIGXFSZ); bit N-1 stands for signal N: python ignores both, so signalling itself is a no-op. Artefact of the test program, not of the shell.
+#    Shell-side values for those two, observed another way:
+$ yes | head -1 >/dev/null; echo ${PIPESTATUS[0]}
+141
+$ (ulimit -f 1; head -c 100000 /dev/zero > /tmp/big); echo $?
+bash: line 1:   321 File size limit exceededhead -c 100000 /dev/zero > /tmp/big
+153

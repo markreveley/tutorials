@@ -1,0 +1,74 @@
+{
+  "id": "terminal-bench",
+  "citation": {
+    "authors": "Laude Institute and Stanford University (site footer: \"a stanford x laude collaboration\"); repo maintained under laude-institute / harbor-framework on GitHub",
+    "title": "Terminal-Bench: a benchmark for AI agents in terminal environments",
+    "venue": "tbench.ai (website + GitHub repository)",
+    "year": "2025 (v1.0); Terminal-Bench 2.0 released 2025, 2.1 active as of June 2026",
+    "url": "https://www.tbench.ai/"
+  },
+  "fetched_urls": [
+    "https://www.tbench.ai/",
+    "https://github.com/laude-institute/terminal-bench",
+    "https://www.tbench.ai/registry",
+    "https://www.tbench.ai/docs",
+    "https://www.tbench.ai/leaderboard/terminal-bench/2.0"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Benchmark of terminal/CLI tasks for agents, each task = instruction + docker environment + verification script — confirm structure",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with one addition: each task has FOUR components, not three. Per the official docs, a task includes (1) an English task description/instruction, (2) a Docker environment, (3) a test script for verification, and (4) a reference ('oracle') solution. The GitHub README lists the same components.",
+      "quote": "Each task in Terminal-Bench includes a description in English, a docker environment, a test script to verify if the agent completed the task successfully, a reference (\"oracle\") solution that solves the task.",
+      "location": "tbench.ai/docs (introduction)"
+    },
+    {
+      "planned": "Confirm current scale (number of tasks) and notable design choices (containerization, test-based verification)",
+      "verdict": "confirmed",
+      "finding": "Scale is version-dependent: Terminal-Bench 1.0 has 80 tasks; Terminal-Bench 2.0 has 89 tasks; Terminal-Bench 2.1 is the current active dataset (an improved 2.0, 'inspired by Z.ai's Terminal-Bench 2.0 Verified'); 3.0 and a Terminal-Bench Science variant are in development. Design choices confirmed: every task runs in a Docker container (sandboxed terminal environment) and success is determined by an automated test script, not by human or LLM judgment.",
+      "quote": "Terminal-Bench 2.0: 89 high-quality tasks across software engineering, machine learning, security, data science, and more. ... Terminal-Bench 1.0: 80 tasks testing agents' abilities to complete tasks using a terminal.",
+      "location": "tbench.ai/registry"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Tasks ship with an oracle solution, which serves as a built-in validity check: the reference solution must pass the test script, proving the task is solvable and the verifier is not vacuous.",
+      "quote": "a reference (\"oracle\") solution that solves the task",
+      "numbers": "4 components per task: instruction, Docker env, test script, oracle solution"
+    },
+    {
+      "point": "Benchmark versioning as living-benchmark practice: rather than freezing one dataset, Terminal-Bench maintains a registry with versioned datasets and deprecation/improvement cycles — useful for teaching contamination management and benchmark lifecycle.",
+      "quote": "Terminal-Bench 2.1 (active): An improved version of Terminal-Bench 2.0, inspired by Z.ai's Terminal-Bench 2.0 Verified.",
+      "numbers": "1.0 = 80 tasks; 2.0 = 89 tasks; 2.1 active; 3.0 and Terminal-Bench Science in development"
+    },
+    {
+      "point": "The harness/agent/benchmark separation is explicit: Harbor is the evaluation harness (Terminal-Bench 2.0+ is 'harbor-native'), Terminus is a reference agent, and the dataset is just the tasks — a clean example of separating measurement infrastructure from the thing being measured.",
+      "quote": "a collection of harbor-native benchmarks to help agent makers quantify their agents' terminal mastery",
+      "numbers": ""
+    },
+    {
+      "point": "The execution harness mediates everything: it 'connects a language model to a sandboxed terminal environment, sets up the task environments, and evaluates the agent's ability to complete the tasks' — run via the `tb` CLI (pip package).",
+      "quote": "The execution harness connects a language model to a sandboxed terminal environment, sets up the task environments, and evaluates the agent's ability to complete the tasks.",
+      "location_note": "tbench.ai/docs",
+      "numbers": ""
+    },
+    {
+      "point": "Leaderboard reports success rate WITH error bars — a rare and teachable practice. As of June 2026, top Terminal-Bench 2.0 entries cluster within overlapping confidence intervals, illustrating why point estimates alone can't rank agents.",
+      "quote": "NexAU-AHE (GPT-5.5): 84.7% +/- 2.1; LemonHarness (multiple models): 84.5% +/- 2.6; Capy (GPT-5.5): 83.1% +/- 2.1; Codex CLI (GPT-5.5): 82.2% +/- 2.2; Polaris (multiple models): 82.2% +/- 2.8",
+      "numbers": "Top-5 on TB 2.0 leaderboard span 82.2%-84.7%, with +/- 2.1 to 2.8 error bars (fetched 2026-06)"
+    },
+    {
+      "point": "Task domains are broad, not just software engineering: tasks span 'software engineering, machine learning, security, data science, and more', covering scenarios from 'compiling code to training models and setting up servers'. It is an open-source project actively soliciting community task contributions.",
+      "quote": "89 high-quality tasks across software engineering, machine learning, security, data science, and more",
+      "numbers": "89 tasks (2.0)"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say 'each task = instruction + docker environment + verification script' as the complete structure — the source lists a fourth component, the reference ('oracle') solution.",
+    "Do not cite a single task count without a version: 1.0 has 80 tasks, 2.0 has 89; the old README's '~100 tasks (beta)' wording is stale 1.0-era language.",
+    "Do not conflate Harbor (the evaluation harness/framework) with Terminus (a reference agent) or with the benchmark dataset itself.",
+    "Do not present Terminal-Bench as a static benchmark — 2.1 is the active version and 3.0 / Terminal-Bench Science are in development; numbers will drift."
+  ],
+  "notes_for_authors": "This is a website/repo source, not a paper — cite tbench.ai and the GitHub repo, and date any task counts or leaderboard numbers (fetched 2026-06-10). Strongest pedagogical angles: (1) test-based verification with an oracle solution as a verifier sanity check, (2) Docker containerization for reproducible agentic eval, (3) versioned dataset registry as contamination/lifecycle management, (4) leaderboard error bars showing overlapping CIs among top agents. Leaderboard entries change frequently; prefer the structural points over specific scores in course text."
+}

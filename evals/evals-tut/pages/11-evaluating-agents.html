@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Makes Agents Different · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 4 · Evaluating Agents</p>
+    <h1>What makes agents different</h1>
+    <p class="lede">
+      When a model stops just answering and starts <em>acting</em> — calling tools, editing files,
+      conversing across turns, changing the state of the world — five assumptions baked into everything
+      we've covered so far quietly break. This page names them; the rest of the module rebuilds the
+      machinery around them.
+    </p>
+
+    <h2 id="what-is-an-agent">"Agent" is a spectrum, not a category</h2>
+    <p>
+      The field never settled on a crisp definition, and the spine sources for this module deliberately
+      avoid one. Shankar and Husain "use 'agent' broadly," covering "the full range from a single LLM
+      call with no tools (the simplest case) to a system that runs in a loop, calls many tools, and
+      makes many decisions per
+      request."<a class="cite" href="https://www.oreilly.com/library/view/evals-for-ai/9798341660717/" title="Shankar &amp; Husain, Evals for AI Engineers, Ch. 1">[Evals Book]</a>
+      The Princeton "AI Agents That Matter" team likewise treats agency as a spectrum with several
+      contributing factors — the complexity of environment and goals, the interface and degree of human
+      supervision, and the system's design (planning, tool use, control
+      flow).<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, AI Agents That Matter, §1.1">[Agents That Matter]</a>
+      For evaluation purposes the operative question isn't "is it an agent?" but "which of the following
+      five complications does it have?"
+    </p>
+
+    <h2 id="trajectory">1. The output is a trajectory, not a string</h2>
+    <p>
+      An <span class="term" data-g="agent">agent's</span> "output" is the whole
+      <span class="term" data-g="trajectory">trajectory</span>: a sequence of model decisions,
+      <span class="term" data-g="tool-call">tool calls</span>, tool results, and messages, often dozens
+      of steps long.
+    </p>
+    <div class="diagram">single LLM call:    prompt ──────────────▶ text          (grade the text)
+
+agent episode:      goal ─▶ think ─▶ tool ─▶ result ─▶ think ─▶ tool ─▶ …
+                              │                                   │
+                              ▼                                   ▼
+                        environment state  ───────────▶  changed environment
+                                                         (grade THIS — and
+                                                          maybe the path too)</div>
+    <p>
+      This forces a choice that didn't exist before. <span class="term" data-g="outcome-based-evaluation">Outcome-based
+      evaluation</span> grades only the end result — did the issue get fixed, the refund processed, the
+      file created? <span class="term" data-g="process-based-evaluation">Process-based evaluation</span>
+      grades the path — did the agent follow policy, avoid dangerous calls, use the budget sensibly?
+      Outcomes are what users care about and are far easier to check mechanically; processes matter when
+      a right answer reached the wrong way is still a liability. The benchmarks dissected in
+      <a href="12-swe-bench-case-study.html">pages 12–13</a> are almost all outcome-based, and the gaps
+      that choice leaves are a running theme.
+    </p>
+
+    <h2 id="environment">2. The environment is now part of the eval</h2>
+    <p>
+      An agent needs something to act <em>on</em> — a repo, a browser, a database, an OS. So every
+      agentic eval ships an <span class="term" data-g="environment">environment</span>, and the
+      environment's engineering becomes part of the measurement. It must be reset to a known state per
+      attempt, isolated in a <span class="term" data-g="sandbox">sandbox</span> (agents execute code —
+      the HumanEval authors already needed gVisor containers and firewall rules in
+      2021<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, §2.3">[HumanEval]</a>),
+      and faithful enough that success in it predicts success in reality.
+    </p>
+    <p>
+      When the environment misbehaves, it grades the wrong thing. A verified example from the Princeton
+      reproducibility analysis: WebArena's Reddit clone enforces rate limits, so "if the tasks involving
+      Reddit posts are evaluated one after another, they are much more likely to fail" — task
+      <em>ordering</em>, not agent quality, moves the
+      score.<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §6">[Agents That Matter]</a>
+      The harness-reading checklist from <a href="02-anatomy-of-an-eval.html">page 2</a> gains a new
+      question: <em>what does the environment do between attempts?</em>
+    </p>
+
+    <h2 id="grading-state">3. Grading means checking the world, not the words</h2>
+    <p>
+      The cleanest agentic grading idea is <span class="term" data-g="state-based-evaluation">state-based
+      evaluation</span>: compare the state of the environment after the episode against an annotated
+      goal state. tau-bench (<a href="14-reliability-pass-hat-k.html">page 14</a>) is the canonical
+      example: a customer-service agent manipulates a mock company database while conversing with a
+      simulated user, and the reward checks both that "the final database is identical to the unique
+      ground truth outcome database" <em>and</em> that the agent's replies contained the required
+      information.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, tau-bench, §3">[tau-bench]</a>
+      To make that comparison meaningful, the benchmark's authors deliberately constructed every task so
+      that "only one database outcome is possible," trading slow annotation for objective grading —
+      and capping the benchmark at 165 tasks
+      total.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §3">[tau-bench]</a>
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — even clean outcome grading leaks</span>
+      <p>tau-bench's own authors flag that a perfect reward is "necessary but not sufficient": an agent
+      can reach the correct final database state while violating policy along the way — for example,
+      "the agent might issue the return without explicit user confirmation," and still score
+      1.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §3">[tau-bench]</a>
+      Outcome-based grading is blind to <em>how</em> — which is exactly the gap process-based checks
+      exist to fill. Knowing what your grader cannot see is part of knowing what your score means.</p>
+    </div>
+
+    <h2 id="users">4. Sometimes the eval needs a fake human</h2>
+    <p>
+      Many agents work <em>with</em> a user mid-task, so the eval must supply one:
+      <span class="term" data-g="user-simulation">user simulation</span>, typically an LLM playing a
+      customer with a goal and personality. tau-bench uses GPT-4 as the simulated
+      user.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §3">[tau-bench]</a>
+      This buys realism — multi-turn clarification, underspecified requests — at the price of a new
+      validity question: the simulator is itself an LLM with quirks, and its behavior is part of what's
+      being measured. Meanwhile the absence of any human in the loop biases the other way: the
+      Princeton team highlights evidence that "simple feedback increases the performance of GPT-4 from
+      0% to over 86% on challenging programming problems" — so benchmarks with no human involvement can
+      badly <em>under</em>estimate an agent's real-world
+      usefulness.<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §7, citing Shi et al.">[Agents That Matter]</a>
+    </p>
+
+    <h2 id="compounding">5. Stochasticity compounds — and cost stops being constant</h2>
+    <p>
+      A single model call is somewhat random; an agent is a <em>chain</em> of model calls, where each
+      sampled decision changes everything downstream. Two runs on the identical task diverge early and
+      end in different places. The measured consequence (the full story is
+      <a href="14-reliability-pass-hat-k.html">page 14</a>): the best agent on tau-bench's retail domain
+      succeeds 61.2% of the time on average — but succeeds eight-for-eight on the same tasks less than
+      25% of the time.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §5.1">[tau-bench]</a>
+      Average success and dependable success are different quantities, and one number cannot report
+      both.
+    </p>
+    <p>
+      Cost breaks symmetrically. A fixed prompt costs roughly the same every time; an agent decides at
+      runtime how many steps to take, and architectures differ in cost by orders of magnitude at the
+      same accuracy (<a href="15-cost-and-capability.html">page 15</a>). Worse, expensive evaluation
+      degrades measurement itself: with SWE-bench-scale evaluations costing thousands of dollars per
+      full run, error bars become a luxury — the Princeton team found published agent results they could
+      not reproduce within the spread of five of their own
+      runs.<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §6">[Agents That Matter]</a>
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Evaluating an agent like a chatbot — grading only its final message with the judge machinery of
+      <a href="08-llm-as-judge.html">Module 3</a>. A polished closing summary can sit on top of a
+      trajectory that mangled the database, and a final-message judge will pass it. For agents, the
+      words are testimony; the environment state is evidence. Grade the evidence.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Five new facts: the output is a trajectory; the environment is part of the instrument; grading
+      checks world-state, not text; users may need simulating; randomness and cost compound across
+      steps. Every agentic benchmark is a bundle of design answers to these five — which is why this
+      module reads benchmarks <em>as artifacts to dissect</em>, starting with the most famous one:
+      <a href="12-swe-bench-case-study.html">SWE-bench</a>.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Shunyu Yao, Noah Shinn, Pedram Razavi, Karthik Narasimhan, "τ-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains," arXiv:2406.12045, 2024. <a href="https://arxiv.org/abs/2406.12045">arxiv.org/abs/2406.12045</a></li>
+        <li>Sayash Kapoor, Benedikt Stroebl, Zachary S. Siegel, Nitya Nadgir, Arvind Narayanan, "AI Agents That Matter," arXiv:2407.01502, 2024. <a href="https://arxiv.org/abs/2407.01502">arxiv.org/abs/2407.01502</a></li>
+        <li>Shreya Shankar &amp; Hamel Husain, <em>Evals for AI Engineers</em>, O'Reilly Media, Early Release. <a href="https://www.oreilly.com/library/view/evals-for-ai/9798341660717/">oreilly.com</a></li>
+        <li>Mark Chen et al., "Evaluating Large Language Models Trained on Code," arXiv:2107.03374, 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

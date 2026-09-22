@@ -1,0 +1,88 @@
+{
+  "id": "metr",
+  "citation": {
+    "authors": "Thomas Kwa, Ben West, Joel Becker, Amy Deng, Katharyn Garcia, Max Hasin, Sami Jawhar, Megan Kinniment, Nate Rush, Sydney Von Arx, Ryan Bloom, Thomas Broadley, Haoxing Du, Brian Goodrich, Nikola Jurkovic, Luke Harold Miles, Seraphina Nix, Tao Lin, Neev Parikh, David Rein, Lucas Jun Koba Sato, Hjalmar Wijk, Daniel M. Ziegler, Elizabeth Barnes, Lawrence Chan (METR)",
+    "title": "Measuring AI Ability to Complete Long Software Tasks",
+    "venue": "arXiv:2503.14499 (v1 2025-03-18; v3 2026-02-25) + metr.org blog",
+    "year": "2025 (v3 update 2026)",
+    "url": "https://arxiv.org/abs/2503.14499"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2503.14499",
+    "https://arxiv.org/html/2503.14499v3",
+    "https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/"
+  ],
+  "access": "full",
+  "version_note": "IMPORTANT for course writers: the paper has materially different headline numbers across versions. The original (v1, March 2025, matching the blog post) reports Claude 3.7 Sonnet with a ~50-minute 50% time horizon; v3 (Feb 2026) adds newer models and reports 'current frontier AI models such as o3 have a 50% time horizon of around 110 minutes.' All quotes below are from the v3 full text unless noted.",
+  "claims": [
+    {
+      "planned": "50%-task-completion time horizon metric: the human task duration at which the model succeeds 50% of the time — confirm definition",
+      "verdict": "confirmed",
+      "finding": "Exactly as planned. The metric is defined as the time humans typically take to complete tasks that AI models can complete with 50% success rate. Note the direction: it is a human duration, indexed by model success probability.",
+      "quote": "we propose a new metric: 50%-task-completion time horizon, the time humans typically take to complete tasks that AI models can complete with 50% success rate.",
+      "location": "Abstract"
+    },
+    {
+      "planned": "Time horizon doubling every ~7 months (2019-2024 trend) — confirm trend claim and caveats",
+      "verdict": "confirmed",
+      "finding": "Confirmed with precise numbers (v3): doubling every 207 days (~7 months), 95% bootstrapped CI 166-240 days (~±19%), over 2019 to early 2025. Caveats stated: possible 2024+ acceleration (o3 lies above the long-run trend, p = 0.006; 2023-2025 growth rate ~20% faster than 2019-2025), and the trend is measured on a specific task distribution so external validity is a live question. Note the trend window in v3 is 2019-2025, not 2019-2024.",
+      "quote": "time horizon has doubled every 207 days with a 95% bootstrapped confidence interval 166-240 days (roughly ±19%). [...] Also, o3 lies above the long-run trend (p = 0.006); this is robust to methodological ablations like using continuous scoring (Appendix H), which may imply the trend in 2024 and early 2025 is faster.",
+      "location": "Section 3.2 (Time horizon vs. release date)"
+    },
+    {
+      "planned": "Methodology: human baseliner times, logistic model relating task length to success — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Three-step methodology: (1) build a task suite (170 tasks: HCAST 97 tasks of 1 min-30 hrs; RE-Bench 7 ML research engineering tasks of 8 hrs each; SWAA 66 single-step tasks of 1-30 seconds); (2) time skilled human baseliners (800+ baselines, 2,529 hours; task duration = geometric mean of successful baseline times) and record agent success; (3) fit a logistic regression p_success(agent,task) = sigma((log h_agent - log t_task) * beta_agent), where h_agent is the 50% time horizon. Fit quality: R^2 ~ 0.80 regressing model success rate against log human time.",
+      "quote": "Third, we fit a logistic model to find the time horizon at which each AI agent has a 50% chance of success, and plot this against the release date of the model. [...] p_success(agent,task) = sigma((log h_agent - log t_task) * beta_agent) where t_task is the geometric mean time of successful human baselines, and h_agent and beta_agent are learned parameters, with h_agent representing the 50% time horizon.",
+      "location": "Section 1 (Figure 2 methodology) and Section 3.1"
+    },
+    {
+      "planned": "Note the 50% vs 80% horizon distinction and why reliability threshold matters",
+      "verdict": "confirmed",
+      "finding": "Confirmed (Section 3.2.1, Figure 17). The 80% time horizon trend is similar (doubling time 204 days vs 207 for 50%), but 80% horizons are 4-6x shorter (v3; the intro summarizes 'roughly 5x shorter'). The stated implication: occasional success on hard tasks does not equal reliable performance on moderate-length tasks. The paper also notes it cannot confidently measure horizons at very high success rates due to limited data.",
+      "quote": "The doubling time in 80% time horizon (204 days) is similar to the doubling time of 50% time horizon (207 days), within margin of error. However, models' 80% time horizons are 4-6x shorter, suggesting that even models that sometimes succeed on difficult and diverse tasks cannot reliably perform tasks of moderate length.",
+      "location": "Section 3.2.1"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The dynamic range of the metric is enormous and spans the whole model era: GPT-2's 50% horizon is 2 seconds vs o3 at 110 minutes — about 5 doublings of growth captured on one log-linear plot. This is why SWAA (1-30 second tasks) had to be created: older models fail everything longer.",
+      "quote": "GPT-2 has a 50% time horizon of only 2 seconds, while o3 has a 110-minute time horizon and succeeds at several tasks over 4 hours.",
+      "numbers": "GPT-2: 2 s; o3: 110 min; SWAA tasks: 1-30 s; HCAST: 1 min-30 hrs; RE-Bench: 8 hrs"
+    },
+    {
+      "point": "Human baselining is expensive and lossy: 800+ baselines totaling 2,529 hours, but only 286 of ~460 HCAST/RE-Bench attempts were successful, and 21 of 169 tasks had no usable baseline and fell back to researcher estimates. Task length ratings use the geometric mean of successful runs because baseline times are roughly log-normally distributed.",
+      "quote": "In total, we use over 800 baselines totaling 2,529 hours, of which 558 baselines (286 successful) come from HCAST and RE-Bench, and 249 (236 successful) from the shorter SWAA tasks. 148 of the 169 tasks have human baselines, but we rely on researcher estimates for 21 tasks in HCAST.",
+      "numbers": "800+ baselines; 2,529 hours; 148/169 tasks baselined; baseliners avg ~5 years relevant experience"
+    },
+    {
+      "point": "The methodology is explicitly IRT-like: logistic regression to find the difficulty at which an agent has 50% success, but using human baseline time as the difficulty rating instead of difficulty learned from response data — a nice bridge to psychometrics for an eval course.",
+      "quote": "Like in IRT, we use logistic regression to find the task difficulty at which the agent has a 50% chance of success, but unlike IRT, we use difficulty ratings directly based on human baseline time rather than ratings learned from the data.",
+      "numbers": "R^2 ~ 0.80 for success rate vs log human time"
+    },
+    {
+      "point": "Task 'messiness' as an external-validity probe: HCAST/RE-Bench tasks were scored against 16 messiness factors (resource limits, novelty, dynamic environments, etc.). Controlling for length, models do worse on messier tasks — but the improvement TREND is similar on high- and low-messiness subsets, with no evidence of a plateau specific to messy tasks.",
+      "quote": "Controlling for task length, we find models perform worse on tasks that have higher messiness scores. Notably, trends in AI agent performance over time are similar for the lower and higher messiness subsets of these tasks (see Figure 12).",
+      "numbers": "16 messiness factors; Section H.6 / Figure 12"
+    },
+    {
+      "point": "Extrapolation with explicit uncertainty: naive trend extrapolation puts a >1-month (167 work-hour) time horizon between mid-2028 and mid-2031; if the faster 2024-2025 trend continues, as soon as early 2027. The paper flags both external validity and trend changes as reasons extrapolation may fail.",
+      "quote": "Naively extrapolating the trend in horizon length implies that AI will reach a time horizon of >1 month (167 work hours) between mid-2028 and mid-2031 (Figure 6). However, extrapolation is affected by both external validity concerns and future changes in the trend.",
+      "numbers": ">1 month defined as 167 work hours; window mid-2028 to mid-2031; early 2027 under 2024-2025 trend"
+    },
+    {
+      "point": "Measurement-validity caveat in the authors' own words: the time horizon is relative to a task distribution and a human population — a core lesson for an eval course about construct definition. The blog states this directly.",
+      "quote": "Our estimate of the length of tasks that an agent can complete depends on methodological choices like the tasks used and the humans whose performance is measured. (blog) / 'we caution that time horizon is always measured relative to a [task] do[main]...' (paper limitations)",
+      "numbers": "Contractors took 5-18x longer than repository maintainers on internal PR tasks, showing how the human reference population shifts the metric"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do NOT cite 'Claude 3.7 Sonnet ~50 minutes' and 'o3 ~110 minutes' as if from the same snapshot: 50 min/Claude 3.7 Sonnet is the v1 (March 2025) headline; 110 min/o3 is the v3 (Feb 2026) headline. Pick one version and date it.",
+    "The doubling time is ~207 days (95% CI 166-240) in v3 — 'every 7 months' is the rounded form used in the abstract; do not present 7 months as exact.",
+    "The time horizon is a property of human task duration (how long tasks take humans), not how long the model runs. Avoid phrasing like 'the model can work for 50 minutes.'",
+    "The trend window is 2019 to early 2025 in v3 (the planned claim said 2019-2024).",
+    "80% horizons are 4-6x shorter than 50% horizons but grow at the same rate (204 vs 207 day doubling) — both halves of that matter; don't claim reliability is improving slower or faster than capability.",
+    "Tasks are software/research-engineering specific (HCAST + RE-Bench + SWAA, 170 tasks total); the authors explicitly question external validity to broader intellectual labor — don't generalize to 'all tasks.'"
+  ],
+  "notes_for_authors": "Strongest source in the agentic tier for teaching metric design: it converts incommensurable benchmark scores into a human-anchored, interpretable unit (task duration), and it is unusually candid about methodological degrees of freedom. Use the logistic/IRT framing to connect to psychometrics, the 50% vs 80% gap to teach why a single reliability threshold is a design choice, and the messiness analysis + contractor-vs-maintainer 5-18x speed gap to teach reference-population sensitivity. Cite as Kwa, West et al. 2025, and state which arXiv version your numbers come from (v1 numbers match the 2025-03-19 metr.org blog post; v3 of 2026-02-25 adds o3/o4-mini and updates headline numbers). The blog post is a faithful summary but omits the 80%-horizon discussion; pull that from paper Section 3.2.1."
+}

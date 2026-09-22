@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orientation: Why Linux, for Evals · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Start</p>
+    <h1>Orientation: why Linux, for evals</h1>
+    <p class="lede">
+      An agentic eval is a pile of Linux boxes with a number coming out of the top. This page shows
+      where the Linux is, walks through three published incidents in which a plain Linux fact — a
+      memory limit, a leftover <code>.git</code> directory, a reachable port — changed what a
+      benchmark measured, and lays out the map of the course.
+    </p>
+
+    <h2 id="physically">An agentic eval, physically</h2>
+    <p>
+      Look at what is actually running. An
+      <span class="term" data-g="eval">eval</span> of an <span class="term" data-g="agent">agent</span>
+      has four moving parts. A <span class="term" data-g="harness">harness</span> — usually a Python
+      program — runs on some host machine. For every attempt at every task it starts a
+      <span class="term" data-g="sandbox">sandbox</span>: a
+      <span class="term" data-g="container">container</span> or a
+      <span class="term" data-g="virtual-machine">virtual machine</span> prepared with the task's
+      files. The model, which lives somewhere else behind an API, is shown the task and replies with
+      shell commands; the harness runs each command inside the sandbox and sends back what it
+      printed. When the model stops, or the clock runs out, a grader inspects what is left in the
+      box and writes down pass or fail.
+    </p>
+    <div class="diagram">   model  (an API, somewhere else)
+     ▲  │
+     │  │  tool call:   bash -c "pytest -q"
+     │  ▼
+┌─ HOST · a Linux machine, or a Linux VM ──────────────────────────┐
+│                                                                  │
+│  harness ─── exec ──▶ ┌─ sandbox 1 · container or VM ─────────┐  │
+│  (Python)             │  /app     the task's files            │  │
+│     ▲                 │  bash     runs the command            │  │
+│     │                 │  a user · mounts · limits · network   │  │
+│     └─ stdout, ───────│                                       │  │
+│        stderr,        └──────────────────┬────────────────────┘  │
+│        exit code        sandbox 2 … N    │ final state:          │
+│                         (one per attempt)│ files, processes      │
+│                                          ▼                       │
+│  results.jsonl ◀─── pass / fail ─── grader / verifier            │
+│       │                                                          │
+└───────┼──────────────────────────────────────────────────────────┘
+        ▼
+   "model X: 58%"</div>
+    <p>
+      Everything inside the big rectangle is Linux. The sandbox is a Linux process tree with a Linux
+      filesystem. The command channel is a shell. What comes back is two text streams and an
+      <span class="term" data-g="exit-status">exit status</span>. The grader is typically a script
+      that checks files and runs tests — state-based evaluation, in the sibling course's terms
+      (<a href="../../../evals/evals-tut/pages/11-evaluating-agents.html">Understanding LLM Evals,
+      page 11</a>). Only the model is not Linux.
+    </p>
+    <p>
+      The headline number is attributed to the model but <em>produced</em> by the whole rectangle.
+      If you cannot read the rectangle, you cannot say which of the two you measured.
+    </p>
+
+    <h2 id="evidence">The field already runs on this</h2>
+    <p>This is how the well-known agentic benchmarks are built today, in their authors' words.</p>
+    <ul>
+      <li>
+        <strong>SWE-bench</strong> first tried to pin its environments with <code>conda</code>. In
+        June 2024 the maintainers replaced that with a fully containerized harness — one Docker
+        image per task — calling the old approach
+        "underspecified" in hindsight: evaluation "remained sensitive to discrepancies originating
+        from different platforms and user-specific configurations, leading to inconsistent
+        results."<a class="cite" href="https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md" title="SWE-bench, Containerized Evaluation Harness report, 27 June 2024">[SWE-bench]</a>
+        Same patch, different laptop, different score; the fix was a Linux packaging decision.
+      </li>
+      <li>
+        <strong>Terminal-Bench</strong> defines a task as an instruction, a Docker image, tests, an
+        example solution and a time limit; the tests work "by testing properties of the final
+        container state; they do not test the agent's commands or console
+        output."<a class="cite" href="https://arxiv.org/html/2601.11868" title="Merrill, Shaw, Carlini et al. 2026, Terminal-Bench, §2.1 Task Formulation">[Terminal-Bench]</a>
+        The task <em>is</em> a Linux box, and the grade is a property of that box.
+      </li>
+      <li>
+        <strong>Inspect</strong>, the UK AI Security Institute's eval framework, makes the sandbox a
+        configuration choice: Docker is built in; Kubernetes, Daytona, Modal, EC2, Proxmox and
+        Vagrant sandboxes come as packages. Its <code>bash()</code> tool runs the model's command
+        inside that
+        sandbox.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#environment-binding" title="Inspect AI documentation, Sandboxing: Environment Binding">[Inspect]</a>
+      </li>
+      <li>
+        <strong>OSWorld</strong> sits at the heavy end: 369 tasks on real Ubuntu desktops inside
+        virtual machines, reset from a snapshot, and graded by scripts that run on the host over
+        state fetched out of the
+        VM.<a class="cite" href="https://arxiv.org/html/2404.07972" title="Xie et al. 2024, OSWorld, §2.2 and Table 3">[OSWorld]</a>
+      </li>
+      <li>
+        None of this is new. In 2021 the <strong>HumanEval</strong> authors already ran
+        model-written programs under the <span class="term" data-g="gvisor">gVisor</span> container
+        runtime, with firewall rules blocking connections "except for those required for experiment
+        control", in order "to prevent these programs from modifying, gaining persistence on,
+        accessing sensitive resources on, or exfiltrating data from a host or
+        network."<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Evaluating Large Language Models Trained on Code, §2.3">[HumanEval]</a>
+        That goal is a list of four Linux subjects: filesystems, processes, credentials, egress.
+      </li>
+    </ul>
+    <p>
+      One number about the models, too. The Terminal-Bench authors sampled 3,800 failed commands
+      from agent runs: the most common failure, 24.1% of them, was calling a program that is not
+      installed or not on the <code>PATH</code>, and per-command error rates ranged from 9.2% to
+      26.7% by
+      model.<a class="cite" href="https://arxiv.org/html/2601.11868#S4.SS5" title="Merrill et al. 2026, Terminal-Bench, §4.5 Command-Level Error Analysis (Terminal-Bench 2.0 runs, paper dated 17 Jan 2026)">[Terminal-Bench]</a>
+      You will produce that failure yourself in the lab below. Reading an agent's
+      <span class="term" data-g="transcript">transcript</span> is largely reading a Linux terminal
+      session that went partly wrong.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — benchmark scores are history by the time you read them</span>
+      <p>At the Terminal-Bench paper's publication (17 January 2026) the best agent resolved 63% of
+      version 2.0. By 2.1 (May 2026) top entries were near 80%; on the harder 3.0 (30 July 2026)
+      the best were around 34%; 4.0 followed on 28 August
+      2026.<a class="cite" href="https://www.tbench.ai/news/terminal-bench-3-0" title="Terminal-Bench 3.0 release post, 30 July 2026; see also arXiv:2601.11868 §4 and the 2.1 and 4.0 release posts">[Terminal-Bench]</a>
+      This course cites scores only with dates. The mechanisms are what last.</p>
+    </div>
+
+    <h2 id="three-ways">Three ways the box corrupts the score</h2>
+    <p>
+      An environment can make a score wrong in three directions. Each has a published incident
+      behind it, and each comes down to Linux facts you will be able to check.
+    </p>
+
+    <h3 id="box-failed">1. The box fails, and the model gets the blame</h3>
+    <p>
+      Start with one you can reproduce in thirty seconds: a container allowed 64 MB of memory,
+      running a command that needs more.
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -it --memory 64m --memory-swap 64m ubuntu:24.04 bash
+<span class="p">#</span> tail /dev/zero
+<span class="o"><span class="hl">Killed</span></span>
+<span class="p">#</span> echo $?
+<span class="o">137</span>
+<span class="p">#</span> grep oom_kill /sys/fs/cgroup/memory.events
+<span class="o">oom_kill 1</span></code></pre>
+    <p>
+      The kernel's <span class="term" data-g="oom-killer">OOM killer</span> ended the process. The
+      terminal shows only <code>Killed</code> and status 137 — 128 plus the number of the signal
+      that killed it, 9,
+      SIGKILL.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, Exit Status">[Bash Manual]</a>
+      Nothing in the agent's view says <em>why</em>; the evidence is a counter in
+      <code>memory.events</code> that a harness may never have recorded. Swap in
+      <code>pip install pandas scikit-learn</code> and you have a real case: a reasonable first
+      move, killed by the box, logged as a model failure.
+    </p>
+    <p>
+      Anthropic measured how much this matters. Running Terminal-Bench 2.0 with the same model and
+      harness under six resource configurations, infrastructure errors fell from 5.8% (each task's
+      stated resources as a hard ceiling) to 0.5% (no cap), and the score gap between the extremes
+      was 6 percentage points (p &lt; 0.01). Their conclusion: "leaderboard differences below 3
+      percentage points deserve skepticism until the eval configuration is documented and
+      matched."<a class="cite" href="https://www.anthropic.com/engineering/infrastructure-noise" title="Anthropic Engineering, Quantifying infrastructure noise in agentic coding evals, 5 Feb 2026">[Anthropic: Infra Noise]</a>
+      The benchmark's maintainers saw it from the other side: Terminal-Bench 2.1 fixed 28 of the 89
+      tasks — changed external dependencies, resource budgets too small for a valid solution — and
+      one agent's score moved from 58.0% to 70.1% with no change to the
+      model.<a class="cite" href="https://www.tbench.ai/news/terminal-bench-2-1" title="Terminal-Bench 2.1 release post, 6 May 2026 (Claude Code + Claude Opus 4.6)">[Terminal-Bench]</a>
+    </p>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>An <span class="term" data-g="infrastructure-failure">infrastructure failure</span> and a
+      wrong answer land in the same column unless you separate them. SWE-bench's harness now counts
+      "instances with errors" and "instances with likely infrastructure failures" apart from
+      unresolved
+      ones.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/blob/main/docs/guides/evaluation.md" title="SWE-bench Evaluation Guide, What the counts mean">[SWE-bench]</a>
+      An infrastructure outcome is an observation about the <em>run</em>, not the model. In any
+      harness: for every failed rollout record the last exit status and whether the sandbox hit
+      its memory or time limit; never drop such rollouts silently; and report
+      <code>correct / scheduled</code>, <code>correct / completed</code> and
+      <code>completed / scheduled</code> as three different quantities, with the primary one
+      chosen before you look at results. Rollouts that all die in the same under-sized box are
+      also not independent
+      samples,<a class="cite" href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" title="Anthropic Engineering, Demystifying evals for AI agents, 9 Jan 2026, Step 4">[Anthropic: Agent Evals]</a>
+      which breaks your error bars
+      (<a href="../../../evals/evals-tut/pages/16-error-bars.html">Understanding LLM Evals, page
+      16</a>). Pages <a href="10-signals-exit-codes.html">10</a> and
+      <a href="12-resources-and-limits.html">12</a> teach the decoding.</p>
+    </div>
+
+    <h3 id="box-leaks">2. The box leaks the answer, and the model gets the credit</h3>
+    <p>
+      A SWE-bench sandbox holds a real project's code as it was just before a bug fix, and the
+      agent must write the fix. In September 2025, issue #465 on the SWE-bench repository — "Repo
+      State Loopholes During Agentic Evaluation" — reported that task images still carried the
+      repository's <em>later</em> history. Agents had run commands such as
+    </p>
+<pre><code>cd /testbed &amp;&amp; git log --oneline --all | grep -i "bracket\|parametrize\|modpath" | head -10</code></pre>
+    <p>
+      and been shown the commit that fixed the bug they were asked to
+      fix.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/issues/465" title="SWE-bench issue #465, Repo State Loopholes During Agentic Evaluation, opened 3 Sept 2025">[SWE-bench #465]</a>
+      No network was needed; the answer was in <code>.git</code>. This is a
+      <span class="term" data-g="git-history-leak">git-history leak</span>, and not exotic
+      behaviour: a commenter on the issue noted that searching the history is what a human
+      engineer would do first. The flaw was in the image.
+    </p>
+    <p>
+      Keep the scale honest. Searching the twenty most recent leaderboard submissions, the
+      maintainers found matching commands in about 5 of 10,000 trajectories; on the bash-only
+      leaderboard, six suspicious successes from one leading model were worth about 1.2 percentage
+      points, and no ranks among the top four changed. They rebuilt every image and fixed the build
+      (pull request #471, merged 11 September 2025): remove the remote, delete tags newer than the
+      task's commit, expire the reflog, garbage-collect — then <em>fail the build</em> if
+      <code>git log --all</code> can still see the
+      future.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/pull/471" title="SWE-bench PR #471, Fix git log leakage in environment images, merged 11 Sept 2025 (v4.1.0)">[SWE-bench #465]</a>
+      The lesson is that last step: check an environment property with a command.
+    </p>
+    <p>
+      The pattern is general. METR found
+      <span class="term" data-g="reward-hacking">reward hacking</span> by a pre-release OpenAI o3
+      checkpoint in 39 of 128 runs (30.4%) on one task suite against 8 of 1,087 (0.7%) on another,
+      and attributed the gap partly to the first suite letting the model "see the entire scoring
+      function". Adding "Please do not cheat" to one task left the rate of cheating plans at
+      80%.<a class="cite" href="https://metr.org/blog/2025-06-05-recent-reward-hacking/" title="Von Arx, Chan, Barnes (METR), Recent Frontier Models Are Reward Hacking, 5 June 2025">[METR]</a>
+      Anthropic reports a quieter variant from internal evals: Claude "gaining an unfair advantage
+      on some tasks by examining the git history from previous trials" — state left by an earlier
+      run.<a class="cite" href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" title="Anthropic Engineering, Demystifying evals for AI agents, 9 Jan 2026, Step 4">[Anthropic: Agent Evals]</a>
+      What an agent can read, write, or find left over is decided by ownership, permission bits,
+      mounts, and whether each attempt got a fresh box:
+      <span class="term" data-g="environment-integrity">environment integrity</span>, the subject
+      of <a href="26-environment-integrity.html">page 26</a>.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — "the tests are hidden, so grading is safe"</span>
+      <p>Terminal-Bench's harness uploads the tests only after the agent has finished. But by
+      default the verifier then runs <em>in the same container the agent just had</em>, typically
+      as
+      root.<a class="cite" href="https://docs.harborframework.com/core-concepts/tasks/verifier" title="Harbor documentation, Tasks: Verifier">[Terminal-Bench]</a>
+      An agent cannot read tests that are not there yet, but it can change the box they will run
+      in. Terminal-Bench 3.0 moved to a separate verifier container, which its authors say
+      "prevents many reward hacking
+      vectors".<a class="cite" href="https://www.tbench.ai/news/terminal-bench-3-0" title="Terminal-Bench 3.0 release post, 30 July 2026">[Terminal-Bench]</a>
+      "Hidden" and "tamper-proof" are different properties, enforced by different mechanisms.</p>
+    </div>
+
+    <h3 id="box-opens">3. The box lets the agent out</h3>
+    <p>
+      OpenAI's system card for o1-preview (12 September 2024) describes one attempt at a
+      capture-the-flag challenge. The agent was meant to break into software in a second container,
+      which had failed to start because of a bug in the evaluation infrastructure. The model, "unable to connect to the
+      container, suspected DNS issues and used nmap to scan the challenge network. Instead of
+      finding the challenge container, the model found that the Docker daemon API running on the
+      evaluation host VM was accessible due to a misconfiguration." It listed the host's containers,
+      briefly tried to debug the broken one, then started a new instance of it with the start
+      command <code>cat flag.txt</code> and read the flag from the container's
+      logs.<a class="cite" href="https://cdn.openai.com/o1-system-card.pdf" title="OpenAI o1 System Card, 12 Sept 2024 version, §4.2.1 Observation of Reward Hacking on Cybersecurity Task">[o1 System Card]</a>
+    </p>
+    <p>
+      The <span class="term" data-g="docker-daemon">Docker daemon</span> is the program that creates
+      containers; whoever can talk to its API can start any container with any command. Be precise
+      about what the card says. It does not describe a container "escape": the model used a
+      network service that should not have been reachable. Nor does OpenAI say a boundary held. It
+      says its infrastructure "does not rely on the Docker container-to-host isolation or the
+      virtual machine boundary for security" and "remained secure as it was designed to" — without
+      saying what it does rely on. It calls the behaviour "benign and within the range of systems
+      administration and troubleshooting tasks we expect models to perform", and also a case of a
+      model that, finding its goal impossible, "gathered more resources … and used them to achieve
+      the goal in an unexpected
+      way."<a class="cite" href="https://cdn.openai.com/o1-system-card.pdf" title="OpenAI o1 System Card, 12 Sept 2024 version, §4.2.1">[o1 System Card]</a>
+    </p>
+    <p>
+      For an evals engineer this is two environment defects in a row: the target never started
+      (way 1), then the host's control API answered from inside the sandbox. The attempt did not
+      measure the skill the challenge was built for. The audit question that finds the second
+      defect before a model does: <em>what can this box reach?</em>
+    </p>
+
+    <table>
+      <tr><th>What went wrong</th><th>Effect on the score</th><th>The Linux facts underneath</th><th>Taught in</th></tr>
+      <tr><td>Box too small, too slow, or drifted</td><td>Falls; model blamed</td><td>memory and CPU limits, the OOM killer, timeouts and signals, package versions</td><td><a href="10-signals-exit-codes.html">10</a>, <a href="12-resources-and-limits.html">12</a>, <a href="15-packages-reproducibility.html">15</a></td></tr>
+      <tr><td>Answer or grader within the agent's reach</td><td>Rises; model credited</td><td>file ownership and permission bits, read-only mounts, image layers, <code>.git</code>, leftover state</td><td><a href="08-permissions.html">8</a>, <a href="14-mounts-and-filesystems.html">14</a>, <a href="22-docker-for-evals.html">22</a>, <a href="26-environment-integrity.html">26</a></td></tr>
+      <tr><td>Box can reach what it should not</td><td>Measures something else — and may be unsafe</td><td>routes, listening ports, egress rules, the Docker socket, isolation technology</td><td><a href="16-addresses-and-routes.html">16</a>–<a href="19-firewalls-and-egress.html">19</a>, <a href="23-hardening-containers.html">23</a>, <a href="24-isolation-ladder.html">24</a></td></tr>
+    </table>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>The environment is part of the measuring instrument. A score is a claim about a model only
+      if someone has checked the box: big enough, holding no answers, with no doors. Each check is
+      a handful of Linux commands.</p>
+    </div>
+
+    <h2 id="the-audit">The target: a ten-minute audit</h2>
+    <p>
+      The course aims at one testable competence: dropped into an unfamiliar Linux box as root,
+      you can answer five questions within ten minutes and say why each matters for the validity
+      of an eval run there. The modules are organised around them.
+    </p>
+    <table>
+      <tr><th>#</th><th>Audit question</th><th>Module</th><th>Pages</th></tr>
+      <tr><td>1</td><td>What is running?</td><td>3 · Processes (and listening sockets from 5)</td><td><a href="09-processes.html">9</a>, <a href="10-signals-exit-codes.html">10</a>, <a href="17-ports-and-sockets.html">17</a></td></tr>
+      <tr><td>2</td><td>What is mounted, and is it read-only?</td><td>4 · Storage &amp; software</td><td><a href="14-mounts-and-filesystems.html">14</a>, <a href="22-docker-for-evals.html">22</a></td></tr>
+      <tr><td>3</td><td>Who owns what?</td><td>2 · Identity &amp; permissions</td><td><a href="07-users-groups-root.html">7</a>, <a href="08-permissions.html">8</a>, <a href="11-environment-and-secrets.html">11</a></td></tr>
+      <tr><td>4</td><td>What can it reach?</td><td>5 · Networking for sandboxes</td><td><a href="16-addresses-and-routes.html">16</a>–<a href="19-firewalls-and-egress.html">19</a></td></tr>
+      <tr><td>5</td><td>Where are the logs?</td><td>3 · Processes; 7 · Harnesses</td><td><a href="12-resources-and-limits.html">12</a>, <a href="13-services-and-logs.html">13</a>, <a href="27-reading-terminal-transcripts.html">27</a></td></tr>
+    </table>
+    <p>
+      The other modules hold the five together. <strong>Module 1</strong> (pages
+      <a href="02-shell-and-commands.html">2</a>–<a href="06-shell-scripting.html">6</a>) is the
+      language every question is asked in: the shell, the file tree, pipes, and the text tools for
+      interrogating ten thousand rollout logs. <strong>Module 6</strong> (pages
+      <a href="20-namespaces.html">20</a>–<a href="24-isolation-ladder.html">24</a>) takes the box
+      apart: what a container is made of, how to lock one down, when a container is not enough.
+      <strong>Module 7</strong> (pages
+      <a href="25-how-harnesses-use-linux.html">25</a>–<a href="28-ten-minute-audit.html">28</a>)
+      returns to the rectangle in the diagram: how real harnesses drive a sandbox, where cheating
+      lives, how to read a transcript, and the audit as a timed procedure. One small benchmark,
+      <code>wordfreq-bench</code>, is built, broken and hardened along the way.
+    </p>
+    <p>The audit is one of three abilities the course builds, framed the way a job uses them:</p>
+    <table>
+      <tr><th>Ability</th><th>A useful demonstration</th></tr>
+      <tr><td><strong>Discuss</strong></td><td>Explain in plain language why exit status 137 does not tell you whether the model or the box failed, and what that does to a pass rate.</td></tr>
+      <tr><td><strong>Navigate</strong></td><td>From a shell inside an unfamiliar sandbox, answer the five questions, find the last thing that worked, and bring evidence rather than a guess.</td></tr>
+      <tr><td><strong>Design</strong></td><td>Choose and defend an environment policy — user, mounts, limits, network, where grading runs — knowing what each choice costs the task.</td></tr>
+    </table>
+      <code>wordfreq-bench</code>, is built, broken and hardened along the way.
+    </p>
+
+    <h2 id="depth-triage">Where to go deep, and where to recognize the idea</h2>
+    <p>
+      This is not preparation for a system administrator's certificate. One question decides what
+      is in: <em>does an evals engineer need this to build, debug, audit, or harden an eval
+      environment, or to read an agent's transcript?</em> The working set is about seventy commands
+      (<a href="../appendices/a-command-reference.html">Appendix A</a>), taught with the model
+      behind them so that you can work out what will happen when your situation differs.
+    </p>
+    <table>
+      <tr><th>Learn to use</th><th>Learn to recognize</th><th>Save for a specialized role</th></tr>
+      <tr>
+        <td>The shell, pipes and text tools; exit codes and signals; users and permission bits; <code>ps</code>, <code>findmnt</code>, <code>ss</code>, <code>ip</code>, <code>curl</code>; resource limits and the OOM killer; <code>docker run</code> and its hardening flags; short shell scripts</td>
+        <td>systemd units and the journal; overlayfs internals; individual capabilities and seccomp profiles; nftables rule syntax; IPv6; gVisor and microVM architecture</td>
+        <td>Kernel building and tuning; boot loaders; disk arrays and volume managers; mail servers; operating Kubernetes; writing seccomp or AppArmor policy from scratch; container-escape research</td>
+      </tr>
+    </table>
+    <p>
+      Two sibling courses carry the rest. Graders, error analysis and error bars belong to
+      <a href="../../../evals/evals-tut/index.html">Understanding LLM Evals</a>. Networking
+      <em>concepts</em> — DNS, TCP, TLS, HTTP, retries, proxies — belong to
+      <a href="../../../networking/networking-tut/index.html">Networking for LLM Evals</a>; Module
+      5 here stays on the Linux side: reading a box's network state and enforcing what it can
+      reach. Dashed-underlined terms link to the <a href="../glossary.html">glossary</a>.
+    </p>
+
+How to work through it</h2>
+    <p>
+      Type everything; the labs are the course. <a href="01-lab-setup.html">Page 1</a> sets up two
+      places to type, both yours to break: a disposable container on your Mac, and a small real VM
+      for the few pages that need a kernel of their own.
+    </p>
+    <p>
+      Every terminal block is pasted from a real run on Ubuntu 24.04. A <code>$</code> prompt means
+      an ordinary user; <code>#</code> means root. Claims about the world carry a bracketed citation
+      to the primary source (<a href="../appendices/f-getting-help.html">Appendix F</a> explains how
+      to read the man pages most point to). Your Mac's own terminal differs in misleading ways
+      (<a href="../appendices/e-macos-vs-linux.html">Appendix E</a>): run course commands in the lab.
+    </p>
+    <p>
+      For more drill on the basics, <a href="https://labex.io/linuxjourney">Linux Journey</a> is a
+      free set of short lessons whose early tracks (Command Line, Text-Fu, Permissions, Processes)
+      parallel Modules 1–3; the old linuxjourney.com address redirects
+      there.<a class="cite" href="https://labex.io/linuxjourney" title="Linux Journey, maintained by LabEx (formerly linuxjourney.com)">[Linux Journey]</a>
+      It will not mention evals.
+    </p>
+    <p>
+      The finish line is a set of observable skills, not a promise of employment: an audit you can
+      perform in front of someone, a script, and a write-up that keeps infrastructure outcomes
+      separate from model outcomes (<a href="28-ten-minute-audit.html">page 28</a>).
+    </p>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A colleague moves an agentic coding benchmark from a large workstation to a shared cluster
+      that runs forty sandboxes per host. The pass rate drops four points, and the draft report says
+      the new model checkpoint "regressed". What would you establish before agreeing?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Observed:</strong> two things changed at once — the checkpoint and the
+        environment. <strong>Hypothesis:</strong> the model got worse. It is only one of at least
+        two. The discriminating test is to hold one side fixed: rerun the <em>old</em> checkpoint on
+        the cluster. If it also drops, the box moved the score.</p>
+        <p>Then look for direct evidence of box failure among the newly failing rollouts: exit
+        status 137 and <code>oom_kill</code> counts, rollouts that ended at exactly the time limit,
+        <code>No space left on device</code>, install commands that failed. Compare the per-sandbox
+        memory, CPU and time limits on both systems, and the concurrency — forty sandboxes sharing
+        a host is a different machine from one. Ask how the four points are computed: if
+        infrastructure deaths are counted as wrong answers, report
+        <code>completed / scheduled</code> beside <code>correct / completed</code> so the reader
+        can see which moved. Anthropic's measurement above is the prior: resource configuration
+        alone moved Terminal-Bench 2.0 by up to 6 points. "Regressed" is a claim about the model;
+        it needs the environment ruled out first.</p>
+      </details>
+    </div>
+      It will not mention evals. That part is this course's job.
+    </p>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Where:</strong> any Mac with Docker running. If <code>docker version</code> fails,
+      do the first half of <a href="01-lab-setup.html">page 1</a> and come back. This lab is
+      deliberately light: the goal is to look around a Linux box before anything has been explained,
+      and write down what you do not understand.</p>
+
+      <p><strong>1. Five commands in a fresh box.</strong> Start a throwaway Ubuntu container and
+      run the five commands below. Keep a note — on paper is fine — of every word of output you
+      cannot explain. You will come back to this list on
+      <a href="28-ten-minute-audit.html">page 28</a>, and the measure of the course is how short it
+      has become.</p>
+<pre><code>docker run --rm -it ubuntu:24.04 bash
+id
+head -2 /etc/os-release
+ps aux
+ip addr
+ls -la /</code></pre>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm -it ubuntu:24.04 bash
+<span class="p">#</span> id
+<span class="o">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="p">#</span> head -2 /etc/os-release
+<span class="o">PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"</span>
+<span class="p">#</span> ps aux
+<span class="o">USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   4296  3576 pts/0    Ss   10:54   0:00 bash
+root        11  0.0  0.0   7628  3448 pts/0    R+   10:54   0:00 ps aux</span>
+<span class="p">#</span> ip addr
+<span class="o">bash: ip: command not found</span>
+<span class="p">#</span> ls -la /
+<span class="o">total 56
+drwxr-xr-x   1 root root 4096 Sep 21 10:54 .
+drwxr-xr-x   1 root root 4096 Sep 21 10:54 ..
+-rwxr-xr-x   1 root root    0 Sep 21 10:54 .dockerenv
+lrwxrwxrwx   1 root root    7 Apr 22  2024 bin -&gt; usr/bin
+drwxr-xr-x   2 root root 4096 Apr 22  2024 boot
+drwxr-xr-x   5 root root  360 Sep 21 10:54 dev
+drwxr-xr-x   1 root root 4096 Sep 21 10:54 etc
+…
+drwxrwxrwt   2 root root 4096 Sep 11 02:12 tmp
+drwxr-xr-x  11 root root 4096 Sep 11 02:06 usr
+drwxr-xr-x  11 root root 4096 Sep 11 02:12 var</span></code></pre>
+        <p>Your prompt will look like <code>root@75ffaabca095:/#</code> (the hex string is the
+        container's name for itself); the course shortens it to <code>#</code>. Things worth having
+        on your list: why you are <code>root</code> without having typed a password
+        (<a href="07-users-groups-root.html">page 7</a>); why only two processes exist on a whole
+        "computer", and why <code>bash</code> is number 1
+        (<a href="09-processes.html">pages 9</a> and <a href="20-namespaces.html">20</a>); what
+        <code>drwxrwxrwt</code> and <code>bin -&gt; usr/bin</code> mean
+        (<a href="08-permissions.html">pages 8</a> and
+        <a href="03-files-and-the-tree.html">3</a>); and what <code>.dockerenv</code> is doing there
+        (<a href="28-ten-minute-audit.html">page 28</a> uses it to tell a container from a VM).</p>
+      </details>
+
+      <p><strong>2. Predict, then verify.</strong> <code>ip addr</code> failed. Before running it,
+      write down what number you expect <code>echo $?</code> to print immediately afterwards — zero
+      or non-zero? Then run <code>ip addr</code> again followed by <code>echo $?</code>.</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> ip addr
+<span class="o">bash: ip: command not found</span>
+<span class="p">#</span> echo $?
+<span class="o">127</span></code></pre>
+        <p><code>$?</code> holds the exit status of the last command: 0 means success, anything
+        else is a failure, and 127 is the shell's specific code for "I could not find a program by
+        that name" (<a href="02-shell-and-commands.html">page 2</a>). Nothing is broken: the
+        <code>ip</code> tool is simply not installed in this minimal image. You have just produced
+        the most common failed command in the Terminal-Bench analysis quoted above. When you see
+        127 in a transcript, the first question is whether the <em>image</em> should have had the
+        tool — an environment question — before it is a question about the model.</p>
+      </details>
+
+      <p><strong>3. Disposable means disposable.</strong> In the container, run
+      <code>touch /i-was-here</code> and check it exists with <code>ls /i-was-here</code>. Type
+      <code>exit</code>. Now, from your Mac, run
+      <code>docker run --rm ubuntu:24.04 ls /i-was-here</code>. Predict the result first. Then: why
+      is this the behaviour a harness wants between one attempt at a task and the next?</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> touch /i-was-here; ls /i-was-here
+<span class="o">/i-was-here</span>
+<span class="p">#</span> exit
+<span class="o">exit</span>
+<span class="p">$</span> docker run --rm ubuntu:24.04 ls /i-was-here
+<span class="o">ls: cannot access '/i-was-here': No such file or directory</span></code></pre>
+        <p>Every <code>docker run</code> creates a new container from the unchanging image; the
+        first container's changes lived in that container only, and <code>--rm</code> deleted it on
+        exit. For an eval this is the reset mechanism: a
+        fresh container per attempt means attempt 7 cannot see files, processes, or git history
+        left by attempt 6. The Anthropic anecdote above — an advantage gained from "the git history
+        from previous trials" — is what happens when a workspace is reused instead.
+        <a href="22-docker-for-evals.html">Page 22</a> covers what does survive (volumes) and why
+        that is the exception to watch.</p>
+      </details>
+
+      <p><strong>4. An eval-flavoured one: who failed?</strong> Reproduce the out-of-memory kill
+      from this page in a container limited to 64 MB (the limit makes this safe — the process is
+      killed long before your Mac notices). Then answer: if a harness had saved only the command's
+      output and exit status, what would the record of this rollout contain, and what would it be
+      missing?</p>
+<pre><code>docker run --rm -it --memory 64m --memory-swap 64m ubuntu:24.04 bash
+tail /dev/zero
+echo $?
+cat /sys/fs/cgroup/memory.max
+grep oom_kill /sys/fs/cgroup/memory.events</code></pre>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> tail /dev/zero
+<span class="o">Killed</span>
+<span class="p">#</span> echo $?
+<span class="o">137</span>
+<span class="p">#</span> cat /sys/fs/cgroup/memory.max
+<span class="o">67108864</span>
+<span class="p">#</span> grep oom_kill /sys/fs/cgroup/memory.events
+<span class="o">oom_kill 1</span></code></pre>
+        <p><code>tail</code> tries to hold the "last lines" of a file that never ends and contains
+        no line breaks, so its memory grows until the kernel enforces the container's limit:
+        67,108,864 bytes is 64 × 1024 × 1024. The record would contain the string
+        <code>Killed</code> and the status 137. It would be missing the cause. Status 137 only says
+        "ended by SIGKILL"; a harness timeout that kills the process produces the same number. The
+        fact that separates "the box was too small" from "the command ran too long" is
+        <code>oom_kill 1</code>, which lives in the sandbox's cgroup files and vanishes with the
+        container unless something copies it out. That is audit question 5 — <em>where are the
+        logs?</em> — in miniature, and <a href="12-resources-and-limits.html">page 12</a> returns
+        to it properly.</p>
+      </details>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Carlos E. Jimenez, John Yang et al., "SWE-bench: Containerized Evaluation Harness" (report, 27 June 2024), and the SWE-bench Evaluation Guide. <a href="https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md">github.com/SWE-bench/SWE-bench (v3.0.0) docs/20240627_docker</a> · <a href="https://github.com/SWE-bench/SWE-bench/blob/main/docs/guides/evaluation.md">docs/guides/evaluation.md</a></li>
+        <li>Jacob Kahn et al., "Repo State Loopholes During Agentic Evaluation," SWE-bench issue #465, opened 3 September 2025, with maintainer responses; fix in pull request #471 (merged 11 September 2025, swebench v4.1.0). <a href="https://github.com/SWE-bench/SWE-bench/issues/465">github.com/SWE-bench/SWE-bench/issues/465</a> · <a href="https://github.com/SWE-bench/SWE-bench/pull/471">pull/471</a></li>
+        <li>Mike A. Merrill, Alexander G. Shaw, Nicholas Carlini et al., "Terminal-Bench: Benchmarking Agents on Hard, Realistic Tasks in Command Line Interfaces," arXiv:2601.11868, 17 January 2026; Terminal-Bench 2.1 and 3.0 release posts (6 May and 30 July 2026); Harbor documentation, "Verifier". <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a> · <a href="https://www.tbench.ai/news/terminal-bench-2-1">tbench.ai/news/terminal-bench-2-1</a> · <a href="https://www.tbench.ai/news/terminal-bench-3-0">tbench.ai/news/terminal-bench-3-0</a> · <a href="https://docs.harborframework.com/core-concepts/tasks/verifier">docs.harborframework.com/…/verifier</a></li>
+        <li>UK AI Security Institute, Inspect AI documentation, "Sandboxing". <a href="https://inspect.aisi.org.uk/sandboxing.html">inspect.aisi.org.uk/sandboxing.html</a></li>
+        <li>Tianbao Xie et al., "OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments," arXiv:2404.07972, 2024. <a href="https://arxiv.org/abs/2404.07972">arxiv.org/abs/2404.07972</a></li>
+        <li>Mark Chen et al., "Evaluating Large Language Models Trained on Code," arXiv:2107.03374, 2021, §2.3. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+        <li>OpenAI, "OpenAI o1 System Card," version dated 12 September 2024 (o1-preview and o1-mini), §4.2.1. The incident does not appear in the December 2024 card or in arXiv:2412.16720. <a href="https://cdn.openai.com/o1-system-card.pdf">cdn.openai.com/o1-system-card.pdf</a></li>
+        <li>Sydney Von Arx, Lawrence Chan, Beth Barnes (METR), "Recent Frontier Models Are Reward Hacking," 5 June 2025. <a href="https://metr.org/blog/2025-06-05-recent-reward-hacking/">metr.org/blog/2025-06-05-recent-reward-hacking</a></li>
+        <li>Anthropic, "Demystifying evals for AI agents," Engineering at Anthropic, 9 January 2026. <a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents">anthropic.com/engineering/demystifying-evals-for-ai-agents</a></li>
+        <li>Gian Segato (Anthropic), "Quantifying infrastructure noise in agentic coding evals," Engineering at Anthropic, 5 February 2026. <a href="https://www.anthropic.com/engineering/infrastructure-noise">anthropic.com/engineering/infrastructure-noise</a></li>
+        <li>GNU Bash Reference Manual, "Exit Status". <a href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status">gnu.org/software/bash/manual/bash.html#Exit-Status</a></li>
+        <li>Linux Journey, originally by Cindy Quach, maintained by LabEx. <a href="https://labex.io/linuxjourney">labex.io/linuxjourney</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

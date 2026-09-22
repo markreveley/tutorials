@@ -1,0 +1,212 @@
+### page 13 verification — 2026-09-21
+### stock container: no systemd, PID 1 is the command, /var/log
+status=1
+bash
+/var/log:
+total 256
+-rw-r--r-- 1 root root   4860 Sep 11 02:12 alternatives.log
+drwxr-xr-x 2 root root   4096 Sep 11 02:12 apt
+-rw-r--r-- 1 root root  61237 Sep 11 02:06 bootstrap.log
+-rw-rw---- 1 root utmp      0 Sep 11 02:06 btmp
+-rw-r--r-- 1 root root 185375 Sep 11 02:12 dpkg.log
+-rw-r--r-- 1 root root      0 Sep 11 02:06 faillog
+-rw-rw-r-- 1 root utmp      0 Sep 11 02:06 lastlog
+-rw-rw-r-- 1 root utmp      0 Sep 11 02:06 wtmp
+
+/var/log/apt:
+total 28
+-rw-r--r-- 1 root root  4420 Sep 11 02:12 eipp.log.xz
+-rw-r--r-- 1 root root 19305 Sep 11 02:12 history.log
+2026-09-11 02:12:41 status unpacked unminimize:arm64 0.2.1
+2026-09-11 02:12:41 status half-configured unminimize:arm64 0.2.1
+2026-09-11 02:12:41 status installed unminimize:arm64 0.2.1
+
+### systemctl in a container that has the binary but no systemd PID 1 (lt-12-base has none either; install systemd package? skip) 
+
+### docker logs: both streams, not files
+$ docker logs lt-13-app
+WARN: retrying API call
+worker started
+$ docker logs lt-13-app 2>/dev/null
+worker started
+$ docker logs -t --since 10m lt-13-app
+2026-09-21T21:09:04.753795677Z WARN: retrying API call
+2026-09-21T21:09:04.753821302Z worker started
+$ docker inspect log config
+driver=json-file opts={}
+/var/lib/docker/containers/<id>/<id>-json.log
+$ docker exec lt-13-app cat /var/log/app.log
+detail only in a file
+# exec output is NOT in docker logs:
+agent ran this via exec
+0
+
+### forensic record of installs (lt-11-lab: I installed procps sudo locales tzdata python3 earlier today)
+# tail of /var/log/apt/history.log
+Commandline: apt-get --yes -oDebug::pkgDepCache::AutoInstall=yes --no-install-recommends install unminimize
+Install: unminimize:arm64 (0.2.1)
+End-Date: 2026-09-11  02:12:41
+
+Start-Date: 2026-09-21  11:11:30
+Commandline: apt-get install -y -qq --no-install-recommends procps sudo locales tzdata python3
+Install: python3.12:arm64 (3.12.3-1ubuntu0.17, automatic), netbase:arm64 (6.4, automatic), readline-common:arm64 (8.2-4build1, automatic), tzdata:arm64 (2026c-0ubuntu0.24.04.1), python3-minimal:arm64 (3.12.3-0ubuntu2.1, 
+End-Date: 2026-09-21  11:11:32
+# grep " install " /var/log/dpkg.log | tail -5
+2026-09-21 11:11:31 install libpython3-stdlib:arm64 <none> 3.12.3-0ubuntu2.1
+2026-09-21 11:11:31 install python3:arm64 <none> 3.12.3-0ubuntu2.1
+2026-09-21 11:11:31 install libapparmor1:arm64 <none> 4.0.1really4.0.1-0ubuntu0.24.04.7
+2026-09-21 11:11:31 install locales:all <none> 2.39-0ubuntu8.9
+2026-09-21 11:11:31 install sudo:arm64 <none> 1.9.15p5-3ubuntu5.24.04.2
+108
+# as learner: readable?
+-rw-r--r-- 1 root root  20291 Sep 21 11:11 /var/log/apt/history.log
+-rw-r--r-- 1 root root 194752 Sep 21 11:11 /var/log/dpkg.log
+readable
+
+### dmesg in a default container
+dmesg: read kernel buffer failed: Operation not permitted
+status=1
+
+### kernel log records the OOM kill (container with only CAP_SYSLOG added, no host mounts)
+exit=137
+[Mon Sep 21 21:04:23 2026] Memory cgroup out of memory: Killed process 65840 (tail) total-vm:66828kB, anon-rss:64640kB, file-rss:1172kB, shmem-rss:0kB, UID:0 pgtables:168kB oom_score_adj:0
+[Mon Sep 21 21:09:16 2026] tail invoked oom-killer: gfp_mask=0xcc0(GFP_KERNEL), order=0, oom_score_adj=0
+[Mon Sep 21 21:09:16 2026] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=6f9f3a8d5052a1c7a6b40a017f7d618c39c8083cf55d36d5b1849ff3efd9b932,mems_allowed=0,oom_memcg=/docker/6f9f3a8d5052a1c7a6b40a017f7d618c39c8083cf55d36d5b1849ff3efd9b932,task_memcg
+[Mon Sep 21 21:09:16 2026] Memory cgroup out of memory: Killed process 67505 (tail) total-vm:66960kB, anon-rss:64768kB, file-rss:1172kB, shmem-rss:0kB, UID:0 pgtables:168kB oom_score_adj:0
+
+### rsyslog + logrotate packaged configs (installed into lt-11-lab just to read the files Ubuntu ships)
+install status=0
+Priority: important
+auth,authpriv.*			/var/log/auth.log
+*.*;auth,authpriv.none		-/var/log/syslog
+kern.*				-/var/log/kern.log
+mail.*				-/var/log/mail.log
+mail.err			/var/log/mail.err
+*.emerg				:omusrmsg:*
+--- /etc/logrotate.d/apt
+/var/log/apt/term.log {
+  rotate 12
+  monthly
+  compress
+  missingok
+  notifempty
+}
+
+/var/log/apt/history.log {
+  rotate 12
+  monthly
+  compress
+  missingok
+  notifempty
+}
+
+--- /etc/logrotate.d/dpkg
+/var/log/dpkg.log {
+	monthly
+	rotate 12
+	compress
+	delaycompress
+	missingok
+	notifempty
+	create 644 root root
+}
+--- rsyslog
+/var/log/syslog
+/var/log/mail.log
+/var/log/kern.log
+/var/log/auth.log
+/var/log/user.log
+/var/log/cron.log
+{
+	rotate 4
+	weekly
+	missingok
+	notifempty
+	compress
+	delaycompress
+	sharedscripts
+	postrotate
+		/usr/lib/rsyslog/rsyslog-rotate
+	endscript
+}
+--- logrotate.conf
+weekly
+su root adm
+rotate 4
+create
+include /etc/logrotate.d
+
+### systemctl/journalctl without systemd as PID 1
+systemd 255 (255.4-1ubuntu8.17)
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
+status=0
+No journal files were found.
+-- No entries --
+#Storage=auto
+
+### unit file syntax check (systemd 255 in lt-11-lab; systemd is not PID 1 so nothing is started)
+[Unit]
+Description=Eval worker (pulls rollouts from the queue, drives sandboxes)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=evalworker
+WorkingDirectory=/opt/eval-worker
+EnvironmentFile=/etc/eval-worker/env
+Environment=LC_ALL=C TZ=UTC
+ExecStart=/opt/eval-worker/venv/bin/python -m worker --concurrency 8
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
+$ systemd-analyze verify /etc/systemd/system/eval-worker.service
+eval-worker.service: Command /opt/eval-worker/venv/bin/python is not executable: No such file or directory
+status=1
+status after creating user+paths=0
+/etc/systemd/system/typo.service:2: Unknown key name 'ExecStrat' in section 'Service', ignoring.
+typo.service: Service has no ExecStart=, ExecStop=, or SuccessAction=. Refusing.
+Unit typo.service has a bad unit file setting.
+typo status=1
+
+### lab ex3 commands (on lt-11-lab)
+Start-Date: 2026-09-21  11:11:30
+Commandline: apt-get install -y -qq --no-install-recommends procps sudo locales tzdata python3
+Start-Date: 2026-09-21  21:09:29
+Commandline: apt-get install -y -qq --no-install-recommends rsyslog logrotate systemd
+2026-09-21 21:09:29 logrotate:arm64 3.21.0-2build1
+2026-09-21 21:09:29 ucf:all 3.0043+nmu1
+2026-09-21 21:09:29 rsyslog:arm64 8.2312.0-3ubuntu9.3
+
+### per-container rotation opts
+driver=json-file opts={"max-file":"2","max-size":"1m"}
+
+### lab ex1/2
+out
+---
+err
+---
+from exec
+  PID  PPID COMMAND
+    1     0 sleep 120
+    7     0 ps -o pid,ppid,args -e
+---
+0
+to pid1 stdout
+
+### final checks of commands exactly as shown on page
+dmesg: read kernel buffer failed: Operation not permitted
+status=1
+[Mon Sep 21 21:15:09 2026] oom-kill:constraint=CONSTRAINT_MEMCG,nodemask=(null),cpuset=fbc75245f11ebf1d6761c18e85f5e163ff12ae1e43f200ed577b6c76e38b441
+[Mon Sep 21 21:15:09 2026] Memory cgroup out of memory: Killed process 72523 (tail) total-vm:67096kB, anon-rss:64896kB, file-rss:1172kB, shmem-rss:0kB
+RestartCount=0 exited 2026-09-21T21:15:09.538601096Z
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down
+
+### dmesg extraction as shown on page
+oom-kill:constraint=CONSTRAINT_MEMCG
+oom_memcg=/docker/fbc75245f11ebf1d6761c18e85f5e163ff12ae1e43f200ed577b6c76e38b441d
+Killed process 72523 (tail)

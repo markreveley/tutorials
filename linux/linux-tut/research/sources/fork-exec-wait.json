@@ -1,0 +1,189 @@
+{
+  "id": "fork-exec-wait",
+  "tag": "[fork(2)]",
+  "citation": {
+    "authors": "Linux man-pages project",
+    "title": "fork(2), execve(2), wait(2), exit(3), environ(7)",
+    "venue": "Linux man-pages 6.19 (man7.org)",
+    "year": "2026",
+    "url": "https://man7.org/linux/man-pages/man2/fork.2.html"
+  },
+  "fetched_urls": [
+    "https://man7.org/linux/man-pages/man2/fork.2.html",
+    "https://man7.org/linux/man-pages/man2/execve.2.html",
+    "https://man7.org/linux/man-pages/man2/wait.2.html",
+    "https://man7.org/linux/man-pages/man3/exit.3.html",
+    "https://man7.org/linux/man-pages/man7/environ.7.html",
+    "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "fork creates a child that is a copy of the parent incl. open file descriptors and environment; execve replaces the program image, keeping PID, open fds (unless close-on-exec), and the environment passed to it",
+      "verdict": "confirmed",
+      "finding": "fork(2): child is 'an exact duplicate' except a listed set (own PID, PPID = parent's PID, no pending signals, no memory locks/timers, counters reset...). It inherits COPIES of the fd table; each fd refers to the SAME open file description, so file offset and status flags are shared. environ(7): fork child 'inherits a copy of its parent's environment'. execve(2): replaces the running program (new stack, heap, data); 'there is no new process', PID unchanged; fds stay open unless marked close-on-exec (FD_CLOEXEC); the new program's environment is exactly the envp array passed to execve — it is only 'kept' because callers conventionally pass their own environ.",
+      "quote": "One sometimes sees execve() (and the related functions described in exec(3)) described as \"executing a new process\" (or similar). This is a highly misleading description: there is no new process; many attributes of the calling process remain unchanged (in particular, its PID).",
+      "location": "execve(2), NOTES; fd rule in DESCRIPTION > Effect on process attributes; fork(2) DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+    },
+    {
+      "planned": "A terminated child remains a zombie until the parent wait()s; zombies hold a PID/table slot but no memory; orphans are adopted by init (or nearest subreaper)",
+      "verdict": "corrected",
+      "finding": "Zombie and adoption parts confirmed. 'No memory' is not what the source says: the kernel keeps 'a minimal set of information' (PID, termination status, resource usage) and the zombie 'will consume a slot in the kernel process table'; if the table fills no further processes can be created. Say 'almost no resources — just a process-table slot and its PID' rather than 'no memory'. Adoption: by init(1) or the nearest subreaper (prctl PR_SET_CHILD_SUBREAPER); init automatically wait()s to remove adopted zombies.",
+      "quote": "A child that terminates, but has not been waited for becomes a \"zombie\". The kernel maintains a minimal set of information about the zombie process (PID, termination status, resource usage information) in order to allow the parent to later perform a wait to obtain information about the child.",
+      "location": "wait(2), NOTES",
+      "cite_url": "https://man7.org/linux/man-pages/man2/wait.2.html"
+    },
+    {
+      "planned": "Only the low 8 bits of the exit status are available to the parent (status & 0xFF) — hence 0-255",
+      "verdict": "confirmed",
+      "finding": "exit(3) states 'status & 0xFF' explicitly; wait(2) WEXITSTATUS returns 'the least significant 8 bits'. So exit(256) is seen as 0 and exit(-1) as 255. Death-by-signal is reported separately (WIFSIGNALED/WTERMSIG) — the 128+N value is a shell convention, not what the kernel stores (see 'signal-7').",
+      "quote": "The exit() function causes normal process termination and the least significant byte of status (i.e., status & 0xFF) is returned to the parent (see wait(2)).",
+      "location": "exit(3), DESCRIPTION; wait(2) DESCRIPTION > WEXITSTATUS",
+      "cite_url": "https://man7.org/linux/man-pages/man3/exit.3.html"
+    },
+    {
+      "planned": "environ: array of name=value strings, inherited by children via exec; by convention uppercase; a child cannot change its parent's environment",
+      "verdict": "corrected",
+      "finding": "Confirmed by environ(7): NULL-terminated array of strings, by convention 'name=value'; made available by execve(2); a fork child inherits a COPY (so changes in the child cannot reach the parent — the page says 'copy' but does not state the no-write-back consequence as a sentence). NOT in environ(7): the uppercase convention. environ(7) only says names are case-sensitive and may not contain '='. The uppercase convention is from POSIX (Base Definitions ch. 8): names used by the standard utilities consist solely of uppercase letters, digits and underscore, and the lowercase name space is reserved for applications. Cite POSIX, not environ(7), for uppercase.",
+      "quote": "By convention, the strings in environ have the form \"name=value\". The name is case-sensitive and may not contain the character \"=\". The value can be anything that can be represented as a string. The name and the value may not contain an embedded null byte ('\\0'), since this is assumed to terminate the string.",
+      "location": "environ(7), DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man7/environ.7.html"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "fork(2) core definition.",
+      "quote": "fork() creates a new process by duplicating the calling process. The new process is referred to as the child process. The calling process is referred to as the parent process. The child process and the parent process run in separate memory spaces. At the time of fork() both memory spaces have the same content.",
+      "location": "fork(2), DESCRIPTION"
+    },
+    {
+      "finding": "fork return values: child's PID in the parent, 0 in the child, -1 on failure.",
+      "quote": "On success, the PID of the child process is returned in the parent, and 0 is returned in the child. On failure, -1 is returned in the parent, no child process is created, and errno is set to indicate the error.",
+      "location": "fork(2), RETURN VALUE"
+    },
+    {
+      "finding": "Shared open file descriptions after fork (why parent and child writing to the same log file interleave rather than overwrite).",
+      "quote": "The child inherits copies of the parent's set of open file descriptors. Each file descriptor in the child refers to the same open file description (see open(2)) as the corresponding file descriptor in the parent. This means that the two file descriptors share open file status flags, file offset, and signal-driven I/O attributes",
+      "location": "fork(2), DESCRIPTION ('Note the following further points')"
+    },
+    {
+      "finding": "fork is cheap: copy-on-write.",
+      "quote": "Under Linux, fork() is implemented using copy-on-write pages, so the only penalty that it incurs is the time and memory required to duplicate the parent's page tables, and to create a unique task structure for the child.",
+      "location": "fork(2), NOTES"
+    },
+    {
+      "finding": "fork fails with EAGAIN for FOUR distinct limits: RLIMIT_NPROC (per real UID), kernel threads-max, kernel pid_max, and the cgroup pids.max. This is the error behind bash's 'fork: retry: Resource temporarily unavailable' in a --pids-limit container.",
+      "quote": "the PID limit (pids.max) imposed by the cgroup \"process number\" (PIDs) controller was reached.",
+      "location": "fork(2), ERRORS > EAGAIN"
+    },
+    {
+      "finding": "glibc fork() is actually clone(2) with SIGCHLD — so strace shows clone/clone3, not fork.",
+      "quote": "Since glibc 2.3.3, rather than invoking the kernel's fork() system call, the glibc fork() wrapper that is provided as part of the NPTL threading implementation invokes clone(2) with flags that provide the same effect as the traditional system call.",
+      "location": "fork(2), VERSIONS > C library/kernel differences"
+    },
+    {
+      "finding": "execve definition and the role of argv/envp.",
+      "quote": "execve() executes the program referred to by path. This causes the program that is currently being run by the calling process to be replaced with a new program, with newly initialized stack, heap, and (initialized and uninitialized) data segments.",
+      "location": "execve(2), DESCRIPTION"
+    },
+    {
+      "finding": "envp is an explicit argument: the new program gets exactly what the caller passes.",
+      "quote": "envp is an array of pointers to strings, conventionally of the form key=value, which are passed as the environment of the new program. The envp array must be terminated by a null pointer.",
+      "location": "execve(2), DESCRIPTION"
+    },
+    {
+      "finding": "File descriptors across exec.",
+      "quote": "By default, file descriptors remain open across an execve(). File descriptors that are marked close-on-exec are closed; see the description of FD_CLOEXEC in fcntl(2).",
+      "location": "execve(2), DESCRIPTION > Effect on process attributes"
+    },
+    {
+      "finding": "execve preserves all process attributes except a listed set; caught signals are reset to default (ignored ones stay ignored, per signal(7)).",
+      "quote": "All process attributes are preserved during an execve(), except the following: The dispositions of any signals that are being caught are reset to the default (signal(7)).",
+      "location": "execve(2), DESCRIPTION > Effect on process attributes"
+    },
+    {
+      "finding": "execve does not return on success.",
+      "quote": "execve() does not return on success, and the text, initialized data, uninitialized data (bss), and stack of the calling process are overwritten according to the contents of the newly loaded program.",
+      "location": "execve(2), DESCRIPTION"
+    },
+    {
+      "finding": "Interpreter scripts (#!): path must be a binary executable or a script starting with '#!interpreter [optional-arg]'; the interpreter must be a valid pathname for an executable. Missing interpreter -> ENOENT ('path or a script or ELF interpreter does not exist') — the source of the confusing 'No such file or directory' for a script that plainly exists (e.g. #!/bin/bash on Alpine).",
+      "quote": "ENOENT path or a script or ELF interpreter does not exist.",
+      "location": "execve(2), ERRORS; DESCRIPTION > Interpreter scripts"
+    },
+    {
+      "finding": "Wrong-architecture binaries fail with ENOEXEC ('Exec format error') — the amd64-image-on-arm64 symptom.",
+      "quote": "ENOEXEC An executable is not in a recognized format, is for the wrong architecture, or has some other format error that means it cannot be executed.",
+      "location": "execve(2), ERRORS"
+    },
+    {
+      "finding": "Set-user-ID bits are ignored on exec if no_new_privs is set, the filesystem is mounted nosuid, or the process is being ptraced.",
+      "quote": "The aforementioned transformations of the effective IDs are not performed (i.e., the set-user-ID and set-group-ID bits are ignored) if any of the following is true: the no_new_privs attribute is set for the calling thread (see prctl(2)); the underlying filesystem is mounted nosuid ...; or the calling process is being ptraced.",
+      "location": "execve(2), DESCRIPTION"
+    },
+    {
+      "finding": "Arguments + environment have a total size limit; exceeding it gives E2BIG ('Argument list too long').",
+      "quote": "E2BIG The total number of bytes in the environment (envp) and argument list (argv) is too large, an argument or environment string is too long, or the full path of the executable is too long.",
+      "location": "execve(2), ERRORS"
+    },
+    {
+      "finding": "wait(2): waiting releases the child's resources; otherwise zombie. Zombies can exhaust the process table.",
+      "quote": "As long as a zombie is not removed from the system via a wait, it will consume a slot in the kernel process table, and if this table fills, it will not be possible to create further processes.",
+      "location": "wait(2), NOTES"
+    },
+    {
+      "finding": "Adoption by init or subreaper, and init's automatic wait.",
+      "quote": "If a parent process terminates, then its \"zombie\" children (if any) are adopted by init(1), (or by the nearest \"subreaper\" process as defined through the use of the prctl(2) PR_SET_CHILD_SUBREAPER operation); init(1) automatically performs a wait to remove the zombies.",
+      "location": "wait(2), NOTES"
+    },
+    {
+      "finding": "Status macros: WIFEXITED/WEXITSTATUS for normal exit, WIFSIGNALED/WTERMSIG for death by signal, WIFSTOPPED, WIFCONTINUED. A process either exited with a status or was killed by a signal — two distinct outcomes that the shell flattens into one number.",
+      "quote": "WEXITSTATUS(wstatus) returns the exit status of the child. This consists of the least significant 8 bits of the status argument that the child specified in a call to exit(3) or _exit(3) or as the argument for a return statement in main().",
+      "location": "wait(2), DESCRIPTION > wait() and waitpid()"
+    },
+    {
+      "finding": "exit(3) also runs atexit handlers and flushes stdio — which does NOT happen when a process is SIGKILLed (lost buffered log lines).",
+      "quote": "All open stdio(3) streams are flushed and closed. Files created by tmpfile(3) are removed.",
+      "location": "exit(3), DESCRIPTION"
+    },
+    {
+      "finding": "environ(7): how variables get there, and the one-command form.",
+      "quote": "Bourne-style shells support the syntax NAME=value command to create an environment variable definition only in the scope of the process that executes command.",
+      "location": "environ(7), DESCRIPTION"
+    },
+    {
+      "finding": "environ(7) core definition and inheritance.",
+      "quote": "This array of strings is made available to the process by the execve(2) call when a new program is started. When a child process is created via fork(2), it inherits a copy of its parent's environment.",
+      "location": "environ(7), DESCRIPTION"
+    },
+    {
+      "finding": "PATH semantics incl. the empty-component trap: a leading/trailing colon or '::' means the current directory (deprecated legacy).",
+      "quote": "As a legacy feature, a zero-length prefix (specified as two adjacent colons, or an initial or terminating colon) is interpreted to mean the current working directory.",
+      "location": "environ(7), DESCRIPTION > PATH"
+    },
+    {
+      "finding": "HOME, LOGNAME, SHELL, USER are set at login by login(1)-style programs from the passwd database — they are NOT kernel facts; in a `docker exec` or bare container they are whatever the launcher set.",
+      "quote": "The HOME, LOGNAME, SHELL, and USER variables are set when the user is changed via a session management interface, typically by a program such as login(1) from a user database (such as passwd(5)).",
+      "location": "environ(7), NOTES"
+    },
+    {
+      "finding": "environ(7) security warning.",
+      "quote": "Clearly there is a security risk here. Many a system command has been tricked into mischief by a user who specified unusual values for IFS or LD_LIBRARY_PATH.",
+      "location": "environ(7), BUGS"
+    },
+    {
+      "finding": "POSIX source for the uppercase convention.",
+      "quote": "Environment variable names used by the utilities in the Shell and Utilities volume of POSIX.1-2024 consist solely of uppercase letters, digits, and the <underscore> ('_') ... The name space of environment variable names containing lowercase letters is reserved for applications.",
+      "location": "POSIX.1-2024, Base Definitions, 8.1 Environment Variable Definition",
+      "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap08.html"
+    },
+    {
+      "finding": "EXECUTED: a child shell sees exported changes; the parent's /proc/PID/environ still shows the environment it was exec'd with (see 'proc-5').",
+      "quote": "$ docker run --rm -e SECRET=abc ubuntu:24.04 bash -c 'export LATER=xyz; SECRET=changed; tr \"\\0\" \"\\n\" < /proc/$$/environ | grep -E \"SECRET|LATER\"; echo \"---child:\"; bash -c \"tr \\\"\\\\0\\\" \\\"\\\\n\\\" < /proc/\\$\\$/environ | grep -E \\\"SECRET|LATER\\\"\"'\nSECRET=abc\n---child:\nLATER=xyz\nSECRET=changed",
+      "location": "executed ubuntu:24.04"
+    }
+  ],
+  "teaching_notes": "These five pages give the whole process life-cycle in citable sentences. Most valuable precision: (1) execve does NOT create a process — quote the 'highly misleading description' line; (2) the environment is not magically inherited: fork copies it, and execve installs whatever envp the caller hands over (which is how `env -i`, `sudo`, and `docker exec` produce a different environment); (3) zombies are not 'no memory' — they are a process-table slot + PID, and the stated risk is table/PID exhaustion; (4) 0-255 is from 'status & 0xFF' in exit(3); killed-by-signal is a separate wait status and 128+N is bash's encoding; (5) the uppercase-names convention is POSIX ch. 8, absent from environ(7); (6) fork's EAGAIN list explicitly names cgroup pids.max, tying the syscall to `--pids-limit`; (7) strace will show clone/clone3 rather than fork because of the glibc wrapper. ENOENT-for-missing-interpreter and ENOEXEC-for-wrong-arch are the two exec errors agents hit most in task images."
+}

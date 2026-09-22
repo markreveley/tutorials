@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resources, Limits, and the OOM Killer · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 3 · Processes</p>
+    <h1>Resources, limits, and the OOM killer</h1>
+    <p class="lede">
+      A sandbox has a budget of CPU, memory, disk, and process slots, and each one fails in its own
+      way when it runs out: a kill, a slowdown, an error message. This page teaches you to read the
+      budget, recognise each kind of exhaustion in a transcript, and prove — with evidence rather
+      than an exit code — that the box failed and not the model.
+    </p>
+
+    <h2 id="four-resources">Four resources, two kinds of limit</h2>
+    <p>
+      Everything a program consumes falls into four buckets. Each has a command that reads it and a
+      characteristic way of failing.
+    </p>
+    <table>
+      <tr><th>Resource</th><th>Read it with</th><th>When it runs out</th></tr>
+      <tr><td>CPU</td><td><code>nproc</code>, <code>uptime</code>, <code>top</code></td><td>Nothing dies. Everything is slow, then something times out.</td></tr>
+      <tr><td>Memory</td><td><code>free -h</code>, <code>top</code></td><td>The kernel kills a process: <code>Killed</code>, exit 137.</td></tr>
+      <tr><td>Disk (space <em>and</em> inodes)</td><td><code>df -h</code>, <code>df -i</code>, <code>du -sh</code></td><td>Writes fail: <code>No space left on device</code>.</td></tr>
+      <tr><td>Process and file slots</td><td><code>ulimit -a</code>, <code>pids.max</code></td><td>Creation fails: <code>Resource temporarily unavailable</code>, <code>Too many open files</code>.</td></tr>
+    </table>
+    <p>
+      Limits on these come from two separate mechanisms, and confusing them is the root of most
+      mistakes on this topic.
+    </p>
+    <p>
+      An <span class="term" data-g="rlimit">rlimit</span> ("resource limit", what <code>ulimit</code>
+      shows) is a <em>per-process</em> attribute. Each has a soft value, which the kernel enforces,
+      and a hard value, which is the ceiling for the soft one; an unprivileged process can raise its
+      soft limit up to the hard limit and can lower its hard limit, irreversibly.<a class="cite" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" title="getrlimit(2), Linux man-pages: soft and hard limits">[getrlimit(2)]</a>
+      Rlimits are inherited across fork and exec like the environment on
+      <a href="11-environment-and-secrets.html">page 11</a>, and like the environment each child gets
+      its own copy: a limit of 64 open files means 64 <em>each</em>, not 64 shared.
+    </p>
+    <p>
+      A <span class="term" data-g="cgroup">cgroup</span> ("control group") limit is a <em>shared
+      budget for a whole group of processes</em> — in practice, a whole
+      <span class="term" data-g="container">container</span>. Memory used by any process in the group
+      counts against the one <code>memory.max</code>. This is the mechanism behind
+      <code>docker run --memory</code>, and <a href="21-cgroups-capabilities-seccomp.html">page 21</a>
+      covers it fully. Here you only need to read it. Note that memory has no usable rlimit at all:
+      the one that sounds right limits virtual address space, not real
+      memory,<a class="cite" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" title="getrlimit(2): RLIMIT_AS limits virtual address space; RLIMIT_RSS has no effect on modern kernels">[getrlimit(2)]</a>
+      so real memory caps are always cgroups.
+    </p>
+
+    <h2 id="reading-the-budget">Reading the budget — and the trap in it</h2>
+    <p>
+      Start a container with explicit limits. (<code>lt-12-base:1</code> is
+      <code>ubuntu:24.04</code> plus the <code>procps</code> and <code>python3</code> packages; your
+      page-1 lab image works the same.) By default a container "has no resource constraints and can
+      use as much of a given resource as the host's kernel scheduler
+      allows",<a class="cite" href="https://docs.docker.com/engine/containers/resource_constraints/" title="Docker Docs: Resource constraints">[Docker: run]</a>
+      so the flags are the policy:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-12-lim --memory 256m --memory-swap 256m --cpus 1.5 \
+    --pids-limit 100 lt-12-base:1 sleep infinity
+<span class="p">$</span> docker exec -it lt-12-lim bash
+<span class="p">#</span> nproc
+<span class="o"><span class="hl">10</span></span>
+<span class="p">#</span> free -h
+<span class="o">               total        used        free      shared  buff/cache   available
+Mem:           <span class="hl">7.7Gi</span>       985Mi       4.1Gi       980Ki       2.8Gi       6.7Gi
+Swap:          1.0Gi          0B       1.0Gi</span>
+<span class="p">#</span> uptime
+<span class="o"> 21:02:39 up  8:42,  0 user,  load average: 1.01, 0.37, 0.24</span></code></pre>
+    <p>
+      Ten CPUs and 7.7 GiB — in a container that was given one and a half CPUs and 256 MiB. These
+      tools read <code>/proc</code>, and <code>/proc/meminfo</code>, <code>/proc/loadavg</code> and
+      the CPU count describe the <em>machine</em> (here, Docker Desktop's Linux VM), not the
+      container's cgroup. Docker's documentation warns about exactly this for
+      <code>free</code>.<a class="cite" href="https://docs.docker.com/engine/containers/resource_constraints/" title="Docker Docs: Resource constraints — 'tools like free report the host's available swap'">[Docker: run]</a>
+      The real budget is in the cgroup filesystem, mounted read-only at
+      <code>/sys/fs/cgroup</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> cd /sys/fs/cgroup
+<span class="p">#</span> cat memory.max memory.current memory.peak
+<span class="o">268435456
+2883584
+5304320</span>
+<span class="p">#</span> cat cpu.max
+<span class="o">150000 100000</span>
+<span class="p">#</span> cat pids.max pids.current
+<span class="o">100
+3</span></code></pre>
+    <p>
+      <code>memory.max</code> is the hard limit in bytes (268435456 = 256 MiB);
+      <code>memory.current</code> is what the group uses now and <code>memory.peak</code> the most it
+      has ever used.<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files" title="Kernel docs, Control Group v2: memory interface files">[Kernel: cgroup-v2]</a>
+      <code>cpu.max</code> reads "quota period" in microseconds: the group may consume up to 150 ms
+      of CPU time in every 100 ms window, i.e. 1.5
+      CPUs.<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files" title="Kernel docs, Control Group v2: cpu.max '$MAX $PERIOD'">[Kernel: cgroup-v2]</a>
+      An unlimited container shows <code>max</code> in place of each number (<code>cpu.max</code> reads <code>max 100000</code>).
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — programs that size themselves from the wrong number</span>
+      <p><code>python3 -c 'import os; print(os.cpu_count())'</code> in that container also prints
+      <code>10</code>. Anything that picks its parallelism or cache size from the machine's totals —
+      a test runner starting one worker per CPU, a build tool, a data loader — will plan for ten CPUs
+      and 7.7 GiB, then be throttled to 1.5 and killed at 256 MiB. The agent's
+      <code>pytest -n auto</code> (one worker per CPU it can count) dying with <code>Killed</code>
+      should make you check this first: it would be a property of the box, not of the model's code.</p>
+    </div>
+    <p>Three reading notes for the host-level tools, which you will still use on VMs:</p>
+    <ul>
+      <li><strong><span class="term" data-g="load-average">Load average</span></strong> counts jobs
+        that are running or runnable <em>plus</em> those in uninterruptible disk wait, averaged over
+        1, 5 and 15 minutes,<a class="cite" href="https://man7.org/linux/man-pages/man5/proc_loadavg.5.html" title="proc_loadavg(5), Linux man-pages">[proc_loadavg(5)]</a>
+        and is not normalised by CPU count: a load of 1 saturates a one-CPU machine and leaves a
+        four-CPU machine idle 75% of the time.<a class="cite" href="https://man7.org/linux/man-pages/man1/uptime.1.html" title="uptime(1), Linux man-pages">[uptime(1)]</a>
+        Compare it with <code>nproc</code>. A sandbox host running 40 rollouts on 8 cores with load
+        35 is oversubscribed; every rollout on it is slower than the same rollout yesterday.</li>
+      <li><strong><code>free</code>: read <em>available</em>, not <em>free</em>.</strong> Linux uses
+        spare memory as file cache, so <code>free</code> is usually small on a healthy machine.
+        <code>available</code> is the "estimation of how much memory is available for starting new
+        applications, without swapping."<a class="cite" href="https://man7.org/linux/man-pages/man1/free.1.html" title="free(1), Linux man-pages: available column">[free(1)]</a></li>
+      <li><strong><code>top</code></strong> (batch form for scripts and agents:
+        <code>top -b -n 1</code>) heads its output with the same load average and a CPU line where
+        <code>id</code> is idle, <code>wa</code> is waiting for I/O, and <code>st</code> is time
+        "stolen from this vm by the
+        hypervisor"<a class="cite" href="https://man7.org/linux/man-pages/man1/top.1.html" title="top(1), Linux man-pages: CPU states">[top(1)]</a>
+        — a noisy-neighbour indicator on cloud VMs.</li>
+    </ul>
+
+    <h2 id="memory">Memory: the kill</h2>
+    <p>
+      When a cgroup's usage reaches <code>memory.max</code> and cannot be reduced, "the OOM killer is
+      invoked in the cgroup."<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files" title="Kernel docs, Control Group v2: memory.max">[Kernel: cgroup-v2]</a>
+      The <span class="term" data-g="oom-killer">OOM (out-of-memory) killer</span> picks a process in
+      the group and kills it; it never kills tasks outside that
+      cgroup.<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files" title="Kernel docs, Control Group v2: memory.oom.group">[Kernel: cgroup-v2]</a>
+      Inside the 256 MiB container, ask for 400 MiB:
+    </p>
+<pre class="term"><code><span class="p">#</span> python3 -c 'b = bytearray(400 * 1024 * 1024); print("allocated")'
+<span class="o">Killed</span>
+<span class="p">#</span> echo $?
+<span class="o">137</span>
+<span class="p">#</span> grep -E '^oom' /sys/fs/cgroup/memory.events
+<span class="o">oom 1
+<span class="hl">oom_kill 1</span>
+oom_group_kill 0</span>
+<span class="p">#</span> cat /sys/fs/cgroup/memory.peak
+<span class="o">268435456</span></code></pre>
+    <p>
+      No traceback, no <code>MemoryError</code>: the program was not told, it was removed.
+      <code>Killed</code> is bash reporting that its child died of
+      <span class="term" data-g="sigkill">SIGKILL</span>, and 137 is 128 + 9
+      (<a href="10-signals-exit-codes.html">page 10</a>). The evidence is
+      <code>memory.events</code>: <code>oom_kill</code> is "the number of processes belonging to this
+      cgroup killed by any kind of OOM
+      killer",<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files" title="Kernel docs, Control Group v2: memory.events">[Kernel: cgroup-v2]</a>
+      and a peak exactly equal to the limit says the group hit its ceiling.
+    </p>
+    <p>
+      Notice what did <em>not</em> happen: the container is still running. The victim was a child;
+      the shell carried on. From outside:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker inspect --format 'Status={{.State.Status}} ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' lt-12-lim
+<span class="o">Status=running ExitCode=0 OOMKilled=true</span></code></pre>
+    <p>That independence is worth seeing in all three combinations:</p>
+<pre class="term"><code><span class="c"># (a) victim is a child; PID 1 carries on and exits normally</span>
+<span class="p">$</span> docker run --name lt-12-oomchild --memory 256m --memory-swap 256m lt-12-base:1 \
+    bash -c 'python3 -c "bytearray(400*1024*1024)"; echo "test step exit=$?"; echo "agent carries on"'
+<span class="o">test step exit=137
+agent carries on
+bash: line 1:     6 Killed                  python3 -c "bytearray(400*1024*1024)"</span>
+<span class="p">$</span> docker inspect --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' lt-12-oomchild
+<span class="o">ExitCode=<span class="hl">0</span> OOMKilled=<span class="hl">true</span></span>
+
+<span class="c"># (b) victim is PID 1</span>
+<span class="p">$</span> docker run --name lt-12-oompid1 --memory 256m --memory-swap 256m lt-12-base:1 \
+    python3 -c "bytearray(400*1024*1024)"
+<span class="p">$</span> docker inspect --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' lt-12-oompid1
+<span class="o">ExitCode=137 OOMKilled=true</span>
+
+<span class="c"># (c) no memory problem at all: docker stop, 10 s grace, then SIGKILL</span>
+<span class="p">$</span> docker run -d --name lt-12-stop --memory 256m lt-12-base:1 sleep infinity
+<span class="p">$</span> docker stop lt-12-stop
+<span class="p">$</span> docker inspect --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' lt-12-stop
+<span class="o">ExitCode=<span class="hl">137</span> OOMKilled=<span class="hl">false</span></span></code></pre>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p><strong>Exit 137 means "died of SIGKILL". It does not mean "out of memory".</strong> The OOM
+      killer, a harness timeout, <code>docker stop</code>, and a human with <code>kill -9</code> all
+      produce it. The evidence for an OOM kill is <code>oom_kill</code> in
+      <code>memory.events</code> and <code>State.OOMKilled</code> from <code>docker inspect</code> —
+      and those can be true while the container exits 0, because the victim may have been the
+      agent's test run rather than the container's main process.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveat — swap changes the demo</span>
+      <p><code>--memory-swap</code> is the <em>total</em> of memory plus swap. If it is unset, the
+      container may use as much swap again as its <code>--memory</code> value, if the host has swap
+      configured;<a class="cite" href="https://docs.docker.com/engine/containers/resource_constraints/" title="Docker Docs: Resource constraints, --memory-swap details">[Docker: run]</a>
+      setting it equal to <code>--memory</code> means no <span class="term" data-g="swap">swap</span>.
+      That is why every example here sets both: with swap available, an over-budget program slows to
+      a crawl before it dies, and your timeout may fire first.</p>
+    </div>
+
+    <h2 id="cpu">CPU: the slowdown</h2>
+    <p>
+      A CPU limit never kills. The group "may consume up to $MAX in each
+      $PERIOD";<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files" title="Kernel docs, Control Group v2: cpu.max">[Kernel: cgroup-v2]</a>
+      when the quota is spent its processes simply do not run until the next period. This script
+      starts four CPU-bound workers, waits for them, and prints the elapsed time and the cgroup's
+      throttling counters:
+    </p>
+<pre><code>#!/bin/bash
+work() { python3 -c 'sum(i*i for i in range(12_000_000))'; }
+start=$(date +%s.%N)
+work &amp; work &amp; work &amp; work &amp;
+wait
+end=$(date +%s.%N)
+python3 -c "print('4 workers wall:', round($end - $start, 1), 's')"
+cat /sys/fs/cgroup/cpu.max
+grep -E 'nr_periods|nr_throttled|throttled_usec' /sys/fs/cgroup/cpu.stat</code></pre>
+    <p>Run it uncapped, then with half a CPU (<code>-v "$PWD/cpu.sh:/cpu.sh:ro"</code> mounts it in;
+    omitted below for width):</p>
+<pre class="term"><code><span class="p">$</span> docker run --rm lt-12-base:1 bash /cpu.sh
+<span class="o">4 workers wall: 0.7 s
+max 100000
+nr_periods 0
+nr_throttled 0
+throttled_usec 0</span>
+<span class="p">$</span> docker run --rm --cpus 0.5 lt-12-base:1 bash /cpu.sh
+<span class="o">4 workers wall: <span class="hl">6.7 s</span>
+50000 100000
+nr_periods 69
+<span class="hl">nr_throttled 68</span>
+throttled_usec 22924227</span></code></pre>
+    <p>
+      Same work, same <span class="term" data-g="cpu-time">CPU time</span>, roughly ten times the
+      <span class="term" data-g="wall-clock-time">wall-clock time</span>. <code>cpu.stat</code> records
+      why: the group was throttled in 68 of 69 periods, for a cumulative 22.9 seconds of enforced
+      waiting across its processes. Now put the same job under a
+      <span class="term" data-g="timeout">timeout</span>, as every harness does:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --cpus 0.5 lt-12-base:1 bash -c 'timeout 5 bash /cpu.sh; echo "exit=$?"'
+<span class="o">exit=124</span>
+<span class="p">$</span> docker run --rm lt-12-base:1 bash -c 'timeout 5 bash /cpu.sh; echo "exit=$?"'
+<span class="o">4 workers wall: 0.6 s
+…
+exit=0</span></code></pre>
+    <p>
+      Identical code passes or "times out" depending on a flag the model never saw. A CPU shortage
+      reaches your results table disguised as a timeout, and <code>nr_throttled</code> is how you
+      unmask it.
+    </p>
+
+    <h2 id="disk">Disk: the error message</h2>
+    <p>
+      Disk exhaustion is the polite one: the write fails with the error <code>ENOSPC</code> and the
+      program is told. To fill a disk safely, use a small RAM-backed
+      <span class="term" data-g="tmpfs">tmpfs</span> (<a href="14-mounts-and-filesystems.html">page 14</a>):
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -it --memory 256m --tmpfs /scratch:size=8m lt-12-base:1 bash
+<span class="p">#</span> head -c 20M /dev/zero &gt; /scratch/big
+<span class="o">head: error writing 'standard output': <span class="hl">No space left on device</span></span>
+<span class="p">#</span> df -h /scratch
+<span class="o">Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           8.0M  8.0M     0 100% /scratch</span>
+<span class="p">#</span> echo '{"passed": true}' &gt; /scratch/result.json; echo "exit=$?"
+<span class="o">bash: line 3: echo: write error: No space left on device
+exit=1</span>
+<span class="p">#</span> ls -l /scratch/result.json
+<span class="o">-rw-r--r-- 1 root root <span class="hl">0</span> Sep 21 21:04 /scratch/result.json</span></code></pre>
+    <p>
+      Look at the last line. Creating the file succeeded; writing its content failed. A full disk
+      leaves behind <em>empty</em> files with the right names — and a grader that checks "does
+      <code>result.json</code> exist?" or treats unparseable output as "no tests failed" is about to
+      record something untrue.
+    </p>
+    <p>
+      Two tools, two questions. <code>df -h</code> ("disk free") asks each mounted filesystem how full
+      it is. <code>du -sh DIR</code> ("disk usage") walks a directory and adds up the files it can
+      see. They disagree when a file has been deleted while a process still holds it open
+      (<a href="03-files-and-the-tree.html">page 3</a>): the name is gone, so <code>du</code> cannot
+      count it, but the space is not freed until the last
+      <span class="term" data-g="file-descriptor">file descriptor</span> closes.
+    </p>
+<pre class="term"><code><span class="p">#</span> head -c 5M /dev/zero &gt; /scratch/log; tail -f /scratch/log &gt; /dev/null &amp;
+<span class="p">#</span> rm /scratch/log
+<span class="p">#</span> du -sh /scratch; df -h /scratch | tail -1
+<span class="o">0	/scratch
+tmpfs           8.0M  <span class="hl">5.0M</span>  3.0M  63% /scratch</span>
+<span class="p">#</span> ls -l /proc/$!/fd | grep deleted
+<span class="o">lr-x------ 1 root root 64 Sep 21 21:03 3 -&gt; /scratch/log (deleted)</span></code></pre>
+    <p>
+      Killing the <code>tail</code> returned <code>df</code> to 0%. On a sandbox host the usual
+      culprit is a long-running daemon holding a deleted, still-growing log.
+    </p>
+    <p>
+      The second way to be "full" is to run out of <span class="term" data-g="inode">inodes</span>,
+      the per-file records. Each file costs one regardless of size, and a filesystem has a fixed
+      supply. With a tmpfs capped at 20 inodes:
+    </p>
+<pre class="term"><code><span class="p">#</span> for i in $(seq 1 30); do touch f$i || break; done
+<span class="o">touch: cannot touch 'f20': No space left on device</span>
+<span class="p">#</span> df -h /scratch | tail -1; df -i /scratch
+<span class="o">tmpfs           8.0M     0  8.0M   <span class="hl">0%</span> /scratch
+Filesystem     Inodes IUsed IFree IUse% Mounted on
+tmpfs              20    20     0  <span class="hl">100%</span> /scratch</span></code></pre>
+    <p>
+      Same error text, zero bytes used. When <code>df -h</code> says there is room and writes still
+      fail with <code>No space left</code>, run <code>df -i</code>. Millions of tiny cache files
+      (<code>node_modules</code>, pip and apt caches, per-rollout temp directories never cleaned) are
+      how real hosts get there.
+    </p>
+
+    <h2 id="pids-and-fds">Process and file slots</h2>
+    <p>
+      A cgroup's <code>pids.max</code> caps the number of processes and threads in the group; at the
+      limit, <code>fork</code> fails with
+      <code>EAGAIN</code>.<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#pid" title="Kernel docs, Control Group v2: PID controller">[Kernel: cgroup-v2]</a>
+      Bash words that error like this:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --pids-limit 20 lt-12-base:1 bash -c \
+    'for i in $(seq 1 30); do sleep 5 &amp; done 2&gt;&amp;1 | sort | uniq -c; cat /sys/fs/cgroup/pids.events'
+<span class="o">      1 bash: fork: Interrupted system call
+      3 bash: fork: retry: <span class="hl">Resource temporarily unavailable</span>
+max 3</span></code></pre>
+    <p>
+      The kernel documentation gives the reason the controller exists: "a fork bomb is likely to
+      exhaust the number of tasks before hitting memory
+      restrictions."<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#pid" title="Kernel docs, Control Group v2: PID controller rationale">[Kernel: cgroup-v2]</a>
+      Use this, not the <code>ulimit -u</code> rlimit, to contain an agent: that rlimit counts
+      processes per user ID across the whole system and is not enforced for
+      root.<a class="cite" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" title="getrlimit(2): RLIMIT_NPROC is per real user ID and not enforced for UID 0">[getrlimit(2)]</a>
+    </p>
+    <p>
+      Open files, by contrast, are a genuine per-process rlimit (<code>ulimit -n</code>). Exceeding it
+      yields the error <code>EMFILE</code>:<a class="cite" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" title="getrlimit(2): RLIMIT_NOFILE, EMFILE">[getrlimit(2)]</a>
+    </p>
+<pre class="term"><code><span class="p">#</span> ulimit -n 20
+<span class="p">#</span> python3 -c '
+fs = []
+for i in range(100):
+    fs.append(open("/etc/hostname"))' 2&gt;&amp;1 | tail -1
+<span class="o">OSError: [Errno 24] <span class="hl">Too many open files</span>: '/etc/hostname'</span></code></pre>
+    <p>
+      The lab container's default here was 1048576, so you rarely hit this in Docker; you are more likely to hit it on
+      VMs and in harness processes, where the limit may be far lower and a harness holding hundreds
+      of sandbox connections and log files can reach it. <code>ulimit -a</code> lists every
+      rlimit of the current shell; <code>/proc/PID/limits</code> shows soft and hard values for any
+      process. SWE-bench's harness exposes an <code>--open_file_limit</code> option.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/blob/main/docs/guides/evaluation.md" title="SWE-bench evaluation guide: harness options">[SWE-bench]</a>
+    </p>
+
+    <h2 id="symptom-table">Symptom → layer</h2>
+    <table>
+      <tr><th>In the transcript or log</th><th>What happened</th><th>Confirm with</th></tr>
+      <tr><td><code>Killed</code>, exit 137, no traceback</td><td>SIGKILL — OOM <em>or</em> timeout <em>or</em> teardown</td><td><code>memory.events</code> <code>oom_kill</code>; <code>State.OOMKilled</code>; harness timeout log; timing</td></tr>
+      <tr><td>Exit 124, or the harness's own timeout message; work was progressing</td><td>Too slow: CPU throttling or an oversubscribed host</td><td><code>cpu.stat</code> <code>nr_throttled</code>; host load average vs <code>nproc</code></td></tr>
+      <tr><td><code>No space left on device</code>; zero-byte output files</td><td>ENOSPC: blocks or inodes</td><td><code>df -h</code>, then <code>df -i</code>; <code>du -sh</code> to find what grew</td></tr>
+      <tr><td><code>fork: retry: Resource temporarily unavailable</code>; <code>can't start new thread</code></td><td>EAGAIN from <code>pids.max</code> (or the per-user rlimit)</td><td><code>pids.events</code>, <code>pids.current</code></td></tr>
+      <tr><td><code>Too many open files</code></td><td>EMFILE: per-process <code>RLIMIT_NOFILE</code></td><td><code>ulimit -n</code>; <code>ls /proc/PID/fd | wc -l</code></td></tr>
+      <tr><td><code>MemoryError</code> / <code>Cannot allocate memory</code> with a traceback</td><td>An allocation was <em>refused</em> (the program asked and was told no) — not the OOM killer</td><td><code>ulimit -v</code>; the size requested</td></tr>
+    </table>
+
+    <h2 id="failure-accounting">Accounting for failures the box caused</h2>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>An under-provisioned sandbox converts rollouts a model would have passed into failures, and
+      the score drops for reasons unrelated to the model. Anthropic measured the size of the effect on
+      Terminal-Bench 2.0 with the same model, harness and tasks: moving from strict per-task
+      resource limits to uncapped resources cut the infrastructure error rate from 5.8% to 0.5% and
+      raised the score by 6 percentage points (p &lt; 0.01), and they conclude that "leaderboard
+      differences below 3 percentage points deserve skepticism until the eval configuration is
+      documented and
+      matched."<a class="cite" href="https://www.anthropic.com/engineering/infrastructure-noise" title="Anthropic Engineering, 'Infrastructure noise' — Terminal-Bench 2.0 resource experiments">[Anthropic: Infra Noise]</a>
+      The same post names the mechanism from this page: with the limit set equal to the expected
+      need, "a momentary memory fluctuation can OOM-kill a container that would otherwise have
+      succeeded." (<em>Discuss.</em>)</p>
+    </div>
+    <p>
+      So treat an OOM kill, a throttling-induced timeout, and a full disk as <strong>observations
+      about the run</strong>, not about the model, and keep them visible in the arithmetic. Suppose
+      200 <span class="term" data-g="rollout">rollouts</span> were scheduled, 14 ended in an
+      infrastructure failure (9 OOM kills, 5 timeouts with heavy throttling), and 120 of the rest
+      were correct:
+    </p>
+    <table>
+      <tr><th>Quantity</th><th>Value</th><th>What it answers</th></tr>
+      <tr><td>correct / scheduled</td><td>120 / 200 = 60.0%</td><td>How did the whole system — model <em>and</em> box — do? The conservative headline.</td></tr>
+      <tr><td>correct / completed</td><td>120 / 186 = 64.5%</td><td>How did the model do when the box held up? Only meaningful if failures are unrelated to task difficulty — and they rarely are: memory-hungry tasks are both harder and likelier to be killed.</td></tr>
+      <tr><td>completed / scheduled</td><td>186 / 200 = 93.0%</td><td>How healthy was the infrastructure? If this differs between two models' runs, fix that before comparing anything else.</td></tr>
+    </table>
+    <p>
+      Choose the primary metric before looking at results, publish all three, and never let a runner
+      drop failed rollouts silently: the second row can be pushed upward just by making the box
+      worse. Re-running infrastructure failures is legitimate if the rule is fixed in advance and
+      applied to every model alike.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p><strong>Concurrency is a resource setting.</strong> Running N sandboxes on one host divides
+      that host. Inspect's Docker provider defaults <code>max_sandboxes</code> to twice the number of
+      processors available to the
+      eval;<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#resource-management" title="Inspect: Sandboxing, Resource Management">[Inspect]</a>
+      SWE-bench recommends at least 16 GB of RAM and 8 cores, and fewer than
+      <code>min(0.75 * os.cpu_count(), 24)</code>
+      workers.<a class="cite" href="https://github.com/SWE-bench/SWE-bench#-set-up" title="SWE-bench README: Set up — resource recommendations">[SWE-bench]</a>
+      Inspect's default sandbox configuration sets no CPU or memory limits at
+      all,<a class="cite" href="https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/src/inspect_ai/util/_sandbox/docker/config.py" title="Inspect source: default Docker compose configuration (no cpu or memory limits)">[Inspect]</a>
+      so by default every rollout competes with its neighbours for the whole machine, and the same
+      eval on a bigger host, or at a lower concurrency, is a slightly different eval. Per-sandbox
+      limits, concurrency, and host size therefore belong in the reported configuration, beside the
+      model name and the prompt (<a href="../../../evals/evals-tut/pages/19-reproducibility.html">Understanding
+      LLM Evals, page 19</a>). (<em>Design:</em> set <code>--memory</code>, <code>--cpus</code> and
+      <code>--pids-limit</code> explicitly per task, with headroom above the oracle solution's
+      measured <code>memory.peak</code>; record OOM and timeout counts next to every pass rate.)</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A nightly run of a coding benchmark drops from 62% to 55% with no change to the model or the
+      tasks. The runner's summary shows 31 rollouts with exit code 137, up from 4. A colleague says:
+      "137 is OOM — the new tasks-per-host setting is starving containers of memory. Let's exclude
+      those 31 and report 60%." What do you ask for before agreeing to either the diagnosis or the
+      number?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Observed vs supposed.</strong> Observed: more SIGKILL deaths, a lower score, a
+        concurrency change. Supposed: that the kills were OOM kills. 137 is equally what a harness
+        timeout's <code>kill -9</code> and <code>docker stop</code> produce — and raising concurrency
+        makes <em>both</em> memory pressure and slowness more likely, so the hypothesis is plausible
+        but untested.</p>
+        <p><strong>Discriminating evidence.</strong> For the 31: <code>State.OOMKilled</code> from
+        <code>docker inspect</code> (or <code>oom_kill</code> in each container's
+        <code>memory.events</code>, and the host kernel log — <a href="13-services-and-logs.html">page
+        13</a>). Note that if the containers set no <code>--memory</code> limit, an OOM kill would be
+        a <em>host-level</em> one and only the host's kernel log records it. Then duration: do the
+        31 cluster at the harness timeout value? That says timeout kill; check
+        <code>nr_throttled</code> or host load for the cause. Also look for the inverse case the
+        exit code hides: rollouts that exited 0 with <code>OOMKilled=true</code>, where the agent's
+        test run was killed and the agent gave up.</p>
+        <p><strong>Bearing on the score.</strong> Excluding the 31 reports correct/completed and
+        hides that the infrastructure got worse; the excluded tasks are probably the heavy ones, so
+        60% is biased upward. Report 55% as correct/scheduled with the 31 shown as infrastructure
+        failures and completed/scheduled alongside; then fix the box (restore concurrency or set
+        per-container limits with headroom) and re-run the whole night, not just the failures,
+        since slow-but-completed rollouts were affected too.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> All exercises are <code>docker run</code> lines typed on your
+      Mac, using the stock <code>ubuntu:24.04</code> image. Every memory demo carries a
+      <code>--memory</code> limit: never run an allocator without one.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Start a container with <code>--memory 128m --cpus 0.5
+          --pids-limit 50</code> and print, side by side, what <code>nproc</code> and
+          <code>/proc/meminfo</code> claim and what the cgroup files say.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm --memory 128m --cpus 0.5 --pids-limit 50 ubuntu:24.04 sh -c \
+    'nproc; grep MemTotal /proc/meminfo; cd /sys/fs/cgroup; cat memory.max cpu.max pids.max'
+<span class="o">10
+MemTotal:        8025424 kB
+134217728
+50000 100000
+50</span></code></pre>
+          <p>Your first two numbers will be your own machine's. The last three are the policy.</p></details></li>
+        <li><strong>Predict, then verify.</strong> <code>tail /dev/zero</code> reads an endless line
+          into memory. Before running this, write down the container's exit code and the value of
+          <code>OOMKilled</code>:
+          <code>docker run --name lt-oom --memory 64m --memory-swap 64m ubuntu:24.04 sh -c 'tail /dev/zero; echo "still here: $?"'</code>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="o">Killed
+still here: 137</span>
+<span class="p">$</span> echo $?
+<span class="o">0</span>
+<span class="p">$</span> docker inspect --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}' lt-oom; docker rm lt-oom
+<span class="o">ExitCode=0 OOMKilled=true</span></code></pre>
+          <p>The child was killed; PID 1 (<code>sh</code>) finished normally. A harness that looks only
+          at the container's exit code sees a clean run.</p></details></li>
+        <li><strong>Predict, then verify.</strong> In
+          <code>docker run --rm -it --tmpfs /scratch:size=8m,nr_inodes=20 ubuntu:24.04 bash</code>,
+          create files in <code>/scratch</code> until it fails. What will <code>df -h /scratch</code>
+          report as used?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> cd /scratch; for i in $(seq 1 30); do touch f$i || break; done
+<span class="o">touch: cannot touch 'f20': No space left on device</span>
+<span class="p">#</span> df -h /scratch | tail -1; df -i /scratch | tail -1
+<span class="o">tmpfs           8.0M     0  8.0M   0% /scratch
+tmpfs              20    20     0  100% /scratch</span></code></pre>
+          <p>Zero bytes used, 100% of inodes. (Nineteen files plus the directory itself.)</p></details></li>
+        <li><strong>Eval task.</strong> Make three dead containers, then classify each death using
+          only <code>docker inspect</code>:
+<pre><code>docker run --name lt-a --memory 64m --memory-swap 64m ubuntu:24.04 tail /dev/zero
+docker run -d --name lt-b ubuntu:24.04 sleep 600; sleep 2; docker stop lt-b
+docker run --name lt-c ubuntu:24.04 timeout -s KILL 2 sleep 60</code></pre>
+          All three exit 137. Which was an infrastructure failure, which a timeout, which a normal
+          teardown — and what would you still need the harness log for?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> for c in lt-a lt-b lt-c; do docker inspect --format \
+    '{{.Name}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} mem={{.HostConfig.Memory}} {{.State.StartedAt}} {{.State.FinishedAt}}' $c; done
+<span class="o">/lt-a exit=137 oom=true mem=67108864 …T21:04:23.09Z …T21:04:23.21Z
+/lt-b exit=137 oom=false mem=0 …T21:04:23.35Z …T21:04:35.54Z
+/lt-c exit=137 oom=false mem=0 …T21:04:35.75Z …T21:04:37.84Z</span>
+<span class="p">$</span> docker rm lt-a lt-b lt-c</code></pre>
+          <p><code>lt-a</code>: <code>oom=true</code> with a 64 MiB limit, dead in a tenth of a second
+          — OOM kill, an infrastructure outcome (or a task whose limit is set too low).
+          <code>lt-b</code> and <code>lt-c</code> are indistinguishable by flags: both
+          <code>oom=false</code>. Timing separates them only if you know the configuration:
+          <code>lt-c</code> lived 2.08 s, matching its 2 s timeout; <code>lt-b</code> lived 12 s = 2 s
+          of life plus Docker's 10 s stop grace period. To be sure <em>who</em> sent the SIGKILL you
+          need the harness's own record of "I timed this out" or "I stopped this" — which is why
+          harness logs are a separate evidence stream from container state.</p></details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>"Control Group v2", Linux kernel documentation (memory, cpu and pid controller interface files). <a href="https://docs.kernel.org/admin-guide/cgroup-v2.html">docs.kernel.org/admin-guide/cgroup-v2.html</a></li>
+        <li>getrlimit(2), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/getrlimit.2.html">man7.org/…/getrlimit.2.html</a></li>
+        <li>proc_loadavg(5), uptime(1), free(1), top(1), Linux man-pages project / procps-ng. <a href="https://man7.org/linux/man-pages/man5/proc_loadavg.5.html">proc_loadavg.5</a>, <a href="https://man7.org/linux/man-pages/man1/uptime.1.html">uptime.1</a>, <a href="https://man7.org/linux/man-pages/man1/free.1.html">free.1</a>, <a href="https://man7.org/linux/man-pages/man1/top.1.html">top.1</a></li>
+        <li>Docker Docs, "Resource constraints". <a href="https://docs.docker.com/engine/containers/resource_constraints/">docs.docker.com/engine/containers/resource_constraints/</a></li>
+        <li>Anthropic Engineering, "Infrastructure noise" (Terminal-Bench 2.0 and SWE-bench resource experiments). <a href="https://www.anthropic.com/engineering/infrastructure-noise">anthropic.com/engineering/infrastructure-noise</a></li>
+        <li>Inspect documentation, UK AI Security Institute: Sandboxing, Resource Management; default Docker compose configuration in the source tree. <a href="https://inspect.aisi.org.uk/sandboxing.html#resource-management">inspect.aisi.org.uk/sandboxing.html</a>, <a href="https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/src/inspect_ai/util/_sandbox/docker/config.py">github.com/UKGovernmentBEIS/inspect_ai</a></li>
+        <li>SWE-bench README (set-up and resource recommendations) and evaluation guide. <a href="https://github.com/SWE-bench/SWE-bench#-set-up">github.com/SWE-bench/SWE-bench</a>, <a href="https://github.com/SWE-bench/SWE-bench/blob/main/docs/guides/evaluation.md">…/docs/guides/evaluation.md</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

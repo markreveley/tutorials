@@ -1,0 +1,202 @@
+{
+ "id": "overlayfs",
+ "tag": "[Kernel: overlayfs]",
+ "citation": {
+  "authors": "Neil Brown et al. (Linux kernel documentation); Docker Inc.",
+  "title": "Overlay Filesystem (kernel docs); Docker Docs: Storage drivers, OverlayFS storage driver, containerd image store",
+  "venue": "docs.kernel.org; docs.docker.com",
+  "year": "2026",
+  "url": "https://docs.kernel.org/filesystems/overlayfs.html"
+ },
+ "fetched_urls": [
+  "https://docs.kernel.org/filesystems/overlayfs.html",
+  "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/",
+  "https://docs.docker.com/engine/storage/drivers/",
+  "https://docs.docker.com/engine/storage/drivers/select-storage-driver/",
+  "https://docs.docker.com/engine/storage/containerd/",
+  "https://docs.docker.com/build/building/secrets/",
+  "https://docs.docker.com/build/building/best-practices/",
+  "https://docs.docker.com/reference/dockerfile/",
+  "https://github.com/opencontainers/image-spec/blob/main/layer.md"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Overlayfs merges an upper (writable) and one or more lower (read-only) directory trees; modifications go to upper; first write to a lower file triggers copy-up of the whole file; deletions recorded as whiteouts",
+   "verdict": "confirmed",
+   "finding": "Kernel doc: 'An overlay filesystem combines two filesystems - an upper filesystem and a lower filesystem' (more correctly 'directory trees'); name in both → upper wins, directories are merged; 'The lower filesystem does not need to be writable'; multiple lower layers via colon-separated lowerdir (rightmost = bottom); mount syntax `mount -t overlay overlay -olowerdir=/lower,upperdir=/upper,workdir=/work /merged`. Copy-up: triggered when a lower file 'is accessed in a way that requires write-access, such as opening for write access, changing some metadata etc.' — so chmod/chown or even opening O_RDWR without writing copies the file up; the data of the whole file is copied ('if the object is a file, the data is copied from the lower to the upper filesystem'; Docker: 'copy the entire file, even if the file is large and only a small part of it's being modified'). (The kernel has an optional 'metacopy' feature for metadata-only copy-up; not the default in the text read.) Whiteouts: quote. Executed demo reproduces all three behaviours.",
+   "quote": "In order to support rm and rmdir without changing the lower filesystem, an overlay filesystem needs to record in the upper filesystem that files have been removed. This is done using whiteouts and opaque directories [...]. A whiteout is created as a character device with 0/0 device number or as a zero-size regular file with the xattr \"trusted.overlay.whiteout\".",
+   "location": "Kernel docs, Overlay Filesystem → 'whiteouts and opaque directories'; also 'Upper and Lower', 'Non-directories'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#whiteouts-and-opaque-directories"
+  },
+  {
+   "planned": "Docker images are stacks of read-only layers; a container adds a thin writable layer on top; writable-layer data is deleted with the container; containers from the same image share the lower layers",
+   "verdict": "confirmed",
+   "finding": "All four parts verbatim in Docker's 'Storage drivers' page. Layers: 'A Docker image is built up from a series of layers. Each layer represents an instruction in the image's Dockerfile. Each layer except the very last one is read-only.' and 'Each layer is only a set of differences from the layer before it.' Writable layer: 'When you create a new container, you add a new writable layer on top of the underlying layers. This layer is often called the \"container layer\". All changes made to the running container ... are written to this thin writable container layer.' Deletion + sharing: quote. Only filesystem-modifying instructions create layers (LABEL/CMD only change metadata). `docker ps -s`: 'size' = writable layer, 'virtual size' = image + writable layer.",
+   "quote": "The major difference between a container and an image is the top writable layer. All writes to the container that add new or modify existing data are stored in this writable layer. When the container is deleted, the writable layer is also deleted. The underlying image remains unchanged.",
+   "location": "Docker Docs, 'Storage drivers' → 'Container and layers'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/#container-and-layers"
+  },
+  {
+   "planned": "Deleting a file in a later layer does NOT remove it from the image: it remains in the earlier layer and can be extracted (critical for solution leakage / secrets in images) — find Docker docs wording (Dockerfile best practices / build secrets docs)",
+   "verdict": "confirmed",
+   "finding": "Docker's wording is in the 'Storage drivers' page (not best-practices): removing files 'will result in a new layer'; the removed directory 'will still be available in the previous layer and add up to the image's total size.' The docs do not use the word 'extract', so that part was verified by EXECUTION: an image built with `RUN echo \"ANSWER=42\" > /solution.txt` then `RUN rm /solution.txt` has no /solution.txt in a running container, but `docker save` + tar shows the earlier layer still contains solution.txt (contents recovered: ANSWER=42) and the later layer contains only the whiteout `.wh.solution.txt`; `docker history` also displays the literal RUN command text. Supporting specs/docs: OCI image-spec layer.md defines the `.wh.` whiteout marker ('signifies a path should be deleted') — deletion is a marker in a new layer, never an edit of the old one. Related Docker guidance: 'Build arguments and environment variables are inappropriate for passing secrets to your build, because they persist in the final image' and the Dockerfile reference warns build args 'are visible in the docker history command'; the sanctioned fix is RUN --mount=type=secret ('without baking them into the image') or a multi-stage build.",
+   "quote": "Each layer is only a set of differences from the layer before it. Note that both adding, and removing files will result in a new layer. In the example above, the `$HOME/.cache` directory is removed, but will still be available in the previous layer and add up to the image's total size.",
+   "location": "Docker Docs, 'Storage drivers' → 'Images and layers'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/#images-and-layers"
+  },
+  {
+   "planned": "Current default storage in Docker Engine 28/29: overlay2 vs containerd image store (verify what is default for fresh installs)",
+   "verdict": "corrected",
+   "finding": "As the docs state TODAY: the containerd image store is the default storage backend for Docker Engine 29.0 and later ON FRESH INSTALLATIONS; hosts UPGRADED from an earlier version keep the classic overlay2 graph driver until the containerd image store is enabled manually (daemon.json features.containerd-snapshotter=true). With the containerd image store, 'Docker Engine uses the overlayfs containerd snapshotter by default' — so the kernel mechanism is still overlayfs either way; what changes is the on-disk location/management (containerd snapshots rather than /var/lib/docker/overlay2) and `docker info` reporting 'driver-type io.containerd.snapshotter.v1' / Storage Driver: overlayfs instead of overlay2. For Engine 28 and earlier the docs imply (by 'legacy graph drivers (overlay2)') that overlay2 was the Linux Engine default; they do not state a 28-specific default in so many words. Docker Desktop is a separate case: this machine's Docker Desktop (Engine 28.1.1) already reports Storage Driver 'overlayfs' with the containerd snapshotter (executed). overlay2 is now described as the 'Classic storage driver. Most widely compatible…'. Known limitation: containerd image store 'is not available when using user namespace remapping (userns-remap)'; it also uses more disk (keeps compressed and uncompressed layers). So 'Docker uses overlay2' is now folklore for new installs — write 'overlayfs (overlay2 driver on older/upgraded installs; containerd overlayfs snapshotter on fresh 29+ installs and Docker Desktop)'.",
+   "quote": "The containerd image store is the default storage backend for Docker Engine 29.0 and later on fresh installations. If you upgraded from an earlier version, your daemon continues using the legacy graph drivers (overlay2) until you enable the containerd image store.",
+   "location": "Docker Docs, 'containerd image store with Docker Engine' (intro)",
+   "cite_url": "https://docs.docker.com/engine/storage/containerd/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Upper/lower basics, verbatim.",
+   "quote": "An overlay filesystem combines two filesystems - an 'upper' filesystem and a 'lower' filesystem. When a name exists in both filesystems, the object in the 'upper' filesystem is visible while the object in the 'lower' filesystem is either hidden or, in the case of directories, merged with the 'upper' object.",
+   "location": "Kernel docs, Overlay Filesystem → 'Upper and Lower'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#upper-and-lower"
+  },
+  {
+   "finding": "Mount syntax and workdir requirement.",
+   "quote": "mount -t overlay overlay -olowerdir=/lower,upperdir=/upper,workdir=/work /merged The \"workdir\" needs to be a directory on the same filesystem as upperdir.",
+   "location": "Kernel docs, Overlay Filesystem → 'Directories'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#directories"
+  },
+  {
+   "finding": "Copy-up trigger and mechanics, verbatim.",
+   "quote": "When a file in the lower filesystem is accessed in a way that requires write-access, such as opening for write access, changing some metadata etc., the file is first copied from the lower filesystem to the upper filesystem (copy_up). Note that creating a hard-link also requires copy_up, though of course creation of a symlink does not.",
+   "location": "Kernel docs, Overlay Filesystem → 'Non-directories'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#non-directories"
+  },
+  {
+   "finding": "Copy-up can happen without any modification (open read-write is enough).",
+   "quote": "The copy_up may turn out to be unnecessary, for example if the file is opened for read-write but the data is not modified.",
+   "location": "Kernel docs, Overlay Filesystem → 'Non-directories'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#non-directories"
+  },
+  {
+   "finding": "Multiple lower layers; omitting upperdir gives a read-only overlay; stacking order.",
+   "quote": "Multiple lower layers can now be given using the colon (\":\") as a separator character between the directory names. [...] As the example shows, \"upperdir=\" and \"workdir=\" may be omitted. In that case the overlay will be read-only. The specified lower directories will be stacked beginning from the rightmost one and going left.",
+   "location": "Kernel docs, Overlay Filesystem → 'Multiple lower layers'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#multiple-lower-layers"
+  },
+  {
+   "finding": "Opaque directories (how a deleted-then-recreated directory hides the lower one).",
+   "quote": "A directory is made opaque by setting the xattr \"trusted.overlay.opaque\" to \"y\". Where the upper filesystem contains an opaque directory, any directory in the lower filesystem with the same name is ignored.",
+   "location": "Kernel docs, Overlay Filesystem → 'whiteouts and opaque directories'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#whiteouts-and-opaque-directories"
+  },
+  {
+   "finding": "Do not modify the underlying directories while mounted — relevant if a harness writes into a container's layer dirs from the host.",
+   "quote": "Changes to the underlying filesystems while part of a mounted overlay filesystem are not allowed. If the underlying filesystem is changed, the behavior of the overlay is undefined, though it will not result in a crash or deadlock.",
+   "location": "Kernel docs, Overlay Filesystem → 'Changes to underlying filesystems'",
+   "cite_url": "https://docs.kernel.org/filesystems/overlayfs.html#changes-to-underlying-filesystems"
+  },
+  {
+   "finding": "rename(2) of a lower/merged directory fails with EXDEV by default (redirect_dir off); Docker repeats this as a compatibility limitation.",
+   "quote": "Calling `rename(2)` for a directory is allowed only when both the source and the destination path are on the top layer. Otherwise, it returns `EXDEV` error (\"cross-device link not permitted\"). Your application needs to be designed to handle `EXDEV` and fall back to a \"copy and unlink\" strategy.",
+   "location": "Docker Docs, 'OverlayFS storage driver' → 'Renaming directories'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/#renaming-directories"
+  },
+  {
+   "finding": "Docker's description of overlay2 terms: lowerdir = image layers, upperdir = container layer, merged = the unified view; up to 128 lower layers.",
+   "quote": "OverlayFS refers to the lower directory as `lowerdir` and the upper directory as `upperdir`. The unified view is exposed through its own directory called `merged`. The `overlay2` driver natively supports up to 128 lower OverlayFS layers.",
+   "location": "Docker Docs, 'OverlayFS storage driver' → 'How the overlay2 driver works'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/#how-the-overlay2-driver-works"
+  },
+  {
+   "finding": "Docker on copy-up cost: whole-file copy, only on first write.",
+   "quote": "OverlayFS works at the file level rather than the block level. This means that all OverlayFS `copy_up` operations copy the entire file, even if the file is large and only a small part of it's being modified. [...] The `copy_up` operation only occurs the first time a given file is written to.",
+   "location": "Docker Docs, 'OverlayFS storage driver' → 'Writing to a file for the first time'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/#writing-to-a-file-for-the-first-time"
+  },
+  {
+   "finding": "Docker on deletion inside a container: whiteout in upperdir; image file untouched.",
+   "quote": "When a file is deleted within a container, a whiteout file is created in the container (`upperdir`). The version of the file in the image layer (`lowerdir`) is not deleted (because the `lowerdir` is read-only). However, the whiteout file prevents it from being available to the container.",
+   "location": "Docker Docs, 'OverlayFS storage driver' → 'Deleting files and directories'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/#deleting-files-and-directories"
+  },
+  {
+   "finding": "Page cache is shared between containers reading the same image file.",
+   "quote": "OverlayFS supports page cache sharing. Multiple containers accessing the same file share a single page cache entry for that file.",
+   "location": "Docker Docs, 'OverlayFS storage driver' → 'Page caching'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/overlayfs-driver/#page-caching"
+  },
+  {
+   "finding": "Writable layer vs volumes: Docker's guidance.",
+   "quote": "The container's writable layer doesn't persist after the container is deleted, but is suitable for storing ephemeral data that is generated at runtime. [...] Use Docker volumes for write-intensive data, data that must persist beyond the container's lifespan, and data that must be shared between containers.",
+   "location": "Docker Docs, 'Storage drivers' → 'Storage drivers versus Docker volumes'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/#storage-drivers-versus-docker-volumes"
+  },
+  {
+   "finding": "All drivers use stackable layers + copy-on-write.",
+   "quote": "Each storage driver handles the implementation differently, but all drivers use stackable image layers and the copy-on-write (CoW) strategy.",
+   "location": "Docker Docs, 'Storage drivers' → 'Container and layers'",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/#container-and-layers"
+  },
+  {
+   "finding": "The storage-drivers page itself now carries a banner that it describes the classic drivers and that on fresh 29+ installs 'the commands and examples won't reflect how your system stores images' (e.g. /var/lib/docker/overlay2 listings).",
+   "quote": "Docker Engine 29.0 and later uses the containerd image store by default for fresh installations, which uses snapshotters instead of classic storage drivers. [...] the concepts on this page still explain how image layers work, but the commands and examples won't reflect how your system stores images.",
+   "location": "Docker Docs, 'Storage drivers' (top NOTE)",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/"
+  },
+  {
+   "finding": "Backend table: containerd (snapshotters) is 'The default for Docker Engine 29.0 and later'; overlay2 is the 'Classic storage driver'; vfs is for testing; fuse-overlayfs only for old rootless hosts.",
+   "quote": "`containerd` (snapshotters) The default for Docker Engine 29.0 and later. Uses containerd snapshotters for image storage. Supports multi-platform images and attestations. [...] `overlay2` Classic storage driver. Most widely compatible across all currently supported Linux distributions, and requires no extra configuration.",
+   "location": "Docker Docs, 'Select a storage driver' (backend table)",
+   "cite_url": "https://docs.docker.com/engine/storage/drivers/select-storage-driver/"
+  },
+  {
+   "finding": "How to tell which backend a daemon uses; default snapshotter is overlayfs.",
+   "quote": "$ docker info -f '{{ .DriverStatus }}' [[driver-type io.containerd.snapshotter.v1]] Docker Engine uses the `overlayfs` containerd snapshotter by default.",
+   "location": "Docker Docs, 'containerd image store with Docker Engine' → 'Enable containerd image store on Docker Engine'",
+   "cite_url": "https://docs.docker.com/engine/storage/containerd/"
+  },
+  {
+   "finding": "containerd image store uses more disk and is unavailable with userns-remap.",
+   "quote": "The containerd image store uses more disk space than the legacy storage drivers for the same images. This is because containerd stores images in both compressed and uncompressed formats [...] The containerd image store is not available when using user namespace remapping (`userns-remap`).",
+   "location": "Docker Docs, 'containerd image store with Docker Engine' → 'Disk space usage' and intro NOTE",
+   "cite_url": "https://docs.docker.com/engine/storage/containerd/"
+  },
+  {
+   "finding": "Secrets: ARG/ENV persist in the image; build args show in docker history.",
+   "quote": "Build arguments and environment variables are inappropriate for passing secrets to your build, because they persist in the final image. Instead, you should use secret mounts or SSH mounts, which expose secrets to your builds securely.",
+   "location": "Docker Docs, 'Build secrets' (intro)",
+   "cite_url": "https://docs.docker.com/build/building/secrets/"
+  },
+  {
+   "finding": "Dockerfile reference warning on ARG.",
+   "quote": "It isn't recommended to use build arguments for passing secrets such as user credentials, API tokens, etc. Build arguments are visible in the `docker history` command and in `max` mode provenance attestations",
+   "location": "Docker Docs, Dockerfile reference → ARG (WARNING)",
+   "cite_url": "https://docs.docker.com/reference/dockerfile/#arg"
+  },
+  {
+   "finding": "OCI image layers represent deletions with `.wh.`-prefixed whiteout files that apply only to lower/parent layers — the image-format counterpart of overlayfs whiteouts.",
+   "quote": "A whiteout file is an empty file with a special filename that signifies a path should be deleted. A whiteout filename consists of the prefix `.wh.` plus the basename of the path to be deleted. [...] Whiteout files MUST only apply to resources in lower/parent layers.",
+   "location": "OCI image-spec, layer.md → 'Whiteouts'",
+   "cite_url": "https://github.com/opencontainers/image-spec/blob/main/layer.md#whiteouts"
+  },
+  {
+   "finding": "EXECUTED — overlayfs by hand (privileged container, dirs on a tmpfs): before any write upper is empty; appending to a.txt copies the whole file up; deleting b.txt creates a 0,0 character-device whiteout; lower is untouched.",
+   "quote": "$ mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/upper,workdir=/mnt/work /mnt/merged\n$ ls merged; ls upper\na.txt\nb.txt\n$ echo changed >> merged/a.txt; rm merged/b.txt\n$ ls -l upper\ntotal 4\n-rw-r--r-- 1 root root   17 Sep 21 06:14 a.txt\nc--------- 2 root root 0, 0 Sep 21 06:14 b.txt\n$ cat lower/a.txt lower/b.txt\noriginal\nkeep\n$ ls merged\na.txt\n$ findmnt -n -o FSTYPE,OPTIONS /mnt/merged\noverlay rw,relatime,lowerdir=/mnt/lower,upperdir=/mnt/upper,workdir=/mnt/work,uuid=on",
+   "location": "executed ubuntu:24.04 (--privileged; setup: mount -t tmpfs tmpfs /mnt; mkdir lower upper work merged; echo original > lower/a.txt; echo keep > lower/b.txt); Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — a file deleted in a later layer is recoverable from the image. Dockerfile: FROM alpine:3.20 / RUN echo \"ANSWER=42\" > /solution.txt / RUN rm /solution.txt.",
+   "quote": "$ docker run --rm lt-r3-leak ls /solution.txt\nls: /solution.txt: No such file or directory\n$ docker history --format '{{.CreatedBy}}\\t{{.Size}}' lt-r3-leak\nRUN /bin/sh -c rm /solution.txt # buildkit\t4.1kB\nRUN /bin/sh -c echo \"ANSWER=42\" > /solution.…\t8.19kB\nCMD [\"/bin/sh\"]\t0B\nADD alpine-minirootfs-3.20.10-aarch64.tar.gz…\t9.49MB\n$ docker save lt-r3-leak -o img.tar && mkdir x && tar -xf img.tar -C x\n$ for b in x/blobs/sha256/*; do tar -tvf $b 2>/dev/null | grep -E 'solution'; done\n----------  0 0      0           0 Dec 31  1969 .wh.solution.txt\n-rw-r--r--  0 0      0          10 Sep 20 23:14 solution.txt\n$ tar -xOf x/blobs/sha256/82de98c7f22c… solution.txt\nANSWER=42",
+   "location": "executed alpine:3.20-based build on the macOS host (docker build/save, bsdtar); loop condensed from the command actually run; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — this host's storage backend.",
+   "quote": "$ docker version --format '{{.Server.Version}}'\n28.1.1\n$ docker info -f 'driver={{.Driver}} status={{.DriverStatus}}'\ndriver=overlayfs status=[[driver-type io.containerd.snapshotter.v1]]",
+   "location": "executed (docker info); Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  }
+ ],
+ "teaching_notes": "KEY CORRECTION: 'Docker's default storage driver is overlay2' is no longer safely true. Docs today: containerd image store (overlayfs snapshotter) is default for fresh installs of Engine 29.0+; upgraded hosts stay on overlay2; Docker Desktop here (Engine 28.1.1) already uses the containerd snapshotter. Consequences for the course: `docker info` says 'overlayfs' not 'overlay2'; layer directories live under containerd's snapshot path (seen in findmnt as /var/lib/desktop-containerd/.../snapshots/N/fs), not /var/lib/docker/overlay2/<id>/diff; the kernel mechanism (overlay mount with lowerdir/upperdir/workdir) is identical — teach the mechanism, and tell readers to check `docker info`. For the solution-leakage page: Docker's citable wording is 'will still be available in the previous layer'; the extraction itself is backed by the executed docker save demo (works with the OCI-layout tarball: blobs/sha256/*), plus `docker history` exposing RUN command lines. Copy-up is triggered by metadata changes and even O_RDWR opens, not just writes — chmod -R on a big tree in a container duplicates it into the writable layer. Kernel doc still calls itself 'a prototype' in its first sentence — ignore, do not quote as status."
+}

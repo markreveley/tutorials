@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comparing Two Models · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 5 · Statistics for Evals</p>
+    <h1>Comparing two models</h1>
+    <p class="lede">
+      "Model B scored two points higher" is the most common sentence in AI engineering, and most of the
+      time nobody knows whether it means anything. This page covers the two tools that settle it —
+      paired analysis and power analysis — including a worked case where doing the statistics properly
+      <em>reverses</em> the naive verdict.
+    </p>
+
+    <h2 id="the-question">The question behind the question</h2>
+    <p>
+      Both models' scores are sample estimates with error bars
+      (<a href="16-error-bars.html">previous page</a>), so their difference is also an estimate with an
+      error bar, and the real question is whether that difference is distinguishable from zero — a
+      <span class="term" data-g="hypothesis-test">hypothesis test</span>
+      (<a href="../appendices/c-hypothesis-testing.html">Appendix C</a> from zero). The naive approach
+      compares the two summary scores as if they were independent measurements. For evals, that throws
+      away the most valuable structural fact you have: <strong>both models answered the same
+      questions.</strong>
+    </p>
+
+    <h2 id="paired">Paired differences: the free lunch</h2>
+    <p>
+      Question difficulty is shared. A brutal question is brutal for both models; a gimme is a gimme for
+      both. So model scores across questions are positively correlated, and that correlation is pure
+      noise <em>for the purpose of comparison</em> — it affects both models identically and cancels if
+      you let it. The <span class="term" data-g="paired-comparison">paired</span> method: for each
+      question i, compute the per-question difference s<sub>A,i</sub> − s<sub>B,i</sub>, and run your
+      inference on those differences.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, Adding Error Bars to Evals, §4.2, Eq. 7">[Error Bars]</a>
+      The variance of the paired estimate shrinks by twice the covariance between the models' scores —
+      in Miller's worked example, a typical correlation of 0.5 cuts estimator variance by a third,
+      which he calls "a 'free' reduction in estimator variance," recommending the paired version
+      "wherever practicable."<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §4.2">[Error Bars]</a>
+      Free, because it needs no new model calls — only refusing to discard the pairing you already
+      have.
+    </p>
+
+    <h2 id="galleon">The worked case: a verdict reversed</h2>
+    <p>
+      Miller's running example deserves retelling in full, because its punchline is the thesis of this
+      module. Two fictional models, Galleon and Dreadnought, are compared on three evals. Read naively —
+      compare the headline scores, no error bars — Dreadnought wins two of three and looks like the
+      better model. Now redo it properly: paired differences, clustered standard errors where the data
+      is clustered, 95% confidence intervals:<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §1, §4.2, Table 5">[Error Bars]</a>
+    </p>
+    <table>
+      <tr><th>Eval</th><th>Difference (D − G)</th><th>SE</th><th>95% CI</th><th>Verdict</th></tr>
+      <tr><td>MATH</td><td><strong>−2.5%</strong> (favors Galleon)</td><td>0.7%</td><td>(−3.8%, −1.2%)</td><td><strong>Significant</strong></td></tr>
+      <tr><td>HumanEval</td><td>+3.1%</td><td>2.1%</td><td>(−1.0%, +7.2%)</td><td>Noise</td></tr>
+      <tr><td>MGSM</td><td>+2.7%</td><td>1.7%</td><td>(−0.7%, +6.1%)</td><td>Noise</td></tr>
+    </table>
+    <p>
+      The only statistically significant difference favors <em>Galleon</em> — the model the naive
+      reading rejected. Dreadnought's two "wins" came on the small eval (HumanEval, 164 questions) and
+      the clustered one (MGSM), exactly where error bars are widest. Miller: "a closer examination of
+      the data would tend to lead the careful analyst to the opposite
+      conclusion."<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §4.2">[Error Bars]</a>
+      The numbers are fictional; the failure mode is not. Model selections, pricing decisions, and
+      launch announcements ride on comparisons exactly this fragile.
+    </p>
+
+    <h2 id="power">Power analysis: can your eval even see the difference you care about?</h2>
+    <p>
+      The second tool runs <em>before</em> you measure.
+      <span class="term" data-g="statistical-power">Statistical power</span> asks: if a real difference
+      of size δ exists, what's the probability my eval detects it? Decide the
+      <span class="term" data-g="effect-size">effect size</span> you care about — say, "I'd switch
+      models for 3 points" — and the machinery (Miller's Eq. 9; gentle version in
+      <a href="../appendices/c-hypothesis-testing.html">Appendix C</a>) tells you the required
+      <span class="term" data-g="sample-size">sample size</span>. Miller's worked example: detecting a
+      3-percentage-point difference at the conventional 5% significance / 80% power level requires
+      <strong>n ≈ 969</strong> questions under reasonable assumptions — the basis for his rule of thumb
+      that "new evals should contain at least 1,000 questions in order to have good signaling
+      ability."<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §5, Eq. 9">[Error Bars]</a>
+    </p>
+    <p>
+      The formula inverts usefully when n is fixed: with only 198 questions, the minimum detectable
+      difference is about 13 points — and resampling each question 10 times (page 16's K lever) shrinks
+      it to about 7.5.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §5, Eq. 10">[Error Bars]</a>
+      Run that arithmetic on your own eval suite once and you'll know whether your weekly "model A vs
+      model B" ritual is measurement or ceremony. An eval that cannot detect the smallest difference
+      you'd act on is underpowered theater — it produces verdicts, but the verdicts are coin flips
+      dressed in decimals.
+    </p>
+    <div class="callout">
+      <span class="label">Why agent evals fail this test constantly</span>
+      <p>Recall from <a href="15-cost-and-capability.html">Module 4</a>: a full SWE-bench run can cost
+      thousands of dollars, so teams run once — n = 1 in the resampling sense, on a few hundred tasks,
+      no error bars. The Princeton team's five-run reproductions found published scores <em>outside the
+      entire range</em> of their five runs.<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §6">[Agents That Matter]</a>
+      When measurement is expensive, the temptation is to economize on replicates — which converts an
+      expensive measurement into an expensive anecdote. Power analysis at least tells you the price of
+      a real answer before you spend.</p>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall: the silent multiple comparison</span>
+      <p>Run enough comparisons and "significant at 95%" loses its meaning — one in twenty noise-only
+      comparisons clears the bar by construction
+      (<span class="term" data-g="type-i-error">Type I error</span>). Eval dashboards invite exactly
+      this: twenty metrics, re-checked every run, and the week one of them twitches becomes a finding.
+      Decide your comparisons before looking, and treat any unexpected "significant" twitch as a
+      hypothesis to re-test on fresh data, not a result. (<a href="../appendices/c-hypothesis-testing.html">Appendix
+      C</a> covers the p-hacking family of errors.)</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Two disciplines turn comparisons from vibes into measurements: <strong>pair</strong> what you
+      can (same questions → analyze per-question differences; it's free precision), and
+      <strong>power</strong> what you plan (decide the effect you care about, then check your eval can
+      see it). Everything else on a comparison dashboard is decoration around those two moves.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Evan Miller, "Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations," arXiv:2411.00640, Anthropic, 2024. <a href="https://arxiv.org/abs/2411.00640">arxiv.org/abs/2411.00640</a></li>
+        <li>Sayash Kapoor, Benedikt Stroebl et al., "AI Agents That Matter," arXiv:2407.01502, 2024. <a href="https://arxiv.org/abs/2407.01502">arxiv.org/abs/2407.01502</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

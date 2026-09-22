@@ -1,0 +1,131 @@
+## audit.sh (research/verify/28-audit.sh) run via: docker exec -i NAME bash -s < 28-audit.sh
+## sloppy: docker run -d --name lt-28-sloppy wordfreq-bench:sloppy ; hardened: wordfreq-bench/run-hardened.sh lt-28-hard
+######## lt-28-sloppy
+
+== 0 orient: who am I, on what?
+id:      uid=0(root) gid=0(root) groups=0(root)
+os:      Ubuntu 24.04.5 LTS, kernel 6.10.14-linuxkit aarch64
+box:     /.dockerenv present; /proc/1/cgroup 0::/
+pid 1:   sleep infinity 
+
+== 1 running: processes (read from /proc) and listening TCP ports
+     1 root     sleep infinity 
+   173 root     bash -s 
+
+== 2 mounted: filesystems, and where this user can write
+  rw overlay /
+  rw proc /proc
+  rw tmpfs /dev
+  ro sysfs /sys
+  rw ext4 /etc/resolv.conf
+  rw ext4 /etc/hostname
+  rw ext4 /etc/hosts
+writable directories: 133, first few: / /srv /etc /etc/systemd 
+
+== 3 owns: privilege, and answers within reach
+CapEff=00000000a80425fb CapBnd=00000000a80425fb NoNewPrivs=0 Seccomp=0
+setuid: /usr/bin/chfn /usr/bin/newgrp /usr/bin/umount /usr/bin/passwd /usr/bin/chsh /usr/bin/mount /usr/bin/su /usr/bin/gpasswd 
+readable, answer-like: /opt/grader/expected.json
+readable, answer-like: /opt/grader/test_hidden.py
+readable, answer-like: /opt/grader/run-tests.sh
+git repo /app: 2 commits on all refs
+
+== 4 reach: routes, DNS, three TCP connects (2 s each)
+interface eth0: up
+interface lo: unknown
+IPv4 routes: 2
+resolver: nameserver 192.168.65.7
+DNS: external names resolve
+tcp example.com:443: OPEN
+tcp 1.1.1.1:443: OPEN
+tcp 169.254.169.254:80: closed
+
+== 5 logs and limits
+memory.max=max cpu.max=max/100000 pids.max=max
+memory.events: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+/var/log: lastlog alternatives.log bootstrap.log faillog wtmp apt btmp dpkg.log 
+init: not systemd; the main process's output is in 'docker logs' (outside)
+[exit=0]
+######## lt-28-hard
+
+== 0 orient: who am I, on what?
+id:      uid=1001(agent) gid=1001(agent) groups=1001(agent)
+os:      Ubuntu 24.04.5 LTS, kernel 6.10.14-linuxkit aarch64
+box:     /.dockerenv present; /proc/1/cgroup 0::/
+pid 1:   /sbin/docker-init -- sleep infinity 
+
+== 1 running: processes (read from /proc) and listening TCP ports
+     1 agent    /sbin/docker-init -- sleep infinity 
+   177 agent    bash -s 
+     7 agent    sleep infinity 
+
+== 2 mounted: filesystems, and where this user can write
+  ro overlay /
+  rw proc /proc
+  rw tmpfs /dev
+  ro sysfs /sys
+  ro overlay /usr/sbin/docker-init
+  rw tmpfs /tmp
+  rw ext4 /app
+  ro ext4 /etc/resolv.conf
+  ro ext4 /etc/hostname
+  ro ext4 /etc/hosts
+writable directories: 4, first few: /tmp /app /app/tests /app/data 
+
+== 3 owns: privilege, and answers within reach
+CapEff=0000000000000000 CapBnd=0000000000000000 NoNewPrivs=1 Seccomp=0
+setuid: /usr/bin/chfn /usr/bin/newgrp /usr/bin/umount /usr/bin/passwd /usr/bin/chsh /usr/bin/mount /usr/bin/su /usr/bin/gpasswd 
+
+== 4 reach: routes, DNS, three TCP connects (2 s each)
+interface lo: unknown
+IPv4 routes: 0
+resolver: nameserver 192.168.65.7
+DNS: no
+tcp example.com:443: closed
+tcp 1.1.1.1:443: closed
+tcp 169.254.169.254:80: closed
+
+== 5 logs and limits
+memory.max=536870912 cpu.max=100000/100000 pids.max=128
+memory.events: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0 
+/var/log: lastlog alternatives.log bootstrap.log faillog wtmp apt btmp dpkg.log 
+init: not systemd; the main process's output is in 'docker logs' (outside)
+[exit=0]
+## lt-28-sloppy
+User= Privileged=false CapDrop=<no value> SecurityOpt=<no value>
+ReadonlyRootfs=false NetworkMode=bridge Memory=0 NanoCpus=0 PidsLimit=<no value>
+Mounts=[] Env=[PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin]
+## lt-28-hard
+User=agent Privileged=false CapDrop=[ALL] SecurityOpt=[no-new-privileges]
+ReadonlyRootfs=true NetworkMode=none Memory=536870912 NanoCpus=1000000000 PidsLimit=128
+Mounts=[volume:/app:rw=true ] Env=[PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin]
+## timings: sloppy 3s, hardened 0s (earlier run)
+## docker history --no-trunc --format '{{.Size}}	{{.CreatedBy}}' wordfreq-bench:sloppy
+0B	CMD ["sleep" "infinity"]
+4.1kB	WORKDIR /app
+8.19kB	RUN /bin/sh -c rm -rf /tmp/solution # buildkit
+16.4kB	COPY solution /tmp/solution # buildkit
+24.6kB	COPY grader /opt/grader # buildkit
+283kB	COPY build/repo-with-history /app # buildkit
+138MB	RUN /bin/sh -c apt-get update && apt-get install -y --no-install-recommends python3 git ca-certificates 
+0B	/bin/sh -c #(nop)  CMD ["/bin/bash"]
+110MB	/bin/sh -c #(nop) ADD file:ff1ce8d2ee022926eb353ff9248358531fbe1661ef12d8784e68fbc52738ed34 in / 
+0B	/bin/sh -c #(nop)  LABEL org.opencontainers.image.version=24.04
+0B	/bin/sh -c #(nop)  ARG LAUNCHPAD_BUILD_ARCH
+0B	/bin/sh -c #(nop)  ARG RELEASE
+## docker logs lt-28-hard | wc -l
+       0
+## lab 2
+id:      uid=1001(agent) gid=1001(agent) groups=1001(agent)
+  rw overlay /
+writable directories: 7, first few: /var/tmp /tmp /run/lock /home/agent 
+CapEff=0000000000000000 CapBnd=00000000a80425fb NoNewPrivs=0 Seccomp=0
+== 4 reach: routes, DNS, three TCP connects (2 s each)
+IPv4 routes: 2
+tcp example.com:443: OPEN
+memory.max=max cpu.max=max/100000 pids.max=max
+## lab 3
+/lt-28-plain RO=false Net=bridge CapDrop=[] Mem=0
+/lt-28-hard RO=true Net=none CapDrop=[ALL] Mem=536870912
+8.19kB	RUN /bin/sh -c rm -rf /tmp/solution # buildkit
+16.4kB	COPY solution /tmp/solution # buildkit

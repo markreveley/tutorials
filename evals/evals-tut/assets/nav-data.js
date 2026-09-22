@@ -1,0 +1,126 @@
+// Site map: drives sidebar nav, search, and prev/next links.
+// Paths are relative to the site root.
+window.NAV = [
+  {
+    module: "Start",
+    pages: [
+      { n: "", path: "index.html", title: "Course Home",
+        kw: "home overview syllabus modules how to use" },
+      { n: "0", path: "pages/00-orientation.html", title: "Orientation: Why Evals",
+        kw: "why evals matter three layers product capability gap iteration velocity introduction" },
+    ],
+  },
+  {
+    module: "Module 1 · Foundations",
+    pages: [
+      { n: "1", path: "pages/01-what-is-an-eval.html", title: "What Is an Eval?",
+        kw: "definition benchmark metric eval evaluation capability product offline online types" },
+      { n: "2", path: "pages/02-anatomy-of-an-eval.html", title: "Anatomy of an Eval",
+        kw: "task dataset sample harness scorer metric report grader components reading a harness" },
+      { n: "3", path: "pages/03-types-of-evaluators.html", title: "Three Kinds of Graders",
+        kw: "code based assertions human labels llm judge reference based reference free ground truth" },
+    ],
+  },
+  {
+    module: "Module 2 · The Eval Process",
+    pages: [
+      { n: "4", path: "pages/04-error-analysis.html", title: "Error Analysis: Look at Your Data",
+        kw: "traces open coding axial coding failure taxonomy theoretical saturation annotation" },
+      { n: "5", path: "pages/05-from-failures-to-evals.html", title: "From Failure Modes to Evals",
+        kw: "datasets test cases binary pass fail likert splits synthetic data labeling" },
+      { n: "6", path: "pages/06-validating-the-grader.html", title: "Validating the Grader",
+        kw: "evalgen criteria drift who validates the validators alignment assertions" },
+      { n: "7", path: "pages/07-evals-in-the-lifecycle.html", title: "Evals in the Development Lifecycle",
+        kw: "ci continuous integration guardrails monitoring a/b testing flywheel regression" },
+    ],
+  },
+  {
+    module: "Module 3 · LLM-as-Judge",
+    pages: [
+      { n: "8", path: "pages/08-llm-as-judge.html", title: "LLM-as-Judge: Mechanics",
+        kw: "judge prompt design pairwise single answer grading rubric structured output" },
+      { n: "9", path: "pages/09-judge-biases.html", title: "Judge Biases and Failure Modes",
+        kw: "position bias verbosity bias self enhancement self preference mt-bench recognition" },
+      { n: "10", path: "pages/10-aligning-judges.html", title: "Aligning Judges with Human Experts",
+        kw: "critique shadowing agreement tpr tnr cohen kappa domain expert judge maintenance" },
+    ],
+  },
+  {
+    module: "Module 4 · Evaluating Agents",
+    pages: [
+      { n: "11", path: "pages/11-evaluating-agents.html", title: "What Makes Agents Different",
+        kw: "trajectory tool calls environment outcome process multi step state" },
+      { n: "12", path: "pages/12-swe-bench-case-study.html", title: "Case Study: SWE-bench",
+        kw: "swe-bench verified github issues fail to pass solution leakage weak tests memorization" },
+      { n: "13", path: "pages/13-agentic-benchmark-landscape.html", title: "The Agentic Benchmark Landscape",
+        kw: "gaia webarena osworld terminal-bench agentbench environments scoring harness" },
+      { n: "14", path: "pages/14-reliability-pass-hat-k.html", title: "Reliability: pass^k and Repeated Trials",
+        kw: "tau-bench pass^k consistency user simulation database state reliability" },
+      { n: "15", path: "pages/15-cost-and-capability.html", title: "Cost Frontiers and Time Horizons",
+        kw: "ai agents that matter pareto cost controlled metr time horizon doubling" },
+    ],
+  },
+  {
+    module: "Module 5 · Statistics for Evals",
+    pages: [
+      { n: "16", path: "pages/16-error-bars.html", title: "Error Bars on Eval Scores",
+        kw: "standard error sem clt confidence interval clustered standard errors variance" },
+      { n: "17", path: "pages/17-comparing-models.html", title: "Comparing Two Models",
+        kw: "paired differences power analysis significance noise sample size" },
+      { n: "18", path: "pages/18-pass-at-k.html", title: "pass@k Done Right",
+        kw: "pass@k unbiased estimator humaneval combinatorics variance" },
+      { n: "19", path: "pages/19-reproducibility.html", title: "Reproducibility",
+        kw: "prompt formatting sensitivity harness divergence eleuther lm-evaluation-harness reporting" },
+    ],
+  },
+  {
+    module: "Module 6 · Contamination & Validity",
+    pages: [
+      { n: "20", path: "pages/20-validity.html", title: "What Does a Score Mean? Validity",
+        kw: "construct validity internal external generalization measurement" },
+      { n: "21", path: "pages/21-contamination.html", title: "Data Contamination",
+        kw: "gsm1k gsm8k memorization training data overlap fresh instances replication" },
+      { n: "22", path: "pages/22-contamination-defenses.html", title: "Defenses: Live Sets, Private Splits, Canaries",
+        kw: "livebench livecodebench arc-agi private holdout canary string big-bench" },
+      { n: "23", path: "pages/23-leaderboard-illusion.html", title: "The Political Economy of Leaderboards",
+        kw: "chatbot arena leaderboard illusion private testing sampling asymmetry anthropic challenges" },
+    ],
+  },
+  {
+    module: "Module 7 · Tooling",
+    pages: [
+      { n: "24", path: "pages/24-inspect.html", title: "Inspect: A Harness in Depth",
+        kw: "inspect aisi task solver scorer sandbox epochs eval logs" },
+      { n: "25", path: "pages/25-tooling-survey.html", title: "The Tooling Landscape",
+        kw: "promptfoo deepeval ragas openai evals assertion libraries metrics" },
+      { n: "26", path: "pages/26-observability.html", title: "Tracing and Online Evaluation",
+        kw: "langfuse braintrust traces spans scores production monitoring experiments" },
+    ],
+  },
+  {
+    module: "Reference",
+    pages: [
+      { n: "G", path: "glossary.html", title: "Glossary",
+        kw: "terms definitions vocabulary glossary" },
+      { n: "B", path: "bibliography.html", title: "Annotated Bibliography",
+        kw: "sources papers citations references reading list" },
+    ],
+  },
+  {
+    module: "Appendices · Math & Stats",
+    pages: [
+      { n: "A", path: "appendices/a-probability.html", title: "A. Probability Basics",
+        kw: "random variable expectation variance bernoulli binomial distribution" },
+      { n: "B", path: "appendices/b-sampling.html", title: "B. Sampling & Estimation",
+        kw: "population sample mean standard error central limit theorem confidence interval" },
+      { n: "C", path: "appendices/c-hypothesis-testing.html", title: "C. Hypothesis Tests & Power",
+        kw: "null hypothesis p-value paired t-test type i ii error power" },
+      { n: "D", path: "appendices/d-combinatorics-pass-at-k.html", title: "D. Counting & the pass@k Estimator",
+        kw: "combinations binomial coefficient derivation unbiased estimator" },
+      { n: "E", path: "appendices/e-agreement-metrics.html", title: "E. Agreement & Classification Metrics",
+        kw: "confusion matrix precision recall tpr tnr f1 cohen kappa spearman correlation" },
+      { n: "F", path: "appendices/f-resampling.html", title: "F. Bootstrap & Clustered Errors",
+        kw: "bootstrap resampling clustered standard errors simulation" },
+    ],
+  },
+];

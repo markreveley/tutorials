@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>F. Bootstrap &amp; Clustered Errors · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix F · Math &amp; Stats</p>
+    <h1>Bootstrap &amp; Clustered Errors</h1>
+    <p class="lede">What to do when the standard-error formula doesn't apply: estimate uncertainty by resampling your own data — and how to avoid the trap of treating grouped eval questions as if they were independent.</p>
+
+    <h2 id="the-problem">The problem: not every statistic has a formula</h2>
+
+    <p><a href="b-sampling.html">Appendix B</a> gave you a clean recipe for one specific case. If your eval score is a <em>mean</em> of per-question scores, the <span class="term" data-g="standard-error">standard error</span> is σ/√n, and a 95% <span class="term" data-g="confidence-interval">confidence interval</span> is roughly the mean ± 2 standard errors. That formula works because the mean of many independent draws behaves predictably — the central limit theorem guarantees it.</p>
+
+    <p>But eval metrics are not always means. Real pipelines report things like:</p>
+
+    <ul>
+      <li>the <em>median</em> latency or median score across questions,</li>
+      <li>a <em>win rate after tie-breaking</em> against a baseline model,</li>
+      <li>the <em>max</em> score across several attempts,</li>
+      <li>some number that falls out of a multi-step pipeline — a ratio of two means, an Elo-style rating, an F1 score.</li>
+    </ul>
+
+    <p>None of these comes with a tidy σ/√n. You could go hunting for a bespoke formula for each one (some exist, many don't, and the ones that exist often require assumptions you can't check). Or you can use one general-purpose tool that works for nearly any statistic you can compute: the <span class="term" data-g="bootstrap">bootstrap</span>.</p>
+
+    <h2 id="the-idea">The bootstrap idea in plain words</h2>
+
+    <p>What you actually want to know is: "if I re-ran this eval on a fresh set of questions drawn from the same population, how much would my number wobble?" You can't draw fresh questions — you only have the <span class="term" data-g="sample">sample</span> you have. The bootstrap's move is to say: <em>your sample is the best available stand-in for the population.</em> So pretend it <em>is</em> the population, and draw fresh samples from it.</p>
+
+    <p>Concretely:</p>
+
+    <ol>
+      <li>Take your n data points.</li>
+      <li>Draw n points from them <strong>with replacement</strong> — after each draw, put the point back, so it can be drawn again.</li>
+      <li>Compute your statistic (mean, median, win rate, whatever) on that resample.</li>
+      <li>Repeat steps 2–3 a few thousand times.</li>
+      <li>The spread of those recomputed statistics approximates how much your statistic would wobble across fresh samples.</li>
+    </ol>
+
+    <p>The phrase <strong>with replacement</strong> does all the work. If you drew n points <em>without</em> replacement, every resample would be your original sample reshuffled — the statistic would come out identical every time, and you'd learn nothing. Drawing with replacement means some points appear twice or three times and others not at all. The duplicates aren't a bug; they're the point. Each resample is a plausible alternate version of your dataset — one where you happened to draw question 3 twice and never drew question 7. That's exactly the kind of luck-of-the-draw variation a fresh sample would have.</p>
+
+    <div class="keyidea"><span class="label">Key idea</span> The bootstrap replaces a math problem ("derive the standard error of my statistic") with a computation ("simulate thousands of alternate datasets and watch the statistic wobble"). It works for nearly any statistic, at the price of CPU time — and one big assumption: that your data points are <span class="term" data-g="independence">independent</span> draws. The second half of this appendix is about what happens when they aren't.</div>
+
+    <h2 id="worked-example">A fully worked tiny example</h2>
+
+    <div class="card">
+      <p>You ran an eval with 8 questions. Per-question scores (1 = pass, 0 = fail):</p>
+      <div class="math"><span class="plain">scores</span> = [1, 1, 0, 1, 0, 1, 1, 0]</div>
+      <p>The observed mean is 5/8 = <strong>0.625</strong>. Number the positions 1–8, so position 1 holds a 1, position 3 holds a 0, and so on. Now draw five bootstrap resamples. Each resample is 8 positions drawn with replacement (we list the positions so you can check every number):</p>
+      <table>
+        <thead><tr><th>Resample</th><th>Positions drawn</th><th>Values</th><th>Mean</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>2, 5, 8, 1, 1, 4, 6, 3</td><td>1, 0, 0, 1, 1, 1, 1, 0</td><td>5/8 = 0.625</td></tr>
+          <tr><td>2</td><td>3, 5, 8, 8, 2, 4, 1, 5</td><td>0, 0, 0, 0, 1, 1, 1, 0</td><td>3/8 = 0.375</td></tr>
+          <tr><td>3</td><td>1, 2, 4, 6, 7, 7, 3, 1</td><td>1, 1, 1, 1, 1, 1, 0, 1</td><td>7/8 = 0.875</td></tr>
+          <tr><td>4</td><td>5, 3, 8, 5, 2, 6, 4, 7</td><td>0, 0, 0, 0, 1, 1, 1, 1</td><td>4/8 = 0.500</td></tr>
+          <tr><td>5</td><td>8, 3, 1, 6, 2, 5, 7, 4</td><td>0, 0, 1, 1, 1, 0, 1, 1</td><td>5/8 = 0.625</td></tr>
+        </tbody>
+      </table>
+      <p>Notice resample 1 drew position 1 twice and never drew position 7 — that's drawing with replacement doing its job. The five bootstrap means are 0.625, 0.375, 0.875, 0.500, 0.625. They range from 0.375 to 0.875, and their standard deviation works out to about 0.19 (mean of the five is 0.600; squared deviations sum to 0.1375; divide by 4 and take the square root: √0.0344 ≈ 0.185).</p>
+      <p>Compare that to the formula from <a href="b-sampling.html">Appendix B</a>: √(0.625 × 0.375 / 8) ≈ <strong>0.171</strong>. Five resamples already land in the right neighborhood. With thousands of resamples the bootstrap estimate settles down — and unlike the formula, the same procedure would have worked if our statistic had been a median or a win rate.</p>
+    </div>
+
+    <h2 id="code">Doing it for real: 10,000 resamples</h2>
+
+    <p>Five resamples by hand shows the mechanics; in practice you do thousands and read a confidence interval straight off the percentiles of the bootstrap distribution. Standard library only:</p>
+
+<pre><code>import random
+
+scores = [1, 1, 0, 1, 0, 1, 1, 0]
+n = len(scores)
+random.seed(42)  # reproducibility
+
+boot_means = []
+for _ in range(10_000):
+    resample = [random.choice(scores) for _ in range(n)]  # with replacement
+    boot_means.append(sum(resample) / n)
+
+boot_means.sort()
+lo = boot_means[int(0.025 * len(boot_means))]   # 2.5th percentile
+hi = boot_means[int(0.975 * len(boot_means))]   # 97.5th percentile
+print(f"observed mean: {sum(scores) / n:.3f}")
+print(f"95% bootstrap interval: [{lo:.3f}, {hi:.3f}]")
+</code></pre>
+
+    <p>This prints an interval of roughly [0.250, 0.875] — wide, because 8 questions is a tiny eval. To bootstrap a different statistic, change one line: replace <code>sum(resample) / n</code> with your median, win-rate, or pipeline computation. That's the whole appeal.</p>
+
+    <h2 id="when-it-fails">When the bootstrap fails or misleads</h2>
+
+    <div class="warn"><span class="label">Caveat</span> The bootstrap is general, not magic. It inherits whatever is wrong with your sample. Three failure modes matter for evals:
+      <ul>
+        <li><strong>Tiny samples.</strong> The bootstrap treats your sample as the population. With 8 questions, the "population" it resamples from has 8 distinct values — the interval above is honest about randomness in resampling but can't conjure information you never collected. Below n ≈ 20–30, treat bootstrap intervals as rough sketches.</li>
+        <li><strong>Statistics dominated by extremes.</strong> The max, the min, the 99th percentile: these depend on one or two specific data points. Resampling either includes that point or doesn't, so the bootstrap distribution comes out lumpy and the interval unreliable. (The theory backs this up — the bootstrap is known to be inconsistent for extremes.)</li>
+        <li><strong>Non-independent data.</strong> The bootstrap assumes each data point is a separate, independent draw. If your data points come in correlated groups, resampling them individually produces intervals that are <em>silently too narrow</em>. This one is so common in evals that the rest of this appendix is about it.</li>
+      </ul>
+    </div>
+
+    <h2 id="clustered-data">Clustered data: when questions come in groups</h2>
+
+    <p>Eval questions are often manufactured in batches that share a common source: five reading-comprehension questions about one passage, eight turns of one conversation, a dozen tasks built from one codebase. Questions within a batch — a <em>cluster</em> — tend to succeed or fail together. If the model misunderstood the passage, it likely misses all five questions about it; if the passage was easy, it likely gets all five.</p>
+
+    <div class="diagram">Independent questions: every question is its own coin flip
+
+  Q:      1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
+  score:  1  0  1  1  0  1  0  1  1  0  1  1  0  0  1  1
+          (passes and fails mixed throughout)
+
+Clustered questions: questions inherit their cluster's fate
+
+  passage A    passage B    passage C    passage D
+  1 1 1 1      0 0 0 0      1 1 1 1      0 0 0 0
+  \________ 16 questions, but only ~4 independent ________/
+            pieces of information</div>
+
+    <p>Why does this matter for uncertainty? The standard-error formula divides by √n on the theory that every question contributes a fresh, independent piece of evidence. But in the clustered picture above, question 2 of passage A tells you almost nothing new once you've seen question 1 — they share the same fate. Your <em>effective</em> sample size is closer to the number of clusters than the number of questions.</p>
+
+    <h3 id="toy-example">A stark toy example</h3>
+
+    <div class="card">
+      <p>An eval has <strong>100 questions in 10 clusters</strong> of 10 questions each, and cluster identity completely drives correctness: in 6 clusters the model gets all 10 questions right, in the other 4 it gets all 10 wrong. Overall accuracy: 60/100 = <strong>0.60</strong>.</p>
+      <p><strong>Naive SE</strong>, pretending all 100 questions are independent:</p>
+      <div class="math">SE<sub>naive</sub> = √( p(1−p) / n ) = √( 0.6 × 0.4 / 100 ) ≈ 0.049</div>
+      <p>That formula says: a fresh 100-question eval would typically land within about ±5 points of 0.60 (see <a href="b-sampling.html">Appendix B</a> for where it comes from).</p>
+      <p><strong>Honest SE</strong>, treating each cluster as one observation. The 10 cluster accuracies are [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]. Their mean is 0.6; the squared deviations are 6 × (0.4)² + 4 × (0.6)² = 0.96 + 1.44 = 2.40; the sample variance is 2.40 / 9 ≈ 0.267, so the standard deviation is ≈ 0.516. With 10 cluster-level observations:</p>
+      <div class="math">SE<sub>cluster</sub> = 0.516 / √10 ≈ 0.163</div>
+      <p>The honest standard error is <strong>0.163 vs 0.049 — more than 3× larger</strong>. Put differently: solve √(0.6 × 0.4 / n<sub>eff</sub>) = 0.163 for n<sub>eff</sub> and you get n<sub>eff</sub> ≈ 9. One hundred questions, but about <em>nine questions' worth</em> of information — almost exactly the number of clusters, because within each cluster the questions are perfect copies of one another.</p>
+    </div>
+
+    <p>Real evals sit between the extremes — questions within a cluster are correlated, not identical — so the honest SE lands somewhere between the naive one and the cluster-count one. But the direction is always the same: ignoring clustering makes your error bars too small, never too big.</p>
+
+    <h2 id="fixes">Two honest fixes</h2>
+
+    <h3 id="clustered-se">Fix 1: clustered standard errors</h3>
+
+    <p>The formula fix is called a <span class="term" data-g="clustered-standard-errors">clustered standard error</span>. The idea: instead of measuring how individual questions scatter around the mean, first <em>sum the residuals within each cluster</em>, then measure how those cluster sums scatter. Correlation inside a cluster gets absorbed into its sum; only cluster-to-cluster variation — the part you can actually trust — drives the error bar. The shape of the formula, for G clusters where S<sub>g</sub> is the sum of residuals (x<sub>i</sub> − x̄) in cluster g:</p>
+
+    <div class="math">SE<sub>cluster</sub> = √( (G / (G−1)) · Σ<sub>g</sub> S<sub>g</sub><sup>2</sup> ) / n</div>
+
+    <p>In words: square each cluster's residual sum, add them up, apply a small correction for the number of clusters, take the square root, and divide by the total number of questions. On the toy example: x̄ = 0.6, so each question in an all-correct cluster has residual 0.4 (cluster sum S<sub>g</sub> = 10 × 0.4 = 4) and each in an all-wrong cluster has residual −0.6 (S<sub>g</sub> = −6). Then Σ S<sub>g</sub>² = 6 × 16 + 4 × 36 = 240; multiply by 10/9 to get 266.7; √266.7 ≈ 16.33; divide by n = 100: <strong>SE ≈ 0.163</strong> — matching the cluster-mean calculation above exactly (they always agree when clusters are equal-sized).</p>
+
+    <h3 id="cluster-bootstrap">Fix 2: the cluster bootstrap</h3>
+
+    <p>The resampling fix is just as natural: <strong>resample whole clusters, not individual questions</strong>. In the toy example, each bootstrap iteration draws 10 clusters with replacement from the 10 available — each draw brings along all 10 of its questions as an intact block — and recomputes accuracy on the resulting 100 questions. Duplicated and omitted <em>clusters</em> now provide the wobble, which is honest, because the cluster is the real unit of independent information. Everything else about the bootstrap recipe (thousands of iterations, read off the 2.5th/97.5th percentiles) stays the same. This "block" version also generalizes to statistics with no clustered-SE formula, the same way the ordinary bootstrap generalized σ/√n.</p>
+
+    <div class="pitfall"><span class="label">Pitfall</span> <strong>Bootstrapping individual questions when the data is clustered.</strong> The ordinary bootstrap runs without complaint on clustered data and hands back a confidence interval — one that's silently too narrow, because resampling questions one at a time treats the 10 copies of each cluster's fate as 10 independent facts. On the toy example it reproduces the naive SE of ≈0.05, a third of the honest 0.163. Nothing in the output warns you. Before bootstrapping any eval, ask: do my questions share passages, conversations, repositories, or templates? If yes, resample at the cluster level. <a href="../pages/16-error-bars.html">Page 16</a> shows how much this changes error bars on real benchmarks.</div>
+
+    <h2 id="summary">Summary</h2>
+
+    <ul>
+      <li>When your metric has no standard-error formula, bootstrap it: resample your data with replacement, n at a time, recompute the statistic each time, and read the spread off the resampled statistics.</li>
+      <li>"With replacement" is essential — duplicates and omissions are what simulate the luck of a fresh sample.</li>
+      <li>Distrust the bootstrap for tiny samples and for extreme-value statistics like the max.</li>
+      <li>If questions come in groups (passages, conversations, codebases), your effective sample size is closer to the number of clusters than the number of questions. Use clustered standard errors or resample whole clusters.</li>
+      <li>Background: probability basics in <a href="a-probability.html">Appendix A</a>, standard errors and confidence intervals in <a href="b-sampling.html">Appendix B</a>, hypothesis tests in <a href="c-hypothesis-testing.html">Appendix C</a>. Applications to real benchmark scores: <a href="../pages/16-error-bars.html">Error Bars on Eval Scores</a>.</li>
+    </ul>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

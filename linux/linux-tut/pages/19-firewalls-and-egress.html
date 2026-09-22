@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firewalls and Egress Control · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 5 · Networking for Sandboxes</p>
+    <h1>Firewalls and egress control</h1>
+    <p class="lede">
+      This page finishes audit question 4, <em>what can it reach?</em> You will learn the menu of ways to
+      limit a sandbox's outbound traffic, how each one is enforced from outside, and a 30-line probe
+      that proves from inside what a box can actually reach. Its output belongs in the eval config
+      next to the score.
+    </p>
+
+    <h2 id="why-egress">Why egress is the question</h2>
+    <p>
+      <span class="term" data-g="egress">Egress</span> is traffic leaving the box;
+      <span class="term" data-g="ingress">ingress</span> is traffic arriving. For an eval
+      <span class="term" data-g="sandbox">sandbox</span>, egress is the one that decides what you are
+      measuring. Tasks are often built from public repositories, so the upstream fix may be public
+      too, and a box that can reach the internet can look for it. The same route carries data out
+      and lets the sandbox send traffic to third parties. Nearby are the host's own services and, on a
+      cloud VM, the instance metadata service, whose data "is not protected by authentication or
+      cryptographic methods" and can include the machine's temporary role
+      credentials.<a class="cite" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html" title="AWS EC2 User Guide: Use instance metadata to manage your EC2 instance">[AWS: IMDS]</a>
+      Docker's starting position is permissive: containers "have networking enabled by default, and
+      they can make outgoing
+      connections".<a class="cite" href="https://docs.docker.com/engine/network/" title="Docker Docs: Networking overview">[Docker: networking]</a>
+      The conceptual side — what a network boundary protects and why it bears on validity — is
+      <a href="../../../networking/networking-tut/pages/22-boundaries-and-validity.html">Networking for
+      LLM Evals, lesson 22</a>. This page covers the Linux and Docker side.
+    </p>
+
+    <h2 id="menu">The enforcement menu</h2>
+    <p>
+      From simplest and strongest to most flexible. Every option is enforced <em>outside</em> the
+      sandbox's control: a default container lacks the <code>NET_ADMIN</code>
+      <span class="term" data-g="capability">capability</span>, so even root inside it cannot change
+      the rules (shown <a href="#sandbox-side">below</a>).
+    </p>
+    <table>
+      <tr><th>Option</th><th>What the sandbox gets</th><th>Still reachable</th><th>Cost to the task</th></tr>
+      <tr><td><code>--network none</code></td><td>only <code>lo</code></td><td>nothing</td><td>no package installs, no multi-container tasks</td></tr>
+      <tr><td><code>--internal</code> network</td><td>an interface, no default route</td><td>other containers on it; <strong>the host gateway</strong></td><td>no internet at all</td></tr>
+      <tr><td>internal network + allowlisting proxy</td><td>as above, plus one door</td><td>named hosts, via the proxy</td><td>the allowlist must be maintained</td></tr>
+      <tr><td>host firewall rules (nftables)</td><td>whatever the rules say</td><td>per rule</td><td>needs a host you control, and care</td></tr>
+    </table>
+
+    <h3 id="none">1. No network</h3>
+    <p>
+      "Within the container, only the loopback device is
+      created."<a class="cite" href="https://docs.docker.com/engine/network/drivers/none/" title="Docker Docs: None network driver">[Docker: none]</a>
+      With no interface to send from, there is nothing for a firewall to do. This is also the default
+      of the most widely used open-source harness: Inspect's generated compose configuration "sets
+      <code>network_mode: none</code>".<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html" title="Inspect AI docs: Sandboxing, Docker Configuration">[Inspect]</a>
+      You will see the <code>--network none</code> output in the <a href="#probe">probe</a> below.
+    </p>
+
+    <h3 id="internal">2. An internal network</h3>
+    <p>
+      <code>docker network create --internal NAME</code> gives containers an interface and each other,
+      but "no default route is configured and firewall rules are set up to drop all traffic to or from
+      other networks". The same sentence continues with the caveat people miss: "Communication with the
+      gateway IP address (and thus appropriately configured host services) is
+      possible".<a class="cite" href="https://docs.docker.com/reference/cli/docker/network/create/#internal" title="Docker CLI reference: docker network create, --internal">[Docker: network create]</a>
+      On the authoring machine the internal network's gateway answered a ping and refused port 8000
+      instantly. Refusing is itself an answer: the host is there, and it simply had nothing listening on that port:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker network create --internal lt-int
+<span class="p">$</span> docker run --rm --network lt-int lt-tools bash -c \
+    'ping -c1 -W2 172.19.0.1 | grep transmitted; curl -sS -m5 -o /dev/null http://172.19.0.1:8000/; dig example.com | grep status'
+<span class="o">1 packets transmitted, <span class="hl">1 received</span>, 0% packet loss, time 0ms
+curl: (7) Failed to connect to 172.19.0.1 port 8000 after 1 ms: Couldn't connect to server
+;; -&gt;&gt;HEADER&lt;&lt;- opcode: QUERY, status: <span class="hl">SERVFAIL</span>, id: 4158</span></code></pre>
+    <p>
+      The last line matters too. On this Docker version the embedded resolver on an internal network
+      did not forward external names, so DNS was not an escape route here. That is an observation of
+      one version, not a documented guarantee, so the probe tests it every time.
+    </p>
+
+    <h3 id="proxy">3. Internal network plus an allowlisting proxy</h3>
+    <p>
+      When a task legitimately needs <em>some</em> internet (a package index, say), give the sandbox
+      exactly one door: a <span class="term" data-g="proxy">proxy</span> container attached to both
+      the internal network and a normal one, which forwards only to hosts on its
+      <span class="term" data-g="allowlist">allowlist</span>. How clients find the proxy, and how a
+      refusal looks, is on <a href="18-dns-http-tls.html#proxies">page 18</a>.
+    </p>
+    <div class="diagram">   network "sandbox"                network "outside"
+   (internal: true, no route out)   (normal bridge, NAT to internet)
+
+   ┌─────────────────────┐
+   │ default (the agent) │
+   │ https_proxy=        │
+   │   http://proxy:8888 │
+   └─────────┬───────────┘
+             │ CONNECT pypi.org:443
+             ▼
+   ┌────────────────────────────────────────────┐
+   │ proxy: one container, an interface on each │──▶ NAT ──▶ internet
+   │ network; forwards only allowlisted hosts   │  (pypi.org,
+   └────────────────────────────────────────────┘  files.pythonhosted.org)</div>
+    <p>
+      In <span class="term" data-g="docker-compose">Compose</span>, an internal network is
+      <code>internal: true</code>, which "lets you create an externally isolated
+      network".<a class="cite" href="https://docs.docker.com/reference/compose-file/networks/#internal" title="Compose file reference: Networks top-level element, internal">[Compose]</a>
+      This sketch was run as written. The proxy is tinyproxy, built inline from
+      <code>ubuntu:24.04</code>, so no extra image is pulled. The service is named <code>default</code>
+      because Inspect treats a service with that name as the primary sandbox:
+    </p>
+<pre><code>services:
+  default:                       # the agent's sandbox
+    image: ubuntu:24.04
+    command: tail -f /dev/null
+    init: true
+    networks: [sandbox]          # internal only: no route out
+    environment:
+      http_proxy: http://proxy:8888
+      https_proxy: http://proxy:8888
+      no_proxy: localhost,127.0.0.1
+  proxy:                         # the only door, on both networks
+    build:
+      dockerfile_inline: |
+        FROM ubuntu:24.04
+        RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends tinyproxy \
+         &amp;&amp; rm -rf /var/lib/apt/lists/*
+        RUN printf '%s\n' 'Port 8888' 'Timeout 30' 'FilterDefaultDeny Yes' \
+              'Filter "/etc/tinyproxy/allow"' 'FilterType ere' &gt; /etc/tinyproxy/egress.conf \
+         &amp;&amp; printf '%s\n' '^pypi\.org$' '^files\.pythonhosted\.org$' &gt; /etc/tinyproxy/allow
+        CMD ["tinyproxy", "-d", "-c", "/etc/tinyproxy/egress.conf"]
+    networks: [sandbox, outside]
+networks:
+  sandbox:
+    internal: true
+  outside: {}</code></pre>
+<pre class="term"><code><span class="p">$</span> docker compose -p lt-egress up -d --build
+<span class="p">$</span> docker compose -p lt-egress exec default apt-get update
+<span class="o">…
+E: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-security/InRelease  <span class="hl">403  Filtered</span> [IP: 172.18.0.3 8888]</span></code></pre>
+    <p>
+      apt honours <code>http_proxy</code>, the Ubuntu mirror is not on the list, and the proxy said
+      no. From a tools container on the same internal network, <code>pypi.org</code> returns 200,
+      <code>github.com</code> fails with <code>CONNECT tunnel failed, response 403</code>, and
+      bypassing the proxy with <code>--noproxy '*'</code> dies at DNS with exit 6. The proxy is the
+      only way out.
+    </p>
+    <div class="warn"><span class="label">Caveat</span>
+      <p>
+        A proxy allowlist of hostnames is only as tight as its hosts. Allowing a site that serves
+        arbitrary user content (a code host, a paste site, a general search engine) re-opens most of
+        what you closed. And note what the proxy config does <em>not</em> say: nothing here restricts
+        the host gateway, which the internal network leaves reachable. That is a job for the host
+        firewall.
+      </p>
+    </div>
+
+    <h3 id="host-firewall">4. Host firewall rules: nftables</h3>
+    <p>
+      The kernel's packet filter is netfilter, and its current front end is
+      <span class="term" data-g="nftables">nftables</span>, which "replaces the popular
+      {ip,ip6,arp,eb}tables".<a class="cite" href="https://www.netfilter.org/projects/nftables/index.html" title="netfilter.org: nftables project page">[nftables]</a>
+      The model has three nouns. A <em>table</em> is a container for chains, and the <code>inet</code>
+      family covers IPv4 and IPv6 in one
+      ruleset.<a class="cite" href="https://wiki.nftables.org/wiki-nftables/index.php/What_is_nftables%3F" title="nftables wiki: What is nftables?">[nftables]</a>
+      A <em>base chain</em> attaches to a <em>hook</em>, a point in the kernel's packet path —
+      <code>input</code> (to this machine), <code>output</code> (from local processes),
+      <code>forward</code> (passing through, which is where a container's traffic crosses the host) —
+      and has a <em>policy</em>, <code>accept</code> or <code>drop</code>, applied to whatever no rule
+      decides.<a class="cite" href="https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains" title="nftables wiki: Configuring chains (base chain hooks, policy)">[nftables]</a>
+      A <span class="term" data-g="default-deny">default-deny</span> chain is policy <code>drop</code>
+      plus explicit accepts. The one rule every such chain needs is
+      <code>ct state established,related accept</code>: connection tracking remembers flows, so replies
+      to connections you allowed get back
+      in.<a class="cite" href="https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation" title="nftables wiki: Matching connection tracking stateful metainformation">[nftables]</a>
+    </p>
+    <p>
+      Host-side rules could not be run on the authoring machine (Docker Desktop hides its Linux VM), so
+      what follows is <strong>adapted from the documentation, not executed output</strong>. On a Linux
+      host using Docker's default iptables backend, rules for container traffic go in the
+      <code>DOCKER-USER</code> chain, "a placeholder for user-defined rules that will be processed
+      before rules in the DOCKER-FORWARD and DOCKER chains". Rules appended to <code>FORWARD</code>
+      instead run <em>after</em> Docker's own and may never see the
+      packet.<a class="cite" href="https://docs.docker.com/engine/network/firewall-iptables/" title="Docker Docs: Docker with iptables, Add iptables policies before Docker's rules">[Docker: iptables]</a>
+      AWS documents this shape for cutting processes off from the metadata
+      service:<a class="cite" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-limiting-access.html" title="AWS EC2 User Guide: Limit access to the Instance Metadata Service">[AWS: IMDS]</a>
+    </p>
+<pre><code># adapted from Docker's DOCKER-USER docs and AWS's IMDS guidance -- NOT executed here
+iptables -I DOCKER-USER -i docker0 -d 169.254.169.254 -j REJECT     # no metadata from containers
+iptables -I DOCKER-USER -i docker0 ! -d 172.17.0.0/16 -j DROP       # nothing else leaves docker0</code></pre>
+    <p>
+      Docker 29's nftables backend is experimental and has <em>no</em> <code>DOCKER-USER</code> chain;
+      instead, "rules can be added in separate tables, with base chains that have the same types and
+      hook points as Docker's base
+      chains".<a class="cite" href="https://docs.docker.com/engine/network/firewall-nftables/" title="Docker Docs: Docker with nftables">[Docker: nftables]</a>
+      Depth triage: reading a ruleset and knowing which chain Docker consults is <em>recognize</em>
+      level for this course. Writing a host's production firewall is a <em>specialist</em>'s job. What
+      you must be able to do yourself is <em>test</em> the result from inside, which is the probe.
+    </p>
+
+    <h3 id="sandbox-side">Drop versus reject, seen from inside</h3>
+    <p>
+      You can feel the two firewall verdicts without a VM by filtering the container's <em>own</em>
+      network namespace, which needs <code>--cap-add NET_ADMIN</code>. Without it, even uid 0 is
+      refused. This is the property that makes outside enforcement trustworthy:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm lt-tools bash -c 'apt-get install -y -qq nftables &gt;/dev/null; nft add table inet sandbox'
+<span class="o">Error: Could not process rule: <span class="hl">Operation not permitted</span></span>
+<span class="p">$</span> docker run --rm -it --cap-add NET_ADMIN lt-tools bash
+<span class="p">#</span> nft add table inet sandbox
+<span class="p">#</span> nft 'add chain inet sandbox egress { type filter hook output priority 0; policy accept; }'
+<span class="p">#</span> nft add rule inet sandbox egress ip daddr 1.1.1.1 tcp dport 80 drop
+<span class="p">#</span> curl -sS -o /dev/null --connect-timeout 3 http://1.1.1.1/
+<span class="o">curl: (<span class="hl">28</span>) Failed to connect to 1.1.1.1 port 80 after 3008 ms: Timeout was reached</span>
+<span class="p">#</span> nft flush chain inet sandbox egress
+<span class="p">#</span> nft add rule inet sandbox egress ip daddr 1.1.1.1 tcp dport 80 reject
+<span class="p">#</span> curl -sS -o /dev/null --connect-timeout 3 http://1.1.1.1/
+<span class="o">curl: (<span class="hl">7</span>) Failed to connect to 1.1.1.1 port 80 after 0 ms: Couldn't connect to server</span></code></pre>
+    <p>
+      <code>drop</code> discards the packet "on the floor"; <code>reject</code> sends back an error,
+      by default ICMP port
+      unreachable.<a class="cite" href="https://wiki.nftables.org/wiki-nftables/index.php/Rejecting_traffic" title="nftables wiki: Rejecting traffic">[nftables]</a>
+      So a reject fails in 0 ms, and a drop fails only when the client's timeout runs out. With no
+      timeout set, the same dropped connection held curl for 136 seconds (<code>after 136238 ms</code>) before the kernel
+      gave up. A default-deny egress chain, listed back by <code>nft</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> nft list ruleset
+<span class="o">table inet sandbox {
+	chain egress {
+		type filter hook output priority filter; policy <span class="hl">drop</span>;
+		oif "lo" accept
+		ct state established,related accept
+		ip daddr 1.1.1.1 tcp dport 443 accept
+	}
+}</span>
+<span class="p">#</span> curl -sS -o /dev/null -w '%{http_code}\n' --connect-timeout 3 https://1.1.1.1/
+<span class="o">301</span>
+<span class="p">#</span> curl -sS -o /dev/null --connect-timeout 3 http://1.0.0.1/
+<span class="o">curl: (28) Failed to connect to 1.0.0.1 port 80 after 3006 ms: Timeout was reached</span>
+<span class="p">#</span> curl -sS -o /dev/null --connect-timeout 3 https://example.com/
+<span class="o">curl: (6) Could not resolve host: example.com</span></code></pre>
+    <p>
+      The third result shows one of the two classic holes, here closed: the policy dropped DNS too, so
+      names fail at exit 6. A rules-plus-proxy design that leaves the resolver open leaves a channel
+      open (<a href="18-dns-http-tls.html#name-resolution">page 18</a>). The other hole is
+      <span class="term" data-g="ipv6">IPv6</span>. An <code>ip</code>-family table, or iptables
+      without ip6tables, filters only IPv4, which is one reason the <code>inet</code> family exists.
+      The probe checks both.
+    </p>
+
+    <h2 id="probe">The reachability probe</h2>
+    <p>
+      Whatever enforces the policy, you prove it the same way: from inside, against a fixed list of
+      targets, with timeouts. Five questions, in order: <em>what network am I on</em>
+      (<code>ip -br addr; ip route</code>, <a href="16-addresses-and-routes.html">page 16</a>)?
+      <em>Do external names resolve?</em> <em>Does the internet answer</em> (by name, by IP, over
+      IPv6)? <em>Does the host gateway answer?</em> <em>Does the metadata address or a neighbour
+      container answer?</em> As a script (<span class="term" data-g="shellcheck">shellcheck</span>-clean,
+      30 lines, saved in the course repo as <code>research/verify/19-probe.sh</code>):
+    </p>
+<pre><code>#!/usr/bin/env bash
+# probe.sh [HOST_PORT] [PEER_IP:PORT] -- from inside a sandbox: what can this box reach?
+set -u
+host_port=${1:-8000}; peer=${2:-}
+echo "== interfaces (fallback tunnel devices hidden) and routes"
+ip -br addr | grep -v '@NONE'; ip route
+gw=$(ip route | awk '/^default/ {print $3; exit}')  # no default route? assume .1 of the subnet
+[ -n "$gw" ] || gw=$(ip route | awk '/proto kernel/ {split($1, a, "[./]"); print a[1] "." a[2] "." a[3] ".1"; exit}')
+echo "== targets"
+try() {  # try LABEL URL [curl options...]: any HTTP answer counts as reachable
+  local label=$1 url=$2 code rc v; shift 2
+  code=$(curl -sS -o /dev/null -m 5 --connect-timeout 3 -w '%{http_code}' "$@" "$url" 2&gt;/dev/null)
+  rc=$?
+  case $rc in
+    0)  v="REACHABLE (HTTP $code)" ;;
+    7)  v="no: refused, rejected or no route (exit 7)" ;;
+    28) v="no: dropped or timed out (exit 28)" ;;
+    *)  v="no (curl exit $rc)" ;;
+  esac
+  printf '%-34s %s\n' "$label" "$v"
+}
+if getent ahosts example.com &gt;/dev/null; then v="REACHABLE (external names resolve)"; else v="no"; fi
+printf '%-34s %s\n' "DNS for external names" "$v"
+try "internet https://example.com" https://example.com/
+try "internet by IP 1.1.1.1" http://1.1.1.1/
+try "internet over IPv6" https://example.com/ -6
+if [ -n "$gw" ]; then try "host gateway $gw:$host_port" "http://$gw:$host_port/"
+else printf '%-34s %s\n' "host gateway" "no: no interface but lo"; fi
+try "metadata 169.254.169.254" http://169.254.169.254/
+if [ -n "$peer" ]; then try "neighbour $peer" "http://$peer/"; fi</code></pre>
+    <p>
+      Run for real under the three network modes. In each, a neighbour container was listening on port
+      8080 where one could exist. The <code>ip</code> lines are trimmed to the interfaces; on Docker
+      Desktop the grep also hides the placeholder tunnel devices its kernel adds to every namespace:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --network none -v "$PWD/probe.sh:/probe.sh:ro" lt-tools bash /probe.sh
+<span class="o">lo               UNKNOWN        127.0.0.1/8 ::1/128
+== targets
+DNS for external names             no
+internet https://example.com       no (curl exit 6)
+internet by IP 1.1.1.1             no: refused, rejected or no route (exit 7)
+internet over IPv6                 no (curl exit 6)
+host gateway                       no: no interface but lo
+metadata 169.254.169.254           no: refused, rejected or no route (exit 7)</span>
+
+<span class="p">$</span> docker run --rm --network lt-int -v "$PWD/probe.sh:/probe.sh:ro" lt-tools bash /probe.sh 8000 172.19.0.2:8080
+<span class="o">eth0@if902       UP             172.19.0.3/16
+172.19.0.0/16 dev eth0 proto kernel scope link src 172.19.0.3      <span class="c"># no default route</span>
+== targets
+DNS for external names             no
+internet https://example.com       no (curl exit 6)
+internet by IP 1.1.1.1             no: refused, rejected or no route (exit 7)
+internet over IPv6                 no (curl exit 6)
+host gateway 172.19.0.1:8000       no: refused, rejected or no route (exit 7)
+metadata 169.254.169.254           no: refused, rejected or no route (exit 7)
+neighbour 172.19.0.2:8080          <span class="hl">REACHABLE (HTTP 200)</span></span>
+
+<span class="p">$</span> docker run --rm -v "$PWD/probe.sh:/probe.sh:ro" lt-tools bash /probe.sh 8000 172.17.0.6:8080
+<span class="o">eth0@if904       UP             172.17.0.10/16
+default via 172.17.0.1 dev eth0
+…
+DNS for external names             <span class="hl">REACHABLE (external names resolve)</span>
+internet https://example.com       <span class="hl">REACHABLE (HTTP 200)</span>
+internet by IP 1.1.1.1             <span class="hl">REACHABLE (HTTP 301)</span>
+internet over IPv6                 no: refused, rejected or no route (exit 7)
+host gateway 172.17.0.1:8000       no: refused, rejected or no route (exit 7)
+metadata 169.254.169.254           no: dropped or timed out (exit 28)
+neighbour 172.17.0.6:8080          <span class="hl">REACHABLE (HTTP 200)</span></span></code></pre>
+    <p>
+      Read it as evidence, with the hypotheses kept separate. <em>Observed:</em> under
+      <code>none</code>, nothing. Under <code>--internal</code>, only the neighbour. On the default
+      bridge, the internet and the neighbour (the default bridge lets containers reach each other by
+      IP;<a class="cite" href="https://docs.docker.com/engine/network/drivers/bridge/" title="Docker Docs: Bridge network driver">[Docker: bridge]</a>
+      another rollout's sandbox is a neighbour too). <em>Not established:</em> that the gateway is
+      safe. Exit 7 there means a host answered "nothing on port 8000". Probe the ports your host
+      actually serves (<code>ss -tlnp</code> on the host, <a href="17-ports-and-sockets.html">page
+      17</a>). Likewise, "metadata: no" on a laptop proves nothing about a cloud VM, where that
+      address answers unless something blocks it. Run the probe where the eval runs.
+    </p>
+    <div class="pitfall"><span class="label">Pitfall</span>
+      <p>
+        Run the probe with the proxy variables set and it lies. Inside the compose sandbox above, with
+        <code>https_proxy</code> inherited, it reported <code>internet by IP 1.1.1.1 REACHABLE (HTTP
+        403)</code> and the same for the gateway and the metadata address. Every "answer" was the proxy
+        saying <code>403 Filtered</code>. Probe twice: once with <code>env -u http_proxy -u
+        https_proxy</code> to test the <em>network</em> policy, and once through the proxy with
+        <code>-f</code> to test the <em>allowlist</em>. And never write a probe without timeouts: a
+        dropped connection with none set held curl for 136 seconds.
+      </p>
+    </div>
+
+    <div class="evals"><span class="label">In eval work · design</span>
+      <p>
+        Inspect's default is <code>network_mode: none</code>, but "supplying a custom Compose
+        configuration … replaces the generated configuration rather than extending it, including its
+        <code>network_mode: none</code>", and Compose's own default "is a project-scoped network with
+        outbound Internet
+        access".<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html" title="Inspect AI docs: Sandboxing, Docker Configuration, Task Configuration">[Inspect]</a>
+        So the day someone adds a <code>compose.yaml</code> to give a task a database, its sandbox
+        silently goes from no network to the open internet, and the scores move for a reason nobody
+        wrote down. Two defences. Write <code>network_mode: none</code> (or an
+        <code>internal: true</code> network) into every compose file yourself. And run
+        <code>probe.sh</code> inside a freshly built sandbox in CI, failing the build if any line
+        differs from the expected policy — an eval of the environment itself. Remember the boundary's
+        scope as well: <code>network_mode: none</code> "applies only to processes inside the
+        container", not to tool, scorer or model-provider code running
+        outside.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html" title="Inspect AI docs: Sandboxing, Task Configuration">[Inspect]</a>
+      </p>
+    </div>
+
+    <div class="evals"><span class="label">In eval work · discuss and failure accounting</span>
+      <p>
+        "Pass rate with open network" and "pass rate with no network" are different measurements. With
+        a route out, the agent may download the fix rather than write it. Report the network policy as
+        part of the eval configuration, as you would the model version, and paste the probe output into
+        the run record. When a sample fails <em>because of</em> the policy — <code>pip install</code>
+        gets a 403 from the proxy, a task needs a host the allowlist forgot — that is an observation
+        about the run and the task, not the model. Log it as an infrastructure or task-validity failure
+        with the probe line that explains it, and keep <code>correct / scheduled</code> and
+        <code>completed / scheduled</code> as separate numbers. Decide before the run whether
+        policy-blocked samples count against the model; don't decide after seeing which way it moves
+        the score.
+      </p>
+    </div>
+
+    <h2 id="symptoms">Symptom → layer</h2>
+    <table>
+      <tr><th>Inside the sandbox you see</th><th>Likely enforcement</th><th>Confirm with</th></tr>
+      <tr><td>only <code>lo</code>; <code>ip route</code> empty</td><td><code>--network none</code></td><td><code>ip -br addr</code></td></tr>
+      <tr><td>an <code>eth0</code>, no <code>default</code> route; names SERVFAIL</td><td><code>--internal</code> network</td><td><code>ip route</code>, <code>dig NAME | grep status</code></td></tr>
+      <tr><td>exit 6 for every name, exit 7 by IP, but a proxy variable set</td><td>internal network + proxy</td><td><code>env | grep -i proxy</code>; try an allowed host</td></tr>
+      <tr><td><code>CONNECT tunnel failed, response 403</code></td><td>proxy allowlist</td><td>compare with an allowed host</td></tr>
+      <tr><td>exit 28 to one address, others fine</td><td>firewall <code>drop</code></td><td>same port, another address</td></tr>
+      <tr><td>exit 7 in 0 ms to an address that serves that port elsewhere</td><td>firewall <code>reject</code></td><td>the same request from another network</td></tr>
+    </table>
+
+    <div class="check"><span class="label">Check your understanding</span>
+      <p>
+        A team moves its agentic coding benchmark from its own runner to a harness whose default is
+        no network. To support two new tasks that need a Postgres container, they add a
+        <code>compose.yaml</code> to the task directory. The next release's pass rate rises from 38%
+        to 47%, and the two new tasks account for only 1 point. The team credits a better model. What
+        do you check, and how would the answer change what gets reported?
+      </p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>
+          <strong>Observed:</strong> a rise, mostly on old tasks, coinciding with a compose file.
+          <strong>Hypothesis to rule out:</strong> the compose file replaced the harness's generated
+          config, the sandbox lost <code>network_mode: none</code>, and old tasks became solvable by
+          fetching. Evidence that discriminates: (1) read the compose file for
+          <code>network_mode</code> or an <code>internal: true</code> network; (2) run
+          <code>probe.sh</code> in a sandbox built from this release and from the previous one (if the
+          diff is "internet: REACHABLE", the configs differ); (3) search transcripts of newly passing
+          tasks for <code>pip download</code>, <code>git clone</code>, <code>curl</code> or
+          <code>wget</code> to outside hosts, and check whether the fetched content contains the fix;
+          (4) rerun the old tasks with the new model under the <em>old</em> network policy. If the gain
+          disappears in (4), the 9 points measured the environment change. Report both runs, label the
+          network policy of each, and restore the intended policy (with <code>probe.sh</code> in CI)
+          before any comparison with earlier releases.
+        </p>
+      </details>
+    </div>
+
+    <div class="lab"><span class="label">Lab</span>
+      <p>
+        <strong>Container lab</strong> for 1–3 and 5, run from your Mac with <code>probe.sh</code>
+        saved in the current directory. Build the tools image once:
+        <code>printf 'FROM ubuntu:24.04\nRUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends curl ca-certificates dnsutils iproute2 iputils-ping\n' | docker build -t lt-tools -</code>.
+        <strong>VM lab</strong> for 4.
+      </p>
+      <ol>
+        <li>
+          <strong>Reproduce.</strong> Run <code>probe.sh</code> under <code>--network none</code> and
+          on the default bridge, and compare the outputs with the page.
+          <details class="solution"><summary>Solution</summary>
+            <p>Use the two <code>docker run</code> lines shown in <a href="#probe">the probe section</a>.
+            Your <code>ip</code> addresses and the metadata line may differ (a cloud VM answers there).
+            The pattern — nothing under <code>none</code>, internet and IPv4 on the bridge — should
+            match.</p>
+          </details>
+        </li>
+        <li>
+          <strong>Predict, then verify.</strong> Create <code>docker network create --internal
+          lt-int</code> and start a neighbour:
+          <code>docker run -d --name lt-peer --network lt-int lt-tools bash -c 'while true; do printf "HTTP/1.0 200 OK\r\n\r\nhi\n" | nc -l -N -p 8080; done'</code>
+          (add <code>netcat-openbsd</code> to the image). Before running the probe on
+          <code>lt-int</code>, write down which lines you expect to say REACHABLE, and what
+          <code>dig example.com | grep status</code> will print.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm --network lt-int -v "$PWD/probe.sh:/probe.sh:ro" lt-tools bash /probe.sh 8000 "$(docker inspect -f '{{(index .NetworkSettings.Networks "lt-int").IPAddress}}' lt-peer):8080"
+<span class="o">…
+neighbour 172.19.0.2:8080          REACHABLE (HTTP 200)</span>
+<span class="p">$</span> docker run --rm --network lt-int lt-tools bash -c 'dig example.com | grep status'
+<span class="o">;; -&gt;&gt;HEADER&lt;&lt;- opcode: QUERY, status: SERVFAIL, id: 51298</span></code></pre>
+            <p>Only the neighbour. The gateway line says exit 7: the host answered and nothing was
+            listening. Clean up with <code>docker rm -f lt-peer; docker network rm lt-int</code>.</p>
+          </details>
+        </li>
+        <li>
+          <strong>Drop versus reject.</strong> In
+          <code>docker run --rm -it --cap-add NET_ADMIN lt-tools bash</code>, install
+          <code>nftables</code>, add the drop rule from the page, and time
+          <code>curl -sS -o /dev/null --connect-timeout 3 http://1.1.1.1/</code>. Replace it with a
+          reject rule and time it again. Then try <code>nft add table inet x</code> in a container
+          <em>without</em> <code>--cap-add</code>.
+          <details class="solution"><summary>Solution</summary>
+            <p>Drop: <code>curl: (28) … after 3008 ms: Timeout was reached</code>. Reject:
+            <code>curl: (7) … after 0 ms</code>. Without <code>NET_ADMIN</code>: <code>Error: Could not
+            process rule: Operation not permitted</code>, as root. That is why a sandboxed agent
+            cannot loosen its own firewall, and why a task image that asks for
+            <code>NET_ADMIN</code> deserves a question in review.</p>
+          </details>
+        </li>
+        <li>
+          <strong>VM lab: close the metadata hole.</strong> On a cloud Linux VM with Docker (iptables
+          backend), run <code>probe.sh</code> in a default container and note the metadata line. Add
+          the <code>DOCKER-USER</code> REJECT rule for <code>169.254.169.254</code> from the page and
+          probe again.
+          <details class="solution"><summary>Solution</summary>
+            <p>Not executed for this course (no cloud VM was used), so no output is shown. What to
+            expect from the documentation: before the rule, the metadata line may report REACHABLE
+            (HTTP 200, or 401 when the instance requires IMDSv2 tokens — any HTTP answer means the
+            service is reachable). After it, the line should read
+            <code>no: refused, rejected or no route (exit 7)</code>, since REJECT answers
+            immediately. Check that the rule is there with
+            <code>sudo iptables -L DOCKER-USER -n</code>. If your Docker uses the nftables backend,
+            there is no <code>DOCKER-USER</code> chain; add a separate table instead.</p>
+          </details>
+        </li>
+        <li>
+          <strong>Eval-flavoured: make the policy a test.</strong> Write
+          <code>expect-none.sh</code>, which runs <code>probe.sh</code> and exits non-zero if any
+          target line says REACHABLE. Show it passing under <code>--network none</code> and failing
+          on the default bridge. That is your CI check for "this task image has no egress".
+          <details class="solution"><summary>Solution</summary>
+<pre><code>#!/usr/bin/env bash
+# expect-none.sh: fail if probe.sh finds anything reachable
+out=$(env -u http_proxy -u https_proxy bash /probe.sh "$@")
+printf '%s\n' "$out"
+if printf '%s\n' "$out" | grep -q 'REACHABLE'; then
+  echo "POLICY VIOLATION: sandbox has egress" &gt;&amp;2; exit 1
+fi
+echo "policy ok: nothing reachable"</code></pre>
+<pre class="term"><code><span class="p">$</span> docker run --rm --network none -v "$PWD:/w:ro" lt-tools bash -c 'cp /w/probe.sh /; bash /w/expect-none.sh &gt;/dev/null; echo "exit=$?"'
+<span class="o">exit=0</span>
+<span class="p">$</span> docker run --rm -v "$PWD:/w:ro" lt-tools bash -c 'cp /w/probe.sh /; bash /w/expect-none.sh &gt;/dev/null; echo "exit=$?"'
+<span class="o">POLICY VIOLATION: sandbox has egress
+exit=1</span></code></pre>
+            <p><code>env -u</code> strips inherited proxy variables, so the check tests the network
+            and not a proxy's 403s. The violation message goes to stderr, which is why it still
+            shows with stdout discarded, while "policy ok" (stdout) does not.</p>
+          </details>
+        </li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Amazon Web Services. EC2 User Guide: Use instance metadata; Limit access to the Instance Metadata Service. <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html">docs.aws.amazon.com/…/ec2-instance-metadata.html</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-limiting-access.html">…/instance-metadata-limiting-access.html</a></li>
+        <li>Docker Docs: Networking overview; None network driver; Bridge network driver; docker network create (--internal); Docker with iptables; Docker with nftables. <a href="https://docs.docker.com/engine/network/">docs.docker.com/engine/network/</a>, <a href="https://docs.docker.com/engine/network/drivers/none/">…/drivers/none/</a>, <a href="https://docs.docker.com/engine/network/drivers/bridge/">…/drivers/bridge/</a>, <a href="https://docs.docker.com/reference/cli/docker/network/create/#internal">…/network/create/#internal</a>, <a href="https://docs.docker.com/engine/network/firewall-iptables/">…/firewall-iptables/</a>, <a href="https://docs.docker.com/engine/network/firewall-nftables/">…/firewall-nftables/</a></li>
+        <li>Docker Docs: Compose file reference, Networks top-level element (internal). <a href="https://docs.docker.com/reference/compose-file/networks/#internal">docs.docker.com/reference/compose-file/networks/#internal</a></li>
+        <li>UK AI Security Institute. Inspect AI documentation: Sandboxing (Docker configuration). <a href="https://inspect.aisi.org.uk/sandboxing.html">inspect.aisi.org.uk/sandboxing.html</a></li>
+        <li>Netfilter project. nftables project page; nftables wiki: What is nftables?, Configuring chains, Rejecting traffic, Matching connection tracking stateful metainformation. <a href="https://www.netfilter.org/projects/nftables/index.html">netfilter.org/projects/nftables/</a>, <a href="https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains">wiki.nftables.org/…/Configuring_chains</a>, <a href="https://wiki.nftables.org/wiki-nftables/index.php/Rejecting_traffic">…/Rejecting_traffic</a></li>
+        <li>All terminal output on this page was produced on Docker 28.1.1 (Docker Desktop, arm64) with <code>ubuntu:24.04</code>-based images, nftables 1.0.9, tinyproxy 1.11.1 and Compose 2.35.1. The iptables block and lab 4 are adapted from documentation and were not executed. Session log: <code>research/verify/19-firewalls-and-egress.txt</code>; script: <code>research/verify/19-probe.sh</code>.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

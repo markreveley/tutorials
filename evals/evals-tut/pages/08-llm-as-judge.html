@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM-as-Judge: Mechanics · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 3 · LLM-as-Judge</p>
+    <h1>LLM-as-judge: mechanics</h1>
+    <p class="lede">
+      Using a model to grade model outputs is the only way to apply human-like judgment at machine
+      scale — and it works well enough to be everywhere. This page covers the machinery: the three
+      judging formats, the evidence that judges can track human preferences, and the prompt-design
+      decisions that determine whether yours will.
+    </p>
+
+    <h2 id="why-viable">The result that legitimized the technique</h2>
+    <p>
+      The canonical citation is Zheng et al.'s MT-Bench paper (NeurIPS 2023), which tested LLM judges
+      against two pools of human judgment: 58 expert-level labelers grading model answers to 80
+      multi-turn questions, and ~30,000 crowdsourced votes from the Chatbot Arena
+      platform.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena">[MT-Bench]</a>
+      The headline: GPT-4's agreement with humans reached <strong>85%</strong>, while humans agreed with
+      <em>each other</em> only <strong>81%</strong> of the time.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §4.2, Tables 5–6">[MT-Bench]</a>
+      A judge that agrees with people as often as people agree with each other is, by that yardstick, a
+      usable instrument.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat: read the fine print on that 85%</span>
+      <p>Both numbers come from the paper's "S2" setup — only non-tie votes counted, where random
+      guessing scores 50%. Under the stricter S1 setup (ties included, random baseline 33%), the same
+      data gives 66% judge–human and 63% human–human agreement.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §4.1, Table 5">[MT-Bench]</a>
+      Neither number is wrong — but quoting "85% agreement" without its baseline is exactly the kind of
+      measurement-definition sleight this course keeps warning about. Also: agreement isn't uniform.
+      It climbs from ~70% toward ~100% as the quality gap between compared models widens<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, Figure 2">[MT-Bench]</a> —
+      judges are most reliable on exactly the comparisons you least need help with.</p>
+    </div>
+
+    <h2 id="formats">The three judging formats</h2>
+    <p>
+      The MT-Bench paper distinguishes three ways to pose the grading question, each with a verified
+      trade-off profile:<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.1">[MT-Bench]</a>
+    </p>
+    <table>
+      <tr><th>Format</th><th>The judge sees</th><th>Strength</th><th>Weakness (paper's own words)</th></tr>
+      <tr><td><span class="term" data-g="pairwise-comparison">Pairwise comparison</span></td><td>One prompt, two answers: which is better?</td><td>More stable; relative judgments are easier</td><td>"Lack[s] scalability when the number of players increases, given that the number of possible pairs grows quadratically"</td></tr>
+      <tr><td><span class="term" data-g="single-answer-grading">Single-answer grading</span></td><td>One prompt, one answer: score it</td><td>Scales linearly; no pairing needed</td><td>"May be unable to discern subtle differences"; absolute scores "fluctuate more than relative pairwise results if the judge model changes"</td></tr>
+      <tr><td><span class="term" data-g="reference-guided-grading">Reference-guided grading</span></td><td>Prompt, answer, and a reference solution</td><td>Dramatically better on math/objective tasks</td><td>Needs a reference — someone must produce it</td></tr>
+    </table>
+    <p>
+      Encouragingly, the scalable option holds up: in the paper's data, single-answer grading matched
+      pairwise comparison's agreement with humans (85% on MT-bench, S2) — so for production use you
+      aren't forced into quadratic pair
+      grading.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, Table 5">[MT-Bench]</a>
+      Eugene Yan's practitioner synthesis adds the complementary rule of thumb: pairwise is "typically
+      used—and more reliable—for subjective evals," producing "more stable results and smaller
+      differences between LLM judgments and human
+      annotations."<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024, Evaluating the Effectiveness of LLM-Evaluators">[Yan]</a>
+      Match the format to the question: pairwise for "which prompt is better," single-answer
+      binary for "does this output pass," reference-guided when a trustworthy answer key exists.
+    </p>
+
+    <h2 id="prompt-design">Designing the judge prompt</h2>
+    <p>
+      A judge is a prompt, and the design decisions are few enough to enumerate. The verified guidance:
+    </p>
+    <ul>
+      <li><strong>Make the output binary, with a critique.</strong> The case for
+        <span class="term" data-g="binary-judgment">binary judgments</span> was made on
+        <a href="05-from-failures-to-evals.html">page 5</a>; for judges specifically, Yan adds that
+        binary outputs "improve model performance while making it easier to apply classification
+        metrics."<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024">[Yan]</a>
+        Scope each judge to one failure mode as a binary classification task<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a> —
+        five small judges beat one omnibus rubric.</li>
+      <li><strong>Ask for reasoning before the verdict.</strong>
+        <span class="term" data-g="chain-of-thought">Chain-of-thought</span> prompting "improves the
+        accuracy of LLM-evaluators"<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024">[Yan]</a> —
+        though not unconditionally: for math grading, MT-Bench found the CoT judge often "makes exactly
+        the same mistake as the given answers," cutting failures only from 14/20 to 6/20, while
+        reference-guided grading cut them to 3/20.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.4, Table 4">[MT-Bench]</a></li>
+      <li><strong>Use expert critiques as few-shot examples — knowing the cost.</strong>
+        <span class="term" data-g="few-shot">Few-shot</span> examples raised GPT-4's position-bias
+        consistency from 65.0% to 77.5% in MT-Bench's tests, but made calls ~4× more expensive and "may
+        introduce new biases," which is why the paper defaulted to
+        zero-shot.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.4">[MT-Bench]</a>
+        The few-shot examples that earn their cost are your domain expert's labeled critiques
+        (<a href="10-aligning-judges.html">page 10</a>).</li>
+      <li><strong>Give the judge everything the human grader had.</strong> Husain's catalogue of common
+        judge-prompt mistakes is mostly omissions: "Not providing any critiques. Writing extremely terse
+        critiques. Not providing external context… Not providing diverse
+        examples."<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024, Using LLM-as-a-Judge For Evaluation">[Husain, Judge]</a>
+        If the human used customer metadata to judge, a judge without it is graded on a different
+        task.</li>
+      <li><strong>For multi-turn, show the whole conversation.</strong> Splitting a two-turn dialogue
+        into separate judge calls made the judge "struggle to locate the assistant's previous response";
+        presenting both full conversations in one prompt and directing focus to the final turn
+        "significantly alleviate[d]" the problem.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §5.1 / Appendix">[MT-Bench]</a></li>
+    </ul>
+
+    <h2 id="which-model">Which model judges?</h2>
+    <p>
+      Start strong, economize later: "start with the most capable models available to establish strong
+      alignment with human judgments. You can optimize for cost later once you've established reliable
+      evaluation criteria."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      A natural worry — can the same model that does the task also judge it? — gets a verified "usually
+      fine" from the same source: the judge is doing a different, narrowly scoped binary task, and what
+      matters is measured alignment with human labels, not model
+      identity.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      Hold that thought skeptically, though — <a href="09-judge-biases.html">the next page</a> covers
+      self-preference, the bias that makes same-model judging genuinely risky in <em>comparative</em>
+      settings.
+    </p>
+    <p>
+      Two more calibration points before you trust any judge prompt. First, sophisticated judge
+      <em>techniques</em> have modest absolute performance: <span class="term" data-g="g-eval">G-Eval</span>,
+      a widely-adopted CoT-plus-form-filling judge method, achieved an average Spearman correlation with
+      human judgments of just 0.514 — "decent," not
+      definitive.<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024">[Yan]</a>
+      Second, for narrow recurring checks, a small fine-tuned classifier can beat a prompted frontier
+      judge entirely (<a href="03-types-of-evaluators.html">page 3</a>). The judge prompt is a
+      hypothesis; <a href="10-aligning-judges.html">page 10</a> is the experiment.
+    </p>
+
+    <div class="card">
+      <p><strong>A minimal judge prompt skeleton</strong> (structure, not magic words):</p>
+      <pre style="margin:0"><code>You are evaluating outputs of &lt;system&gt; for ONE criterion:
+&lt;criterion, stated concretely, with the expert's definition&gt;.
+
+Context the human grader had: &lt;user metadata, system state&gt;
+
+Examples of expert judgments (critique + verdict):
+&lt;few-shot examples drawn from your domain expert's labels&gt;
+
+Now evaluate:
+&lt;input&gt; &lt;output&gt;
+
+First write a critique referencing the criterion.
+Then output exactly one line: VERDICT: pass | fail</code></pre>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Treating the judge's <em>critique text</em> as evidence the judge is right. Fluent reasoning
+      is what LLMs produce whether or not the verdict is sound — MT-Bench's math-grading failures came
+      with confident explanations that reproduced the wrong answer's
+      error.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.4">[MT-Bench]</a>
+      The only evidence a judge works is measured agreement with human labels on a held-out set.
+      Until then you have a plausible-sounding random number generator.</p>
+    </div>
+
+    <p>
+      Next: the documented ways judges go wrong —
+      <a href="09-judge-biases.html">position, verbosity, and self-preference biases</a> — and the
+      mitigations with verified effect sizes.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Lianmin Zheng et al., "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena," NeurIPS 2023. <a href="https://arxiv.org/abs/2306.05685">arxiv.org/abs/2306.05685</a></li>
+        <li>Eugene Yan, "Evaluating the Effectiveness of LLM-Evaluators (aka LLM-as-Judge)," eugeneyan.com, August 2024. <a href="https://eugeneyan.com/writing/llm-evaluators/">eugeneyan.com/writing/llm-evaluators</a></li>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+        <li>Hamel Husain, "Using LLM-as-a-Judge For Evaluation: A Complete Guide," hamel.dev, October 2024. <a href="https://hamel.dev/blog/posts/llm-judge/">hamel.dev/blog/posts/llm-judge</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

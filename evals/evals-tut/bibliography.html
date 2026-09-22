@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Annotated Bibliography · Understanding LLM Evals</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Reference</p>
+    <h1>Annotated bibliography</h1>
+    <p class="lede">
+      The course's complete citation universe. Every factual claim in every page traces to one of these
+      sources, and every source was verified by fetching the actual paper, post, or documentation —
+      not recalled from memory. Annotations note what each source uniquely teaches and, where our
+      verification caught the record diverging from the folklore, what to watch for.
+    </p>
+
+    <div class="callout">
+      <span class="label">How these were verified</span>
+      <p>Each source was fetched in full (arXiv PDFs/HTML, live documentation, archived repositories)
+      during June 2026, and the specific claims the course planned to make were checked against the
+      text — confirmed, corrected, or discarded. The structured verification notes, with exact quotes
+      and locations, live in the repository under <code>research/sources/</code>. Corrections worth
+      knowing are flagged ⚠ below.</p>
+    </div>
+
+    <h2 id="core">The canonical process core</h2>
+    <div class="card">
+      <p><strong>Shreya Shankar &amp; Hamel Husain, <em>Evals for AI Engineers: Systematically Measuring and Improving AI Applications</em></strong>, O'Reilly Media. <a href="https://www.oreilly.com/library/view/evals-for-ai/9798341660717/">oreilly.com</a><br>
+      The spine text for Modules 1–2: the Three Gulfs framework and the Analyze–Measure–Improve lifecycle, with dedicated chapters on error analysis, automated evaluators, RAG, agents, and CI/CD. ⚠ As of June 2026 it is an Early Release (final publication October 2026) — chapter content may still change; there is no chapter called "judges" (LLM-as-judge lives inside Ch. 5, "Implementing Automated Evaluators").</p>
+      <p><strong>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ)</strong>, hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a><br>
+      The fastest map of the field's practical disputes, with deliberately sharp positions: binary over Likert, 100+ traces to saturation (~20-trace stopping heuristic), "no" to generic metrics, the benevolent-dictator labeling model, 60–80% of dev time on evals. ⚠ Retitled from "Frequently Asked Questions (And Answers) About AI Evals"; takes <em>no</em> position on fine-tuning vs prompting judges, despite frequent citation for one.</p>
+      <p><strong>Hamel Husain, "Your AI Product Needs Evals"</strong>, hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a><br>
+      The original error-analysis-first argument: the three levels (unit tests; human &amp; model eval; A/B testing), the Rechat/Lucy case study, and "remove all friction from looking at data." ⚠ The assistant is <em>Lucy</em> (company: Rechat) — "Lucid" is a common misquote.</p>
+      <p><strong>Hamel Husain, "Using LLM-as-a-Judge For Evaluation: A Complete Guide"</strong>, hamel.dev, October 2024. <a href="https://hamel.dev/blog/posts/llm-judge/">hamel.dev/blog/posts/llm-judge</a><br>
+      The Critique Shadowing method in seven steps, the Principal Domain Expert, the Honeycomb case (&gt;90% agreement in three iterations — with the essential caveat that raw agreement only worked because classes were balanced). ⚠ Originally titled "Creating a LLM-as-a-Judge That Drives Business Results"; the phrase "benevolent dictator" does not appear in it.</p>
+      <p><strong>Shreya Shankar, J.D. Zamfirescu-Pereira, Björn Hartmann, Aditya G. Parameswaran, Ian Arawjo, "Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences"</strong>, UIST 2024 (DOI 10.1145/3654777.3676450). <a href="https://arxiv.org/abs/2404.12272">arxiv.org/abs/2404.12272</a><br>
+      The EvalGen paper — the academic anchor for grader validation: criteria drift (two types, observed in a 9-participant study), the grading catch-22, and alignment as the harmonic mean of coverage and (1 − false-failure-rate). Qualitative evidence; treat prevalence claims accordingly.</p>
+      <p><strong>"AI Evals for Engineers &amp; PMs"</strong> (Shankar &amp; Husain), Maven. <a href="https://maven.com/parlance-labs/evals">maven.com/parlance-labs/evals</a><br>
+      The live course the book grew from. ⚠ Current scale: 4,500+ engineers and PMs across cohorts — the often-quoted "700+" is stale.</p>
+    </div>
+
+    <h2 id="judge">LLM-as-judge: mechanics and failure modes</h2>
+    <div class="card">
+      <p><strong>Lianmin Zheng et al., "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena"</strong>, NeurIPS 2023. <a href="https://arxiv.org/abs/2306.05685">arxiv.org/abs/2306.05685</a><br>
+      The paper that legitimized LLM judges and catalogued their biases. Teach the numbers with their setups: 85% vs 81% agreement is the non-tie S2 setup; position-bias consistency 23.8%–65.0% by judge; the verbosity attack (91.3/91.3/8.7% failure). ⚠ Self-enhancement bias is explicitly <em>inconclusive</em> in the paper — don't cite it as demonstrated.</p>
+      <p><strong>Arjun Panickssery, Samuel R. Bowman, Shi Feng, "LLM Evaluators Recognize and Favor Their Own Generations"</strong>, NeurIPS 2024. <a href="https://arxiv.org/abs/2404.13076">arxiv.org/abs/2404.13076</a><br>
+      The empirical core of self-preference: out-of-box self-recognition (GPT-4: 73.5%), fine-tuning to &gt;90% recognition increases self-preference linearly, with control fine-tunes ruling out confounds; the label-swap experiment is the vivid demo. ⚠ The authors state this is evidence <em>toward</em> the causal hypothesis, not proof; GPT-4 was never fine-tuned.</p>
+      <p><strong>Eugene Yan — "Patterns for Building LLM-based Systems" (2023); "Task-Specific LLM Evals that Do &amp; Don't Work" (2024); "Evaluating the Effectiveness of LLM-Evaluators" (2024)</strong>, eugeneyan.com. <a href="https://eugeneyan.com/writing/llm-evaluators/">eugeneyan.com</a><br>
+      The best practitioner synthesis outside the Parlance orbit: evals as pattern #1, classification metrics over bare accuracy, binary judge outputs, Cohen's kappa over raw agreement (judge kappas 0.84/0.79 vs human-human 0.97), and the sobering detection-gap numbers (30–60% recall on inconsistent summaries; 58.5% on HaluEval).</p>
+    </div>
+
+    <h2 id="agentic">Agentic evaluation</h2>
+    <div class="card">
+      <p><strong>Sayash Kapoor, Benedikt Stroebl, Zachary S. Siegel, Nitya Nadgir, Arvind Narayanan, "AI Agents That Matter"</strong>, arXiv:2407.01502, Princeton, 2024. <a href="https://arxiv.org/abs/2407.01502">arxiv.org/abs/2407.01502</a><br>
+      The critique of agent benchmarking: cost-controlled evaluation and Pareto frontiers (simple baselines <em>match</em> SOTA agents at up to 50× less cost — match, not beat), the four-level holdout framework (5 of 17 benchmarks adequate), and the five reproducibility root causes.</p>
+      <p><strong>Carlos E. Jimenez, John Yang et al., "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?"</strong>, ICLR 2024. <a href="https://arxiv.org/abs/2310.06770">arxiv.org/abs/2310.06770</a><br>
+      The template for execution-graded agent benchmarks: 2,294 instances from real PRs, resolved = patch applies + all tests pass. ⚠ The famous 1.96% (Claude 2) is a BM25-retrieval number; oracle retrieval gives 4.8% — the headline always contained a harness.</p>
+      <p><strong>OpenAI, "Introducing SWE-bench Verified"</strong>, openai.com, August 2024. <a href="https://openai.com/index/introducing-swe-bench-verified/">openai.com/index/introducing-swe-bench-verified</a><br>
+      The benchmark repair: 93 annotators, 1,699 tasks screened, 68.3% filtered out (38.3% underspecified, 61.1% unfair tests — overlapping), 500 kept; GPT-4o's score doubled (16% → 33.2%) with no model change.</p>
+      <p><strong>Reem Aleithan et al., "SWE-Bench+"</strong>, arXiv:2410.06992, 2024; <strong>Shanchao Liang, Spandan Garg, Roshanak Zilouchian Moghaddam, "The SWE-Bench Illusion"</strong>, arXiv:2506.12286 (v4), 2025. <a href="https://arxiv.org/abs/2410.06992">arxiv.org/abs/2410.06992</a>, <a href="https://arxiv.org/abs/2506.12286">arxiv.org/abs/2506.12286</a><br>
+      The two-wave critique: solution leakage in ~33% of <em>resolved</em> instances and weak tests in ~31% (the 12.47% → 3.97% → 0.55% arc); then the memorization diagnostics (76% file-path identification from issue text alone vs ≤53% out-of-benchmark; verbatim solution reproduction rising with model generation). Both are preprints; both audited GPT-4-era agents.</p>
+      <p><strong>Grégoire Mialon et al., "GAIA: a benchmark for General AI Assistants"</strong>, arXiv:2311.12983, 2023. <a href="https://arxiv.org/abs/2311.12983">arxiv.org/abs/2311.12983</a><br>
+      The difficulty inversion (humans 92% vs GPT-4+plugins 15%) and the factoid-answer design that buys cheap valid scoring. ⚠ Questions are public; only the 300 test <em>answers</em> are withheld. The paper concedes it cannot grade the trace.</p>
+      <p><strong>Shunyu Yao, Noah Shinn, Pedram Razavi, Karthik Narasimhan, "τ-bench"</strong>, arXiv:2406.12045, Sierra, 2024. <a href="https://arxiv.org/abs/2406.12045">arxiv.org/abs/2406.12045</a><br>
+      User simulation + state-based grading + the pass^k reliability metric: gpt-4o at 61.2% average on retail falls below 25% at pass^8. The policy-ablation experiment (retail −4.4 vs airline −22.4) is a model probe of what a score measures.</p>
+      <p><strong>Shuyan Zhou et al., "WebArena"</strong>, ICLR 2024. <a href="https://arxiv.org/abs/2307.13854">arxiv.org/abs/2307.13854</a><br>
+      Self-hosted web environments with outcome-based reward functions; 812 tasks from 241 templates; 14.41% vs human 78.24% at publication; the unachievable-task probe (humans 100%, GPT-4 44.44%).</p>
+      <p><strong>Tianbao Xie et al., "OSWorld"</strong>, NeurIPS 2024. <a href="https://arxiv.org/abs/2404.07972">arxiv.org/abs/2404.07972</a><br>
+      The price of valid grading in rich environments: 369 Ubuntu tasks, 302 initial states, 134 hand-built evaluation functions (~2 person-hours each); measured human baseline 72.36% vs best model 12.24% (accessibility-tree input, not screenshots).</p>
+      <p><strong>Xiao Liu et al., "AgentBench"</strong>, ICLR 2024. <a href="https://arxiv.org/abs/2308.03688">arxiv.org/abs/2308.03688</a><br>
+      Breadth (8 environments, 3 groundings) and the failure taxonomy: the dominant agent failure is Task Limit Exceeded — wandering, not crashing. The commercial-vs-OSS gap (2.32 vs 0.51) is a dated 2023 snapshot.</p>
+      <p><strong>Terminal-Bench</strong> (Stanford × Laude Institute), tbench.ai, accessed June 2026. <a href="https://www.tbench.ai/">tbench.ai</a><br>
+      The living-benchmark exemplar: four-component tasks (instruction, Docker env, test script, oracle solution), a versioned dataset registry (1.0: 80 tasks; 2.0: 89), and a leaderboard with error bars under which top agents overlap.</p>
+      <p><strong>Thomas Kwa, Ben West et al. (METR), "Measuring AI Ability to Complete Long Software Tasks"</strong>, arXiv:2503.14499 (v3, Feb 2026). <a href="https://arxiv.org/abs/2503.14499">arxiv.org/abs/2503.14499</a><br>
+      The time-horizon metric (human task duration at 50% model success), built on 2,529 hours of human baselining and IRT-style logistic fits; doubling every ~207 days; 80%-reliability horizons are 4–6× shorter. ⚠ Headline numbers differ by paper version (v1: Claude 3.7 ~50 min; v3: o3 ~110 min) — date-stamp citations.</p>
+    </div>
+
+    <h2 id="stats">Statistical rigor</h2>
+    <div class="card">
+      <p><strong>Evan Miller, "Adding Error Bars to Evals"</strong>, arXiv:2411.00640, Anthropic, 2024. <a href="https://arxiv.org/abs/2411.00640">arxiv.org/abs/2411.00640</a><br>
+      The single best practical paper on eval statistics: super-population framing, CLT standard errors, clustered SEs (up to 3.05× larger on real data), paired comparisons, resampling (and "don't touch the thermostat"), and the power-analysis basis for the ~1,000-question rule. The Galleon/Dreadnought example — proper statistics reversing the naive verdict — is the module in miniature. ⚠ AI-generated summaries of this paper circulate with confabulated numbers; ours were verified against the PDF.</p>
+      <p><strong>Mark Chen et al., "Evaluating Large Language Models Trained on Code"</strong> (HumanEval), arXiv:2107.03374, 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a><br>
+      The unbiased pass@k estimator (the naive plug-in is a consistent <em>under</em>estimate), the BLEU-fails-for-code demonstration, hand-written problems as contamination defense, and temperature-per-k. pass@k itself originates with Kulal et al. 2019.</p>
+      <p><strong>Stella Biderman, Hailey Schoelkopf, Lintang Sutawika et al. (EleutherAI), "Lessons from the Trenches on Reproducible Evaluation of Language Models"</strong>, arXiv:2405.14782 (v3). <a href="https://arxiv.org/abs/2405.14782">arxiv.org/abs/2405.14782</a><br>
+      The reproducibility failure catalogue from the lm-evaluation-harness maintainers: ~46-point prompt-format swings with rank reversals, three MMLU implementations disagreeing, answer-extraction and tokenization traps, and the best-practices checklist. ⚠ Quote against v3; the 2024 v1 lacks some sections.</p>
+    </div>
+
+    <h2 id="contamination">Contamination and validity</h2>
+    <div class="card">
+      <p><strong>Hugh Zhang et al. (Scale AI), "A Careful Examination of Large Language Model Performance on Grade School Arithmetic"</strong> (GSM1k), NeurIPS 2024. <a href="https://arxiv.org/abs/2405.00332">arxiv.org/abs/2405.00332</a><br>
+      The canonical contamination demonstration and reusable recipe: 1,205 fresh difficulty-validated problems, family-level overfitting (Phi, Mistral; up to 8 points), clean frontier models, the log-likelihood probe (Spearman 0.36), and "overfit ≠ can't reason." ⚠ The widely-quoted 1,250 problems / 13% drops / r²=0.32 are <em>preprint</em> numbers, all revised in the camera-ready.</p>
+      <p><strong>Colin White et al., "LiveBench: A Challenging, Contamination-Limited LLM Benchmark"</strong>, ICLR 2025. <a href="https://arxiv.org/abs/2406.19314">arxiv.org/abs/2406.19314</a><br>
+      The rotating-benchmark design (1/6 monthly refresh, rolling private sixth, rank stability &gt;0.997) and the evidence against LLM judges on hard reasoning (error rates 10–46%, score inflation). ⚠ Retitled from "Contamination-Free" to "Contamination-Limited" — the correction is itself the lesson.</p>
+      <p><strong>Naman Jain et al., "LiveCodeBench"</strong>, ICLR 2025. <a href="https://arxiv.org/abs/2403.07974">arxiv.org/abs/2403.07974</a><br>
+      Date-tagged problems and "scrolling through time" as contamination detection: the DeepSeek post-cutoff cliff (base model ~60% → ~0% on LeetCode), with the controls that make it causal (AtCoder stable; pre-window models flat). Also the HumanEval-overfitting scatter.</p>
+      <p><strong>ARC Prize Foundation, ARC-AGI dataset documentation and model testing policy</strong>, arcprize.org, accessed June 2026. <a href="https://arcprize.org/arc-agi/2">arcprize.org/arc-agi/2</a>, <a href="https://arcprize.org/policy">arcprize.org/policy</a><br>
+      The four-way split architecture (public train / public eval / semi-private / private), difficulty-calibrated to &lt;1pp so cross-split agreement works as a live overfitting alarm; plus the "soft contamination" warning. ⚠ Semi-private is a managed trust compromise, not a sealed holdout; task counts differ between ARC-AGI-1 and -2.</p>
+      <p><strong>Shivalika Singh et al., "The Leaderboard Illusion"</strong>, arXiv:2504.20879 (v2), 2025. <a href="https://arxiv.org/abs/2504.20879">arxiv.org/abs/2504.20879</a><br>
+      The Arena-meta critique: undisclosed private testing (Meta: 27 variants), the identical-checkpoint experiment (1052 vs 1069), sampling asymmetries (top four proprietary providers: 62.8% of data), Arena-data fine-tuning gains that don't transfer (112% relative on ArenaHard, flat on MMLU), and silent deprecation. ⚠ Preprint by Arena participants (disclosed); the platform disputed parts — read both sides.</p>
+      <p><strong>BIG-bench collaboration, canary string documentation</strong>, github.com/google/BIG-bench (archived 2026). <a href="https://github.com/google/BIG-bench">github.com/google/BIG-bench</a><br>
+      The practical canary mechanism: one shared GUID for filtering plus a two-tailed log-probability hypothesis test for post-hoc detection (GPT-2 sanity check: p ≈ 0.18). ⚠ A clean canary score does not prove a clean model — untagged copies escape it.</p>
+      <p><strong>Anthropic, "Challenges in Evaluating AI Systems"</strong>, anthropic.com, October 2023. <a href="https://www.anthropic.com/news/evaluating-ai-systems">anthropic.com/news/evaluating-ai-systems</a><br>
+      A lab's own honest accounting: ~5-point MMLU formatting sensitivity, mislabeled "ground truth," the BBQ bias-score-zero control-check story, BIG-bench/HELM integration pain, and policy recommendations. Advocacy-adjacent; pre-dates current eval infrastructure.</p>
+    </div>
+
+    <h2 id="tooling">Tooling</h2>
+    <div class="card">
+      <p><strong>UK AI Security Institute, Inspect documentation</strong>, inspect.aisi.org.uk, accessed June 2026. <a href="https://inspect.aisi.org.uk/">inspect.aisi.org.uk</a><br>
+      The primary harness: Task = Dataset/Solver/Scorer, sandboxed agents, the full scorer spectrum, epochs with pass_at_k reducers, binary .eval logs with a live viewer, human baselining and approval. ⚠ "AI Security Institute" since February 2025 (formerly Safety); no built-in judge-vs-human agreement workflow — that discipline remains yours.</p>
+      <p><strong>OpenAI Evals</strong>, github.com/openai/evals + Cookbook, accessed June 2026. <a href="https://github.com/openai/evals">github.com/openai/evals</a> — The first-generation blueprint: YAML registry, JSONL data, deterministic vs model-graded templates. In maintenance mode; OpenAI recommends its hosted product.</p>
+      <p><strong>promptfoo documentation</strong>, promptfoo.dev, accessed June 2026. <a href="https://www.promptfoo.dev/docs/intro/">promptfoo.dev/docs</a> — The prompts × providers × tests matrix, the fullest public assertion taxonomy (deterministic and model-assisted, including agent-trajectory assertions), and first-class red-teaming.</p>
+      <p><strong>DeepEval (Confident AI) and Ragas (Exploding Gradients) documentation</strong>, accessed June 2026. <a href="https://deepeval.com/docs/getting-started">deepeval.com/docs</a>, <a href="https://docs.ragas.io/en/stable/concepts/metrics/">docs.ragas.io</a> — Metric libraries; "almost all" DeepEval metrics are LLM-as-judge; the four Ragas RAG metrics with their actual algorithms. ⚠ Same metric names compute differently across tools; DeepEval's Hallucination and Faithfulness have opposite polarity; Ragas now says "Response Relevancy."</p>
+      <p><strong>Langfuse and Braintrust documentation</strong>, accessed June 2026. <a href="https://langfuse.com/docs">langfuse.com/docs</a>, <a href="https://www.braintrust.dev/docs/start">braintrust.dev/docs</a> — The tracing/observability layer: traces, observations (spans/generations/events), scores on traces/sessions/observations, immutable experiments over versioned datasets, and the unified offline/online loop.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Verification artifacts</span>
+      <ul>
+        <li>Per-source verification notes (claims checked, quotes, corrections): <code>research/sources/*.json</code> in this repository.</li>
+        <li>The planned-claims manifest the verification ran against: <code>research/sources.json</code>.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="assets/nav-data.js"></script>
+<script src="assets/glossary-data.js"></script>
+<script src="assets/wiki.js"></script>
+</body>
+</html>

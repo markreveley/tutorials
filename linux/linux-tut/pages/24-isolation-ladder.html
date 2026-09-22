@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Isolation Ladder: Containers, gVisor, MicroVMs · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Containers &amp; Isolation</p>
+    <h1>The isolation ladder: containers, gVisor, microVMs</h1>
+    <p class="lede">
+      Page 23 hardened a container as far as flags can take it, and ended on a caveat: it still shares
+      the host's kernel. This page explains why that one fact organises the whole field of sandboxing,
+      what the rungs above a container are, what each costs, and how to choose one from a threat model
+      rather than from habit.
+    </p>
+
+    <h2 id="shared-kernel">The shared-kernel fact</h2>
+    <p>
+      Three different distributions, one command:
+    </p>
+<pre class="term"><code><span class="p">$</span> for i in ubuntu:24.04 debian:bookworm-slim alpine:3.20; do docker run --rm $i uname -r; done
+<span class="o">6.10.14-linuxkit
+6.10.14-linuxkit
+6.10.14-linuxkit</span>
+<span class="p">$</span> docker run --rm ubuntu:24.04 cat /proc/sys/kernel/random/boot_id; docker run --rm alpine:3.20 cat /proc/sys/kernel/random/boot_id
+<span class="o">adc18ab8-3212-40c0-bd43-47fba20d4842
+adc18ab8-3212-40c0-bd43-47fba20d4842</span></code></pre>
+    <p>
+      An image supplies files — a userland. It never supplies a
+      <span class="term" data-g="kernel">kernel</span>. Every
+      <span class="term" data-g="container">container</span> on a host runs on that host's one kernel
+      (here, the kernel of Docker Desktop's Linux VM), which is why two unrelated containers report
+      the same boot ID. So every <span class="term" data-g="system-call">system call</span> the
+      agent's code makes is handled by the same kernel that runs the harness, the other rollouts and
+      the host. The authors of Firecracker put the consequence precisely: "In Linux containers,
+      untrusted code calls the host kernel directly, possibly with the kernel surface area restricted
+      (such as with seccomp-bpf)", and this "reliance on a single operating system kernel means that
+      there is a fundamental tradeoff between security and code compatibility. Container implementors
+      can choose to improve security by limiting syscalls, at the cost of breaking code which requires
+      the restricted
+      calls."<a class="cite" href="https://www.usenix.org/system/files/nsdi20-paper-agache.pdf" title="Agache et al. 2020, Firecracker, NSDI '20, §1 and §2.1">[Firecracker]</a>
+    </p>
+    <p>
+      In this course's terms: the <span class="term" data-g="attack-surface">attack surface</span> of
+      a container is the entire system-call interface, minus whatever
+      <span class="term" data-g="seccomp">seccomp</span> filters out
+      (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>). A kernel bug reachable through an
+      allowed call is a way out, and no <code>docker run</code> flag removes it. This is not a new
+      worry for evals. In 2021 the HumanEval authors ran model-written programs under gVisor because
+      "container runtimes like Docker can share host resources with containers, a malicious container
+      could potentially compromise a
+      host."<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Evaluating Large Language Models Trained on Code, §2.3">[HumanEval]</a>
+    </p>
+
+    <h2 id="the-ladder">The ladder: where do the agent's system calls go?</h2>
+    <div class="diagram">  CONTAINER (runc)       gVisor (runsc)          microVM (Firecracker)
+┌────────────────┐    ┌────────────────┐      ┌──────────────────────┐
+│  agent's code  │    │  agent's code  │      │     agent's code     │
+└───────┬────────┘    └───────┬────────┘      └──────────┬───────────┘
+        │ syscalls            │ syscalls                 │ syscalls
+        │ (seccomp-           ▼                          ▼
+        │  filtered)  ┌────────────────┐      ┌──────────────────────┐
+        │             │ Sentry: a user-│      │ GUEST Linux kernel   │
+        │             │ space kernel   │      │ (its own; untrusted) │
+        │             │ in Go + Gofer  │      └──────────┬───────────┘
+        │             │ for file access│         virtual hardware only
+        │             └───────┬────────┘      ┌──────────▼───────────┐
+        │            few, fixed host calls    │ VMM process (jailed) │
+        ▼                     ▼               │ + KVM, CPU hardware  │
+┌────────────────────────────────────────┐    └──────────┬───────────┘
+│            HOST LINUX KERNEL           │◀──────────────┘
+└────────────────────────────────────────┘
+ boundary = the whole  boundary = Sentry,     boundary = hardware
+ syscall interface     then a narrow host     virtualization + a
+                       syscall filter         small VMM</div>
+
+    <h3 id="rung-gvisor">gVisor: a kernel written as an ordinary program</h3>
+    <p>
+      <span class="term" data-g="gvisor">gVisor</span> "is an application kernel that implements a
+      Linux-like interface. Unlike Linux, it is written in a memory-safe language (Go) and runs in
+      userspace." Its core, the Sentry, intercepts the application's system calls and answers them
+      itself: "the Sentry does not pass system calls through to the host kernel." File access goes
+      through a second process, the
+      Gofer.<a class="cite" href="https://gvisor.dev/docs/" title="gVisor documentation, What is gVisor?">[gVisor]</a>
+      To escape, "an attacker would need to simultaneously exploit the gVisor Sentry kernel and the
+      host Linux kernel, which do not share any
+      code."<a class="cite" href="https://gvisor.dev/docs/architecture_guide/intro/" title="gVisor documentation, Introduction to gVisor security">[gVisor]</a>
+      It ships as an OCI
+      <span class="term" data-g="container-runtime">runtime</span>, <code>runsc</code>, that plugs
+      into Docker and Kubernetes — the same images, a different thing underneath. On a host where it
+      is installed you select it with <code>docker run --runtime=runsc</code>; where it isn't:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker info --format '{{range $k, $v := .Runtimes}}{{$k}} {{end}}default={{.DefaultRuntime}}'
+<span class="o">io.containerd.runc.v2 runc default=runc</span>
+<span class="p">$</span> docker run --rm --runtime=runsc ubuntu:24.04 true; echo "exit=$?"
+<span class="o">docker: Error response from daemon: unknown or invalid runtime name: runsc
+exit=125</span></code></pre>
+    <p>
+      The price, in gVisor's own words: "reduced application compatibility and higher per-system call
+      overhead." It "does not presently implement every system call, /proc file, or /sys file", and
+      "the only real way to know if it will work is to
+      try."<a class="cite" href="https://gvisor.dev/docs/user_guide/compatibility/" title="gVisor documentation, Applications: compatibility">[gVisor]</a>
+      The cost falls on syscall-heavy and file-operation-heavy work, not on raw disk
+      I/O.<a class="cite" href="https://gvisor.dev/docs/architecture_guide/performance/" title="gVisor documentation, Performance Guide">[gVisor]</a>
+    </p>
+
+    <h3 id="rung-microvm">MicroVMs: a real guest kernel behind a tiny VMM</h3>
+    <p>
+      A <span class="term" data-g="virtual-machine">virtual machine</span> gives the untrusted code
+      its <em>own</em> kernel and confines that kernel using the CPU's virtualization hardware.
+      On Linux the hardware is driven through <span class="term" data-g="kvm">KVM</span>, which a
+      program uses by opening <code>/dev/kvm</code> and issuing
+      <code>ioctl</code>s.<a class="cite" href="https://docs.kernel.org/virt/kvm/api.html" title="Linux kernel documentation, The Definitive KVM API Documentation">[Kernel: KVM]</a>
+      That program is the VMM (virtual machine monitor). The Firecracker paper's argument for the
+      arrangement: it "moves the security-critical interface from the OS boundary to a boundary
+      supported in hardware and comparatively simpler software… the guest kernel can supply its full
+      feature set with no change to the threat
+      model."<a class="cite" href="https://www.usenix.org/system/files/nsdi20-paper-agache.pdf" title="Agache et al. 2020, Firecracker, §2.1.3">[Firecracker]</a>
+      The agent can have root, every capability and every syscall — of a kernel that is itself
+      treated as hostile.
+    </p>
+    <p>
+      The traditional objection is weight: a general-purpose VMM such as QEMU is over 1.4 million
+      lines, and VMs boot in seconds. A <span class="term" data-g="microvm">microVM</span> monitor
+      strips the virtual hardware to almost nothing.
+      <span class="term" data-g="firecracker">Firecracker</span>, built at AWS for Lambda and Fargate,
+      is about 50 thousand lines of Rust, and advertises three numbers. Each is conditional:
+    </p>
+    <table>
+      <thead><tr><th>Headline (project site)</th><th>What was actually specified or measured</th></tr></thead>
+      <tbody>
+        <tr><td>"Boot in &lt;125ms"</td><td>≤ 125 ms from the <code>InstanceStart</code> API call to the start of the guest's <code>/sbin/init</code>, for a minimal kernel and root filesystem, 1 vCPU, 128 MiB, serial console off. Not the boot time of an Ubuntu task image.</td></tr>
+        <tr><td>"&lt;5 MiB overhead per VM"</td><td>The VMM's own memory, <em>on top of</em> the guest's RAM, for that same minimal microVM; workload-dependent. The paper measured about 3 MB, against about 131 MB for QEMU.</td></tr>
+        <tr><td>"up to 150 microVMs per second per host"</td><td>The design doc gives the underlying rate: 5 per host core per second — so it depends on core count.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      (Site, specification, design doc and
+      paper.<a class="cite" href="https://github.com/firecracker-microvm/firecracker/blob/main/SPECIFICATION.md" title="Firecracker SPECIFICATION.md; firecracker-microvm.github.io; docs/design.md; NSDI '20 paper §5">[Firecracker]</a>)
+      The VMM process is itself confined: a "jailer" gives it cgroups, a mount namespace and dropped
+      privileges, and Firecracker installs seccomp filters on itself — the tools of pages 20–23,
+      applied to the thing guarding the agent.
+    </p>
+    <p>
+      Two neighbours, a sentence each. <strong>Kata Containers</strong> wraps the microVM idea in the
+      container workflow: an OCI runtime that starts each container inside a lightweight VM, "using
+      hardware virtualization technology as a second layer of defence" — inside the VM the guest
+      kernel still builds namespaces and cgroups for the
+      workload.<a class="cite" href="https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md" title="Kata Containers Architecture">[Kata]</a>
+      <strong>Cloud Hypervisor</strong> is a general-purpose Rust VMM from the same lineage as
+      Firecracker (it supports Windows guests and live migration, which Firecracker does not); Kata
+      can use either, or
+      QEMU.<a class="cite" href="https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/README.md" title="Cloud Hypervisor README; Kata hypervisors doc">[Kata]</a>
+    </p>
+
+    <h3 id="rung-full-vm">Full VMs: the top rung, and sometimes the only one</h3>
+    <p>
+      OSWorld evaluates agents that operate a desktop. Its environment "runs on the host machine",
+      creates a virtual machine per task, restores it from a
+      <span class="term" data-g="snapshot">snapshot</span>, and after the episode "retrieves data to
+      the host machine… and then runs evaluation
+      scripts."<a class="cite" href="https://arxiv.org/abs/2404.07972" title="Xie et al. 2024, OSWorld, §2.2">[OSWorld]</a>
+      The paper's stated reasons for VMs are real operating systems with real GUI applications, safety
+      of the host, and snapshot reset; it never argues against containers. The course's gloss: some
+      tasks need a full VM regardless of threat model — a GUI, Windows, a task that loads kernel
+      modules or reboots. (OSWorld's "docker" provider runs the VM <em>inside</em> a container and
+      wants KVM. "Docker" in a README does not always mean container-level isolation.)
+    </p>
+
+    <h2 id="costs">A trade-off curve, not a ranking</h2>
+    <table>
+      <thead><tr><th></th><th>Container</th><th>gVisor</th><th>MicroVM / Kata</th><th>Full VM</th></tr></thead>
+      <tbody>
+        <tr><td>Host-facing boundary</td><td>whole syscall interface (filtered)</td><td>Sentry + narrow host filter</td><td>KVM + small VMM</td><td>KVM + large VMM</td></tr>
+        <tr><td>Compatibility</td><td>native</td><td>a subset of Linux; test it</td><td>full Linux guest</td><td>any OS, GUI</td></tr>
+        <tr><td>Per-sandbox overhead</td><td>a process</td><td>+ Sentry, per-syscall cost</td><td>+ guest kernel and RAM</td><td>+ full OS; boots in seconds</td></tr>
+        <tr><td>Host needs</td><td>Linux</td><td>Linux; no virtualization needed</td><td><code>/dev/kvm</code></td><td><code>/dev/kvm</code> or a hypervisor</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The last row decides more real deployments than the first. KVM needs "either a bare-metal
+      machine (with hardware virtualization), or a virtual machine that supports nested
+      virtualization"<a class="cite" href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/dev-machine-setup.md" title="Firecracker docs, dev-machine-setup">[Firecracker]</a>
+      — and whether a cloud VM exposes nested virtualization is the provider's choice. gVisor's default
+      platform needs no virtualization, which is why it can run inside ordinary cloud VMs; its KVM platform is
+      meant for bare
+      metal.<a class="cite" href="https://gvisor.dev/docs/architecture_guide/platforms/" title="gVisor documentation, Platform Guide">[gVisor]</a>
+      One command tells you which world a box is in:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 ls -l /dev/kvm
+<span class="o">ls: cannot access '/dev/kvm': No such file or directory</span></code></pre>
+    <p>
+      And "stronger" is not automatic. gVisor's docs warn that "one should not assume that the mere
+      use of virtualization hardware makes a system more or less
+      secure."<a class="cite" href="https://gvisor.dev/docs/architecture_guide/security/" title="gVisor documentation, Security Model">[gVisor]</a>
+    </p>
+
+    <h2 id="four-boundaries">Four boundaries, not one</h2>
+    <p>
+      "Which sandbox?" is really four questions. The ladder answers only the first.
+    </p>
+    <table>
+      <thead><tr><th>Boundary</th><th>Question</th><th>Who provides it</th><th>The check that shows it failing</th></tr></thead>
+      <tbody>
+        <tr><td><span class="term" data-g="isolation">Isolation</span></td><td>Does code execution stay in the box?</td><td>The rung: kernel features, Sentry, or hypervisor</td><td>From inside: is a Docker socket or API, a host mount, or <code>--privileged</code> present? (<a href="23-hardening-containers.html#never-list">page 23</a>)</td></tr>
+        <tr><td><span class="term" data-g="egress">Egress</span></td><td>What can the box reach?</td><td><strong>Never the rung.</strong> "Firecracker does not perform any network traffic filtering… should be filtered at the host-level."<a class="cite" href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md" title="Firecracker docs, design.md">[Firecracker]</a> gVisor says the same of network policy.</td><td>The reachability probe of <a href="19-firewalls-and-egress.html">page 19</a>: internet, host gateway, metadata address, neighbours</td></tr>
+        <tr><td><span class="term" data-g="tenancy">Tenancy</span></td><td>Can rollouts (or customers) see each other?</td><td>Fresh sandbox per rollout; no shared volumes, networks or snapshots' secrets</td><td><code>docker inspect</code> mounts and networks; a marker file written by rollout 1, looked for in rollout 2</td></tr>
+        <tr><td>Secrets</td><td>What is inside that is worth stealing?</td><td>You — by not putting it there</td><td><code>env</code>, <code>/proc/1/environ</code>, image history (<a href="11-environment-and-secrets.html">page 11</a>); for VMs, who can read snapshot files</td></tr>
+      </tbody>
+    </table>
+    <div class="evals">
+      <span class="label">In eval work — the incident that was not an escape</span>
+      <p>The most-cited sandbox incident in evals broke none of the rungs. In OpenAI's September 2024
+      o1 system card, o1-preview, on a CTF task whose target container had failed to start, scanned
+      its network and "found that the Docker daemon API running on the evaluation host VM was
+      accessible due to a misconfiguration"; it used the API to start a new copy of the challenge
+      container with the command <code>cat flag.txt</code> and read the flag from the logs. OpenAI's
+      own framing: "our evaluation infrastructure does not rely on the Docker container-to-host
+      isolation or the virtual machine boundary for security. It remained secure as it was designed
+      to, notwithstanding this misconfiguration of the container
+      network."<a class="cite" href="https://cdn.openai.com/o1-system-card.pdf" title="OpenAI o1 System Card (Sept 12, 2024), §4.2.1">[o1 System Card]</a>
+      The card does not say what the infrastructure does rely on. What it establishes for us is
+      narrower and more useful: the failure was on the <em>egress</em> boundary — a control plane
+      reachable from the sandbox's network — and moving the agent up the ladder would not have
+      changed it. gVisor's documentation states the general rule: "An attacker need not escalate
+      privileges within a container if there's an exploitable network-accessible service on the host
+      or some other API path. A sandbox is not a substitute for a secure
+      architecture."<a class="cite" href="https://gvisor.dev/docs/architecture_guide/security/" title="gVisor documentation, Security Model">[gVisor]</a>
+      The same holds one rung up: AISI's Proxmox plugin notes that by default a sandbox VM can reach
+      the Proxmox host's API and cloud metadata services until the host firewall says
+      otherwise.<a class="cite" href="https://github.com/UKGovernmentBEIS/inspect_proxmox_sandbox" title="UK AISI, inspect_proxmox_sandbox README">[AISI: Sandboxing]</a></p>
+    </div>
+
+    <h2 id="snapshots">Snapshots: the reset evals love, and its two cautions</h2>
+    <p>
+      A fresh container is a <em>filesystem</em> reset: the files return to the image's state and
+      every process starts from nothing (<a href="22-docker-for-evals.html#reset">page 22</a>). VMs
+      offer something more: a snapshot that includes memory. A Firecracker snapshot is a guest memory
+      file, a microVM state file, and the disk
+      files.<a class="cite" href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md" title="Firecracker docs, snapshot-support.md">[Firecracker]</a>
+      Restore it and the database is already warm, the server already listening. For evals the appeal
+      is obvious: boot and set up once, then fan out a hundred identical rollouts. The Firecracker docs
+      attach two cautions to exactly that pattern.
+    </p>
+    <p>
+      <strong>Uniqueness.</strong> When a state "is resumed from more than once, guest information
+      assumed to be unique may in fact not be; this information can include identifiers, random numbers
+      and random number seeds, the guest OS entropy pool, as well as cryptographic tokens… we consider
+      resuming execution from the same state more than once insecure." A kernel mechanism (VMGenID)
+      reseeds the guest kernel's random pool on resume, but other state "will still be replicated
+      across multiple microVMs resumed from the same snapshot" — the docs name
+      <code>/proc/sys/kernel/random/boot_id</code>, the file this page opened
+      with.<a class="cite" href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/random-for-clones.md" title="Firecracker docs, snapshot-support.md and random-for-clones.md">[Firecracker]</a>
+      The eval reading (ours, not theirs): a userspace random generator seeded before the snapshot
+      gives every clone the same "random" choices, so rollouts you count as independent samples may
+      not be.
+    </p>
+    <p>
+      <strong>The files are sensitive.</strong> A full snapshot writes "the full contents of guest
+      memory", Firecracker trusts snapshot files with only a CRC on the state file, and "users need to
+      secure snapshot files by implementing authentication and encryption
+      schemes."<a class="cite" href="https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md" title="Firecracker docs, snapshot-support.md">[Firecracker]</a>
+      The inference for the secrets boundary is one step: anything in guest RAM at snapshot time — an
+      API key in a process's environment — is in that memory file, readable by whoever can read the
+      file. Snapshot before secrets go in, not after.
+    </p>
+
+    <h2 id="aisi">A published taxonomy: AISI's T / H / N profiles</h2>
+    <p>
+      The UK AI Security Institute's sandboxing toolkit describes a sandbox on three axes — tooling,
+      host isolation, network
+      isolation<a class="cite" href="https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations" title="UK AISI, The Inspect Sandboxing Toolkit (blog, Aug 2025)">[AISI: Sandboxing]</a>
+      — and its Technical Guidance PDF (in the <code>aisi-sandboxing</code> repository, not the blog
+      post) assigns levels, zero-based, higher meaning more restricted, written as a profile such as
+      <code>T0.H1.N2</code>:<a class="cite" href="https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf" title="UK AISI, Technical guidance: sandboxing configurations for agentic evaluations (PDF)">[AISI: Sandboxing]</a>
+    </p>
+    <table>
+      <thead><tr><th>Axis</th><th>Levels</th></tr></thead>
+      <tbody>
+        <tr><td>Tooling (T)</td><td>T0 unrestricted execution (code, browser) · T1 restricted: browsing and basic tooling without side effects · T2 no execution</td></tr>
+        <tr><td>Host isolation (H)</td><td>H0 none (local machine) · H1 local containers (Docker, Compose) · H2 remote containers (Kubernetes pods) · H3 remote virtual machine (Proxmox)</td></tr>
+        <tr><td>Network isolation (N)</td><td>N0 full external access · N1 pre-approved domains only · N2 no external access</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Read what it does and does not say. The H axis is defined by <em>provider</em>, and AISI's stated
+      reasons are practical: Kubernetes for "greater scalability, security and built-in tooling" (its
+      chart enables gVisor by default, and domain allow-listing, N1, is practical only there);
+      Proxmox for "strong virtual machine (VM) isolation for high-risk evaluations" and
+      software-defined networks for cyber ranges. AISI does not make the shared-kernel argument — that
+      is Firecracker's and gVisor's, above. Its worked example of an agent hunting a Docker zero-day
+      sits at H2, not H3, and it leaves the decision with you: "it is up to users to make the ultimate
+      decision", and "no sandboxing solution can provide 100% security
+      assurance."<a class="cite" href="https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf" title="UK AISI, Technical guidance (PDF) and blog post">[AISI: Sandboxing]</a>
+    </p>
+
+    <h2 id="choosing">Choosing a rung</h2>
+    <p>Two questions do most of the work: <em>who wrote the code that will run</em>, and <em>what is on
+      this host and network worth reaching</em>.</p>
+    <table>
+      <thead><tr><th>Situation</th><th>Reasonable rung</th><th>Because</th></tr></thead>
+      <tbody>
+        <tr><td>Your own scorer scripts; model output is only text</td><td>No sandbox (AISI: T2)</td><td>Nothing untrusted executes</td></tr>
+        <tr><td>Agent runs shell commands on a laptop or a dedicated, disposable eval host with no secrets</td><td>Hardened container (page 23), no network</td><td>Main risk is accident; blast radius is a machine you can wipe</td></tr>
+        <tr><td>Same, on shared infrastructure: other teams' jobs, credentials, a cluster</td><td>gVisor, or microVMs if you have <code>/dev/kvm</code></td><td>A kernel bug now reaches things that matter</td></tr>
+        <tr><td>Cyber or autonomy evals where escape is the capability under test; GUI or Windows tasks</td><td>VMs on isolated hosts and networks</td><td>The guest is adversarial by design, or the task needs a whole OS</td></tr>
+      </tbody>
+    </table>
+    <p>
+      In every row the other three boundaries are separate work. And one reframing matters for this
+      field. AISI reports that "the primary current concern is agents accidentally damaging
+      infrastructure", but that it increasingly runs evaluations that deliberately test escaping
+      sandboxes.<a class="cite" href="https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations" title="UK AISI, The Inspect Sandboxing Toolkit (blog, Aug 2025)">[AISI: Sandboxing]</a>
+      A reward-hacking agent is an adversarial guest; a threat model that assumes
+      cooperative guests does not cover it.
+    </p>
+    <div class="callout">
+      <span class="label">Depth triage</span>
+      <p><strong>Learn to use:</strong> the four-boundary checklist; telling which rung you are on
+      (<code>uname -r</code> against the host, <code>docker info</code> runtimes,
+      <code>/dev/kvm</code>); reading a harness's sandbox config. <strong>Recognise:</strong> the names
+      and one-line mechanisms — runc, runsc/Sentry, Kata, Firecracker, Cloud Hypervisor, QEMU, KVM,
+      nested virtualization. <strong>Leave to a platform or security specialist:</strong> operating
+      gVisor or Firecracker fleets, jailer and hypervisor configuration, snapshot encryption, and the
+      sign-off that a rung is adequate for a given model. Your job is to ask for that sign-off and to
+      know what evidence it should rest on.</p>
+    </div>
+    <div class="evals">
+      <span class="label">In eval work — the rung is part of the instrument</span>
+      <p><em>Discuss:</em> changing isolation can change scores. AISI's Kubernetes sandbox docs say
+      gVisor's behavioural differences "may make some Cyber misuse evals harder or impossible to
+      solve."<a class="cite" href="https://k8s-sandbox.aisi.org.uk/security/container-runtime/" title="UK AISI, k8s-sandbox docs: container runtime">[AISI: Sandboxing]</a>
+      A task that fails under <code>runsc</code> and passes under <code>runc</code> is an observation
+      about the environment, so account for it that way: run each task's oracle solution under the
+      runtime you will report, exclude tasks the runtime makes unsolvable for every model, and publish
+      the runtime with the score. VM boot time, similarly, lands in wall-clock timeouts and in cost
+      per rollout. <em>Design:</em> Inspect makes the rung a configuration choice — built-in
+      <code>docker</code> and <code>local</code>, plus external <code>k8s</code>, <code>daytona</code>,
+      <code>modal</code>, <code>ec2</code>, <code>proxmox</code> and <code>vagrant</code> providers —
+      behind one interface: <code>exec()</code> takes a command list, stdin, working directory,
+      environment, user and timeout and returns exit code, stdout and stderr; plus
+      <code>read_file</code> and
+      <code>write_file</code>.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html" title="Inspect AI documentation, Sandboxing">[Inspect]</a>
+      That interface is the portable skill; everything in it is a page of this course
+      (<a href="25-how-harnesses-use-linux.html">page 25</a>).</p>
+    </div>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Buying a higher rung to fix a lower-rung problem. If the answer key is in the image, the
+      Docker API is on the network, or an API key is in the environment, a microVM faithfully isolates
+      an agent that already has everything it needs. Fix the four boundaries first; climb the ladder
+      for the threat that remains — kernel exploits.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>Your team moves a 300-task terminal benchmark from Docker on dedicated hosts to a shared
+      Kubernetes cluster running gVisor. Pass rate for the same model falls from 54% to 49%, and mean
+      rollout time rises by 40%. The platform team says: "It's more secure, and five points is noise."
+      What do you need to establish before the new numbers replace the old?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Observed:</strong> a score drop and a slowdown coinciding with a runtime change.
+      <strong>Supposed:</strong> noise. Three hypotheses predict different evidence. (a) Noise: then
+      per-task flips go both ways in similar numbers, and repeated runs on the <em>old</em> setup
+      show a comparable spread — check the run-to-run variance before calling anything noise. (b)
+      Compatibility: flips are one-directional and concentrated in a few tasks; transcripts show
+      unimplemented-syscall or <code>/proc</code> errors, <code>Operation not permitted</code>, tools
+      behaving differently. (c) Time: flips concentrate in tasks near the timeout; failures are
+      exit 124/137 or harness timeouts, not wrong answers. The discriminating test needs no model:
+      run all 300 oracle solutions under gVisor with the production timeout. Oracle failures are
+      environment defects — fix or exclude those tasks for all models; if slower rollouts hit the
+      limit, recalibrate the timeout with headroom and say so. Then report <em>completed /
+      scheduled</em> and <em>correct / completed</em> alongside the headline, and name the runtime.
+      "More secure" and "same measurement" are separate claims, and only the first has been
+      shown.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong> (from your Mac's terminal). This page's higher rungs need a
+      Linux host with KVM, which a Mac's Docker VM does not offer, so the lab is about
+      <em>identifying</em> rungs and reasoning about them.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Show that three images share one kernel and one boot ID. Then
+          find the kernel's name for your Docker host and explain the <code>linuxkit</code> (or
+          other) suffix.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> for i in ubuntu:24.04 debian:bookworm-slim alpine:3.20; do docker run --rm $i uname -r; done
+<span class="o">6.10.14-linuxkit
+6.10.14-linuxkit
+6.10.14-linuxkit</span></code></pre>
+          <p>The suffix is the kernel build of Docker Desktop's hidden Linux VM
+          (<a href="01-lab-setup.html">page 1</a>). Note what that means for a Mac user: your
+          containers are already inside a VM, but all of them share <em>that</em> VM's kernel, so
+          between containers nothing has changed.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Which rungs could this Docker host offer? Predict the
+          output of <code>docker info</code>'s runtime list, of <code>ls -l /dev/kvm</code> inside a
+          container, and the exit code of <code>docker run --runtime=runsc …</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker info --format '{{range $k, $v := .Runtimes}}{{$k}} {{end}}default={{.DefaultRuntime}}'
+<span class="o">io.containerd.runc.v2 runc default=runc</span>
+<span class="p">$</span> docker run --rm ubuntu:24.04 ls -l /dev/kvm
+<span class="o">ls: cannot access '/dev/kvm': No such file or directory</span>
+<span class="p">$</span> docker run --rm --runtime=runsc ubuntu:24.04 true; echo "exit=$?"
+<span class="o">docker: Error response from daemon: unknown or invalid runtime name: runsc
+exit=125</span></code></pre>
+          <p>Only runc; no KVM device in the container. 125 is Docker's own failure code
+          (<a href="22-docker-for-evals.html#docker-exit-codes">page 22</a>): in a results file this is
+          an infrastructure failure — the rollout never started.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> AISI's docs suggest <code>dmesg | grep gvisor</code>
+          to tell whether a container runs under
+          gVisor.<a class="cite" href="https://k8s-sandbox.aisi.org.uk/security/container-runtime/" title="UK AISI, k8s-sandbox docs: container runtime">[AISI: Sandboxing]</a>
+          What happens when you run <code>dmesg</code> in a default runc container as root, and why?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 bash -c 'dmesg | head -2'
+<span class="o">dmesg: read kernel buffer failed: Operation not permitted</span></code></pre>
+          <p>The kernel log belongs to the shared host kernel; reading it is a privileged operation, and
+          Docker's default capability set does not include <code>CAP_SYSLOG</code>
+          (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>). The refusal is itself a small
+          piece of evidence that you are talking to the real host kernel through Docker's policy.</p>
+          </details></li>
+        <li><strong>Eval task: write the profile.</strong> Give the AISI-style profile
+          (<code>Tx.Hx.Nx</code>) for (a) <code>run-hardened.sh</code> from page 23; (b) a
+          multiple-choice benchmark scored by string match; (c) an Inspect task whose author supplied
+          a <code>compose.yaml</code> with no <code>network_mode</code> line.
+          <details class="solution"><summary>Solution</summary>
+          <p>(a) <code>T0.H1.N2</code>: unrestricted shell, local Docker, <code>--network none</code>.
+          (b) T2, and H/N are moot — nothing executes. (c) <code>T0.H1.N0</code> — and probably by
+          accident: Inspect's generated default sets <code>network_mode: none</code>, but a
+          user-supplied compose file replaces it, and Compose's own default has outbound
+          access.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html" title="Inspect AI documentation, Sandboxing: task configuration">[Inspect]</a>
+          The audit step: run the reachability probe from page 19 inside a live sample rather than
+          trusting either file.</p>
+          </details></li>
+        <li><strong>Eval task: four boundaries.</strong> A vendor says: "Every rollout runs in its own
+          Firecracker microVM, restored from one golden snapshot taken after we log the agent's tools
+          in to our package mirror." Write one question per boundary.
+          <details class="solution"><summary>Solution</summary>
+          <p><em>Isolation:</em> is the VMM started through the jailer, and what on the host can the
+          VMM's user reach? <em>Egress:</em> Firecracker filters nothing — what host-level rules apply
+          to the guest's network device, and can a guest reach the host's API, the metadata address,
+          or other guests? <em>Tenancy:</em> every clone shares the snapshot's identifiers and any
+          userspace random state; are rollouts seeded after restore, and is anything written back to
+          shared storage? <em>Secrets:</em> the login happened <em>before</em> the snapshot, so the
+          mirror credential is in every guest's memory and in the memory file on disk — who can read
+          that file, is it encrypted, and can the credential be scoped read-only or injected after
+          restore instead?</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>[Firecracker] Agache, Brooker, Florescu, Iordache, Liguori, Neugebauer, Piwonka, Popa, <em>Firecracker: Lightweight Virtualization for Serverless Applications</em>, NSDI '20, pp. 419–434; with the Firecracker project site and docs (SPECIFICATION.md, design.md, snapshot-support.md, random-for-clones.md, dev-machine-setup.md). <a href="https://www.usenix.org/conference/nsdi20/presentation/agache">usenix.org/conference/nsdi20/presentation/agache</a> · <a href="https://firecracker-microvm.github.io/">firecracker-microvm.github.io</a> · <a href="https://github.com/firecracker-microvm/firecracker/tree/main/docs">github.com/firecracker-microvm/firecracker/docs</a></li>
+        <li>[gVisor] The gVisor Authors, <em>gVisor documentation</em>: What is gVisor?; Introduction to gVisor security; Security Model; Performance Guide; Platform Guide; Applications. <a href="https://gvisor.dev/docs/">gvisor.dev/docs/</a></li>
+        <li>[Kata] Kata Containers community, <em>Kata Containers Architecture</em> and hypervisors doc; Cloud Hypervisor project README. <a href="https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md">github.com/kata-containers/…/architecture/README.md</a> · <a href="https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/README.md">github.com/cloud-hypervisor/cloud-hypervisor</a></li>
+        <li>[Kernel: KVM] Linux kernel documentation, <em>The Definitive KVM API Documentation</em>. <a href="https://docs.kernel.org/virt/kvm/api.html">docs.kernel.org/virt/kvm/api.html</a></li>
+        <li>[AISI: Sandboxing] UK AI Security Institute, <em>The Inspect Sandboxing Toolkit</em> (blog, 7 Aug 2025); <em>Technical guidance: sandboxing configurations for agentic evaluations</em> (PDF, aisi-sandboxing repository); k8s-sandbox docs; inspect_proxmox_sandbox README. <a href="https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations">aisi.gov.uk/blog/the-inspect-sandboxing-toolkit…</a> · <a href="https://github.com/UKGovernmentBEIS/aisi-sandboxing/blob/main/Technical%20Guidance.pdf">Technical Guidance.pdf</a> · <a href="https://k8s-sandbox.aisi.org.uk/security/container-runtime/">k8s-sandbox.aisi.org.uk</a> · <a href="https://github.com/UKGovernmentBEIS/inspect_proxmox_sandbox">inspect_proxmox_sandbox</a></li>
+        <li>[o1 System Card] OpenAI, <em>OpenAI o1 System Card</em>, version dated Sept 12, 2024 (o1-preview and o1-mini), §4.2.1. The incident does not appear in the December 2024 card. <a href="https://cdn.openai.com/o1-system-card.pdf">cdn.openai.com/o1-system-card.pdf</a></li>
+        <li>[OSWorld] Xie, Zhang, Chen, Li, Zhao, Cao et al., <em>OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments</em>, arXiv:2404.07972 (2024), and the project README. <a href="https://arxiv.org/abs/2404.07972">arxiv.org/abs/2404.07972</a></li>
+        <li>[Inspect] UK AI Security Institute, <em>Inspect AI documentation: Sandboxing</em>. <a href="https://inspect.aisi.org.uk/sandboxing.html">inspect.aisi.org.uk/sandboxing.html</a></li>
+        <li>[HumanEval] Chen, Tworek, Jun, Yuan et al., <em>Evaluating Large Language Models Trained on Code</em>, arXiv:2107.03374 (2021), §2.3. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

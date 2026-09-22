@@ -1,0 +1,338 @@
+# Page 05 verification. Container lt-05-lab (ubuntu:24.04 + python3 3.12.3 + jq 1.7; later + locales/en_US.UTF-8), user learner. 2026-09-21.
+# gen_results.py copied verbatim from research/wordfreq-bench/. Commands echoed by a runner script then eval'd.
+# (The full 'grep -A 3 ^Start-Date /var/log/apt/history.log' output — ~100 base-image entries — is trimmed here.)
+$ python3 gen_results.py > results.jsonl
+$ wc -l results.jsonl
+192 results.jsonl
+$ head -n 2 results.jsonl
+{"task": "wordfreq", "model": "model-a", "epoch": 1, "exit_code": 0, "passed": true, "stderr_tail": "", "duration_s": 72.7}
+{"task": "wordfreq", "model": "model-a", "epoch": 2, "exit_code": 0, "passed": true, "stderr_tail": "", "duration_s": 87.4}
+$ tail -n 1 results.jsonl
+{"task": "symlinks", "model": "model-c", "epoch": 8, "exit_code": 2, "passed": false, "stderr_tail": "E: Could not get lock /var/lib/dpkg/lock-frontend", "duration_s": 77.1}
+$ jq . results.jsonl | head -n 9
+{
+  "task": "wordfreq",
+  "model": "model-a",
+  "epoch": 1,
+  "exit_code": 0,
+  "passed": true,
+  "stderr_tail": "",
+  "duration_s": 72.7
+}
+$ grep -c '"passed": true' results.jsonl
+106
+$ grep -c -v '"passed": true' results.jsonl
+86
+$ grep -c Killed results.jsonl
+5
+$ grep -n Killed results.jsonl | head -n 3
+87:{"task": "logrotate", "model": "model-b", "epoch": 7, "exit_code": 137, "passed": false, "stderr_tail": "Killed", "duration_s": 182.7}
+96:{"task": "jsonfix", "model": "model-b", "epoch": 8, "exit_code": 137, "passed": false, "stderr_tail": "Killed", "duration_s": 169.5}
+152:{"task": "logrotate", "model": "model-c", "epoch": 8, "exit_code": 137, "passed": false, "stderr_tail": "Killed", "duration_s": 94.4}
+$ grep -i killed results.jsonl | wc -l
+5
+$ grep -o '"exit_code": [0-9]*' results.jsonl | head -n 3
+"exit_code": 0
+"exit_code": 0
+"exit_code": 0
+$ grep -o '"exit_code": [0-9]*' results.jsonl | sort | uniq -c | sort -rn
+    106 "exit_code": 0
+     56 "exit_code": 1
+      9 "exit_code": 127
+      8 "exit_code": 124
+      5 "exit_code": 137
+      4 "exit_code": 2
+      4 "exit_code": 126
+$ grep -o '"exit_code": [0-9]*' results.jsonl | uniq -c | head -n 5
+      6 "exit_code": 0
+      1 "exit_code": 1
+      2 "exit_code": 0
+      1 "exit_code": 1
+     10 "exit_code": 0
+$ grep -E -o 'Killed|Permission denied|command not found|No space left' results.jsonl | sort | uniq -c | sort -rn
+      9 command not found
+      9 Permission denied
+      7 No space left
+      5 Killed
+$ grep 'Permission denied' results.jsonl | grep -o '"stderr_tail": "[^"]*"' | sort | uniq -c
+      5 "stderr_tail": "PermissionError: [Errno 13] Permission denied: '/opt/grader/expected.json'"
+      4 "stderr_tail": "bash: line 1: ./run.sh: Permission denied"
+$ grep -l Killed *.jsonl *.py
+results.jsonl
+gen_results.py
+$ grep -rl dpkg /var/log 2>/dev/null
+/var/log/bootstrap.log
+/var/log/apt/history.log
+/var/log/dpkg.log
+$ grep -A 3 '^Start-Date' /var/log/apt/history.log | cut -c 1-100
+[... trimmed: one 4-line block per base-image package, separated by -- ...]
+
+$ jq -r '.model' results.jsonl | sort | uniq -c
+     64 model-a
+     64 model-b
+     64 model-c
+$ jq -r 'select(.passed) | .model' results.jsonl | sort | uniq -c
+     45 model-a
+     34 model-b
+     27 model-c
+$ jq -c 'select(.exit_code == 137)' results.jsonl | head -n 2
+{"task":"logrotate","model":"model-b","epoch":7,"exit_code":137,"passed":false,"stderr_tail":"Killed","duration_s":182.7}
+{"task":"jsonfix","model":"model-b","epoch":8,"exit_code":137,"passed":false,"stderr_tail":"Killed","duration_s":169.5}
+$ jq 'select(.passed | not) | .exit_code' results.jsonl | sort -n | uniq -c | sort -rn
+     56 1
+      9 127
+      8 124
+      5 137
+      4 2
+      4 126
+$ jq -r '[.task, .passed] | @tsv' results.jsonl | sort | uniq -c
+      6 csvsum	false
+     18 csvsum	true
+      6 dedupe	false
+     18 dedupe	true
+      8 jsonfix	false
+     16 jsonfix	true
+      9 logrotate	false
+     15 logrotate	true
+     10 pathwalk	false
+     14 pathwalk	true
+     24 symlinks	false
+     15 tzparse	false
+      9 tzparse	true
+      8 wordfreq	false
+     16 wordfreq	true
+$ jq -r 'select(.passed) | .task' results.jsonl | sort -u
+csvsum
+dedupe
+jsonfix
+logrotate
+pathwalk
+tzparse
+wordfreq
+$ jq -r 'select(.task == "symlinks") | .stderr_tail' results.jsonl | cut -c 1-40 | sort | uniq -c | sort -rn
+     15 AssertionError: Lists differ: [('The', 3
+      4 OSError: [Errno 28] No space left on dev
+      2 ModuleNotFoundError: No module named 'wo
+      2 E: Could not get lock /var/lib/dpkg/lock
+      1 bash: line 1: pytest: command not found
+$ jq length results.jsonl | head -n 2
+7
+7
+$ jq -s length results.jsonl
+192
+$ jq -sc 'group_by(.model) | map({model: .[0].model, n: length, passed: (map(select(.passed)) | length)})' results.jsonl
+[{"model":"model-a","n":64,"passed":45},{"model":"model-b","n":64,"passed":34},{"model":"model-c","n":64,"passed":27}]
+$ jq -sc 'group_by(.model)[] | {model: .[0].model, scheduled: length, passed: (map(select(.passed)) | length), verdicts: (map(select(.passed or (.stderr_tail | startswith("AssertionError")))) | length)}' results.jsonl
+{"model":"model-a","scheduled":64,"passed":45,"verdicts":55}
+{"model":"model-b","scheduled":64,"passed":34,"verdicts":48}
+{"model":"model-c","scheduled":64,"passed":27,"verdicts":40}
+
+$ jq '.duration_s' results.jsonl | sort -n | sed -n '96,97p'
+67.0
+67.3
+$ jq 'select(.passed) | .duration_s' results.jsonl | sort -n | wc -l
+106
+$ jq '.duration_s' results.jsonl | awk '{s += $1} END {print s / NR}'
+89.1234
+$ jq '.duration_s' results.jsonl | sort -n | tail -n 3
+300.0
+300.0
+300.0
+$ jq -r 'select(.exit_code == 124) | .duration_s' results.jsonl | sort | uniq -c
+      8 300.0
+
+$ jq -r '"\(.task) \(.model) \(.epoch) \(.exit_code) \(.duration_s)"' results.jsonl > runs.txt
+$ head -n 3 runs.txt
+wordfreq model-a 1 0 72.7
+wordfreq model-a 2 0 87.4
+wordfreq model-a 3 0 36.6
+$ cut -d ' ' -f 1,4 runs.txt | head -n 3
+wordfreq 0
+wordfreq 0
+wordfreq 0
+$ awk '{print $2, $5}' runs.txt | head -n 2
+model-a 72.7
+model-a 87.4
+$ awk '$4 == 137' runs.txt
+logrotate model-b 7 137 182.7
+jsonfix model-b 8 137 169.5
+logrotate model-c 8 137 94.4
+dedupe model-c 1 137 104.8
+tzparse model-c 5 137 71.4
+$ awk '$5 > 200 && $4 != 124 {print $1, $5}' runs.txt | sort -k2,2 -rn | head -n 4
+symlinks 239.7
+wordfreq 221.3
+pathwalk 218.4
+symlinks 215.0
+$ awk '$4 == 0 {s += $5; n++} END {print n, s / n}' runs.txt
+106 52.5283
+$ awk -F: '{print $1, $7}' /etc/passwd | tail -n 2
+ubuntu /bin/bash
+learner /bin/bash
+$ sort -t ' ' -k5,5 -n runs.txt | tail -n 2
+tzparse model-c 6 124 300.0
+wordfreq model-b 4 124 300.0
+$ sed -n '5,7p' runs.txt
+wordfreq model-a 5 0 57.3
+wordfreq model-a 6 0 92.1
+wordfreq model-a 7 1 54.8
+$ sed 's/model-/m/' runs.txt | head -n 2
+wordfreq ma 1 0 72.7
+wordfreq ma 2 0 87.4
+$ sed -n '/ 137 /p' runs.txt | wc -l
+5
+$ tr ' ' ',' < runs.txt | head -n 2
+wordfreq,model-a,1,0,72.7
+wordfreq,model-a,2,0,87.4
+$ echo "Permission DENIED" | tr 'A-Z' 'a-z'
+permission denied
+$ printf 'b\na\nb\nb\na\n' | uniq -c
+      1 b
+      1 a
+      2 b
+      1 a
+$ printf 'b\na\nb\nb\na\n' | sort | uniq -c
+      2 a
+      3 b
+
+# Batch B (after: apt-get install locales; locale-gen en_US.UTF-8 as root)
+$ grep -B 1 -A 2 'Commandline: apt-get install -y' /var/log/apt/history.log | cut -c 1-90
+Start-Date: 2026-09-21  11:02:46
+Commandline: apt-get install -y -qq --no-install-recommends python3 jq
+Install: python3.12:arm64 (3.12.3-1ubuntu0.17, automatic), netbase:arm64 (6.4, automatic),
+End-Date: 2026-09-21  11:02:48
+--
+Start-Date: 2026-09-21  16:31:14
+Commandline: apt-get install -y -qq --no-install-recommends locales
+Install: locales:arm64 (2.39-0ubuntu8.9)
+End-Date: 2026-09-21  16:31:14
+$ jq -r '[.model, .passed, (.stderr_tail | startswith("AssertionError"))] | @tsv' results.jsonl | awk '{n[$1]++; if ($2 == "true") p[$1]++; if ($2 == "true" || $3 == "true") v[$1]++} END {for (m in n) printf "%s scheduled=%d verdicts=%d passed=%d  passed/scheduled=%.1f%%  passed/verdicts=%.1f%%  verdicts/scheduled=%.1f%%\n", m, n[m], v[m], p[m], 100*p[m]/n[m], 100*p[m]/v[m], 100*v[m]/n[m]}' | sort
+model-a scheduled=64 verdicts=55 passed=45  passed/scheduled=70.3%  passed/verdicts=81.8%  verdicts/scheduled=85.9%
+model-b scheduled=64 verdicts=48 passed=34  passed/scheduled=53.1%  passed/verdicts=70.8%  verdicts/scheduled=75.0%
+model-c scheduled=64 verdicts=40 passed=27  passed/scheduled=42.2%  passed/verdicts=67.5%  verdicts/scheduled=62.5%
+$ jq -r 'select(.passed | not) | .stderr_tail' results.jsonl | sed 's/:.*//' | sort | uniq -c | sort -rn
+     37 AssertionError
+     13 bash
+      8 
+      7 OSError
+      7 ModuleNotFoundError
+      5 PermissionError
+      5 Killed
+      4 E
+$ jq -r 'select(.passed | not) | .stderr_tail' results.jsonl | grep -c '^$'
+8
+$ jq -r 'select(.passed | not) | "\(.exit_code)\t\(.stderr_tail)"' results.jsonl | cut -c 1-60 | sort | uniq -c | sort -rn
+     37 1	AssertionError: Lists differ: [('The', 3)] != [('the', 7)]
+      9 127	bash: line 1: pytest: command not found
+      8 124	
+      7 1	OSError: [Errno 28] No space left on device
+      7 1	ModuleNotFoundError: No module named 'wordfreq'
+      5 137	Killed
+      5 1	PermissionError: [Errno 13] Permission denied: '/opt/grade
+      4 2	E: Could not get lock /var/lib/dpkg/lock-frontend
+      4 126	bash: line 1: ./run.sh: Permission denied
+$ jq -r 'select(.task != "symlinks") | select(.passed) | .model' results.jsonl | sort | uniq -c
+     45 model-a
+     34 model-b
+     27 model-c
+
+$ mkdir -p logs; cp results.jsonl "logs/run 1.jsonl"; cp results.jsonl logs/run2.jsonl
+$ find logs -name '*.jsonl' | xargs wc -l
+  192 logs/run2.jsonl
+  192 total
+wc: logs/run: No such file or directory
+wc: 1.jsonl: No such file or directory
+$ find logs -name '*.jsonl' -print0 | xargs -0 wc -l
+  192 logs/run2.jsonl
+  192 logs/run 1.jsonl
+  384 total
+$ find logs -name '*.jsonl' -print0 | xargs -0 grep -c Killed
+logs/run2.jsonl:5
+logs/run 1.jsonl:5
+$ cp runs.txt scratch.txt; sed -i 's/model-/m/' scratch.txt; head -n 1 scratch.txt
+wordfreq ma 1 0 72.7
+$ printf 'b\nA\na\nB\n_x\n10\n9\n' > mixed.txt
+$ locale -a
+C
+C.utf8
+POSIX
+en_US.utf8
+$ sort mixed.txt | tr '\n' ' '; echo
+10 9 A B _x a b 
+$ LC_ALL=C sort mixed.txt | tr '\n' ' '; echo
+10 9 A B _x a b 
+$ LC_ALL=en_US.UTF-8 sort mixed.txt | tr '\n' ' '; echo
+10 9 a A b B _x 
+$ sort -n mixed.txt | tr '\n' ' '; echo
+A B _x a b 9 10 
+$ printf '10\n9\n100\n' | sort | tr '\n' ' '; echo
+10 100 9 
+$ printf '10\n9\n100\n' | sort -n | tr '\n' ' '; echo
+9 10 100 
+$ grep -c . results.jsonl
+192
+$ grep -v '"exit_code": 0' results.jsonl | grep -c '"passed": true'
+0
+$ grep -E '"exit_code": (124|137)' results.jsonl | wc -l
+13
+$ jq -r 'select(.exit_code == 124 or .exit_code == 137) | .model' results.jsonl | sort | uniq -c
+      2 model-a
+      5 model-b
+      6 model-c
+$ jq -r 'select(.exit_code == 127) | .task' results.jsonl | sort | uniq -c | sort -rn
+      2 wordfreq
+      2 pathwalk
+      2 jsonfix
+      1 tzparse
+      1 symlinks
+      1 logrotate
+$ jq -r 'select(.exit_code == 127) | "\(.model) \(.task)"' results.jsonl | sort | uniq -c | sort -rn | head -n 4
+      2 model-c wordfreq
+      1 model-c logrotate
+      1 model-c jsonfix
+      1 model-b tzparse
+$ printf '{"a":1}\n{bad\n{"a":3}\n' | jq -c .a; echo "jq exit=$?"
+1
+jq: parse error: Invalid numeric literal at line 3, column 0
+jq exit=5
+
+# macOS (this Mac, /usr/bin/sed): sed -i 's/model-/m/' mac.txt ->
+sed: 1: "mac.txt": invalid command code m
+exit=1  ; with -i '' it works
+
+# Batch C (lab solutions)
+$ jq -r 'select(.task != "symlinks") | "\(.model) \(.passed)"' results.jsonl | awk '{n[$1]++; if ($2 == "true") p[$1]++} END {for (m in n) printf "%s %d/%d = %.1f%%\n", m, p[m], n[m], 100 * p[m] / n[m]}' | sort
+model-a 45/56 = 80.4%
+model-b 34/56 = 60.7%
+model-c 27/56 = 48.2%
+$ jq -r 'select(.exit_code == 124 or .exit_code == 137) | .model' results.jsonl | sort | uniq -c
+      2 model-a
+      5 model-b
+      6 model-c
+$ jq -r 'select(.exit_code == 127) | .task' results.jsonl | sort | uniq -c | sort -rn
+      2 wordfreq
+      2 pathwalk
+      2 jsonfix
+      1 tzparse
+      1 symlinks
+      1 logrotate
+$ grep -c '"passed": true' results.jsonl
+106
+$ grep 'model-a' results.jsonl | grep -c '"passed": true'
+45
+$ tail -n 3 results.jsonl | jq -r .stderr_tail
+AssertionError: Lists differ: [('The', 3)] != [('the', 7)]
+OSError: [Errno 28] No space left on device
+E: Could not get lock /var/lib/dpkg/lock-frontend
+$ less --version | head -n 1
+/usr/local/bin/run.sh: line 7: less: command not found
+
+# Batch D (multi-line form of accounting cmd; jq missing key; awk|head)
+cd ~ || exit 1
+jq -r '[.model, .passed, (.stderr_tail | startswith("AssertionError"))] | @tsv' results.jsonl \
+    | awk '{n[$1]++; if ($2 == "true") p[$1]++; if ($2 == "true" || $3 == "true") v[$1]++}
+           END {for (m in n) printf "%s scheduled=%d verdicts=%d passed=%d\n",
+                m, n[m], v[m], p[m]}' | sort
+echo '{"a":1}' | jq .typo
+awk '$4 == 137' runs.txt | head -n 2
+-> model-a scheduled=64 verdicts=55 passed=45 / model-b 64 48 34 / model-c 64 40 27 ; null ; two 137 rows

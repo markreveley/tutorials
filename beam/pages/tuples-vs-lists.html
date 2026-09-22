@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tuples vs Lists in Memory</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .layoutdiag { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  @media(max-width:680px){ .layoutdiag{ grid-template-columns:1fr; } }
+  .mblock { font-family:var(--mono); font-size:12.5px; }
+  .word { display:flex; gap:10px; align-items:center; padding:7px 11px; border:1px solid var(--line);
+          border-radius:6px; margin:5px 0; background:var(--bg-2); transition:all .25s; }
+  .word .addr { color:var(--ink-faint); min-width:54px; }
+  .word.hdr { border-color:var(--accent); color:#e6c79a; }
+  .word.lit { color:var(--imm); }
+  .word.hot { border-color:var(--accent); box-shadow:0 0 0 2px var(--accent); background:var(--bg-3); }
+  .word.visited { border-color:var(--cons); opacity:.85; }
+  .word .tailptr { color:var(--cons); }
+  .cell-pair { border-left:2px solid var(--cons); padding-left:8px; margin:8px 0; }
+  .diaghead { font-family:var(--mono); font-size:12px; color:var(--accent); margin-bottom:8px; letter-spacing:.03em; }
+  /* contiguous-block strip */
+  .tptr { font-family:var(--mono); font-size:11.5px; color:var(--boxed); margin:2px 0 6px; }
+  .tblock { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; font-family:var(--mono); }
+  .tcell { flex:1; min-width:0; padding:13px 6px 24px; text-align:center; position:relative;
+           border-right:1px dashed var(--line); transition:all .2s; }
+  .tcell:last-child { border-right:none; }
+  .tcell .val { font-size:13px; }
+  .tcell .sub { font-size:9.5px; color:var(--ink-faint); margin-top:2px; }
+  .tcell .off { position:absolute; left:0; right:0; bottom:5px; font-size:9.5px; color:var(--ink-faint); }
+  .tcell.hdrcell { background:var(--bg-3); color:#e6c79a; }
+  .tcell.slot { background:var(--bg-2); }
+  .tcell.slot .val { color:var(--imm); }
+  .tcell.hot { background:var(--bg-3); box-shadow:inset 0 0 0 2px var(--accent); }
+  .tcell.hot .val { color:#fff; }
+  .tspan { font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); text-align:center; margin-top:6px; }
+  /* cons-cell word strip — same word vocabulary as the tuple block */
+  .lchain { display:flex; flex-direction:column; gap:2px; }
+  .lcell { display:flex; align-items:center; gap:10px; }
+  .lcell .clab { font-family:var(--mono); font-size:10.5px; color:var(--ink-faint); min-width:150px; text-align:right; }
+  .lcons { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; flex:1; max-width:440px; font-family:var(--mono); }
+  .lw { flex:1; min-width:0; padding:11px 8px 22px; text-align:center; position:relative; transition:all .2s; background:var(--bg-2); }
+  .lw + .lw { border-left:1px dashed var(--line); }
+  .lw .val { font-size:13px; }
+  .lw.headw .val { color:var(--imm); }
+  .lw.tailw .val { color:var(--cons); }
+  .lw .sub { font-size:9.5px; color:var(--ink-faint); margin-top:2px; }
+  .lw .off { position:absolute; left:0; right:0; bottom:5px; font-size:9.5px; color:var(--ink-faint); }
+  .lw.hot { background:var(--bg-3); box-shadow:inset 0 0 0 2px var(--accent); }
+  .lw.hot .val { color:#fff; }
+  .lconn { font-family:var(--mono); font-size:10.5px; color:var(--cons); padding-left:160px; line-height:1.5; }
+  @media(max-width:680px){ .lcell{ flex-direction:column; align-items:flex-start; } .lcell .clab{ min-width:0; text-align:left; } .lconn{ padding-left:12px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 3 · data structures</p>
+    <h1>Tuples vs Lists in Memory</h1>
+    <p class="lede">
+      Now that a value is "a word, sometimes a pointer," we can build the two workhorse collections and see
+      exactly where their famous performance characteristics come from. They aren't arbitrary rules to
+      memorise — they fall straight out of the memory layout.
+    </p>
+
+    <h2>A tuple is a contiguous block</h2>
+    <p>
+      A tuple is a single block on the heap: a <strong>header word</strong> (it's a tuple, arity N) followed
+      by N slots, one per element, at fixed evenly-spaced offsets <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.5</a>.
+      Two things become cheap:
+    </p>
+    <ul>
+      <li><code>tuple_size(t)</code> reads the number recorded in the header — <strong>O(1)</strong>, whether the tuple has 4 elements or 4,000.</li>
+      <li><code>elem(t, i)</code> is arithmetic: <em>start of block + (i+1) words</em>. The machine jumps straight there — <strong>O(1)</strong>, any index.</li>
+    </ul>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">a tuple, laid out in memory</span></div>
+      <div class="viz-body">
+        <div class="tptr">boxed pointer ──▶ lands at the <b>base</b>; every element is a fixed offset away</div>
+        <div class="tblock" id="tblock"></div>
+        <div class="tspan">└──────────────── one contiguous block, 5 words ────────────────┘</div>
+
+        <div class="controls" style="margin-top:14px">
+          <label class="fld">read element:
+            <div class="seg" id="tidxSeg">
+              <button data-i="0" class="on">0</button><button data-i="1">1</button>
+              <button data-i="2">2</button><button data-i="3">3</button>
+            </div>
+          </label>
+        </div>
+        <div class="readout" id="tArith"></div>
+      </div>
+      <div class="viz-foot">Header records {tuple, arity 4}; the N slots follow at base + (i+1) words, evenly spaced (Ch.4.5). Addresses illustrative; one word = 8 bytes on 64-bit.</div>
+    </div>
+
+    <p>
+      The diagram leans on one fact worth stating outright: <strong>every slot is exactly one word — never
+      larger.</strong> That uniformity is what licenses the <code>base + (i+1) words</code> arithmetic; if slots
+      could vary in size, reaching element <em>i</em> couldn't be a single jump.
+    </p>
+    <p>
+      What varies isn't the slot's size, it's what the word <em>holds</em> — the immediate-vs-boxed split from
+      <a href="machine-word-and-tags.html">rung&nbsp;2</a>. A value that fits in a word sits in the slot
+      directly; anything bigger (a nested tuple, a map, a float, a bignum, a binary) lives as its own boxed
+      object elsewhere on the heap, and the slot holds a one-word <span class="ptr" style="color:var(--boxed)">pointer</span>
+      to it. So <code>{:ok, 42, %{a: 1}, 3.14}</code> is still <strong>5 words</strong>: the map and float aren't
+      fattening their slots — slot&nbsp;2 points at the map's block, slot&nbsp;3 at a boxed float (whose own
+      object is <code>header + the full 64-bit double</code>, stored full-width — just off in its own block, not
+      in the slot).
+    </p>
+    <p>
+      This is the opposite of a C <code>struct</code> or a numeric array, where an 8-byte <code>double</code>
+      really does occupy 8 contiguous bytes <em>inline</em> and nested structs nest their storage. A BEAM tuple
+      never inlines a multi-word value; size is always escaped through a pointer. The cost is one extra
+      indirection to reach a boxed element; the payoff is that the contiguous-block model and O(1) indexing hold
+      no matter what the tuple contains.
+    </p>
+
+    <h2>A list is a chain of cons cells</h2>
+    <p>
+      A list is built from <strong>cons cells</strong> — each just <em>two</em> words on the heap: a
+      <span class="tok-com">head</span> (the value) and a <span style="color:var(--cons)">tail</span> (a
+      pointer to the next cell, or <code>[]</code> to end) <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.3</a>.
+      A cell needs no header word — the <code>01</code> tag in the pointer already says "this is a list node,"
+      which is why a cons cell uses <strong>33% less memory</strong> than a boxed 2-tuple. But to reach the
+      Nth element you must follow the chain from the front: <strong>O(n)</strong>.
+    </p>
+
+    <p>
+      It's worth seeing that on the heap, in the same word-cells the tuple used above. Each cons cell is a
+      tiny <strong>2-word block</strong> — a <span style="color:var(--imm)">head</span> word and a
+      <span style="color:var(--cons)">tail</span> word — and, crucially, the cells need <em>not</em> sit next to
+      each other. The tail word is the only thing linking them.
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">a cons cell is two words</span></div>
+      <div class="viz-body">
+        <div class="tptr" style="color:var(--cons)">list pointer ──▶ first cell; each cell's <b>tail</b> points to the next, wherever it happens to live</div>
+        <div class="lchain" id="lchain"></div>
+
+        <div class="controls" style="margin-top:14px">
+          <label class="fld">highlight cell:
+            <div class="seg" id="lcellSeg">
+              <button data-i="0" class="on">0</button><button data-i="1">1</button>
+              <button data-i="2">2</button><button data-i="3">3</button>
+            </div>
+          </label>
+          <button class="btn" id="ltraceBtn">follow the chain →</button>
+        </div>
+        <div class="readout" id="lOut"></div>
+      </div>
+      <div class="viz-foot">2 words per cell, no header — the <code>01</code> tag in the pointer says "list node" (Ch.4.3). Addresses are illustrative and deliberately scattered: only the tail pointer links cells. The last tail is <code>[]</code> (nil).</div>
+    </div>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">access cost, made physical</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <label class="fld">index:
+            <div class="seg" id="idxSeg">
+              <button data-i="0">0</button><button data-i="1">1</button>
+              <button data-i="2" class="on">2</button><button data-i="3">3</button>
+            </div>
+          </label>
+          <button class="btn primary" id="goBtn">Access element <span id="goIdx">2</span></button>
+          <button class="btn" id="resetBtn">reset</button>
+        </div>
+
+        <div class="layoutdiag">
+          <div>
+            <div class="diaghead">tuple {:a, :b, :c, :d} — 5 words</div>
+            <div class="mblock" id="tupBlock"></div>
+          </div>
+          <div>
+            <div class="diaghead">list [:a, :b, :c, :d] — 8 words</div>
+            <div class="mblock" id="listBlock"></div>
+          </div>
+        </div>
+
+        <div class="readout" id="costOut">Pick an index and press access. The tuple does one jump; the list takes one step per cell it passes.</div>
+      </div>
+      <div class="viz-foot">Cons = 2 words/cell, no header (Ch.4.3). Tuple = 1 header + N slots (Ch.4.5). "Words touched" counts memory reads to reach the element.</div>
+    </div>
+
+    <h2>And updates? That's the next rung's question</h2>
+    <p>
+      Because data is immutable, <code>put_elem(t, i, v)</code> can't overwrite a slot — it allocates a
+      <em>new</em> tuple block. That sounds expensive (O(n) to build the new block), and it is — but the
+      elements inside are <strong>not</strong> re-copied. The new block's other slots just point at the same
+      values the old one did.
+    </p>
+    <p>
+      That single sentence — "the elements themselves are not copied" — is the one most worth getting
+      concrete about. It's the whole of the next rung.
+    </p>
+
+    <table class="cmp">
+      <tr><th>Use a tuple when…</th><th>Use a list when…</th></tr>
+      <tr>
+        <td>Fixed-size grouping you read often but rarely rewrite. Fast size &amp; index, cheap to pattern-match. <br><em><code>{:ok, result}</code>, <code>{:error, reason}</code>, a fixed record of fields.</em></td>
+        <td>The collection grows, shrinks, or is processed element-by-element. Prepend <code>[x | list]</code> is O(1); append/index is O(n). <br><em>any sequence you iterate or build up.</em></td>
+      </tr>
+    </table>
+
+    <div class="callout">
+      <span class="label">The naming convention is a tell</span>
+      <code>tuple_size/1</code> and <code>byte_size/1</code> say <em>size</em> — constant-time, read from a
+      header. <code>length/1</code> says <em>length</em> — linear, must walk the chain. The word choice
+      encodes the cost.
+    </div>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.4.3 (Lists), Ch.4.5 (Boxed Terms / Tuples).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('tuples-vs-lists');
+
+// ---- "a tuple, laid out in memory": contiguous block + address arithmetic ----
+const TBASE = 0x2000, WORD = 8, TVALS = [':a', ':b', ':c', ':d'];
+const thex = n => '0x' + n.toString(16).toUpperCase();
+
+function buildTuple(){
+  let h = `<div class="tcell hdrcell"><div class="val">header</div>`+
+          `<div class="sub">tuple · arity 4</div><div class="off">${thex(TBASE)} · base</div></div>`;
+  TVALS.forEach((e,i)=>{
+    h += `<div class="tcell slot" data-ti="${i}"><div class="val">${e}</div>`+
+         `<div class="sub">slot ${i}</div><div class="off">${thex(TBASE+(i+1)*WORD)} · +${i+1}w</div></div>`;
+  });
+  document.getElementById('tblock').innerHTML = h;
+}
+function showArith(i){
+  document.querySelectorAll('#tblock .tcell').forEach(c=>c.classList.remove('hot'));
+  document.querySelector(`#tblock [data-ti="${i}"]`).classList.add('hot');
+  const addr = TBASE + (i+1)*WORD;
+  document.getElementById('tArith').innerHTML =
+    `<code>elem(t, ${i})</code> &nbsp;=&nbsp; base + (${i}+1)×8 &nbsp;=&nbsp; ${thex(TBASE)} + ${(i+1)*WORD} `+
+    `&nbsp;=&nbsp; <b>${thex(addr)}</b> &nbsp;→&nbsp; one jump, <b>1</b> read &nbsp;→&nbsp; `+
+    `<span style="color:var(--imm)">${TVALS[i]}</span>. &nbsp;Same cost for index 0 or 3 — that's the O(1).`;
+}
+document.getElementById('tidxSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#tidxSeg button').forEach(x=>x.classList.toggle('on', x===b));
+  showArith(+b.dataset.i);
+});
+buildTuple(); showArith(0);
+
+// ---- "a cons cell is two words": the list mapped onto heap words ----
+const LBASE = [0x3000, 0x40A0, 0x3820, 0x5010];   // deliberately scattered cell addresses
+const LVALS = [':a', ':b', ':c', ':d'];
+const lhex = n => '0x' + n.toString(16).toUpperCase();
+let ltracing = false;
+
+function buildList2(){
+  let h = '';
+  LBASE.forEach((base,i)=>{
+    const last = i === LBASE.length-1;
+    const next = last ? '[]' : `──▶ ${lhex(LBASE[i+1])}`;
+    h += `<div class="lcell">`+
+           `<div class="clab">cons cell @ ${lhex(base)}</div>`+
+           `<div class="lcons">`+
+             `<div class="lw headw" data-lw="h${i}"><div class="val">${LVALS[i]}</div><div class="sub">head · the element</div><div class="off">${lhex(base)} ·+0w</div></div>`+
+             `<div class="lw tailw" data-lw="t${i}"><div class="val">${next}</div><div class="sub">tail · next or []</div><div class="off">${lhex(base+8)} ·+1w</div></div>`+
+           `</div>`+
+         `</div>`;
+    if(!last) h += `<div class="lconn">↘ tail holds a pointer to ${lhex(LBASE[i+1])} — the next cell, anywhere on the heap</div>`;
+  });
+  document.getElementById('lchain').innerHTML = h;
+}
+function lclear(){ document.querySelectorAll('#lchain .lw').forEach(w=>w.classList.remove('hot')); }
+function showCell(i){
+  lclear();
+  document.querySelector(`[data-lw="h${i}"]`).classList.add('hot');
+  document.querySelector(`[data-lw="t${i}"]`).classList.add('hot');
+  const last = i === LBASE.length-1;
+  document.getElementById('lOut').innerHTML =
+    `<b>Cons cell ${i}</b> = <b>2 words</b>, no header. `+
+    `<span style="color:var(--imm)">head</span> @ ${lhex(LBASE[i])} holds the element <span style="color:var(--imm)">${LVALS[i]}</span>; `+
+    `<span style="color:var(--cons)">tail</span> @ ${lhex(LBASE[i]+8)} holds `+
+    (last ? '<code>[]</code> — the end of the list.' : `a pointer to the next cell at <b class="ptr">${lhex(LBASE[i+1])}</b>.`)+
+    ` There's no header word — the <code>01</code> tag in the <i>pointer</i> already said "list node," which is the word a 2-tuple would have spent on its header.`;
+}
+document.getElementById('lcellSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b || ltracing) return;
+  document.querySelectorAll('#lcellSeg button').forEach(x=>x.classList.toggle('on', x===b));
+  showCell(+b.dataset.i);
+});
+document.getElementById('ltraceBtn').addEventListener('click', async ()=>{
+  if(ltracing) return; ltracing = true; lclear();
+  document.querySelectorAll('#lcellSeg button').forEach(x=>x.classList.remove('on'));
+  const out = document.getElementById('lOut');
+  for(let i=0;i<LBASE.length;i++){
+    document.querySelector(`[data-lw="h${i}"]`).classList.add('hot');
+    out.innerHTML = `Cell ${i}: read <span style="color:var(--imm)">head</span> @ ${lhex(LBASE[i])} = <span style="color:var(--imm)">${LVALS[i]}</span>…`;
+    await new Promise(r=>setTimeout(r,360));
+    document.querySelector(`[data-lw="t${i}"]`).classList.add('hot');
+    if(i < LBASE.length-1){
+      out.innerHTML = `Cell ${i}: <span style="color:var(--cons)">tail</span> @ ${lhex(LBASE[i]+8)} → follow the pointer to <b class="ptr">${lhex(LBASE[i+1])}</b>…`;
+      await new Promise(r=>setTimeout(r,360));
+    }
+  }
+  out.innerHTML = `<b>4 cons cells × 2 words = 8 words</b>, scattered across the heap and linked only by their tail pointers. `+
+                  `Compare the tuple above: <b>one</b> contiguous 5-word block reached by a single address. Same four elements, `+
+                  `two different shapes — which is exactly why the tuple indexes in one jump and the list has to walk.`;
+  ltracing = false;
+});
+buildList2(); showCell(0);
+
+const ELS = [':a', ':b', ':c', ':d'];
+const tup = document.getElementById('tupBlock');
+const lst = document.getElementById('listBlock');
+let idx = 2, running = false;
+
+function build(){
+  // tuple: header + 4 slots
+  let h = `<div class="word hdr"><span class="addr">100</span><span>header · tuple/4</span></div>`;
+  ELS.forEach((e,i)=> h += `<div class="word" data-tslot="${i}"><span class="addr">${104+i*4}</span><span class="lit">${e}</span></div>`);
+  tup.innerHTML = h;
+  // list: 4 cons cells, each head + tail
+  let l='';
+  ELS.forEach((e,i)=>{
+    const tail = i<ELS.length-1 ? `→ cell ${i+1}` : `[]`;
+    l += `<div class="cell-pair" data-cell="${i}">`+
+         `<div class="word" data-lhead="${i}"><span class="addr">cell ${i}</span><span class="lit">${e}</span><span class="tailptr">${tail}</span></div>`+
+         `</div>`;
+  });
+  lst.innerHTML = l;
+}
+function clearHot(){
+  document.querySelectorAll('.word').forEach(w=>w.classList.remove('hot','visited'));
+}
+
+document.getElementById('idxSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b||running) return;
+  document.querySelectorAll('#idxSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  idx=+b.dataset.i; document.getElementById('goIdx').textContent=idx;
+});
+
+document.getElementById('goBtn').addEventListener('click', async ()=>{
+  if(running) return; running=true; clearHot();
+  const out=document.getElementById('costOut');
+  // tuple: instant jump
+  const tslot=tup.querySelector(`[data-tslot="${idx}"]`);
+  tslot.classList.add('hot');
+  // list: step through
+  let steps=0;
+  out.innerHTML = `<b>Tuple:</b> jump to <code>base + ${idx+1} words</code> → <b>1</b> read. `+
+                  `&nbsp;&nbsp;<b style="color:var(--cons)">List:</b> walking…`;
+  for(let i=0;i<=idx;i++){
+    const head=lst.querySelector(`[data-lhead="${i}"]`);
+    head.classList.add('hot'); steps++;
+    await new Promise(r=>setTimeout(r,420));
+    if(i<idx){ head.classList.remove('hot'); head.classList.add('visited'); }
+  }
+  out.innerHTML = `<b>Tuple:</b> jump to <code>base + ${idx+1} words</code> → <b>1</b> read &nbsp;(O(1), same for any index).`+
+                  `<br><b style="color:var(--cons)">List:</b> followed the chain through <b>${steps}</b> cell${steps>1?'s':''} → <b>${steps}</b> reads &nbsp;(O(n): grows with the index).`;
+  running=false;
+});
+document.getElementById('resetBtn').addEventListener('click', ()=>{ if(!running){ clearHot();
+  document.getElementById('costOut').textContent='Pick an index and press access. The tuple does one jump; the list takes one step per cell it passes.'; }});
+
+build();
+</script>
+</body>
+</html>

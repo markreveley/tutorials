@@ -1,0 +1,98 @@
+{
+  "id": "evals-faq",
+  "citation": {
+    "authors": "Hamel Husain, Shreya Shankar",
+    "title": "LLM Evals: Everything You Need to Know (formerly 'Frequently Asked Questions (And Answers) About AI Evals')",
+    "venue": "hamel.dev (Hamel's Blog)",
+    "year": "2026 (page shows Published January 15, 2026; FAQ originally circulated 2025)",
+    "url": "https://hamel.dev/blog/posts/evals-faq/"
+  },
+  "fetched_urls": [
+    "https://hamel.dev/blog/posts/evals-faq/"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Binary pass/fail preferred over Likert scales for judge labels — confirm exact position and reasoning",
+      "verdict": "confirmed",
+      "finding": "The FAQ explicitly recommends binary (pass/fail) evaluations over 1-5 Likert scales. Reasoning given: (1) adjacent-point distinctions (3 vs 4) are subjective and inconsistent across annotators, (2) detecting statistical differences requires larger sample sizes, (3) annotators default to middle values to avoid hard decisions, (4) binary decisions are faster during error analysis. For gradual improvement tracking, decompose into multiple binary sub-checks (e.g. '4 out of 5 expected facts included' as separate binary checks) instead of a scale.",
+      "quote": "Binary evaluations force clearer thinking and more consistent labeling. Likert scales introduce significant challenges: the difference between adjacent points (like 3 vs 4) is subjective and inconsistent across annotators, detecting statistical differences requires larger sample sizes, and annotators often default to middle values to avoid making hard decisions. ... Start with binary labels to understand what 'bad' looks like. Numeric labels are advanced and usually not necessary.",
+      "location": "Evaluation Design & Methodology — 'Q: Why do you recommend binary (pass/fail) evaluations instead of 1-5 ratings (Likert scales)?'"
+    },
+    {
+      "planned": "Position on how many traces to review (error analysis sample sizes / theoretical saturation)",
+      "verdict": "confirmed",
+      "finding": "Iterate until 'theoretical saturation' (new traces reveal no new failure modes). Rule of thumb: review at least 100 traces to start; stop heuristic is when ~20 consecutive traces turn up no new category. Related numbers elsewhere: minimum viable setup is 30 minutes reviewing 20-50 outputs after significant changes; re-run error analysis with 100+ fresh traces per review cycle (typical cycles 2-4 weeks); between major analyses review 10-20 traces weekly focusing on outliers; sample 100 synthetic traces for error analysis.",
+      "quote": "Keep iterating on more traces until you reach theoretical saturation, meaning new traces do not seem to reveal new failure modes or information to you. As a rule of thumb, you should aim to review at least 100 traces. My rough heuristic is if ~20 traces don't turn up a new category, you can stop (but review at least 100 to start).",
+      "location": "Error Analysis & Data Collection — 'Q: Why is error analysis so important...' (step 4, Iterative Refinement); also 'How often should I re-run error analysis' and 'What's a minimum viable evaluation setup?'"
+    },
+    {
+      "planned": "Position on off-the-shelf eval metrics vs custom evals",
+      "verdict": "confirmed",
+      "finding": "Flat 'No' to ready-to-use metrics (helpfulness, coherence, quality scores) — they 'waste time and create false confidence' — with one carve-out: experienced practitioners may repurpose generic metrics as exploration signals to find interesting traces, not as quality measures. Similarity metrics (BERTScore, ROUGE, cosine similarity) are 'not useful for evaluating LLM outputs in most AI applications' but retain utility for search/recommendation and RAG retrieval debugging. Recommended alternative: error analysis -> binary failure modes -> custom evaluators (binary LLM-as-judge or code assertions) validated against human judgment.",
+      "quote": "No. Generic evaluations waste time and create false confidence. (Unless you're using them for exploration). ... 'All you get from using these prefab evals is you don't know what they actually do and in the best case they waste your time and in the worst case they create an illusion of confidence that is unjustified.' ... 'The abuse of generic metrics is endemic. Many eval vendors promote off the shelf metrics, which ensnare engineers into superfluous tasks.'",
+      "location": "Evaluation Design & Methodology — 'Q: Should I use \"ready-to-use\" evaluation metrics?' and 'Q: Are similarity metrics (BERTScore, ROUGE, etc.) useful...?'"
+    },
+    {
+      "planned": "Position on fine-tuning judges vs prompting",
+      "verdict": "corrected",
+      "finding": "The FAQ contains NO question or stated position on fine-tuning judges versus prompting them. (Searched full text: 'fine-tun'/'train'/'distill' appear only in a TOC reference to an older blog post.) Its judge guidance is entirely about prompted judges: scope judges to binary classification tasks, start with the most capable models available to establish alignment, validate against a held-out human-labeled test set via True Positive Rate and True Negative Rate, optimize cost later, and using the same model as the main pipeline is 'usually fine'. LLM-as-judge evaluators 'require 100+ labeled examples, ongoing weekly maintenance'. Do not attribute a fine-tuning-vs-prompting position to this source.",
+      "quote": "When selecting judge models, start with the most capable models available to establish strong alignment with human judgments. You can optimize for cost later once you've established reliable evaluation criteria. ... Focus on achieving high True Positive Rate (TPR) and True Negative Rate (TNR) with your judge on a held out labeled test set.",
+      "location": "Evaluation Design & Methodology — 'Q: Can I use the same model for both the main task and evaluation?'; 'Q: Should I build automated evaluators for every failure mode I find?'"
+    },
+    {
+      "planned": "Any stated positions on synthetic data, eval-driven development, who should label (benevolent dictator / principal domain expert)",
+      "verdict": "confirmed",
+      "finding": "All three positions are present. (1) Synthetic data: use structured dimension/tuple two-step generation (define dimensions, hand-write ~20 tuples, LLM generates more tuples, separate prompt converts tuples to natural-language queries); unreliable for complex domain-specific content, low-resource languages, unverifiable domains, high-stakes domains (medicine, law, emergency response), and underrepresented user groups. (2) Eval-driven development: 'Generally no' — write evaluators for errors you discover via error analysis, not errors you imagine; exception for known exact constraints like 'never mention competitors'. (3) Labeling: appoint a single domain expert as a 'benevolent dictator' as definitive voice on quality for most small/medium companies; multiple annotators only for larger/multi-domain orgs, measured with Cohen's Kappa; outsourcing error analysis is 'usually a big mistake'; the source also uses the phrase 'principal domain expert' (re tacit knowledge lost when outsourcing).",
+      "quote": "Generally no. Eval-driven development (writing evaluators before implementing features) sounds appealing but creates more problems than it solves. ... For most small to medium-sized companies, appointing a single domain expert as a 'benevolent dictator' is the most effective approach. ... A common mistake is prompting an LLM to \"give me test queries\" without structure, resulting in generic, repetitive outputs.",
+      "location": "'Q: Should I practice eval-driven development?'; 'Q: How many people should annotate my LLM outputs?'; 'Q: What is the best approach for generating synthetic data?'; 'Q: Are there scenarios where synthetic data may not be reliable?'; 'Q: Should I outsource annotation & labeling to a third party?'"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Evals consume the majority of development time — error analysis and evaluation are part of development, not a separate line item.",
+      "quote": "In the projects we've worked on, we've spent 60-80% of our development time on error analysis and evaluation.",
+      "numbers": "60-80% of development time"
+    },
+    {
+      "point": "A 100% eval pass rate is a warning sign, not a victory.",
+      "quote": "If you're passing 100% of your evals, you're likely not challenging your system enough. A 70% pass rate might indicate a more meaningful evaluation that's actually stress-testing your application.",
+      "numbers": "100% pass rate = suspect; ~70% can indicate meaningful stress-testing"
+    },
+    {
+      "point": "Error analysis follows qualitative-research methodology: open coding (open-ended notes, note the FIRST failure per trace since upstream errors cause downstream issues) then axial coding (group notes into a failure taxonomy and count per category — 'the most important step').",
+      "quote": "Categorize the open-ended notes into a 'failure taxonomy.' ... group similar failures into distinct categories. This is the most important step. At the end, count the number of failures in each category.",
+      "numbers": "Open code 30-50 traces yourself before letting an LLM do first-pass axial coding"
+    },
+    {
+      "point": "Cost hierarchy of evaluators: cheap code assertions/regex first; LLM-as-judge is expensive and reserved for persistent, subjective failures.",
+      "quote": "LLM-as-Judge evaluators require 100+ labeled examples, ongoing weekly maintenance, and coordination between developers, PMs, and domain experts. ... Only build expensive evaluators for problems you'll iterate on repeatedly.",
+      "numbers": "100+ labeled examples plus weekly maintenance per LLM-judge evaluator"
+    },
+    {
+      "point": "Validate judges statistically: measure TPR/TNR on a held-out human-labeled test set, then use those rates to correct judge estimates into a true failure-rate estimate.",
+      "quote": "Once you know your judge's True Positive and True Negative rates, you can correct its estimates to determine the actual failure rate in your system. Skip this validation and your judges may not reflect your actual quality criteria.",
+      "numbers": "TPR/TNR on held-out set; correction applied to observed judge pass rate"
+    },
+    {
+      "point": "Minimum viable eval setup is people and process, not infrastructure: 30 minutes reviewing 20-50 outputs after significant changes, one benevolent-dictator domain expert, and a notebook or small custom annotation tool.",
+      "quote": "Start with error analysis, not infrastructure. Spend 30 minutes manually reviewing 20-50 LLM outputs whenever you make significant changes.",
+      "numbers": "30 minutes; 20-50 outputs; 1 domain expert"
+    },
+    {
+      "point": "CI vs production monitoring use evals differently: CI uses small curated datasets (often 100+ examples) favoring deterministic checks; production monitoring samples live traces asynchronously with reference-free LLM-judges and confidence intervals.",
+      "quote": "Test datasets for CI are small (in many cases 100+ examples) and purpose-built. ... Favor assertions or other deterministic checks over LLM-as-judge evaluators. ... Additionally, track confidence intervals for production metrics.",
+      "numbers": "CI datasets ~100+ examples"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not cite this FAQ for a position on fine-tuning judges vs prompting — it takes no position; its judge advice assumes prompted judges (most capable model, TPR/TNR validation).",
+    "Do not present '100 traces' as a hard sample-size requirement — it is a rule-of-thumb floor combined with a saturation criterion (~20 traces with no new category).",
+    "Do not say the FAQ bans generic metrics entirely — it explicitly endorses repurposing them as exploration signals for surfacing traces, and similarity metrics remain valid for retrieval/RAG debugging.",
+    "Do not say the FAQ bans Likert scales absolutely — it says 'Numeric labels are advanced and usually not necessary' and to start binary.",
+    "Do not say using the same model for task and judge is forbidden — the FAQ says it is 'usually fine' because the judge does a different, scoped binary task; what matters is alignment with human labels.",
+    "The page title is now 'LLM Evals: Everything You Need to Know', not the older 'Frequently Asked Questions (And Answers) About AI Evals' — cite the current title.",
+    "Eval-driven development is 'generally no', not 'never' — there is an explicit exception for precisely-known constraints (e.g. 'never mention competitors')."
+  ],
+  "notes_for_authors": "Source fully accessible and rich with exact numbers — quote them precisely: 100+ traces / ~20-trace saturation heuristic, 60-80% of dev time on evals, 30 min reviewing 20-50 outputs, 100+ labeled examples per LLM-judge, 2-4 week review cycles, 10-20 traces weekly between cycles. The authors frame all of this as 'sharp opinions about what works in most cases... not universal truths' — preserve that framing. The FAQ is organized into 7 sections (Getting Started, Error Analysis & Data Collection, Evaluation Design & Methodology, Human Annotation & Process, Tools & Infrastructure, Production & Deployment, Domain-Specific Applications) drawn from teaching 700+ engineers and PMs. The one planned claim that failed verification is fine-tuning judges vs prompting — source that claim elsewhere (e.g. Shankar et al.'s 'Who Validates the Validators?' or the authors' course/book material), not this FAQ. Strong companion positions worth a lesson each: benevolent dictator + outsourcing critique (with the AnkiHub 4th-year-medical-students exception), structured dimension/tuple synthetic data generation, guardrails-vs-evaluators distinction, and the abstention-ability ('know what it doesn't know') eval design with balanced answerable/unanswerable sets."
+}

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Machine Word & Tags</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 2 · terms</p>
+    <h1>The Machine Word &amp; Tags</h1>
+    <p class="lede">
+      Every Erlang/Elixir value the VM handles is, at bottom, a single <strong>machine word</strong> — and
+      that word is <em>self-describing</em>. It carries, in a few of its own bits, the answer to "what am I?"
+      No side table, no separate descriptor. This page is about how one word pulls that off.
+    </p>
+
+    <h2>One word</h2>
+    <p>
+      A <strong>word</strong> is the natural unit the CPU and runtime work in. On a 64-bit machine (anything
+      modern) that's <strong>64 bits / 8 bytes</strong>; on a 32-bit machine, 32 bits / 4 bytes. It's the
+      BEAM's fundamental cell: every tuple slot, every list-cell pointer, every immediate value occupies one
+      such word.
+    </p>
+    <p>
+      Because runtime type checks and term comparison happen constantly, the type has to travel <em>with</em>
+      the value. The BEAM solves this by <strong>tagging</strong> <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.1</a>:
+      it splits every word into a small <span style="color:var(--tag)">tag</span> plus a payload.
+    </p>
+
+    <h2>Two families: immediate vs boxed</h2>
+    <table class="cmp">
+      <tr><th>Immediate</th><th>Boxed</th></tr>
+      <tr>
+        <td>The whole value fits in the word. The bits <em>are</em> the value. No heap object exists. <br>
+            <em>e.g. small integers, atoms, the empty list <code>[]</code>, pids.</em></td>
+        <td>Too big for a word. The word holds a <span class="ptr" style="color:var(--boxed)">tagged pointer</span> to an object on the process heap. <br>
+            <em>e.g. tuples, maps, floats, bignums, binaries.</em></td>
+      </tr>
+    </table>
+    <p>
+      This is the correction to the natural beginner model "lists and tuples only hold pointers." Sometimes a
+      slot holds a pointer (boxed); sometimes it holds the value outright (immediate). A small integer in a
+      tuple isn't pointing anywhere — it's sitting right there in the slot.
+    </p>
+
+    <h2>What decides it — and why it isn't only size</h2>
+    <p>
+      The single rule underneath the split is: <strong>a value is immediate when its <em>entire</em>
+      representation fits in one tagged word.</strong> But what makes something "fit" differs by type, so there
+      are really <strong>four</strong> triggers, not just a size cutoff <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.1</a>:
+    </p>
+    <ul>
+      <li><strong>Type — categorically (the main driver).</strong> Most types are immediate-or-boxed by their
+          very nature, at <em>any</em> size. <em>Always immediate:</em> atoms, the empty list <code>[]</code>,
+          <strong>local</strong> pids, <strong>local</strong> ports. <em>Always boxed:</em> floats, tuples,
+          maps, binaries, funs, references — even an empty tuple <code>{}</code> is boxed (it still needs its one
+          header word). Non-empty lists are their own category: a <span style="color:var(--cons)">list-tagged
+          pointer</span> (tag <code>01</code>) to a cons cell on the heap.</li>
+      <li><strong>Size — but only for integers.</strong> A <em>small integer</em> stays immediate while it fits
+          the payload: <strong>60-bit signed on 64-bit</strong> (±2⁵⁹), 28-bit on 32-bit. Step past that and the
+          same number is re-represented as a boxed <strong>bignum</strong>. Integers are the one type with a
+          true size cutoff.</li>
+      <li><strong>Interning — why an atom is <em>always</em> immediate.</strong> An atom's word doesn't hold its
+          <em>characters</em>; it holds an <strong>index into the global atom table</strong>. A 40-letter atom is
+          still one immediate word — the name's length is irrelevant, only the index travels. (This is the
+          machinery behind <a href="atoms-and-atom-table.html">rung&nbsp;5</a>.)</li>
+      <li><strong>Locality — for pids, ports, references.</strong> A <em>local</em> pid or port encodes a table
+          index that fits, so it's immediate. An <strong>external</strong> pid/port/ref — one naming a process on
+          another node — must also carry node identity, creation, and serial; that doesn't fit, so it's boxed.</li>
+    </ul>
+    <p>
+      The float case is the clearest sign it isn't a "small enough?" question: a full 64-bit IEEE double needs
+      the <em>whole</em> word, leaving no room for even a tag — so <strong>every</strong> float is boxed, never
+      inline, whatever its value. And the payoff of being immediate is concrete: an immediate compares and
+      copies as a single word, with no dereference, and the garbage collector never has to chase it. The VM
+      makes a value immediate whenever it possibly can.
+    </p>
+
+    <h2>The tag-bit trick (and why it's free)</h2>
+    <p>
+      Here's the elegant part. Pointers to heap objects are <strong>aligned</strong>: the allocator only ever
+      places an object at an address that's a multiple of the word size. A multiple of 4 ends in
+      <code>00</code> in binary; a multiple of 8 ends in <code>000</code>. So the lowest bits of any genuine
+      pointer are <em>always zero</em> — they carry no information. The BEAM repurposes them as the
+      <strong>primary tag</strong> <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.2</a>:
+    </p>
+    <pre><code>  <span class="tok-num">00</span>  Header (on heap) / return address (on stack)
+  <span class="tok-num">01</span>  List  — a pointer to a cons cell
+  <span class="tok-num">10</span>  Boxed — a pointer to any other heap object
+  <span class="tok-num">11</span>  Immediate — a self-contained value</code></pre>
+    <div class="callout">
+      <span class="label">A correction worth making</span>
+      A common explanation says "8-byte alignment frees the low <em>3</em> bits." True on 64-bit — but ERTS
+      only claims <strong>two</strong> bits for the primary tag, because the scheme must also work on 32-bit
+      (4-byte) words, where only 2 low bits are guaranteed zero <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.2</a>.
+      "At least two bits."
+    </div>
+
+    <h2>Poke at a word</h2>
+    <p>
+      Pick a value and watch the same 64-bit word reinterpret itself. The <span style="color:var(--tag)">tag bits</span>
+      are on the right (least-significant). For the two pointer types, hit <strong>Mask &amp; dereference</strong>
+      to clear the tag and recover the real address.
+    </p>
+
+    <div class="callout">
+      <span class="label">Which way to read the bits</span>
+      The word is written like any binary number — most-significant bit on the <b>left</b>, bit&nbsp;0 on the
+      <b>right</b>. But the <span style="color:var(--tag)">tag</span> is <em>decoded from the right</em>: the
+      <b>primary tag</b> is the lowest two bits, and each sub-tag sits in the next bits up. So an atom's
+      <code>00&nbsp;10&nbsp;11</code> reads right-to-left as <b>immediate</b> (<code>11</code>) →
+      <b>immediate-2</b> (<code>10</code>) → <b>atom</b> (<code>00</code>) <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.2</a>.
+      Putting the primary tag at the very bottom is what lets a single <code>AND</code> both strip the tag and
+      restore the aligned address.
+    </div>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">64-bit word explorer</span></div>
+      <div class="viz-body">
+        <div class="controls" id="wordSeg">
+          <div class="seg">
+            <button data-t="small" class="on">small int 42</button>
+            <button data-t="atom">atom :ok</button>
+            <button data-t="nil">[] (nil)</button>
+            <button data-t="pid">pid</button>
+            <button data-t="cons">list ptr</button>
+            <button data-t="boxed">boxed ptr</button>
+          </div>
+          <button class="btn" id="maskBtn" style="display:none">Mask &amp; dereference →</button>
+        </div>
+
+        <div class="bits" id="bitGrid" style="margin:6px 0 4px"></div>
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--ink-faint);margin-top:4px">
+          <span>bit 63 (most significant)</span><span>bit 0 →</span>
+        </div>
+
+        <div class="readout" id="wordOut"></div>
+
+        <div class="legend">
+          <span class="key"><span class="swatch" style="background:var(--tag)"></span> tag bits</span>
+          <span class="key"><span class="swatch" style="background:var(--imm)"></span> immediate value / index</span>
+          <span class="key"><span class="swatch" style="background:var(--boxed)"></span> address bits</span>
+        </div>
+      </div>
+      <div class="viz-foot">Tag encodings per BEAM Book Ch.4.2. Payload values are illustrative; high address bits are shown abbreviated.</div>
+    </div>
+
+    <h2>Two-stage typing</h2>
+    <p>
+      Notice what the pointer's tag does <em>not</em> tell you: whether the boxed thing is a tuple, a map, or a
+      float. There isn't room. The primary tag only says "boxed — go dereference." The <strong>precise</strong>
+      type lives in the <strong>header word</strong>, the first word of the object itself, which encodes the
+      subtype and the arity <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.5</a>.
+      So typing is two-stage:
+    </p>
+    <pre><code>slot tag says "boxed"  →  mask off tag  →  follow pointer  →  read header word  →  "tuple, arity 4"</code></pre>
+    <p>
+      Immediates skip all that: their tag (plus sub-tag) fully describes them, which is exactly why comparing
+      two atoms, or two small integers, is a single-word operation.
+    </p>
+
+    <div class="callout aha">
+      <span class="label">The takeaway to carry down</span>
+      A value is a self-identifying word. <em>Immediate</em> = the bits are the value. <em>Boxed</em> = the bits
+      are a tagged address; the real type is in the header at that address. Everything in the next rungs —
+      tuples, lists, sharing, atoms — is built from this one idea.
+    </div>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.4 (The Erlang Type System and Tags); immediate/boxed classification cross-checked against ERTS <code>erts/emulator/beam/erl_term.h</code>.</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('machine-word-and-tags');
+
+// ---- build a 64-cell representation for each term type ----
+// returns {bits:[{b:'0'|'1', cls:''|'tag'|'val'|'addr'|'zero'}], desc, maskable, masked}
+function pad(n, w){ return n.toString(2).padStart(w,'0'); }
+
+function buildWord(type){
+  let cells = new Array(64).fill(null).map(()=>({b:'0',cls:'zero'}));
+  // helper to set a contiguous range [hi..lo] (inclusive) from a binary string, class
+  function place(binStr, lo, cls){
+    // binStr MSB-first occupying len bits ending at bit `lo`
+    const len = binStr.length;
+    for(let i=0;i<len;i++){
+      const bitPos = lo + (len-1-i);       // bit index 0..63
+      cells[63-bitPos] = {b:binStr[i], cls};   // cells[0] is bit 63 (display MSB left)
+    }
+  }
+  let desc='', maskable=false, addrHex='';
+
+  if(type==='small'){
+    place('1111',0,'tag');
+    place(pad(42,60),4,'val');
+    desc = `Primary tag <span style="color:var(--tag)">11</span> = immediate, sub-tag <span style="color:var(--tag)">11</span> = <b>small integer</b>. `+
+           `All four low bits are 1 — a deliberate trick that lets the VM test "are both operands small ints?" with one AND. `+
+           `The remaining <b>60 bits</b> hold the value: <b>42</b>. (Beyond ±2⁵⁹ it's promoted to a boxed bignum.)`;
+  } else if(type==='atom'){
+    place('001011',0,'tag');                 // bits[5:0] = 00 10 11  (Atom)
+    place(pad(137,58),6,'val');
+    desc = `Low six bits <span style="color:var(--tag)">00&nbsp;10&nbsp;11</span> = <b>atom</b> (immediate → immediate-2 → atom). `+
+           `The remaining bits are an <b>index into the global atom table</b> — here, slot <b>137</b>, where the name "ok" actually lives. `+
+           `The word <i>is</i> the atom; there's nothing to dereference.`;
+  } else if(type==='nil'){
+    place('111011',0,'tag');                 // Nil
+    place('1'.repeat(58),6,'val');
+    desc = `Low six bits <span style="color:var(--tag)">11&nbsp;10&nbsp;11</span> = <b>NIL</b>, the empty list <code>[]</code>. `+
+           `The rest of the word is filled with ones. <code>[]</code> is an immediate — which is why it can sit in a register or be the tail of a list with no heap word of its own.`;
+  } else if(type==='pid'){
+    place('0011',0,'tag');                    // bits[3:0] = 00 11 (Pid)
+    place(pad(0b101100100110001,60),4,'val');
+    desc = `Low four bits <span style="color:var(--tag)">00&nbsp;11</span> = <b>pid</b> (immediate, sub-type pid). `+
+           `The high bits pack a process-table index + serial. The whole reference is one word, so comparing two pids is a single integer comparison.`;
+  } else if(type==='cons'){
+    addrHex='0x…5F3A0';
+    place('01',0,'tag');                      // primary tag 01 = List
+    place(pad(0x5F3A0>>2,62),2,'addr');       // address with low 2 bits cleared, shifted in
+    maskable=true;
+    desc = `Primary tag <span style="color:var(--tag)">01</span> = <b>list (cons) pointer</b>. The other 62 bits are the high part of a heap address. `+
+           `A cons cell needs no header — the tag in the <i>pointer</i> already says "this is a list node."`;
+  } else if(type==='boxed'){
+    addrHex='0x…A1240';
+    place('10',0,'tag');                      // primary tag 10 = Boxed
+    place(pad(0xA1240>>2,62),2,'addr');
+    maskable=true;
+    desc = `Primary tag <span style="color:var(--tag)">10</span> = <b>boxed pointer</b> — points to a tuple / map / float / bignum / binary on the heap. `+
+           `The tag says only "go dereference"; the <i>exact</i> type waits in the header word at that address.`;
+  }
+  return {cells, desc, maskable, addrHex};
+}
+
+const grid = document.getElementById('bitGrid');
+const out  = document.getElementById('wordOut');
+const maskBtn = document.getElementById('maskBtn');
+const seg = document.getElementById('wordSeg');
+let current='small', masked=false;
+
+function render(type, doMask){
+  const w = buildWord(type);
+  grid.innerHTML='';
+  w.cells.forEach((c,i)=>{
+    const d=document.createElement('div');
+    d.className='bit '+c.cls;
+    let b=c.b;
+    // when masked, force the two tag bits (rightmost) to 0 and recolor as address
+    if(doMask && (i===62||i===63)){ b='0'; d.className='bit addr flash'; }
+    d.textContent=b;
+    grid.appendChild(d);
+  });
+  let html = w.desc;
+  if(w.maskable){
+    maskBtn.style.display='';
+    if(doMask){
+      html += `<br><br><span style="color:var(--boxed)">Masked.</span> The two tag bits are cleared (<code>AND …11111100</code>), recovering the true aligned address <b class="ptr">${w.addrHex}</b>. The VM now follows it to the heap object.`;
+      maskBtn.textContent='↺ show tagged word';
+    } else {
+      maskBtn.textContent='Mask & dereference →';
+    }
+  } else {
+    maskBtn.style.display='none';
+  }
+  out.innerHTML = html;
+}
+
+seg.addEventListener('click', e=>{
+  const b=e.target.closest('button[data-t]'); if(!b) return;
+  seg.querySelectorAll('button[data-t]').forEach(x=>x.classList.toggle('on', x===b));
+  current=b.dataset.t; masked=false;
+  render(current,false);
+});
+maskBtn.addEventListener('click', ()=>{ masked=!masked; render(current,masked); });
+render('small',false);
+</script>
+</body>
+</html>

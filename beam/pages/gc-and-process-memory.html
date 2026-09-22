@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GC & Process Memory</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .memblock { font-family:var(--mono); font-size:12px; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:10px 0; }
+  .memrow { display:flex; align-items:center; gap:10px; padding:9px 14px; border-bottom:1px solid var(--line-soft); }
+  .memrow:last-child{border-bottom:none;}
+  .memrow .lbl { min-width:78px; color:var(--ink-faint); }
+  .growbar { flex:1; height:30px; position:relative; background:var(--bg-3); border-radius:6px; overflow:hidden; }
+  .growbar .stack { position:absolute; left:0; top:0; bottom:0; background:rgba(176,138,217,.3); border-right:2px solid var(--violet); }
+  .growbar .heap  { position:absolute; right:0; top:0; bottom:0; background:rgba(122,162,214,.25); border-left:2px solid var(--boxed); }
+  .growbar .arrowL, .growbar .arrowR { position:absolute; top:6px; font-size:11px; color:var(--ink-soft); }
+  /* heap cells */
+  .cells { display:flex; gap:4px; flex-wrap:wrap; }
+  .gcell { width:28px; height:28px; border-radius:5px; display:flex; align-items:center; justify-content:center;
+           font-family:var(--mono); font-size:11px; border:1px solid var(--line); background:var(--bg-2); transition:all .4s; }
+  .gcell.live { border-color:var(--imm); color:var(--imm); background:rgba(143,206,134,.12); }
+  .gcell.dead { border-color:var(--line); color:var(--ink-faint); opacity:.45; }
+  .gcell.old  { border-color:var(--accent-2); color:var(--accent-2); background:rgba(122,162,214,.12); }
+  .gcell.gone { opacity:0; transform:scale(.4); }
+  .strip { border:1px solid var(--line); border-radius:8px; padding:10px 12px; background:#0b0e13; margin:8px 0; }
+  .strip .cap { font-size:11px; color:var(--ink-faint); margin-bottom:6px; font-family:var(--mono); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 8 · the metal</p>
+    <h1>GC &amp; Process Memory</h1>
+    <p class="lede">
+      Rung 7 said each process has its own private heap. Now: how is that heap laid out, what happens when it
+      fills, and why does the BEAM stay responsive under millions of processes? The answer is a collector
+      that's the opposite of "stop the world."
+    </p>
+
+    <h2>A process is four blocks — and the stack meets the heap</h2>
+    <p>
+      "A process is basically four blocks of memory: a stack, a heap, a message area, and the Process Control
+      Block (the PCB)" <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.3.2</a>.
+      The clever part: the <strong>stack and heap share one allocated block and grow toward each other</strong>
+      — the stack downward from the top, the heap upward from the bottom
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.3</a>. When the two
+      pointers (<code>stop</code> and <code>htop</code>) meet, the process is out of room and the garbage
+      collector runs.
+    </p>
+
+    <div class="memblock">
+      <div class="memrow"><span class="lbl">one block</span>
+        <div class="growbar">
+          <div class="stack" style="width:26%"></div>
+          <div class="heap" style="width:46%"></div>
+          <span class="arrowL" style="left:27%">stack → (grows down/right)</span>
+          <span class="arrowR" style="right:47%">← heap (grows up/left)</span>
+        </div>
+      </div>
+      <div class="memrow"><span class="lbl">free gap</span><span style="color:var(--ink-faint)">the white space in the middle — when it hits zero, GC runs</span></div>
+    </div>
+
+    <h2>A copying collector: keep the living, abandon the dead</h2>
+    <p>
+      The BEAM uses a <strong>per-process copying generational</strong> collector
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.3</a>. A collection works
+      like this: allocate a fresh area (the <em>to-space</em>), walk the stack to find the live
+      <strong>roots</strong>, follow each root and <strong>copy the live data</strong> into the new heap, then
+      free the entire old area at once. Garbage is never touched — it's reclaimed simply by <em>not</em> being
+      copied. Copying also <strong>compacts</strong>: survivors end up packed together with no holes.
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">a copying, generational collection</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <button class="btn" id="allocBtn">allocate terms</button>
+          <button class="btn primary" id="gcBtn">run minor GC →</button>
+          <button class="btn" id="gcRst">reset</button>
+        </div>
+        <div class="strip"><div class="cap">young heap (from-space) — <span style="color:var(--imm)">live</span> / <span style="color:var(--ink-faint)">garbage</span></div>
+          <div class="cells" id="young"></div></div>
+        <div class="strip"><div class="cap">old heap — survivors of a previous collection (only swept on a full sweep)</div>
+          <div class="cells" id="old"></div></div>
+        <div class="readout" id="gcOut"></div>
+      </div>
+      <div class="viz-foot">Simplified: real collections scan stack roots and follow pointers. "Minor" = young only; promotion happens across the <code>high_water</code> mark; the old heap is collected only on a major/full sweep (Ch.3).</div>
+    </div>
+
+    <h2>Generational: look at the young, mostly leave the old alone</h2>
+    <p>
+      Most garbage is short-lived, so scanning the whole heap every time wastes work. The collector is
+      <strong>generational</strong>: a <em>minor collection</em> looks only at recent data; anything that has
+      already survived (below the <code>high_water</code> mark) is treated as <strong>old</strong> and moved to
+      a separate <strong>old heap</strong>, which is only collected during an occasional <em>major collection</em>
+      / <em>full sweep</em> <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.3</a>.
+      The fields driving this — <code>high_water</code>, <code>old_heap</code>, <code>gen_gcs</code>,
+      <code>max_gen_gcs</code> — live in the PCB.
+    </p>
+
+    <div class="callout aha">
+      <span class="label">Why this is the BEAM's superpower</span>
+      Because heaps are <em>private</em>, a collection pauses <strong>only that one process</strong> — never a
+      global stop-the-world across the millions of others. Combined with copying (cost scales with the
+      <em>live</em> set, not the garbage) and generations (usually only a small young heap), you get the low,
+      predictable latency the BEAM is famous for. The isolation that forced message-copying (next rung) is the
+      very same isolation that makes GC cheap.
+    </div>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.3 (Processes Are Just Memory; The Garbage Collector), Ch.11 (Memory Subsystem).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('gc-and-process-memory');
+
+let young=[]; // {id, live}
+let old=[];   // promoted survivors
+let nextId=0;
+const youngEl=document.getElementById('young'), oldEl=document.getElementById('old'), out=document.getElementById('gcOut');
+
+function seed(){
+  young=[]; old=[]; nextId=0;
+  // initial young heap: mix of live and garbage
+  const pattern=[1,0,1,1,0,0,1,0,1,0];
+  pattern.forEach(l=> young.push({id:nextId++, live:!!l}));
+  render();
+  out.innerHTML='Young heap holds a mix of still-<b style="color:var(--imm)">live</b> terms and <b style="color:var(--ink-faint)">garbage</b> (no longer reachable from the stack). Press <b>run minor GC</b>.';
+}
+function render(gone){
+  youngEl.innerHTML = young.map(c=>`<div class="gcell ${c.live?'live':'dead'} ${gone&&!c.live?'gone':''}">${c.live?'●':'×'}</div>`).join('');
+  oldEl.innerHTML = old.length ? old.map(()=>`<div class="gcell old">●</div>`).join('') : `<div style="color:var(--ink-faint);font-size:11px">empty — nothing has survived a collection yet</div>`;
+}
+document.getElementById('allocBtn').onclick=()=>{
+  const add=[1,0,0,1,0]; add.forEach(l=>young.push({id:nextId++, live:!!l}));
+  render();
+  out.innerHTML='Allocated more terms into the young heap. Some are live, some already garbage. The free gap shrinks toward a GC.';
+};
+document.getElementById('gcBtn').onclick=async ()=>{
+  const liveCount=young.filter(c=>c.live).length;
+  const deadCount=young.length-liveCount;
+  // animate garbage vanishing
+  render(true);
+  await new Promise(r=>setTimeout(r,500));
+  // survivors get promoted to old heap (they lived through a collection)
+  const survivors=young.filter(c=>c.live);
+  old.push(...survivors.map(s=>({id:s.id})));
+  young=[]; // young heap emptied (copied out / promoted); fresh young starts empty
+  render();
+  out.innerHTML=`Minor GC: <b style="color:var(--imm)">${liveCount}</b> live terms were copied out and <b>promoted</b> to the old heap; <b>${deadCount}</b> garbage cells were reclaimed by simply not copying them. The young heap is now empty and compacted — cost scaled with the <i>live</i> set, not the garbage. The old heap waits for a full sweep.`;
+};
+document.getElementById('gcRst').onclick=seed;
+seed();
+</script>
+</body>
+</html>

@@ -1,0 +1,98 @@
+{
+  "repository": "https://github.com/ob6to8/beatcode",
+  "commit": "b2042746329c21d6bb29deb0cec77ff666eac779",
+  "retrieved": "2026-09-21",
+  "license": "Apache-2.0",
+  "functions": {
+    "cli.build": {
+      "path": "src/cli.rs",
+      "symbol": "build",
+      "start_line": 42,
+      "end_line": 48,
+      "file_sha256": "59a39dedb9f3987389a9166eb3589edd90d1d80efc50a14545b0966777e9a9e7",
+      "excerpt_sha256": "34eff190870de2a64c7b4380867558a1a38d64a33eb2eecee965a8a77eaf1073",
+      "snapshot": "beatcode/cli.build.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/cli.rs#L42-L48"
+    },
+    "score.num_token": {
+      "path": "src/score.rs",
+      "symbol": "num_token",
+      "start_line": 116,
+      "end_line": 122,
+      "file_sha256": "41cc2b33e344a4d0bb0586deb3fde422e11ad095e369314791d4e4834eb1a7c3",
+      "excerpt_sha256": "8b0f2442e8ac4d37ca3608c22d4188d3800c4d4ed316e585fddc1b7e19953fee",
+      "snapshot": "beatcode/score.num_token.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/score.rs#L116-L122"
+    },
+    "score.num_grammar": {
+      "path": "src/score.rs",
+      "symbol": "num_grammar",
+      "start_line": 128,
+      "end_line": 165,
+      "file_sha256": "41cc2b33e344a4d0bb0586deb3fde422e11ad095e369314791d4e4834eb1a7c3",
+      "excerpt_sha256": "821632f629a0755e10b0f0f45916ff2b599debbcdc492d8d62657d943dfb2712",
+      "snapshot": "beatcode/score.num_grammar.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/score.rs#L128-L165"
+    },
+    "events.compile": {
+      "path": "src/events.rs",
+      "symbol": "compile",
+      "start_line": 84,
+      "end_line": 122,
+      "file_sha256": "5f9adb9c0e82f47f6586910389b087b0e24799dbb83a029120a45884ee6f4517",
+      "excerpt_sha256": "5508d03715d8fabcf9df25e0c2d2c19e508b3ce7fd08a4d9e63b8edc771befcc",
+      "snapshot": "beatcode/events.compile.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/events.rs#L84-L122"
+    },
+    "events.lane_idx": {
+      "path": "src/events.rs",
+      "symbol": "lane_idx",
+      "start_line": 51,
+      "end_line": 54,
+      "file_sha256": "5f9adb9c0e82f47f6586910389b087b0e24799dbb83a029120a45884ee6f4517",
+      "excerpt_sha256": "673bb2a2246a634ff13cba9b2209a7797a0b228296ea1a5a5e8bb842466b7e58",
+      "snapshot": "beatcode/events.lane_idx.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/events.rs#L51-L54"
+    },
+    "events.time_offset": {
+      "path": "src/events.rs",
+      "symbol": "time_offset",
+      "start_line": 70,
+      "end_line": 76,
+      "file_sha256": "5f9adb9c0e82f47f6586910389b087b0e24799dbb83a029120a45884ee6f4517",
+      "excerpt_sha256": "b3b3e88264eebfe745e8453c7be710bf866baf9069ee9b26bdad462b0e9a3d8b",
+      "snapshot": "beatcode/events.time_offset.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/events.rs#L70-L76"
+    },
+    "jsonl.events_jsonl": {
+      "path": "src/jsonl.rs",
+      "symbol": "events_jsonl",
+      "start_line": 61,
+      "end_line": 68,
+      "file_sha256": "60c71464405a26e445814e8dca285b094276b6c0d4966b21e361cb15a3fb25a4",
+      "excerpt_sha256": "260ffe0c0a0c878476fcfd1370459fef419c920c4b2d6fca904bcc06e89054b5",
+      "snapshot": "beatcode/jsonl.events_jsonl.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/jsonl.rs#L61-L68"
+    },
+    "jsonl.event_line": {
+      "path": "src/jsonl.rs",
+      "symbol": "event_line",
+      "start_line": 27,
+      "end_line": 58,
+      "file_sha256": "60c71464405a26e445814e8dca285b094276b6c0d4966b21e361cb15a3fb25a4",
+      "excerpt_sha256": "c0facc998f898833bd971a1e61e79b41f7f786bfbedbe1ba70bbc477a3f6a071",
+      "snapshot": "beatcode/jsonl.event_line.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/jsonl.rs#L27-L58"
+    },
+    "render.render": {
+      "path": "src/render.rs",
+      "symbol": "render",
+      "start_line": 23,
+      "end_line": 97,
+      "file_sha256": "86e277ceb27cd99a6b160cd14da9258bd2cc5d951112f83986207945aedd7e16",
+      "excerpt_sha256": "6ef74c625469f3e3896cfff0f1be64039e8a7215d38088409ff6e81e4ebd0d2e",
+      "snapshot": "beatcode/render.render.rs",
+      "url": "https://github.com/ob6to8/beatcode/blob/b2042746329c21d6bb29deb0cec77ff666eac779/src/render.rs#L23-L97"
+    }
+  }
+}

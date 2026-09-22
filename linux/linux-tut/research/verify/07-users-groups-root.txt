@@ -1,0 +1,204 @@
+# Page 07 verification. lt-07-box = wordfreq-bench:hardened (default user agent, uid 1001). lt-07-sudo = same image started -u 0 with apt sudo 1.9.15p5 installed; committed as lt-07-sudo-img for the no-new-privileges run.
+## agent session
+$ whoami
+agent
+$ id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+$ grep -E '^(Uid|Gid|Groups):' /proc/self/status
+Uid:	1001	1001	1001	1001
+Gid:	1001	1001	1001	1001
+Groups:	1001 
+$ getent passwd agent
+agent:x:1001:1001::/home/agent:/bin/bash
+$ getent passwd 0
+root:x:0:0:root:/root:/bin/bash
+$ head -n 3 /etc/passwd
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+$ grep -E '^(ubuntu|agent):' /etc/passwd
+ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash
+agent:x:1001:1001::/home/agent:/bin/bash
+$ grep -c nologin /etc/passwd
+16
+$ getent passwd www-data
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+$ getent group agent sudo shadow
+agent:x:1001:
+sudo:x:27:ubuntu
+shadow:x:42:
+$ ls -l /etc/passwd /etc/shadow /etc/group
+-rw-r--r-- 1 root root   517 Sep 21 21:16 /etc/group
+-rw-r--r-- 1 root root   929 Sep 21 21:16 /etc/passwd
+-rw-r----- 1 root shadow 529 Sep 21 21:16 /etc/shadow
+$ cat /etc/shadow; echo "exit status: $?"
+cat: /etc/shadow: Permission denied
+exit status: 1
+$ id -u; bash -c 'id -u; sh -c "id -u"'
+1001
+1001
+1001
+$ sudo -l; echo "exit status: $?"
+/tmp/run.sh: line 5: sudo: command not found
+exit status: 127
+$ su -; echo "exit status: $?"
+Password: su: Authentication failure
+exit status: 1
+$ apt-get install -y sudo 2>&1 | tail -n 2; echo "exit status: $?"
+E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?
+exit status: 0
+$ useradd eve; echo "exit status: $?"
+useradd: Permission denied.
+useradd: cannot lock /etc/passwd; try again later.
+exit status: 1
+## root session
+$ id
+uid=0(root) gid=0(root) groups=0(root)
+$ cat /etc/shadow | grep -E '^(root|ubuntu|agent):'
+root:*:20707:0:99999:7:::
+ubuntu:!:20707:0:99999:7:::
+agent:!:20717:0:99999:7:::
+$ useradd -m -s /bin/bash reviewer
+$ id reviewer
+uid=1002(reviewer) gid=1002(reviewer) groups=1002(reviewer)
+$ groupadd graders
+$ usermod -aG graders reviewer
+$ id reviewer
+uid=1002(reviewer) gid=1002(reviewer) groups=1002(reviewer),1003(graders)
+$ grep -E '^(graders|reviewer):' /etc/group
+reviewer:x:1002:
+graders:x:1003:reviewer
+$ grep '^reviewer:' /etc/passwd /etc/shadow
+/etc/passwd:reviewer:x:1002:1002::/home/reviewer:/bin/bash
+/etc/shadow:reviewer:!:20717:0:99999:7:::
+$ passwd -l reviewer
+passwd: password changed.
+$ su - reviewer -c 'whoami; pwd; id'
+reviewer
+/home/reviewer
+uid=1002(reviewer) gid=1002(reviewer) groups=1002(reviewer),1003(graders)
+$ su reviewer -c 'pwd'
+/app
+$ touch /srv/orphan && chown 4242:4242 /srv/orphan && ls -l /srv/orphan
+-rw-r--r-- 1 4242 4242 0 Sep 21 21:17 /srv/orphan
+$ ls -l /app/wordfreq.py; ls -ln /app/wordfreq.py
+-rw-r--r-- 1 agent agent 765 Sep 21 06:08 /app/wordfreq.py
+-rw-r--r-- 1 1001 1001 765 Sep 21 06:08 /app/wordfreq.py
+$ userdel -r reviewer 2>&1; groupdel graders; id reviewer
+userdel: reviewer mail spool (/var/mail/reviewer) not found
+id: 'reviewer': no such user
+## sudo: root setup (rule = apt-get only)
+$ ls -l /usr/bin/sudo
+-rwsr-xr-x 1 root root 335120 Mar  2  2026 /usr/bin/sudo
+$ grep -Ev '^#|^$' /etc/sudoers
+Defaults	env_reset
+Defaults	mail_badpass
+Defaults	secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+Defaults	use_pty
+root	ALL=(ALL:ALL) ALL
+%admin ALL=(ALL) ALL
+%sudo	ALL=(ALL:ALL) ALL
+@includedir /etc/sudoers.d
+$ echo 'agent ALL=(ALL) NOPASSWD: /usr/bin/apt-get' > /etc/sudoers.d/agent && chmod 440 /etc/sudoers.d/agent
+## sudo: agent
+$ sudo -l
+Matching Defaults entries for agent on 5a3a9ce9e54f:
+    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin\:/snap/bin, use_pty
+
+User agent may run the following commands on 5a3a9ce9e54f:
+    (ALL) NOPASSWD: /usr/bin/apt-get
+$ sudo -n cat /etc/shadow; echo "exit status: $?"
+sudo: a password is required
+exit status: 1
+$ sudo apt-get --version | head -n 1
+apt 2.8.3 (arm64)
+$ sudo -n id; echo "exit status: $?"
+sudo: a password is required
+exit status: 1
+## sudo: via apt-get rule to root shell? (not shown in page)
+## blanket rule
+User agent may run the following commands on 5a3a9ce9e54f:
+    (ALL) NOPASSWD: ALL
+uid=0(root) gid=0(root) groups=0(root)
+root:*:20707:0:99999:7:::
+## docker-level (host shell)
++ docker run --rm ubuntu:24.04 id
+uid=0(root) gid=0(root) groups=0(root)
++ docker run --rm --user 1000 ubuntu:24.04 id
+uid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev)
++ docker run --rm --user 12345 ubuntu:24.04 bash -c 'id; whoami; echo "HOME=$HOME"'
+uid=12345 gid=0(root) groups=0(root)
+whoami: cannot find name for user ID 12345
+HOME=/
++ docker run --rm --user 12345:12345 ubuntu:24.04 id
+uid=12345 gid=12345 groups=12345
++ docker run --rm wordfreq-bench:hardened id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
++ docker run --rm --user 0 wordfreq-bench:hardened id
+uid=0(root) gid=0(root) groups=0(root)
++ docker exec lt-07-box id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
++ docker exec -u 0 lt-07-box id
+uid=0(root) gid=0(root) groups=0(root)
++ docker inspect -f '{{.Config.User}}' wordfreq-bench:hardened
+agent
++ docker inspect -f '{{.Config.User}}' wordfreq-bench:sloppy
+
++ docker run --rm --user agent --security-opt no-new-privileges lt-07-sudo-img bash -c 'sudo id; echo "exit status: $?"; grep NoNewPrivs /proc/self/status'
+sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+exit status: 1
+NoNewPrivs:	1
++ docker volume create lt-07-shared
+lt-07-shared
++ docker run --rm --user 0 -v lt-07-shared:/work wordfreq-bench:hardened bash -c 'chown agent:agent /work'
++ docker run --rm -v lt-07-shared:/work wordfreq-bench:hardened bash -c 'id -un; echo "patched" > /work/notes.txt; ls -l /work/notes.txt'
+agent
+-rw-r--r-- 1 agent agent 8 Sep 21 21:17 /work/notes.txt
++ docker run --rm -v lt-07-shared:/work alpine:3.20 ls -l /work/notes.txt
+-rw-r--r--    1 1001     1001             8 Sep 21 21:17 /work/notes.txt
++ docker run --rm -v lt-07-shared:/work debian:bookworm-slim bash -c 'useradd -u 1001 mallory; ls -l /work/notes.txt; ls -ln /work/notes.txt'
+-rw-r--r-- 1 mallory mallory 8 Sep 21 21:17 /work/notes.txt
+-rw-r--r-- 1 1001 1001 8 Sep 21 21:17 /work/notes.txt
++ docker volume rm lt-07-shared
+lt-07-shared
++ docker exec lt-07-box bash -c 'echo "agent private notes" > /home/agent/private.txt; chmod 600 /home/agent/private.txt; ls -l /home/agent/private.txt'
+-rw------- 1 agent agent 20 Sep 21 21:17 /home/agent/private.txt
++ docker exec -u 0 lt-07-box cat /home/agent/private.txt
+agent private notes
++ docker exec -u 1000 lt-07-box cat /home/agent/private.txt
+cat: /home/agent/private.txt: Permission denied
++ docker run --rm --user 0 --cap-drop ALL wordfreq-bench:hardened bash -c 'id; cat /home/agent/.bashrc | head -n 1; ls /home/agent'
+uid=0(root) gid=0(root) groups=0(root)
+cat: /home/agent/.bashrc: Permission denied
+ls: cannot open directory '/home/agent': Permission denied
++ docker run --rm --user 0 wordfreq-bench:hardened bash -c 'ls -ld /home/agent; ls -a /home/agent | head -n 4'
+drwxr-x--- 2 agent agent 4096 Sep 21 06:29 /home/agent
+.
+..
+.bash_logout
+.bashrc
+## macOS bind mount quirk (authoring machine; host uid 501)
+-rw-r--r-- 1 0 0 3 Sep 21 21:16 /m/f.txt
+
+## extra checks for page text and lab
++(eval):2> docker volume create lt-07-v2
++(eval):3> docker run --rm -v lt-07-v2:/work wordfreq-bench:hardened bash -c 'ls -ldn /work; echo x > /work/notes.txt'
+drwxr-xr-x 2 0 0 4096 Sep 21 21:20 /work
+bash: line 1: /work/notes.txt: Permission denied
++(eval):4> docker volume rm lt-07-v2
++(eval):5> docker run --rm ubuntu:24.04 bash -c 'touch /srv/orphan && chown 4242:4242 /srv/orphan; ls -l /srv/orphan; useradd -u 4242 ghost; ls -l /srv/orphan; ls -ln /srv/orphan; userdel ghost; ls -l /srv/orphan'
+-rw-r--r-- 1 4242 4242 0 Sep 21 21:20 /srv/orphan
+-rw-r--r-- 1 ghost ghost 0 Sep 21 21:20 /srv/orphan
+-rw-r--r-- 1 4242 4242 0 Sep 21 21:20 /srv/orphan
+-rw-r--r-- 1 4242 4242 0 Sep 21 21:20 /srv/orphan
++(eval):6> docker run --rm --user 1000 debian:bookworm-slim id
+uid=1000 gid=0(root) groups=0(root)
++(eval):7> docker run --rm wordfreq-bench:hardened bash -c 'id; sudo -n -l; echo "exit status: $?"'
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+bash: line 1: sudo: command not found
+exit status: 127
++(eval):8> docker run --rm wordfreq-bench:sloppy id
+uid=0(root) gid=0(root) groups=0(root)
++(eval):9> set +x

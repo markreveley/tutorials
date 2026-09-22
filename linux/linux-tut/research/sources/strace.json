@@ -1,0 +1,124 @@
+{
+  "id": "strace",
+  "tag": "[strace(1)]",
+  "citation": {
+    "authors": "strace project; Linux man-pages project; Docker Inc. / Moby project for the seccomp facts",
+    "title": "strace(1) — trace system calls and signals; syscalls(2); intro(2); ptrace(2); Docker 'Seccomp security profiles' and moby default seccomp profile",
+    "venue": "man7.org (man-pages 6.19); docs.docker.com; github.com/moby/profiles",
+    "year": "2026",
+    "url": "https://man7.org/linux/man-pages/man1/strace.1.html"
+  },
+  "fetched_urls": [
+    "https://man7.org/linux/man-pages/man1/strace.1.html",
+    "https://man7.org/linux/man-pages/man2/syscalls.2.html",
+    "https://man7.org/linux/man-pages/man2/intro.2.html",
+    "https://man7.org/linux/man-pages/man2/ptrace.2.html",
+    "https://docs.docker.com/engine/security/seccomp/",
+    "https://raw.githubusercontent.com/moby/profiles/main/seccomp/default.json"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "A system call is the fundamental interface between an application and the Linux kernel; strace traces system calls and signals; -f follows forks; -e trace=… filters; requires ptrace permission (blocked by default Docker seccomp? verify: Docker default seccomp allows ptrace on kernels ≥4.8)",
+      "verdict": "confirmed",
+      "finding": "(1) syscalls(2) verbatim: 'The system call is the fundamental interface between an application and the Linux kernel.' Programs normally reach syscalls through thin glibc wrappers. (2) strace 'intercepts and records the system calls made by a process and the signals a process receives', output to stderr or -o FILE. (3) -f / --follow-forks traces children created by fork/vfork/clone. (4) -e trace=SET filters by name, /regex, or class: %file, %process, %net (%network), %signal, %ipc, %desc, %memory (the un-prefixed class names are deprecated). (5) Permission: strace is built on ptrace(2). Docker: the default seccomp profile ALLOWS ptrace on kernels >= 4.8 (moby default.json: ptrace, process_vm_readv, process_vm_writev -> SCMP_ACT_ALLOW with includes.minKernel '4.8'; a second rule allows them plus kcmp, pidfd_getfd, process_madvise when CAP_SYS_PTRACE is granted). Docker's docs: ptrace was 'Blocked in Linux kernel versions before 4.8 to avoid seccomp bypass'; tracing ARBITRARY processes remains blocked because CAP_SYS_PTRACE is dropped. Net effect in a default container on any modern kernel: you can strace a command you launch, or attach to your own same-UID descendants; you cannot attach to other users' processes without --cap-add SYS_PTRACE. Executed: strace 6.8 works in a default ubuntu:24.04 container and ALSO under --security-opt seccomp=builtin with Seccomp: 2 (this host's daemon default is seccomp unconfined, so the builtin profile was forced for the decisive run; both runs are in extra_findings).",
+      "quote": "ptrace: Tracing/profiling syscall. Blocked in Linux kernel versions before 4.8 to avoid seccomp bypass. Tracing/profiling arbitrary processes is already blocked by dropping CAP_SYS_PTRACE, because it could leak a lot of information on the host.",
+      "location": "Docker docs, Seccomp security profiles > 'Significant syscalls blocked by the default profile' table (ptrace row); moby/profiles seccomp/default.json rule with includes.minKernel 4.8",
+      "cite_url": "https://docs.docker.com/engine/security/seccomp/"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "syscalls(2) on wrappers: the function you call in C/Python is usually a thin glibc wrapper; names usually but not always match (strace shows the real syscall: openat not open, clone not fork, prlimit64 not setrlimit).",
+      "quote": "System calls are generally not invoked directly, but rather via wrapper functions in glibc (or perhaps some other library). ... Often, but not always, the name of the wrapper function is the same as the name of the system call that it invokes.",
+      "location": "syscalls(2), DESCRIPTION > System calls and library wrapper functions",
+      "cite_url": "https://man7.org/linux/man-pages/man2/syscalls.2.html"
+    },
+    {
+      "finding": "intro(2) definition and the errno convention: kernel returns a negative error number; the wrapper stores it in errno and returns -1. strace shows this as '= -1 ENOENT (No such file or directory)'.",
+      "quote": "A system call is an entry point into the Linux kernel. Usually, system calls are not invoked directly: instead, most system calls have corresponding C library wrapper functions which perform the steps required (e.g., trapping to kernel mode) in order to invoke the system call.",
+      "location": "intro(2), DESCRIPTION; error convention in RETURN VALUE",
+      "cite_url": "https://man7.org/linux/man-pages/man2/intro.2.html"
+    },
+    {
+      "finding": "strace core description.",
+      "quote": "In its simplest use case, strace runs the specified command until it exits. It intercepts and records the system calls made by a process and the signals a process receives. The name of each system call, its arguments, and its return value are printed to standard error or to the file specified with the -o option.",
+      "location": "strace(1), DESCRIPTION"
+    },
+    {
+      "finding": "Output format, from the man page: 'open(\"/dev/null\", O_RDONLY) = 3'; errors as '= -1 ENOENT (No such file or directory)'; signals as '--- SIGINT {si_signo=SIGINT, si_code=SI_USER, si_pid=...} ---' and termination as '+++ killed by SIGINT +++' (normal exit prints '+++ exited with 0 +++').",
+      "quote": "Errors, typically indicated by a return value of -1, have the errno symbol and error string appended. open(\"/foo/bar\", O_RDONLY) = -1 ENOENT (No such file or directory)",
+      "location": "strace(1), DESCRIPTION"
+    },
+    {
+      "finding": "-f exact text.",
+      "quote": "Traces child processes as they are created by currently traced processes as a result of the fork(2), vfork(2) and clone(2) system calls. Note that if process PID is multi-threaded, using -f -p PID attaches to all of its threads, not just the one with thread_id = PID.",
+      "location": "strace(1), OPTIONS > Tracing > -f, --follow-forks"
+    },
+    {
+      "finding": "%file class — 'what files is this program touching' in one flag.",
+      "quote": "Traces all system calls that take a file name as an argument. You can think of this as an abbreviation for --trace=open,stat,chmod,unlink,... which is useful to seeing what files the process is referencing.",
+      "location": "strace(1), OPTIONS > Filtering > -e trace= > %file"
+    },
+    {
+      "finding": "Other options worth teaching: -p PID attach (Ctrl-C detaches and leaves the process running); -o FILE; -c summary of counts/time/errors per syscall; -s N max string length, DEFAULT 32 (why strings look truncated with '...'); -y print paths for fd arguments; -t/-tt wall-clock timestamps; -T time spent in each call; -u USER run as user (needed for setuid programs, which otherwise run without their privileges under strace).",
+      "quote": "Specifies the maximum string size to print (the default is 32). Note that filenames are not considered strings and are always printed in full.",
+      "location": "strace(1), OPTIONS > Output format > -s strsize (others under Tracing / Statistics / Output format)"
+    },
+    {
+      "finding": "-p attach semantics.",
+      "quote": "Attaches to the process with the process ID pid and begin tracing. The trace may be terminated at any time by a keyboard interrupt signal (CTRL-C). strace will respond by detaching itself from the traced processes, leaving them to continue running.",
+      "location": "strace(1), OPTIONS > General > -p pid"
+    },
+    {
+      "finding": "Shared-library loading makes the start of every trace noisy (dozens of openat/mmap calls before the program's own work).",
+      "quote": "Systems that use shared libraries often produce a large amount of tracing output when loading them.",
+      "location": "strace(1), NOTES"
+    },
+    {
+      "finding": "ptrace permission failure: EPERM; required capability CAP_SYS_PTRACE; cannot trace processes you cannot signal, or set-user-ID programs; a process can have only one tracer.",
+      "quote": "EPERM The specified process cannot be traced. This could be because the tracer has insufficient privileges (the required capability is CAP_SYS_PTRACE); unprivileged processes cannot trace processes that they cannot send signals to or those running set-user-ID/set-group-ID programs, for obvious reasons. Alternatively, the process may already be being traced",
+      "location": "ptrace(2), ERRORS",
+      "cite_url": "https://man7.org/linux/man-pages/man2/ptrace.2.html"
+    },
+    {
+      "finding": "Yama ptrace_scope (the usual reason `strace -p` fails on an Ubuntu HOST even for your own process): value 1 'restricted ptrace' is documented as the default where Yama is present — attach only to descendants unless you hold CAP_SYS_PTRACE. Launching a command under strace (PTRACE_TRACEME) is unaffected.",
+      "quote": "1 (\"restricted ptrace\") [default value] When performing an operation that requires a PTRACE_MODE_ATTACH check, the calling process must either have the CAP_SYS_PTRACE capability in the user namespace of the target process or it must have a predefined relationship with the target process. By default, the predefined relationship is that the target process must be a descendant of the caller.",
+      "location": "ptrace(2), NOTES > /proc/sys/kernel/yama/ptrace_scope"
+    },
+    {
+      "finding": "A traced process shows state 't' (tracing stop) in ps and a non-zero TracerPid in /proc/PID/status (see 'procps', 'proc-5').",
+      "quote": "While being traced, the tracee will stop each time a signal is delivered, even if the signal is being ignored. (An exception is SIGKILL, which has its usual effect.)",
+      "location": "ptrace(2), DESCRIPTION"
+    },
+    {
+      "finding": "Docker default seccomp profile in one sentence: an allowlist, defaultAction SCMP_ACT_ERRNO (seen by programs as 'Operation not permitted'/Permission Denied), 'disables around 44 system calls out of 300+'.",
+      "quote": "The default seccomp profile provides a sane default for running containers with seccomp and disables around 44 system calls out of 300+. It is moderately protective while providing wide application compatibility.",
+      "location": "Docker docs, Seccomp security profiles > Pass a profile for a container",
+      "cite_url": "https://docs.docker.com/engine/security/seccomp/"
+    },
+    {
+      "finding": "moby default.json facts (parsed): defaultAction SCMP_ACT_ERRNO with defaultErrnoRet 1 (EPERM); rule {names: [process_vm_readv, process_vm_writev, ptrace], action: SCMP_ACT_ALLOW, includes: {minKernel: '4.8'}}; rule {names: [kcmp, pidfd_getfd, process_madvise, process_vm_readv, process_vm_writev, ptrace], action: SCMP_ACT_ALLOW, includes: {caps: [CAP_SYS_PTRACE]}}. The profile moved from moby/moby profiles/seccomp/default.json to the moby/profiles repository.",
+      "quote": "\"names\": [\"process_vm_readv\", \"process_vm_writev\", \"ptrace\"], \"action\": \"SCMP_ACT_ALLOW\", \"includes\": {\"minKernel\": \"4.8\"}",
+      "location": "github.com/moby/profiles, seccomp/default.json (main branch, fetched 2026-09-20)",
+      "cite_url": "https://github.com/moby/profiles/blob/main/seccomp/default.json"
+    },
+    {
+      "finding": "EXECUTED: strace in a default-flags ubuntu:24.04 container (strace must be apt-installed; it is not in the base image). -f output prefixes each line with the PID; note execve + openat, the '/* 4 vars */' environment count, and '+++ exited with 0 +++'. Attaching to the shell's own child with -p worked. HOST CAVEAT: this Docker Desktop daemon reports SecurityOptions 'name=seccomp,profile=unconfined', so containers here show 'Seccomp: 0' unless run with --security-opt seccomp=builtin (then 'Seccomp: 2, Seccomp_filters: 1'). On a stock Linux Docker Engine the default is the builtin profile.",
+      "quote": "$ docker run --rm ubuntu:24.04 sh -c 'apt-get update -qq && apt-get install -y -qq strace; strace -V | head -1; strace -f -e trace=execve,openat -o /tmp/t.txt cat /etc/hostname; grep -v ENOENT /tmp/t.txt | head -8; strace -c true 2>&1 | tail -4; sleep 100 & strace -p $! -e trace=none & sleep 1; grep -E \"Seccomp|CapEff\" /proc/self/status'\nstrace -- version 6.8\n1d7c6050188f\n172   execve(\"/usr/bin/cat\", [\"cat\", \"/etc/hostname\"], 0xffffdc0e0110 /* 4 vars */) = 0\n172   openat(AT_FDCWD, \"/etc/ld.so.cache\", O_RDONLY|O_CLOEXEC) = 3\n172   openat(AT_FDCWD, \"/lib/aarch64-linux-gnu/libc.so.6\", O_RDONLY|O_CLOEXEC) = 3\n172   openat(AT_FDCWD, \"/etc/hostname\", O_RDONLY) = 3\n172   +++ exited with 0 +++\n…\n------ ----------- ----------- --------- --------- ----------------\n100.00    0.000000           0        27         1 total\nstrace: Process 180 attached\nCapEff:\t00000000a80425fb\nSeccomp:\t0\nSeccomp_filters:\t0",
+      "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1, kernel 6.10.14-linuxkit, arm64; daemon seccomp profile = unconfined)"
+    },
+    {
+      "finding": "EXECUTED: the Seccomp status field with and without the builtin profile on this host.",
+      "quote": "$ docker info --format '{{json .SecurityOptions}}'\n[\"name=seccomp,profile=unconfined\",\"name=cgroupns\"]\n$ docker run --rm ubuntu:24.04 grep -E 'Seccomp' /proc/self/status\nSeccomp:\t0\nSeccomp_filters:\t0\n$ docker run --rm --security-opt seccomp=builtin ubuntu:24.04 grep -E 'Seccomp' /proc/self/status\nSeccomp:\t2\nSeccomp_filters:\t1",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: strace WITH Docker's builtin default seccomp profile forced on (Seccomp: 2) and default capabilities (no CAP_SYS_PTRACE): both launching a command under strace and attaching with -p to the shell's own child succeed. This directly confirms 'default seccomp allows ptrace on kernels >= 4.8' (kernel here 6.10.14).",
+      "quote": "$ docker run --name lt-R2-strace --security-opt seccomp=builtin ubuntu:24.04 sh -c 'grep Seccomp: /proc/self/status; apt-get update -qq && apt-get install -y -qq strace; strace -e trace=openat -o /tmp/t cat /etc/hostname; echo \"strace rc=$?\"; grep hostname /tmp/t; sleep 60 & sleep 1; timeout 2 strace -p $! 2>&1 | head -3'\nSeccomp:\t2\nc0e9032069a5\nstrace rc=0\nopenat(AT_FDCWD, \"/etc/hostname\", O_RDONLY) = 3\nstrace: Process 163 attached\nrestart_syscall(<... resuming interrupted io_setup ...>strace: Process 163 detached\n <detached ...>",
+      "location": "executed ubuntu:24.04 with --security-opt seccomp=builtin (Docker Desktop 28.1.1, kernel 6.10.14-linuxkit)"
+    }
+  ],
+  "teaching_notes": "The planned 'blocked by default Docker seccomp?' resolves to: NO on any kernel >= 4.8 — the old advice to add --cap-add SYS_PTRACE / seccomp=unconfined just to run strace is outdated folklore from pre-4.8 kernels. What is still restricted is attaching to processes of another UID (needs CAP_SYS_PTRACE, dropped by default) and, on hosts with Yama ptrace_scope=1, attaching to non-descendants. IMPORTANT lab caveat for authors: on this authoring machine Docker Desktop runs with the seccomp profile UNCONFINED, so any page that shows 'Seccomp: 2' or demonstrates a syscall being blocked must pass --security-opt seccomp=builtin explicitly (and should tell Mac readers to do the same), otherwise readers will see Seccomp: 0. strace is absent from base images; show the apt install. For reading agent transcripts: strace prints real syscall names (openat, clone/clone3, execve, prlimit64), truncates strings at 32 bytes unless -s is raised, and prefixes PIDs under -f."
+}

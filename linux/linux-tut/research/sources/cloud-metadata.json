@@ -1,0 +1,162 @@
+{
+ "id": "cloud-metadata",
+ "tag": "[AWS: IMDS]",
+ "citation": {
+  "authors": "Amazon Web Services",
+  "title": "Amazon EC2 User Guide: Use instance metadata to manage your EC2 instance; Use the Instance Metadata Service to access instance metadata; Configure the Instance Metadata Service options",
+  "venue": "AWS documentation",
+  "year": "2026 (living document)",
+  "url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html"
+ },
+ "fetched_urls": [
+  "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html",
+  "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html",
+  "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-options.html",
+  "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-security-credentials.html",
+  "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html",
+  "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-limiting-access.html",
+  "https://cloud.google.com/compute/docs/metadata/overview",
+  "https://cloud.google.com/compute/docs/metadata/querying-metadata"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Instance metadata is served at link-local 169.254.169.254 and can include temporary IAM role credentials",
+   "verdict": "confirmed",
+   "finding": "IMDS endpoints: IPv4 169.254.169.254 (enabled whenever IMDS is enabled) and IPv6 [fd00:ec2::254] (opt-in, Nitro only). IAM role credentials are at /latest/meta-data/iam/security-credentials/<role-name>; they are temporary and auto-rotated (new ones available at least five minutes before expiry).",
+   "quote": "An application on the instance retrieves the security credentials provided by the role from the instance metadata item iam/security-credentials/role-name. ... These security credentials are temporary and we rotate them automatically.",
+   "location": "Retrieve security credentials from instance metadata",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-security-credentials.html"
+  },
+  {
+   "planned": "a sandboxed agent on a cloud VM with open egress to that address can read the host's cloud credentials",
+   "verdict": "confirmed",
+   "finding": "AWS states the metadata is not protected by authentication or cryptography: anyone with direct access to the instance, \"and potentially any software running on the instance\", can view it. AWS itself recommends local firewall rules (iptables OUTPUT ... --destination 169.254.169.254 ... REJECT) to cut processes off from IMDS. The specific \"sandboxed agent\" framing is the course's inference; the source supports \"any software on the instance\".",
+   "quote": "Although you can only access instance metadata and user data from within the instance itself, the data is not protected by authentication or cryptographic methods. Anyone who has direct access to the instance, and potentially any software running on the instance, can view its metadata.",
+   "location": "Use instance metadata to manage your EC2 instance, \"Important\" box",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html"
+  },
+  {
+   "planned": "IMDSv2 requires a session token (PUT)",
+   "verdict": "confirmed",
+   "finding": "IMDSv2 is session-oriented: PUT http://169.254.169.254/latest/api/token with header X-aws-ec2-metadata-token-ttl-seconds (1 second to 21600 s = 6 h), then send X-aws-ec2-metadata-token: $TOKEN on GET/HEAD requests. With tokens \"required\", requests without a valid token get 401 Unauthorized. PUT requests containing X-Forwarded-For are rejected. Token is instance-specific.",
+   "quote": "Use a PUT request to initiate a session to the instance metadata service. The PUT request returns a token that must be included in subsequent GET requests to the instance metadata service. The token is required to access metadata using IMDSv2.",
+   "location": "Use the Instance Metadata Service to access instance metadata > How Instance Metadata Service Version 2 works",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html"
+  },
+  {
+   "planned": "IMDSv2 has a hop limit (default 1) that blocks containers one hop away - verify exact defaults",
+   "verdict": "corrected",
+   "finding": "Default PUT-response hop limit is 1 (IP TTL of the token response), configurable 1-64. AWS says a container counts as an additional network hop, so with hop limit 1 an IMDSv2 call from a container \"might not receive a response at all\"; AWS suggests raising it to 2 for containers. TWO caveats the planned claim misses: (a) an AMI registered with ImdsSupport v2.0 launches instances with IMDSv2 required AND hop limit 2, so \"default 1\" is not universal; (b) the hop limit only protects the IMDSv2 token PUT - \"By default, you can use either IMDSv1 or IMDSv2, or both\", and IMDSv1 is a plain GET with no token and no hop limit, so the hop limit protects nothing unless the instance is set to IMDSv2-only (token required).",
+   "quote": "By default, the response to PUT requests has a response hop limit (time to live) of 1 at the IP protocol level. If you need a bigger hop limit, you can adjust it by using the modify-instance-metadata-options AWS CLI command.",
+   "location": "Use the Instance Metadata Service to access instance metadata > How IMDSv2 works",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Container = extra hop; AWS recommendation is hop limit 2 or passing settings directly to the container.",
+   "quote": "For those AWS SDKs that require IMDSv2, if the hop limit is 1 in a container environment, the call might not receive a response at all because going to the container is considered an additional network hop.",
+   "location": "Access instance metadata for an EC2 instance > Considerations > \"In a container environment, consider reconfiguration or increasing the hop limit to 2\"",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html"
+  },
+  {
+   "finding": "Hop limit range and meaning.",
+   "quote": "The hop limit is the number of network hops that the PUT response is allowed to make. You can set the hop limit to a minimum of 1 and a maximum of 64. In a container environment, a hop limit of 1 can cause issues.",
+   "location": "Configure the Instance Metadata Service options > Metadata response hop limit",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-options.html"
+  },
+  {
+   "finding": "AMIs with ImdsSupport v2.0 change both defaults (IMDSv2 required, hop limit 2); account-level defaults override AMI defaults; launch parameters override both.",
+   "quote": "When an instance is launched with this AMI, the instance metadata version is automatically set to IMDSv2 and the hop limit is set to 2.",
+   "location": "Configure the Instance Metadata Service options > Where to configure instance metadata options (AMI)",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-options.html"
+  },
+  {
+   "finding": "IMDSv1 vs v2 default and how requests are distinguished.",
+   "quote": "By default, you can use either IMDSv1 or IMDSv2, or both. You can configure the Instance Metadata Service (IMDS) on each instance to only accept IMDSv2 calls, which will cause IMDSv1 calls to fail.",
+   "location": "Use the Instance Metadata Service to access instance metadata (intro)",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html"
+  },
+  {
+   "finding": "Exact IMDSv2 commands as AWS documents them.",
+   "quote": "TOKEN=`curl -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 21600\"` && curl -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/iam/security-credentials/role-name",
+   "location": "Retrieve security credentials from instance metadata > IMDSv2 > Linux",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-security-credentials.html"
+  },
+  {
+   "finding": "IMDSv1 credential fetch is a single unauthenticated GET.",
+   "quote": "curl http://169.254.169.254/latest/meta-data/iam/security-credentials/role-name",
+   "location": "Retrieve security credentials from instance metadata > IMDSv1 > Linux",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-security-credentials.html"
+  },
+  {
+   "finding": "Token TTL bounds; 401 when token required and missing; X-Forwarded-For PUTs rejected (anti-SSRF/proxy).",
+   "quote": "HTTP GET and HEAD methods are allowed in IMDSv2 instance metadata requests. PUT requests are rejected if they contain an X-Forwarded-For header.",
+   "location": "How Instance Metadata Service Version 2 works",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html"
+  },
+  {
+   "finding": "AWS warns that proxies and similar services making HTTP calls on your behalf can leak role credentials (SSRF framing).",
+   "quote": "If you use services that use instance metadata with IAM roles, ensure that you don't expose your credentials when the services make HTTP calls on your behalf. The types of services that could expose your credentials include HTTP proxies, HTML/CSS validator services, and XML processors that support XML inclusion.",
+   "location": "Retrieve security credentials from instance metadata > Warning",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-security-credentials.html"
+  },
+  {
+   "finding": "AWS-documented firewall mitigation on the instance (iptables owner match).",
+   "quote": "$ sudo iptables --append OUTPUT --proto tcp --destination 169.254.169.254 --match owner --uid-owner apache --jump REJECT",
+   "location": "Limit access to the Instance Metadata Service > Using iptables to limit access",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-limiting-access.html"
+  },
+  {
+   "finding": "AWS recommends allow-rules over deny-rules for IMDS access.",
+   "quote": "Allow rules might be easier to manage from a security perspective, because they require you to make a decision about what software needs access to instance metadata.",
+   "location": "Limit access to the Instance Metadata Service",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-limiting-access.html"
+  },
+  {
+   "finding": "IMDS can be disabled entirely per instance.",
+   "quote": "You can enable or disable the IMDS on an instance. When disabled, you or any code won't be able to access the instance metadata on the instance.",
+   "location": "Configure the Instance Metadata Service options",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-options.html"
+  },
+  {
+   "finding": "User data is also exposed via IMDS and must not hold secrets; limited to 16 KB raw.",
+   "quote": "Therefore, you should not store sensitive data, such as passwords or long-lived encryption keys, as user data.",
+   "location": "Use instance metadata to manage your EC2 instance, \"Important\" box",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html"
+  },
+  {
+   "finding": "Link-local services on EC2 share a 1024 packets-per-second limit (DNS resolver, IMDS, NTP).",
+   "quote": "There is a 1024 packet per second (PPS) limit to services that use link-local addresses.",
+   "location": "Access instance metadata for an EC2 instance > Considerations > Packets per second (PPS) limit",
+   "cite_url": "https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instancedata-data-retrieval.html"
+  },
+  {
+   "finding": "GCP: metadata server is at metadata.google.internal (recommended), 169.254.169.254, or fd20:ce::254; base path /computeMetadata/v1.",
+   "quote": "calls to the metadata server, including those using the DNS name (metadata.google.internal) or IP addresses (169.254.169.254 or fd20:ce::254), don't incur egress or service charges.",
+   "location": "GCP: About VM metadata > costs and quotas",
+   "cite_url": "https://cloud.google.com/compute/docs/metadata/overview"
+  },
+  {
+   "finding": "GCP requires the header Metadata-Flavor: Google on every request; without it the request is denied. (This is GCP's lightweight SSRF defence - no token, no hop limit.)",
+   "quote": "If you don't provide this header, the metadata server denies your request. Metadata-Flavor: Google",
+   "location": "GCP: View and query VM metadata > Request header",
+   "cite_url": "https://cloud.google.com/compute/docs/metadata/querying-metadata"
+  },
+  {
+   "finding": "GCP rejects proxied requests.",
+   "quote": "Any requests that contain the header X-Forwarded-For are automatically rejected by the metadata server. This header generally indicates that the request was proxied and might not be a request made by an authorized user.",
+   "location": "GCP: View and query VM metadata > X-Forwarded-For header",
+   "cite_url": "https://cloud.google.com/compute/docs/metadata/querying-metadata"
+  },
+  {
+   "finding": "GCP serves OAuth2 access tokens for the attached service account from the metadata server.",
+   "quote": "when you query the metadata server for an OAuth2 access token from the /computeMetadata/v1/instance/service-accounts/default/token endpoint, the returned token includes all scopes that you specified for the service account when you created or updated the instance.",
+   "location": "GCP: View and query VM metadata > Obtain specific OAuth2 access tokens",
+   "cite_url": "https://cloud.google.com/compute/docs/metadata/querying-metadata"
+  }
+ ],
+ "teaching_notes": "Most valuable correction: \"IMDSv2 hop limit 1 blocks containers\" is only a defence if IMDSv1 is disabled (token required); by default AWS docs still say both v1 and v2 are usable, and v1 is one unauthenticated GET. Also the hop-limit default of 1 becomes 2 for AMIs registered with ImdsSupport v2.0. The URL configuring-instance-metadata-service.html in sources.json now serves the page titled \"Use the Instance Metadata Service to access instance metadata\" (identical bytes to instance-metadata-v2-how-it-works.html). The hop-limit mechanism is the IP TTL of the PUT response; a Docker bridge container is one routed hop from the host (the docs say \"going to the container is considered an additional network hop\"); the docs say nothing about --network host containers, so do not assert behaviour there. Both AWS and GCP use the same link-local address 169.254.169.254, so one egress-deny rule for 169.254.0.0/16 covers both."
+}

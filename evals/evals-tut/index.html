@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Understanding LLM Evals · A Course in Measurement</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">A wiki-course</p>
+    <h1>Understanding LLM Evals</h1>
+    <p class="lede">
+      How do you know whether an AI system works? Not "feels good in a demo" works —
+      <em>measurably, repeatably, and credibly</em> works. This course teaches evaluation
+      from the ground up: the process, the statistics, the failure modes of the measurements
+      themselves, and the tools. No ML or statistics background assumed.
+    </p>
+
+    <div class="keyidea">
+      <span class="label">The premise of this course</span>
+      <p>Evaluation is <strong>measurement</strong>, and measurement is a discipline. A score is a claim
+      about the world, and like any claim it can be wrong — because the test data leaked into training,
+      because the grader is biased, because the difference is statistical noise, or because the number
+      measures something other than what you care about. Learning evals means learning both how to
+      build them <em>and</em> how to distrust them properly.</p>
+    </div>
+
+    <h2 id="what-you-will-learn">What you'll be able to do</h2>
+    <ul>
+      <li>Take a vague complaint ("the bot is sometimes weird") and turn it into a reproducible, measurable failure mode.</li>
+      <li>Build evaluators — code checks, human labeling workflows, and LLM judges — and <em>validate the evaluators themselves</em>.</li>
+      <li>Read any benchmark's scoring harness critically and predict how its numbers can mislead.</li>
+      <li>Put honest error bars on a score and tell a real improvement from noise.</li>
+      <li>Recognize contamination, judge bias, and leaderboard distortions before they cost you a decision.</li>
+      <li>Use a real eval harness (Inspect) and navigate the surrounding tool ecosystem.</li>
+    </ul>
+
+    <h2 id="modules">The modules</h2>
+    <div class="modgrid">
+      <a class="modcard" href="pages/00-orientation.html">
+        <h3><span class="n">0</span>Orientation</h3>
+        <p>Why evals are the bottleneck of AI engineering, and the map of the field: product evals, capability benchmarks, and the layer in between.</p>
+        <div class="pages">1 page</div>
+      </a>
+      <a class="modcard" href="pages/01-what-is-an-eval.html">
+        <h3><span class="n">1</span>Foundations</h3>
+        <p>What an eval actually is: task, data, grader, metric. The anatomy shared by a pytest assertion and a million-dollar benchmark, and the three kinds of graders.</p>
+        <div class="pages">3 pages</div>
+      </a>
+      <a class="modcard" href="pages/04-error-analysis.html">
+        <h3><span class="n">2</span>The eval process</h3>
+        <p>The practitioner's loop: error analysis on real traces, turning failures into test cases, validating your grader, and wiring evals into development.</p>
+        <div class="pages">4 pages</div>
+      </a>
+      <a class="modcard" href="pages/08-llm-as-judge.html">
+        <h3><span class="n">3</span>LLM-as-judge</h3>
+        <p>Using a model to grade model outputs: how it works, the documented biases (position, verbosity, self-preference), and how to align a judge with human experts.</p>
+        <div class="pages">3 pages</div>
+      </a>
+      <a class="modcard" href="pages/11-evaluating-agents.html">
+        <h3><span class="n">4</span>Evaluating agents</h3>
+        <p>Multi-step systems that act on environments. Benchmark dissections (SWE-bench, GAIA, tau-bench, WebArena, OSWorld), reliability via pass<sup>k</sup>, cost frontiers, time horizons.</p>
+        <div class="pages">5 pages</div>
+      </a>
+      <a class="modcard" href="pages/16-error-bars.html">
+        <h3><span class="n">5</span>Statistics for evals</h3>
+        <p>The module most courses skip. Error bars, clustered standard errors, paired comparisons, power analysis, the unbiased pass@k estimator, and reproducibility.</p>
+        <div class="pages">4 pages</div>
+      </a>
+      <a class="modcard" href="pages/20-validity.html">
+        <h3><span class="n">6</span>Contamination &amp; validity</h3>
+        <p>When the measurement itself is broken: training-data contamination, construct validity, live benchmarks, private holdouts, canary strings, and leaderboard politics.</p>
+        <div class="pages">4 pages</div>
+      </a>
+      <a class="modcard" href="pages/24-inspect.html">
+        <h3><span class="n">7</span>Tooling</h3>
+        <p>One harness in depth (UK AISI's Inspect) and a survey of the rest: promptfoo, DeepEval, Ragas, OpenAI Evals, and the tracing/observability layer.</p>
+        <div class="pages">3 pages</div>
+      </a>
+    </div>
+
+    <h2 id="reference">Reference material</h2>
+    <ul>
+      <li><a href="glossary.html"><strong>Glossary</strong></a> — every term used in the course, defined for an entry-level reader. Terms with a dashed underline anywhere in the course show a hover tooltip and link here.</li>
+      <li><a href="bibliography.html"><strong>Annotated bibliography</strong></a> — the citation universe. Every factual claim in the course traces to one of these primary sources.</li>
+      <li><strong>Appendices A–F</strong> — self-contained mini-lessons on the math and statistics the course relies on: <a href="appendices/a-probability.html">probability</a>, <a href="appendices/b-sampling.html">sampling &amp; estimation</a>, <a href="appendices/c-hypothesis-testing.html">hypothesis tests &amp; power</a>, <a href="appendices/d-combinatorics-pass-at-k.html">counting &amp; pass@k</a>, <a href="appendices/e-agreement-metrics.html">agreement metrics</a>, <a href="appendices/f-resampling.html">bootstrap &amp; clustered errors</a>.</li>
+    </ul>
+
+    <h2 id="how-to-use">How to use this course</h2>
+    <p>
+      The modules build on each other, and the recommended path is simply in order — but each page is
+      written to stand alone, wiki-style, with cross-links wherever it leans on another page. If you're
+      here with a specific question ("is this benchmark score trustworthy?" → Module 6; "my judge
+      disagrees with me" → Module 3), jump straight in and follow links backward as needed.
+    </p>
+    <p>
+      Statistical concepts are explained in plain language where they appear, with a link to the
+      appendix that teaches the underlying math properly. You can read the whole course without the
+      appendices, but Module 5 will reward you for reading <a href="appendices/b-sampling.html">Appendix B</a> first.
+    </p>
+
+    <div class="callout">
+      <span class="label">A note on provenance</span>
+      <p>This course practices what it teaches. Every empirical claim — every number, finding, and quoted
+      position — was verified against its primary source (the actual paper or documentation, fetched and
+      checked) before being written down, and carries an inline citation like
+      <a class="cite" href="https://arxiv.org/abs/2405.00332" title="Zhang et al. 2024, GSM1k">[GSM1k]</a>
+      linking to that source. Each page ends with a source box. A course about rigorous measurement
+      that cited summaries-of-summaries would fail its own first lesson.</p>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="assets/nav-data.js"></script>
+<script src="assets/glossary-data.js"></script>
+<script src="assets/wiki.js"></script>
+</body>
+</html>

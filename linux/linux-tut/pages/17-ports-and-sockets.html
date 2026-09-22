@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ports, Sockets, TCP and UDP · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 5 · Networking for Sandboxes</p>
+    <h1>Ports, sockets, TCP and UDP</h1>
+    <p class="lede">
+      An address gets a packet to a box; a port gets it to a process. This page teaches you to list
+      who is listening and on which address, to read the four ways a connection attempt fails, and
+      to see why "it's running, I started it" and "the grader can't reach it" are so often both true.
+    </p>
+
+    <p>
+      This page finishes <strong>audit question 1 (what is running?)</strong> — a process with a
+      listening socket is offering a service — and continues <strong>question 4 (what can it
+      reach?)</strong>. The concepts are taught in the sibling networking course
+      (<a href="../../../networking/networking-tut/pages/02-addresses-and-ports.html">addresses, ports, and localhost</a>;
+      <a href="../../../networking/networking-tut/pages/05-transport.html">TCP, UDP, and QUIC</a>;
+      <a href="../../../networking/networking-tut/pages/14-containers.html">containers: whose network is this?</a>).
+      Here they get a paragraph; the rest is the Linux side. Sessions use the
+      <code>lt-net:local</code> image built in <a href="16-addresses-and-routes.html">page 16</a>'s
+      lab (stock <code>ubuntu:24.04</code> has no <code>ss</code>, <code>nc</code>,
+      <code>curl</code> or <code>python3</code>), running as the non-root user <code>learner</code>.
+    </p>
+
+    <h2 id="the-model">The model: a socket is an endpoint a process holds</h2>
+    <p>
+      A <span class="term" data-g="port">port</span> is a 16-bit number (0–65535) that the transport
+      protocols add on top of IP so that one address can serve many conversations: "an IP socket
+      address is defined as a combination of an IP interface address and a 16-bit port
+      number."<a class="cite" href="https://man7.org/linux/man-pages/man7/ip.7.html" title="ip(7), Address format: socket address = IP interface address + 16-bit port; ports are implemented by udp(7) and tcp(7)">[ip(7)]</a>
+      A <span class="term" data-g="socket">socket</span> is the kernel object a process holds — a
+      <a href="04-streams-pipes-redirection.html">file descriptor</a>, like any other — that is
+      bound to such an address. A connection is identified by the full tuple: protocol, local
+      address and port, remote address and port. That is why one server port can carry thousands of
+      clients.
+    </p>
+    <p>Two transport protocols matter, and their port spaces are separate (TCP 53 and UDP 53 are different doors):</p>
+    <table>
+      <tr><th></th><th><span class="term" data-g="tcp">TCP</span></th><th><span class="term" data-g="udp">UDP</span></th></tr>
+      <tr><td>Service</td>
+          <td>"a reliable, stream-oriented, full-duplex connection"; data "arrives in order" and lost packets are retransmitted<a class="cite" href="https://man7.org/linux/man-pages/man7/tcp.7.html" title="tcp(7) DESCRIPTION">[tcp(7)]</a></td>
+          <td>"a connectionless, unreliable datagram packet service"; packets "may be reordered or duplicated"<a class="cite" href="https://man7.org/linux/man-pages/man7/udp.7.html" title="udp(7) DESCRIPTION">[udp(7)]</a></td></tr>
+      <tr><td>Before data flows</td><td>A handshake — so "can I connect?" has a yes/no answer</td><td>Nothing — silence is ambiguous</td></tr>
+      <tr><td>You meet it as</td><td>HTTP(S), SSH, databases, the Docker API</td><td>DNS, mostly (<a href="18-dns-http-tls.html">page 18</a>)</td></tr>
+      <tr><td><code>ss</code> state when waiting</td><td><code>LISTEN</code></td><td><code>UNCONN</code></td></tr>
+    </table>
+    <p>
+      <strong>Port ranges.</strong> IANA divides the space into System Ports 0–1023, User Ports
+      1024–49151, and Dynamic Ports
+      49152–65535.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc6335#section-6" title="RFC 6335 §6, Port Number Ranges">[RFC 6335]</a>
+      Linux does not follow the last part: a client's source port (its <em>ephemeral</em> port) is
+      drawn from <code>ip_local_port_range</code>, whose default is
+      32768–60999.<a class="cite" href="https://docs.kernel.org/networking/ip-sysctl.html" title="Kernel docs, IP Sysctl: ip_local_port_range, 'The default values are 32768 and 60999 respectively'">[Kernel: ip-sysctl]</a>
+      You will see exactly that in connection listings below (<code>:47856</code>).
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><strong>"Ports below 1024 need root" is false inside a Docker container.</strong> The
+      classic rule is real: binding a port below 1024 requires the
+      <span class="term" data-g="capability">capability</span>
+      <code>CAP_NET_BIND_SERVICE</code>.<a class="cite" href="https://man7.org/linux/man-pages/man7/ip.7.html" title="ip(7): ports below 1024 are privileged; binding needs CAP_NET_BIND_SERVICE">[ip(7)]</a>
+      But the threshold is a per-network-namespace sysctl,
+      <code>ip_unprivileged_port_start</code>, kernel default
+      1024,<a class="cite" href="https://docs.kernel.org/networking/ip-sysctl.html" title="Kernel docs, IP Sysctl: ip_unprivileged_port_start, per-namespace, Default: 1024; 0 disables privileged ports">[Kernel: ip-sysctl]</a>
+      and inside a Docker container it reads 0:</p>
+<pre class="term"><code><span class="p">$</span> cat /proc/sys/net/ipv4/ip_unprivileged_port_start
+<span class="o">0</span>
+<span class="p">$</span> id -u; grep CapEff /proc/self/status
+<span class="o">1001
+CapEff:	0000000000000000</span>
+<span class="p">$</span> python3 -m http.server 80 &amp;
+<span class="p">$</span> ss -tlpn 'sport = :80'
+<span class="o">State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+LISTEN 0      5            0.0.0.0:80        0.0.0.0:*    users:(("python3",pid=53,fd=3))</span></code></pre>
+      <p>Uid 1001 with no capabilities at all is serving on port 80. With the kernel default restored
+      (<code>docker run --sysctl net.ipv4.ip_unprivileged_port_start=1024 …</code>) the same
+      command fails with <code>PermissionError: [Errno 13] Permission denied</code> — which is
+      what you get on a VM or bare host. So a task that "works in the container"
+      can fail on a VM-based sandbox for this reason alone — and "it listens on port 80" proves
+      nothing about privilege.</p>
+    </div>
+
+    <h2 id="ss">Reading <code>ss -tulpn</code></h2>
+    <p>
+      <code>ss</code> ("socket statistics") lists the kernel's socket table. The five flags worth
+      memorising as one word: <code>-t</code> TCP, <code>-u</code> UDP, <code>-l</code> listening
+      only ("these are omitted by default"), <code>-p</code> show the owning process,
+      <code>-n</code> numbers instead of service
+      names.<a class="cite" href="https://man7.org/linux/man-pages/man8/ss.8.html" title="ss(8) OPTIONS: -t, -u, -l, -p, -n">[ss(8)]</a>
+      In a container where <code>learner</code> has started two web servers and a UDP listener:
+    </p>
+<pre class="term"><code><span class="p">$</span> ss -tulpn
+<span class="o">Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+udp   UNCONN 0      0         127.0.0.11:44963      0.0.0.0:*
+udp   UNCONN 0      0            0.0.0.0:5005       0.0.0.0:*    users:(("nc",pid=19,fd=3))
+tcp   LISTEN 0      4096      127.0.0.11:43993      0.0.0.0:*
+tcp   LISTEN 0      5            <span class="hl">0.0.0.0:8000</span>       0.0.0.0:*    users:(("python3",pid=7,fd=3))
+tcp   LISTEN 0      5          <span class="hl">127.0.0.1:8001</span>       0.0.0.0:*    users:(("python3",pid=13,fd=3))</span></code></pre>
+    <p>
+      The column that matters is <strong>Local Address:Port</strong> — and within it, the address
+      half, which the next section is about. <code>Peer</code> is <code>*</code> for a listener
+      (anyone may connect). <code>Process</code> gives the program, its PID, and which of its file
+      descriptors is the socket (the header really does print "PortProcess" run together). The two
+      <code>127.0.0.11</code> lines with no process are Docker's built-in DNS for user-defined
+      networks; they belong to the Docker daemon, outside this container's process tree.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p><strong>An empty Process column does not mean "no process".</strong> <code>ss -p</code>
+      can only name processes whose details you are allowed to read. Run the same command as a
+      different user — and here, even as root in the same default container, where the servers
+      belong to <code>learner</code> — and every Process cell comes back blank, with no error:</p>
+<pre class="term"><code><span class="p">#</span> ss -tlpn
+<span class="o">State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+LISTEN 0      4096      127.0.0.11:43993      0.0.0.0:*
+LISTEN 0      5            0.0.0.0:8000       0.0.0.0:*
+LISTEN 0      5          127.0.0.1:8001       0.0.0.0:*</span></code></pre>
+      <p>The listening lines themselves are always complete. For the owner, run <code>ss</code> as
+      the user who started the service, or from outside with full privileges.</p>
+    </div>
+    <p>Drop the <code>-l</code> and you see live connections instead. Client side, then server side, of one connection:</p>
+<pre class="term"><code><span class="p">$</span> ss -tn
+<span class="o">State Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+ESTAB 0      0         172.20.0.3:<span class="hl">47856</span>   172.20.0.2:8000</span>
+
+<span class="p">$</span> ss -tnp
+<span class="o">State Recv-Q Send-Q Local Address:Port Peer Address:Port Process
+ESTAB 0      0         172.20.0.2:8000   172.20.0.3:47856 users:(("python3",pid=7,fd=4))</span></code></pre>
+    <p>
+      The same tuple seen from both ends; the client's port is an ephemeral one from the Linux
+      range. In an audit, <code>ss -tn</code> answers "who is this box talking to <em>right
+      now</em>?"
+    </p>
+
+    <h2 id="bind-address">The bind address decides who can knock</h2>
+    <p>
+      When a server starts it <em>binds</em>: it picks a port and a local address. The
+      <span class="term" data-g="bind-address">bind address</span> is a filter on which of the
+      box's interfaces accept connections for it. <code>127.0.0.1</code> means
+      <span class="term" data-g="loopback">loopback</span> only; <code>0.0.0.0</code> is the "any"
+      address — "the socket will be bound to all local
+      interfaces."<a class="cite" href="https://man7.org/linux/man-pages/man7/ip.7.html" title="ip(7): when INADDR_ANY is specified in the bind call, the socket will be bound to all local interfaces">[ip(7)]</a>
+      The container above has one server of each kind. From a second container on the same Docker
+      network:
+    </p>
+<pre class="term"><code><span class="p">$</span> curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://lt-17-srv:8000/
+<span class="o">200</span>
+<span class="p">$</span> curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://lt-17-srv:8001/
+<span class="o">curl: (7) Failed to connect to lt-17-srv port 8001 after 0 ms: Couldn't connect to server
+000</span>
+<span class="p">$</span> curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://localhost:8000/
+<span class="o">curl: (7) Failed to connect to localhost port 8000 after 0 ms: Couldn't connect to server
+000</span></code></pre>
+    <p>
+      Port 8001 is alive and healthy — <code>curl http://127.0.0.1:8001/</code> <em>inside</em> the
+      server container returns 200 — but from next door it is indistinguishable from a port with
+      nothing on it. And the third command fails for the mirror-image reason:
+      <span class="term" data-g="localhost">localhost</span> is a point of view. Each container has
+      its own <span class="term" data-g="network-namespace">network namespace</span>, and a
+      namespace isolates, among other things, "port numbers
+      (sockets)".<a class="cite" href="https://man7.org/linux/man-pages/man7/network_namespaces.7.html" title="network_namespaces(7) DESCRIPTION: isolates network devices, protocol stacks, routing tables, firewall rules, port numbers (sockets)">[network_namespaces(7)]</a>
+      The client's <code>localhost:8000</code> is the client's own port 8000, where nothing listens.
+    </p>
+    <div class="diagram">  container "app" (its own netns)      container "db" (its own netns)
+  ┌───────────────────────────────┐    ┌───────────────────────────────┐
+  │ lo    127.0.0.1               │    │ lo    127.0.0.1  ◀─ :8001     │
+  │   localhost:5432 ─▶ nothing   │    │           (loopback only)     │
+  │ eth0  172.20.0.3 ─────────────┼────┼─▶ eth0  172.20.0.2            │
+  │   db:5432 ─▶ reaches db       │    │   ◀─ 0.0.0.0:8000, :5432      │
+  └───────────────────────────────┘    └───────────────────────────────┘</div>
+    <p>
+      This is why an application configured with <code>localhost:5432</code> cannot find its
+      database in the next container, and why the
+      <span class="term" data-g="docker-compose">Compose</span> service name works: each service
+      "is both reachable by other containers on that network, and discoverable by its service
+      name", and service-to-service traffic uses the <em>container</em>
+      port.<a class="cite" href="https://docs.docker.com/compose/how-tos/networking/#default-network-and-service-discovery" title="Docker Docs: Networking in Compose, Default network and service discovery">[Compose: networking]</a>
+    </p>
+    <div class="evals">
+      <span class="label">In eval work · navigate</span>
+      <p>"Build a web service" tasks fail on this constantly, in both directions. Many frameworks'
+      development servers bind <code>127.0.0.1</code> by default; the agent's transcript shows
+      <code>Serving HTTP on 127.0.0.1 port 8000</code>, the agent's own <code>curl
+      localhost:8000</code> succeeds, and a <span class="term" data-g="verifier">verifier</span>
+      connecting from another container or the host gets <code>Connection refused</code>. Is that a
+      model failure? Only if the task statement made the requirement observable ("the service must
+      accept connections from other hosts", or an explicit <code>0.0.0.0</code>). If the grader's
+      vantage point is an unstated detail of the
+      <span class="term" data-g="harness">harness</span>, you are measuring whether the model
+      guessed your infrastructure. Either state it, or grade from inside the same namespace
+      (<code>docker exec … curl localhost:8000</code>). The one-line evidence is the Local Address
+      column of <code>ss -tln</code>.</p>
+    </div>
+
+    <h2 id="symptoms">Four ways to fail, and what each proves</h2>
+    <p>
+      When a connection attempt fails, the error text tells you how far it got. All of these were
+      produced for real; each is shown as <code>curl</code> and as <code>nc -zv</code>
+      (<code>-z</code>: connect and close without sending, <code>-v</code>: say what happened,
+      <code>-w N</code>: give up after N seconds).
+    </p>
+    <table>
+      <tr><th>You see</th><th>Time</th><th>What happened</th><th>What it does <em>not</em> prove</th></tr>
+      <tr><td><code>Connection refused</code><br>curl exit 7, "after 0 ms"</td><td>instant</td>
+          <td>Something answered "no". A reachable host with no listener on that port replies with a TCP reset.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc9293#section-3.5.2" title="RFC 9293 §3.5.2 Reset Generation: a SYN that does not match an existing connection is rejected with a reset">[RFC 9293]</a><a class="cite" href="https://man7.org/linux/man-pages/man2/connect.2.html" title="connect(2) ERRORS: ECONNREFUSED, ENETUNREACH, ETIMEDOUT">[connect(2)]</a></td>
+          <td>That the host itself answered. A firewall <code>REJECT</code> rule sends back an error packet too — by default ICMP port-unreachable, optionally a TCP reset<a class="cite" href="https://man7.org/linux/man-pages/man8/iptables-extensions.8.html" title="iptables-extensions(8), REJECT: sends back an error packet; icmp-port-unreachable is the default; tcp-reset option">[iptables-extensions(8)]</a> — and the client sees exactly the same thing. Nor that the service is down: it may be bound to loopback.</td></tr>
+      <tr><td><code>Connection timed out</code><br>curl exit 28; <code>nc</code>: "timed out"</td><td>as long as you allowed</td>
+          <td>Packets left and nothing came back: silently dropped by a firewall, or sent toward an address nobody owns.</td>
+          <td>Which hop dropped it. That needs a vantage point on the other side (<a href="19-firewalls-and-egress.html">page 19</a>).</td></tr>
+      <tr><td><code>Network is unreachable</code><br>curl exit 7, "after 0 ms"</td><td>instant</td>
+          <td>The kernel has no route (<a href="16-addresses-and-routes.html#three-networks"><code>--network none</code></a>). Nothing was sent.</td>
+          <td>—  This one is conclusive; check <code>ip route</code>.</td></tr>
+      <tr><td><code>No route to host</code><br>curl exit 7, "after 3111 ms"</td><td>~3 s</td>
+          <td>The route says "directly connected", but no machine on the local subnet owns that address.</td>
+          <td>That the service is broken: the container may simply not be up yet, or have a different address this run.</td></tr>
+      <tr><td><code>Could not resolve host</code><br>curl exit 6</td><td>instant (here)</td>
+          <td>Never got as far as a connection: the <em>name</em> failed. Different layer — <a href="18-dns-http-tls.html">page 18</a>.</td>
+          <td>Anything about the port or the service.</td></tr>
+    </table>
+<pre class="term"><code><span class="p">$</span> nc -zv -w 3 lt-17-srv 8000
+<span class="o">Connection to lt-17-srv (172.20.0.2) 8000 port [tcp/*] succeeded!</span>
+<span class="p">$</span> nc -zv -w 3 lt-17-srv 9999
+<span class="o">nc: connect to lt-17-srv (172.20.0.2) port 9999 (tcp) failed: Connection refused</span>
+<span class="p">$</span> nc -zv -w 3 192.0.2.1 80
+<span class="o">nc: connect to 192.0.2.1 port 80 (tcp) timed out: Operation now in progress</span>
+<span class="p">$</span> nc -zv -w 5 172.20.0.99 8000
+<span class="o">nc: connect to 172.20.0.99 port 8000 (tcp) failed: No route to host</span></code></pre>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p><strong>Fast failures are answers; slow failures are silence.</strong> "Refused" and
+      "unreachable" come back in milliseconds because something — the peer, a firewall, your own
+      kernel — actively said no. A dropped packet says nothing, and by default Linux keeps
+      retrying: six SYN retransmissions, about two minutes (tcp(7) says roughly 127 seconds, the
+      kernel documentation
+      131).<a class="cite" href="https://docs.kernel.org/networking/ip-sysctl.html" title="Kernel docs, IP Sysctl: tcp_syn_retries default 6; final timeout for an active TCP connection attempt after 131 seconds">[Kernel: ip-sysctl]</a><a class="cite" href="https://man7.org/linux/man-pages/man7/tcp.7.html" title="tcp(7), tcp_syn_retries: default 6, approximately 127 seconds">[tcp(7)]</a>
+      So every network command in a harness, a grader, or a probe takes an explicit timeout —
+      <code>curl -m</code>, <code>nc -w</code>, <code>timeout</code>. Without one, a firewalled
+      sandbox turns each blocked call into two minutes of a rollout's time budget.</p>
+    </div>
+
+    <h3 id="dev-tcp">When the box has no tools: <code>/dev/tcp</code></h3>
+    <p>
+      Minimal images have no <code>nc</code> or <code>curl</code>. Bash itself can open a TCP
+      connection: a redirection to <code>/dev/tcp/<em>host</em>/<em>port</em></code> is handled by
+      bash, not the
+      filesystem<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Redirections" title="Bash Reference Manual §3.6 Redirections: /dev/tcp/host/port is handled specially by bash">[Bash Manual]</a>
+      — there is no such file. In stock <code>ubuntu:24.04</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> ls -l /dev/tcp
+<span class="o">ls: cannot access '/dev/tcp': No such file or directory</span>
+<span class="p">#</span> (echo &gt; /dev/tcp/lt-17-srv/8000) &amp;&amp; echo open
+<span class="o">open</span>
+<span class="p">#</span> (echo &gt; /dev/tcp/lt-17-srv/9999) || echo closed
+<span class="o">bash: connect: Connection refused
+bash: line 1: /dev/tcp/lt-17-srv/9999: Connection refused
+closed</span>
+<span class="p">#</span> timeout 3 bash -c 'echo &gt; /dev/tcp/192.0.2.1/80'; echo "exit=$?"
+<span class="o">exit=124</span></code></pre>
+    <p>
+      It has no timeout of its own — wrap it in <code>timeout</code>
+      (<a href="10-signals-exit-codes.html">124 = timed out</a>). And it is a bash feature only:
+      under <code>sh</code> on Ubuntu (dash) you get <code>cannot create /dev/tcp/…: Directory
+      nonexistent</code>, and on Alpine (BusyBox ash) <code>can't create /dev/tcp/…: nonexistent
+      directory</code>. Alpine's BusyBox does include an <code>nc</code> that accepts
+      <code>-zv</code>. Agents use this trick routinely; now you can read it in a transcript.
+    </p>
+
+    <h2 id="published-ports">Published ports: the host's side of the door</h2>
+    <p>
+      Everything so far was container-to-container. A container's ports are also reachable from the
+      Docker host, but not from beyond it unless <em>published</em>: <code>-p HOST:CONTAINER</code>
+      maps a port on the host to a port in the container. Docker's documentation does not soften
+      the default: "Publishing container ports is insecure by default. Meaning, when you publish a
+      container's ports it becomes available not only to the Docker host, but to the outside world
+      as well"; with a <code>127.0.0.1:</code> prefix "only the Docker host can access the published
+      container
+      port."<a class="cite" href="https://docs.docker.com/engine/network/port-publishing/" title="Docker Docs: Port publishing and mapping, Publishing ports (Important box); default bind address 0.0.0.0 and [::]">[Docker: port publishing]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name web -p 127.0.0.1:18080:8000 -p 18081:8000 lt-net:local python3 -m http.server 8000
+<span class="p">$</span> docker port web
+<span class="o">8000/tcp -&gt; 0.0.0.0:18081
+8000/tcp -&gt; 127.0.0.1:18080</span></code></pre>
+    <p>Three things about this that matter for a sandbox:</p>
+    <ul>
+      <li><strong>It is the bind-address question again, one level up.</strong> <code>0.0.0.0:18081</code>
+        is every interface of the host — including the bridge gateway address. Verified: from an
+        unrelated container, <code>nc -zv 172.17.0.1 18081</code> succeeded while
+        <code>172.17.0.1 18080</code> was refused. A port you published "for yourself" without the
+        <code>127.0.0.1:</code> prefix is reachable from every sandbox on the host.</li>
+      <li><strong>Host firewalls may not apply.</strong> Docker routes published-port traffic in the
+        <code>nat</code> table, so it "gets diverted before it goes through the ufw firewall
+        settings."<a class="cite" href="https://docs.docker.com/engine/network/packet-filtering-firewalls/" title="Docker Docs: Packet filtering and firewalls, Docker and ufw">[Docker: firewalls]</a>
+        A host whose firewall "blocks everything" can still be serving a published port to the
+        network. <a href="19-firewalls-and-egress.html">Page 19</a> covers where rules must go.</li>
+      <li><strong>Publishing does not change the listener.</strong> If the process inside bound
+        <code>127.0.0.1</code>, the mapping leads to a door nobody opens. Here (Docker Desktop) the
+        symptom was <code>curl: (52) Empty reply from server</code>; the exact symptom depends on
+        how the host forwards the port, but the cause is the one <code>ss -tln</code> inside the
+        container shows.</li>
+    </ul>
+    <div class="evals">
+      <span class="label">In eval work · design</span>
+      <p><strong>Run <code>ss -tulpn</code> on the sandbox <em>host</em>, as root, as part of every
+      environment audit.</strong> Every line whose Local Address is <code>0.0.0.0</code>,
+      <code>*</code>, <code>[::]</code>, or a bridge address is a service your agents can reach
+      through the gateway (<a href="16-addresses-and-routes.html#adjacent">page 16</a>): a results
+      database, a harness dashboard, another team's published port — or a Docker API. Docker warns
+      that even a firewalled API endpoint "can be still accessible from containers, and it can
+      easily result in the privilege
+      escalation."<a class="cite" href="https://docs.docker.com/engine/security/#docker-daemon-attack-surface" title="Docker Docs: Docker Engine security, Docker daemon attack surface">[Docker: security]</a>
+      That is the o1 incident exactly: the model scanned the challenge network and found "the Docker
+      daemon API running on the evaluation host VM was accessible due to a misconfiguration", then
+      used it to list containers and start a new one with the command
+      <code>cat flag.txt</code>.<a class="cite" href="https://cdn.openai.com/o1-system-card.pdf" title="OpenAI o1 System Card (Sept 12, 2024), §4.2.1 Observation of Reward Hacking on Cybersecurity Task">[o1 System Card]</a>
+      (The card does not say which port or how the scan was run.) One listening socket, on the
+      wrong address, reachable from the wrong network. On Docker Desktop there is an extra door:
+      the name <code>host.docker.internal</code> "resolves to the internal IP address of your
+      host",<a class="cite" href="https://docs.docker.com/desktop/features/networking/networking-how-tos/" title="Docker Docs: Explore networking how-tos on Docker Desktop">[Docker Desktop: networking]</a>
+      and through it a container here reached even the port published on the Mac's
+      <code>127.0.0.1</code>. Sandboxes on a laptop can reach the laptop.</p>
+    </div>
+
+    <h2 id="graders">Probing a service the agent started</h2>
+    <p>
+      A grader that connects once, immediately, measures a race: servers take time to start, and
+      "refused" in the first second means "not yet", not "never". The robust pattern is
+      <em>retry until a deadline</em>, with a timeout on every attempt, and a distinct outcome for
+      "never came up":
+    </p>
+<pre><code>#!/usr/bin/env bash
+# wait-for-port.sh HOST PORT [DEADLINE_SECONDS] -- exit 0 when HOST:PORT accepts a TCP connection
+set -u
+host=$1 port=$2 deadline=${3:-30}
+start=$SECONDS
+while (( SECONDS - start &lt; deadline )); do
+  if timeout 2 bash -c "echo &gt; /dev/tcp/$host/$port" 2&gt;/dev/null; then
+    echo "open after $(( SECONDS - start ))s"
+    exit 0
+  fi
+  sleep 1
+done
+echo "still not accepting connections on $host:$port after ${deadline}s" &gt;&amp;2
+exit 1</code></pre>
+<pre class="term"><code><span class="p">$</span> bash wait-for-port.sh lt-17-srv 8080 15      <span class="c"># server started 4 s after the probe began</span>
+<span class="o">open after 4s</span>
+<span class="p">$</span> bash wait-for-port.sh lt-17-srv 8001 5; echo "exit=$?"   <span class="c"># bound to loopback: never reachable</span>
+<span class="o">still not accepting connections on lt-17-srv:8001 after 5s
+exit=1</span></code></pre>
+    <p>
+      The script is ShellCheck-clean, needs nothing but bash and coreutils, and treats refusals and
+      timeouts alike — deliberately: from the grader's side both mean "not reachable yet".
+    </p>
+    <div class="evals">
+      <span class="label">In eval work · discuss</span>
+      <p><strong>Failure accounting.</strong> A connection error in a grader log is an observation
+      about the <em>run</em>; which column it belongs in depends on the cause, and the symptom table
+      tells you what to check. <em>Refused after the full deadline, and <code>ss</code> shows the
+      agent's server on 127.0.0.1 or not at all</em> → the agent's outcome (given a task statement
+      that made the requirement clear). <em>Timed out, <code>No route to host</code>, or
+      <code>Could not resolve host</code> between the task's own containers</em> → almost always the
+      environment: a sidecar that did not start, a network that was not attached. Record those as
+      <span class="term" data-g="infrastructure-failure">infrastructure failures</span>, report
+      <code>completed / scheduled</code> beside <code>correct / completed</code>, and do not let
+      them fall silently into "wrong answer" — or silently out of the denominator. A grader with no
+      retry converts start-up jitter into a
+      <span class="term" data-g="flaky-test">flaky</span> score that varies with host load, which
+      rises with concurrency: exactly the kind of noise that gets misread as a difference between
+      models.</p>
+    </div>
+
+    <p>Depth triage for this page:</p>
+    <table>
+      <tr><th>Learn to use</th><th>Recognise</th><th>Leave to a specialist</th></tr>
+      <tr><td><code>ss -tulpn</code>, <code>ss -tn</code>; the bind-address rule; the symptom table; <code>nc -zv -w</code>, <code>/dev/tcp</code> with <code>timeout</code>; <code>docker port</code></td>
+          <td>TCP states beyond LISTEN/ESTAB; <code>Recv-Q</code>/<code>Send-Q</code>; UDP's "refused"; ephemeral ports; <code>netstat -tlnp</code> as the legacy spelling of the same question</td>
+          <td>TCP tuning (retries, backlogs, buffers); packet-level debugging; host firewall design</td></tr>
+    </table>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A multi-container benchmark (an <code>app</code> service the agent works in, plus a
+      <code>db</code> service) reports 61% for model A and 54% for model B. Reading failures, you
+      find that 9% of B's rollouts and 2% of A's end with the agent's test command printing
+      <code>could not connect to server: Connection refused</code> for <code>db:5432</code> in the
+      first minute, after which the agent thrashes and gives up. A colleague says B "is worse at
+      databases". What do you establish first?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Observed vs supposed.</strong> Observed: an instant refusal on a name that
+        resolved. So DNS worked and a route existed; something actively said no. "B is worse at
+        databases" is a hypothesis about the model; the symptom is equally what you would see if
+        <code>db</code> was not listening <em>yet</em>, had crashed, or listened only on its own
+        loopback.</p>
+        <p><strong>Discriminating evidence.</strong> (1) Timing: compare the timestamp of the first
+        refused connection with the <code>db</code> container's log line announcing it is ready to
+        accept connections. If the refusals all precede readiness, it is a start-up race — the
+        harness hands control to the agent before the environment is up. (2) Why would it differ by
+        model? Check whether B's runs were scheduled at higher concurrency or on a busier host
+        (slower <code>db</code> start), and whether B simply issues its first command sooner. Either
+        makes the race bite B more without B being worse. (3) In a live reproduction,
+        <code>docker exec db ss -tln</code>: is 5432 on <code>0.0.0.0</code> or
+        <code>127.0.0.1</code>, and when does the line appear?</p>
+        <p><strong>Bearing on the score.</strong> If it is a race, those rollouts are
+        infrastructure failures: the agent was given a broken environment and partial credit for
+        "should have retried" is a different eval. Report them separately
+        (<code>completed / scheduled</code>), fix the harness to wait for <code>db</code> with a
+        deadline (a Compose healthcheck or the script above) before the agent starts, and rerun. A
+        seven-point gap with a seven-point difference in infrastructure failures is not yet a
+        finding about either model.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong>, run from your Mac's terminal with the
+      <code>lt-net:local</code> image from <a href="16-addresses-and-routes.html">page 16</a>'s lab.
+      Setup — a network, a server container with two web servers, and a client:</p>
+<pre class="term"><code><span class="p">$</span> docker network create lt-ports
+<span class="p">$</span> docker run -d --name lt-srv --network lt-ports -w /tmp lt-net:local sleep 3600
+<span class="p">$</span> docker exec -d lt-srv python3 -m http.server 8000
+<span class="p">$</span> docker exec -d lt-srv python3 -m http.server 8001 --bind 127.0.0.1
+<span class="p">$</span> docker run -d --name lt-cli --network lt-ports lt-net:local sleep 3600</code></pre>
+      <p>Clean up at the end with <code>docker rm -f lt-srv lt-cli; docker network rm lt-ports</code>.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Run <code>docker exec lt-srv ss -tlpn</code>. For each line
+          say: which process, which port, and who can connect.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec lt-srv ss -tlpn
+<span class="o">State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+LISTEN 0      4096      127.0.0.11:43993      0.0.0.0:*
+LISTEN 0      5            0.0.0.0:8000       0.0.0.0:*    users:(("python3",pid=7,fd=3))
+LISTEN 0      5          127.0.0.1:8001       0.0.0.0:*    users:(("python3",pid=13,fd=3))</span></code></pre>
+            <p>8000: python3, any interface — reachable from <code>lt-cli</code> and from the host.
+            8001: python3, loopback only — reachable only from inside <code>lt-srv</code>. The
+            <code>127.0.0.11</code> line is Docker's embedded DNS (random port, no visible
+            process). Your PIDs and that port will differ.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> From <code>lt-cli</code> you will run
+          <code>curl -sS -m 5 -o /dev/null -w '%{http_code}\n'</code> against
+          <code>http://lt-srv:8000/</code>, <code>http://lt-srv:8001/</code>, and
+          <code>http://localhost:8000/</code>. Write down the three results first.
+          <details class="solution"><summary>Solution</summary>
+            <p><code>200</code>; then <code>curl: (7) Failed to connect to lt-srv port 8001 after 0
+            ms</code>; then <code>curl: (7) Failed to connect to localhost port 8000 after 0
+            ms</code>. The second is a live server bound to loopback; the third is
+            <code>lt-cli</code>'s own localhost, where nothing listens. Confirm the second server is
+            fine: <code>docker exec lt-srv curl -sS -o /dev/null -w '%{http_code}\n'
+            http://127.0.0.1:8001/</code> prints <code>200</code>.</p>
+          </details></li>
+        <li><strong>Predict the symptom and its speed.</strong> From <code>lt-cli</code>, with
+          <code>-m 5</code> each time: <code>curl http://lt-srv:9999/</code>,
+          <code>curl http://192.0.2.1/</code> (an address reserved for documentation — nobody owns
+          it), <code>curl http://no-such-host.invalid/</code>. For each: which error, which exit
+          code, and roughly how long?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> curl -sS -m 5 http://lt-srv:9999/; echo "exit=$?"
+<span class="o">curl: (7) Failed to connect to lt-srv port 9999 after 1 ms: Couldn't connect to server
+exit=7</span>
+<span class="p">$</span> curl -sS -m 5 http://192.0.2.1/; echo "exit=$?"
+<span class="o">curl: (28) Connection timed out after 5006 milliseconds
+exit=28</span>
+<span class="p">$</span> curl -sS -m 5 http://no-such-host.invalid/; echo "exit=$?"
+<span class="o">curl: (6) Could not resolve host: no-such-host.invalid
+exit=6</span></code></pre>
+            <p>Refused: instant. Dropped: exactly as long as <code>-m</code> allowed — without
+            <code>-m</code> it would have been about two minutes. Name failure: instant, and a
+            different layer altogether.</p>
+          </details></li>
+        <li><strong>No tools.</strong> Start a stock image on the same network:
+          <code>docker run --rm -it --network lt-ports ubuntu:24.04 bash</code>. Confirm it has no
+          <code>curl</code>, <code>nc</code>, <code>ss</code> or <code>ip</code>, then determine
+          whether <code>lt-srv</code> ports 8000 and 8001 accept connections.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> command -v curl nc ss ip; echo "exit=$?"
+<span class="o">exit=1</span>
+<span class="p">#</span> (echo &gt; /dev/tcp/lt-srv/8000) 2&gt;/dev/null &amp;&amp; echo 8000 open
+<span class="o">8000 open</span>
+<span class="p">#</span> (echo &gt; /dev/tcp/lt-srv/8001) 2&gt;/dev/null || echo 8001 closed-or-filtered
+<span class="o">8001 closed-or-filtered</span></code></pre>
+            <p>The honest label is "closed or filtered": from outside you cannot tell a loopback-bound
+            server from no server from a REJECT rule. For an address that might silently drop, wrap
+            the probe in <code>timeout 3 bash -c '…'</code>.</p>
+          </details></li>
+        <li><strong>Eval task: the grader says the service is down.</strong> A rollout's transcript
+          ends with the agent running its server and printing
+          <code>Serving HTTP on 127.0.0.1 port 8001 (http://127.0.0.1:8001/) ...</code>; the agent
+          verified it with <code>curl localhost:8001</code> (200). The grader, in another container,
+          recorded <code>Connection refused</code> and scored 0. Using <code>lt-srv</code> (the
+          agent's box) and <code>lt-cli</code> (the grader), gather the evidence for a two-sentence
+          finding: what happened, and whose failure is it?
+          <details class="solution"><summary>Solution</summary>
+            <p>Evidence: <code>docker exec lt-srv ss -tln</code> shows
+            <code>127.0.0.1:8001</code> (exercise 1); from <code>lt-cli</code>,
+            <code>nc -zv -w 3 lt-srv 8001</code> prints <code>nc: connect to lt-srv (172.20.0.2)
+            port 8001 (tcp) failed: Connection refused</code>; inside <code>lt-srv</code> the same
+            URL returns 200. Finding: "The service was running and correct but bound to loopback, so
+            it was reachable only from inside the agent's container; the grader connects from a
+            separate container and was refused." Whose failure depends on the task text: if it said
+            the service must be reachable from other hosts (or named <code>0.0.0.0</code>), it is
+            the agent's. If it said only "start the server on port 8001", the requirement lived in
+            the harness, not the task — fix the task statement or grade via
+            <code>docker exec</code>, and re-score affected rollouts rather than reporting them as
+            model failures.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>ip(7), tcp(7), udp(7), connect(2), network_namespaces(7), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man7/ip.7.html">man7.org/…/ip.7.html</a>, <a href="https://man7.org/linux/man-pages/man7/tcp.7.html">…/tcp.7.html</a>, <a href="https://man7.org/linux/man-pages/man7/udp.7.html">…/udp.7.html</a>, <a href="https://man7.org/linux/man-pages/man2/connect.2.html">…/connect.2.html</a>, <a href="https://man7.org/linux/man-pages/man7/network_namespaces.7.html">…/network_namespaces.7.html</a></li>
+        <li>ss(8), iproute2. <a href="https://man7.org/linux/man-pages/man8/ss.8.html">man7.org/…/ss.8.html</a></li>
+        <li>iptables-extensions(8), REJECT target. <a href="https://man7.org/linux/man-pages/man8/iptables-extensions.8.html">man7.org/…/iptables-extensions.8.html</a></li>
+        <li>Linux kernel documentation: IP Sysctl (<code>ip_local_port_range</code>, <code>ip_unprivileged_port_start</code>, <code>tcp_syn_retries</code>). <a href="https://docs.kernel.org/networking/ip-sysctl.html">docs.kernel.org/networking/ip-sysctl.html</a></li>
+        <li>Cotton, M. et al. (2011). IANA Procedures for the Management of the Service Name and Transport Protocol Port Number Registry. RFC 6335, §6. <a href="https://www.rfc-editor.org/rfc/rfc6335#section-6">rfc-editor.org/rfc/rfc6335</a></li>
+        <li>Eddy, W. (ed.) (2022). Transmission Control Protocol (TCP). RFC 9293, §3.5.2. <a href="https://www.rfc-editor.org/rfc/rfc9293#section-3.5.2">rfc-editor.org/rfc/rfc9293</a></li>
+        <li>Bash Reference Manual, §3.6 Redirections. <a href="https://www.gnu.org/software/bash/manual/bash.html#Redirections">gnu.org/software/bash/manual/</a></li>
+        <li>Docker Docs: Port publishing and mapping. <a href="https://docs.docker.com/engine/network/port-publishing/">docs.docker.com/engine/network/port-publishing/</a></li>
+        <li>Docker Docs: Packet filtering and firewalls (Docker and ufw). <a href="https://docs.docker.com/engine/network/packet-filtering-firewalls/">docs.docker.com/engine/network/packet-filtering-firewalls/</a></li>
+        <li>Docker Docs: Networking in Compose. <a href="https://docs.docker.com/compose/how-tos/networking/#default-network-and-service-discovery">docs.docker.com/compose/how-tos/networking/</a></li>
+        <li>Docker Docs: Docker Engine security, Docker daemon attack surface. <a href="https://docs.docker.com/engine/security/#docker-daemon-attack-surface">docs.docker.com/engine/security/</a></li>
+        <li>Docker Docs: Explore networking how-tos on Docker Desktop. <a href="https://docs.docker.com/desktop/features/networking/networking-how-tos/">docs.docker.com/desktop/…/networking-how-tos/</a></li>
+        <li>OpenAI (2024). OpenAI o1 System Card (version dated Sept 12, 2024), §4.2.1. <a href="https://cdn.openai.com/o1-system-card.pdf">cdn.openai.com/o1-system-card.pdf</a></li>
+        <li>Terminal sessions executed in <code>ubuntu:24.04</code> and <code>alpine:3.20</code> containers (Docker 28.1.1, Docker Desktop on macOS); raw record in <code>research/verify/17-ports-and-sockets.txt</code>.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

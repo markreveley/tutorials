@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Man Pages and Getting Help · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix F</p>
+    <h1>Man pages and getting help</h1>
+    <p class="lede">
+      The course teaches about seventy commands and promises you can find the rest. This appendix
+      is how: the manual and its numbered sections, reading a SYNOPSIS, the three other places help
+      lives, what to do in a minimal image where the manual has been deleted, and what a citation
+      like <code>[signal(7)]</code> means.
+    </p>
+
+    <h2 id="four-sources">Four places help lives</h2>
+    <table>
+      <tr><th>Ask</th><th>Answers for</th><th>Present in a minimal image?</th></tr>
+      <tr><td><code>man <em>name</em></code></td><td>Programs, system calls, file formats, concepts — the reference manual</td><td>Usually not (see <a href="#minimal-images">below</a>)</td></tr>
+      <tr><td><code><em>command</em> --help</code></td><td>That one program's options, in brief</td><td>Yes: it is built into the program</td></tr>
+      <tr><td><code>help <em>name</em></code></td><td>Commands that are part of <span class="term" data-g="bash">bash</span> itself (<code>cd</code>, <code>export</code>, <code>set</code>, <code>trap</code> …)</td><td>Yes, wherever bash is</td></tr>
+      <tr><td><code>type <em>name</em></code></td><td>Not help, but the question before help: <em>what is this name?</em></td><td>Yes</td></tr>
+    </table>
+    <p>Start with <code>type</code>, because it tells you which of the others to use:</p>
+<pre class="term"><code><span class="p">$</span> type cd kill ls timeout
+<span class="o">cd is a shell builtin
+kill is a shell builtin
+ls is /usr/bin/ls
+timeout is /usr/bin/timeout</span>
+<span class="p">$</span> type -a kill
+<span class="o">kill is a shell builtin
+kill is /usr/bin/kill
+kill is /bin/kill</span>
+<span class="p">$</span> man cd
+<span class="o">No manual entry for cd</span>
+<span class="p">$</span> help cd | head -2
+<span class="o">cd: cd [-L|[-P [-e]] [-@]] [dir]
+    Change the shell working directory.</span></code></pre>
+    <p>
+      A <span class="term" data-g="builtin">builtin</span> is a command implemented inside the
+      shell rather than as a separate program
+      (<a href="../pages/02-shell-and-commands.html">page 2</a> explains why <code>cd</code> has to
+      be one). Builtins have no man page of their own; <code>help</code> documents them.
+      <code>kill</code> is both: bash has its own, and there is also a program
+      <code>/usr/bin/kill</code>. When you type <code>kill</code> you get the builtin, but
+      <code>man kill</code> describes the program. The two agree on the basics and differ at the
+      edges, which is worth knowing before you trust either page about an edge.
+    </p>
+
+    <h2 id="sections">The manual and its sections</h2>
+    <p>
+      The manual is divided into numbered sections, because the same name can mean different
+      things. The list, from <code>man man</code> on Ubuntu 24.04:
+    </p>
+<pre class="term"><code><span class="o">       1   Executable programs or shell commands
+       2   System calls (functions provided by the kernel)
+       3   Library calls (functions within program libraries)
+       4   Special files (usually found in /dev)
+       5   File formats and conventions, e.g. /etc/passwd
+       6   Games
+       7   Miscellaneous  (including  macro  packages  and  conventions), e.g.
+           man(7), groff(7), man-pages(7)
+       8   System administration commands (usually only for root)
+       9   Kernel routines [Non standard]</span></code></pre>
+    <p>
+      A <span class="term" data-g="man-page">man page</span> is always named with its section in
+      parentheses, and the convention is used everywhere in Linux writing, including this course.
+      Three pages about ending a process show why the number matters:
+    </p>
+    <table>
+      <tr><th>Page</th><th>Section</th><th>What it documents</th><th>You read it when</th></tr>
+      <tr><td><code>kill(1)</code></td><td>1 · programs</td><td>The <code>kill</code> command and its options</td><td>you want to send a signal from the shell</td></tr>
+      <tr><td><code>kill(2)</code></td><td>2 · <span class="term" data-g="system-call">system calls</span></td><td>The kernel service the command uses; permission rules, error codes</td><td>you need to know <em>who is allowed</em> to signal whom, or what <code>EPERM</code> means here</td></tr>
+      <tr><td><code>signal(7)</code></td><td>7 · overviews</td><td>The concept: the list of signals, their numbers and default actions, which cannot be caught</td><td>you are decoding an exit status (<a href="../pages/10-signals-exit-codes.html">page 10</a>)</td></tr>
+    </table>
+    <p>
+      For an evals engineer the sections that pay are <strong>1</strong> and <strong>8</strong>
+      (commands), <strong>5</strong> (file formats: <code>passwd(5)</code>,
+      <code>resolv.conf(5)</code>) and <strong>7</strong> (the overviews this course cites most:
+      <code>signal(7)</code>, <code>capabilities(7)</code>, <code>namespaces(7)</code>,
+      <code>cgroups(7)</code>). Sections 2 and 3 are written for C programmers; learn to recognize
+      them and to mine them for one fact — an error's meaning, a permission rule — without reading
+      the rest.
+    </p>
+    <p>
+      Ask for a section by putting the number first. If you leave it out, <code>man</code> shows
+      the first match in its search order, which is not always the one you meant. (This session is
+      from a lab container with the programmer's pages, <code>manpages-dev</code>, also installed,
+      as they are on most full systems; without them sections 2 and 3 are simply absent.)
+    </p>
+<pre class="term"><code><span class="p">$</span> man -f kill                <span class="c"># -f: which sections have a page by this name? (same as: whatis kill)</span>
+<span class="o">kill (1)             - send a signal to a process
+kill (2)             - send signal to a process</span>
+<span class="p">$</span> man -w signal              <span class="c"># -w: which file would be shown?</span>
+<span class="o">/usr/share/man/man2/<span class="hl">signal.2</span>.gz</span>
+<span class="p">$</span> man -w 7 signal
+<span class="o">/usr/share/man/man7/<span class="hl">signal.7</span>.gz</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><code>man signal</code> opens <code>signal(2)</code>, a C function, and a beginner looking
+      for the table of signal numbers concludes the manual is useless. The table is in
+      <code>man 7 signal</code>. The same trap: <code>man passwd</code> is the command;
+      the file format is <code>man 5 passwd</code>. When a page seems to be about the wrong thing,
+      run <code>man -f <em>name</em></code> and check for another section.</p>
+    </div>
+
+    <h3 id="searching">Finding a page when you do not know its name</h3>
+<pre class="term"><code><span class="p">$</span> man -k "send a signal"     <span class="c"># -k: search names and one-line descriptions (same as: apropos)</span>
+<span class="o">kill (1)             - send a signal to a process
+killall5 (8)         - send a signal to all processes
+pidfd_send_signal (2) - send a signal to a process specified by a file descri...
+pthread_kill (3)     - send a signal to a thread
+…</span>
+<span class="p">$</span> apropos -s 1 signal          <span class="c"># restrict to section 1: commands only</span>
+<span class="o">kill (1)             - send a signal to a process
+pgrep (1)            - look up, signal, or wait for processes based on name a...
+pidwait (1)          - look up, signal, or wait for processes based on name a...
+pkill (1)            - look up, signal, or wait for processes based on name a...
+…</span></code></pre>
+    <p>
+      The search covers only the one-line descriptions, so use plain words a description would
+      contain ("signal", "mount", "list open"), and narrow with <code>-s</code>.
+    </p>
+
+    <h2 id="synopsis">Reading a SYNOPSIS</h2>
+    <p>
+      Every page in sections 1 and 8 opens with a SYNOPSIS: the command's grammar in a compact
+      notation. Two real ones:
+    </p>
+<pre class="term"><code><span class="p">$</span> man timeout
+<span class="o">SYNOPSIS
+       timeout [OPTION] DURATION COMMAND [ARG]...
+       timeout [OPTION]</span>
+<span class="p">$</span> man cp
+<span class="o">SYNOPSIS
+       cp [OPTION]... [-T] SOURCE DEST
+       cp [OPTION]... SOURCE... DIRECTORY
+       cp [OPTION]... -t DIRECTORY SOURCE...</span></code></pre>
+    <table>
+      <tr><th>Notation</th><th>Meaning</th><th>In the examples</th></tr>
+      <tr><td><code>[ ]</code></td><td>Optional</td><td><code>[OPTION]</code>: options may be omitted</td></tr>
+      <tr><td><code>...</code></td><td>The thing before it may repeat</td><td><code>SOURCE...</code>: one or more sources; <code>[ARG]...</code>: zero or more</td></tr>
+      <tr><td>UPPERCASE (underlined in a terminal)</td><td>A placeholder you replace</td><td><code>DURATION</code> becomes <code>30s</code></td></tr>
+      <tr><td>lowercase, literal punctuation</td><td>Type exactly as shown</td><td><code>-t</code>, <code>cp</code></td></tr>
+      <tr><td><code>a | b</code></td><td>One or the other</td><td><code>kill [-s sigspec | -n signum | -sigspec]</code> in <code>help kill</code></td></tr>
+      <tr><td>Several lines</td><td>Separate forms of the command</td><td><code>cp</code> has three: file to file, files into a directory, and the same with the directory named first</td></tr>
+    </table>
+    <p>
+      Order matters in a synopsis. <code>timeout [OPTION] DURATION COMMAND [ARG]...</code> says
+      options for <code>timeout</code> go <em>before</em> the duration, and everything after
+      <code>COMMAND</code> belongs to the command being run. That is why
+      <code>timeout 5 ls -l</code> works as hoped and <code>-l</code> is not taken as an option to
+      <code>timeout</code>.
+    </p>
+    <p>
+      After SYNOPSIS come DESCRIPTION and the option list, then the sections people skip and should
+      not: <strong>EXIT STATUS</strong> (what the numbers mean — see the lab), <strong>FILES</strong>
+      and <strong>ENVIRONMENT</strong> (what the program reads without being told),
+      <strong>SEE ALSO</strong> (the next page to read).
+    </p>
+
+    <h3 id="in-the-pager">Moving around inside a page</h3>
+    <p>
+      <code>man</code> displays pages through a <span class="term" data-g="pager">pager</span>
+      called <code>less</code>. The same keys work whenever you run <code>less</code> on a log file.
+      From <code>less --help</code>:
+    </p>
+<pre class="term"><code><span class="o">  h  H                 Display this help.
+  q  :q  Q  :Q  ZZ     Exit.
+  b  ^B  ESC-v      *  Backward one window (or N lines).
+  /pattern          *  Search forward for (N-th) matching line.
+  ?pattern          *  Search backward for (N-th) matching line.
+  g  &lt;  ESC-&lt;       *  Go to first line in file (or line N).
+  G  &gt;  ESC-&gt;       *  Go to last line in file (or line N).</span></code></pre>
+    <p>
+      The working set: <kbd>Space</kbd> forward a screen, <kbd>b</kbd> back, <kbd>/</kbd> then a
+      word and <kbd>Enter</kbd> to search, <kbd>n</kbd> for the next match, <kbd>q</kbd> to quit.
+      To find an option, search for it with leading spaces so you land on its definition instead
+      of a mention: <code>/   -k</code>. Or skip the pager: <code>man timeout | grep -A3 -- -k</code>.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>A pager waits for keys. When <code>man</code> writes to a pipe or a file instead of a
+      terminal it prints the whole page and exits — <code>man timeout | wc -l</code> printed 95 in
+      our lab container with nobody pressing anything. But a harness that gives the agent a real
+      terminal (Terminal-Bench's reference agent drives a tmux
+      session<a class="cite" href="https://arxiv.org/html/2601.11868#A6" title="Merrill et al. 2026, Terminal-Bench, Appendix F: Terminus 2">[Terminal-Bench]</a>)
+      will leave it sitting inside <code>less</code> until it sends <kbd>q</kbd>. In a transcript, a
+      <code>man</code>, <code>git log</code> or <code>systemctl status</code> call followed by
+      garbled output or a timeout is often exactly this. It is an agent-fluency failure you can
+      design around: task images that set <code>PAGER=cat</code> and <code>MANPAGER=cat</code>
+      remove the trap for every agent equally
+      (<a href="../pages/27-reading-terminal-transcripts.html">page 27</a>).</p>
+    </div>
+
+    <h2 id="dash-help">--help, and help for Docker</h2>
+    <p>
+      Nearly every GNU program answers <code>--help</code> with a usage line, its options, and often
+      its exit statuses. It is shorter than the man page, always matches the installed version, and
+      is there when the manual is not. A mistyped option points you at it:
+    </p>
+<pre class="term"><code><span class="p">$</span> ls --hepl
+<span class="o">ls: unrecognized option '--hepl'
+Try 'ls --help' for more information.</span>
+<span class="p">$</span> timeout --help | head -3
+<span class="o">Usage: timeout [OPTION] DURATION COMMAND [ARG]...
+  or:  timeout [OPTION]
+Start COMMAND, and kill it if still running after DURATION.</span></code></pre>
+    <p>
+      Docker has no man pages on a Mac; its help is a tree you walk with <code>--help</code> at each
+      level. <code>docker --help</code> lists commands; <code>docker <em>command</em> --help</code>
+      gives that command's synopsis and options:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --help | head -3
+<span class="o">Usage:  docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+
+Create and run a new container from an image</span>
+<span class="p">$</span> docker run --help | grep -E -- ' --(rm|memory|network|read-only) '
+<span class="o">  -m, --memory bytes                     Memory limit
+      --network network                  Connect a container to a network
+      --read-only                        Mount the container's root
+      --rm                               Automatically remove the</span></code></pre>
+    <p>
+      The synopsis rule from above explains a classic mistake:
+      <code>[OPTIONS]</code> come before <code>IMAGE</code>, and everything after the image is the
+      command to run inside. <code>docker run ubuntu:24.04 --rm bash</code> tries to execute a
+      program called <code>--rm</code> and fails with
+      <code>exec: "--rm": executable file not found in $PATH</code>, exit status 127. The word after an option's name (<code>bytes</code>,
+      <code>network</code>) is the type of value it takes; options with no such word are on/off
+      switches. With about a hundred options, <code>grep</code> is how you read this page.
+      The full semantics are in the online reference that the course cites as
+      <a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/" title="Docker Docs, docker container run (CLI reference)">[Docker: run]</a>.
+    </p>
+
+    <h2 id="minimal-images">Minimal images have no manual</h2>
+    <p>
+      Container images are trimmed for size, and documentation goes first. The three base images
+      the course uses:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 man ls
+<span class="o">This system has been minimized by removing packages and content that are
+not required on a system that users do not log into.
+…</span>
+<span class="p">$</span> docker run --rm debian:bookworm-slim man ls
+<span class="o">docker: Error response from daemon: … exec: "man": executable file not found in $PATH: unknown</span>
+<span class="p">$</span> docker run --rm alpine:3.20 sh -c 'ls --help 2&gt;&amp;1 | head -3'
+<span class="o">BusyBox v1.36.1 (2025-11-23 14:32:18 UTC) multi-call binary.
+
+Usage: ls [-1AaCxdLHRFplinshrSXvctu] [-w WIDTH] [FILE]...</span></code></pre>
+    <p>
+      Ubuntu's image has a stub that prints a notice; Debian's slim image and Alpine have no
+      <code>man</code> at all. Alpine's <code>ls</code> is not GNU's: it is
+      <span class="term" data-g="busybox">BusyBox</span>, one small program standing in for
+      hundreds of commands, with fewer options, and its <code>--help</code> is the only
+      documentation on board. What to do, in order of effort:
+    </p>
+    <ol>
+      <li><strong>Use <code>--help</code> and <code>help</code>.</strong> They are always there.</li>
+      <li><strong>Read the page online.</strong> <a href="https://man7.org/linux/man-pages/">man7.org</a>
+        publishes "HTML renderings of the man pages from the Linux man-pages project as well as a
+        curated collection of pages from various other free software
+        projects."<a class="cite" href="https://man7.org/linux/man-pages/index.html" title="man7.org, Linux man pages online (index page)">[man7.org]</a>
+        Its addresses are predictable: <code>signal(7)</code> is at
+        <code>man7.org/linux/man-pages/man7/signal.7.html</code>. For Debian- and Ubuntu-specific
+        tools such as <code>apt-get(8)</code>, use
+        <a href="https://manpages.debian.org/">manpages.debian.org</a> or
+        <a href="https://manpages.ubuntu.com/">manpages.ubuntu.com</a>, which let you pick the
+        release.</li>
+      <li><strong>Read it in your lab container</strong>, where
+        <a href="../pages/01-lab-setup.html#man-pages">page 1</a> restored the manual with
+        <code>unminimize</code>. Install <code>manpages-dev</code> as well if you want sections 2
+        and 3.</li>
+    </ol>
+    <div class="warn">
+      <span class="label">Caveat — which version are you reading?</span>
+      <p>The manual describes the software it shipped with. man7.org renders the newest release
+      of the man-pages project (each page's COLOPHON, at the bottom, names it: 6.19 when this was
+      written), while Ubuntu 24.04 installs version 6.7. For long-stable material such as signal
+      numbers the difference is nil; for newer kernel features, check the COLOPHON, and treat the
+      box in front of you as the authority — <code>--help</code> cannot be out of date. The same
+      caution applies more strongly to your Mac: <code>man ls</code> in macOS's Terminal documents
+      the BSD <code>ls</code>, and <code>man timeout</code> there opens a C library page
+      (<code>curs_inopts(3X)</code>), because macOS has no <code>timeout</code> command. Read Linux
+      manuals on Linux or online (<a href="e-macos-vs-linux.html">Appendix E</a>).</p>
+    </div>
+    <p>
+      Two more tools you will see mentioned. <code>info</code> is the GNU project's own manual
+      system; some GNU man pages end by pointing to it for the full text, and the same manuals are
+      on the web (the course cites the Bash one as <code>[Bash Manual]</code>). <code>tldr</code> is
+      a community collection of short example-only pages. Neither is installed in the lab image;
+      neither is needed for the course. Recognize the names.
+    </p>
+
+    <h2 id="citations">How this course cites</h2>
+    <p>
+      Every bracketed superscript is a link to the primary source for the sentence it follows, and
+      the box at the foot of each page lists them in full.
+    </p>
+    <table>
+      <tr><th>Tag</th><th>Read it as</th><th>Links to</th></tr>
+      <tr><td><code>[signal(7)]</code>, <code>[capabilities(7)]</code>, <code>[proc(5)]</code></td><td>The man page of that name and section</td><td>man7.org</td></tr>
+      <tr><td><code>[apt-get(8)]</code></td><td>A distribution-specific man page</td><td>manpages.debian.org</td></tr>
+      <tr><td><code>[Kernel: cgroup-v2]</code></td><td>The kernel's own documentation</td><td>docs.kernel.org</td></tr>
+      <tr><td><code>[Docker: run]</code>, <code>[Docker: security]</code></td><td>A page of Docker's documentation</td><td>docs.docker.com</td></tr>
+      <tr><td><code>[Bash Manual]</code>, <code>[POSIX]</code>, <code>[RFC 1918]</code></td><td>A reference manual or standard</td><td>gnu.org, the Open Group, rfc-editor.org</td></tr>
+      <tr><td><code>[Inspect]</code>, <code>[Terminal-Bench]</code>, <code>[SWE-bench]</code>, <code>[METR]</code> …</td><td>Harness documentation, papers, incident reports</td><td>the project or publisher</td></tr>
+    </table>
+    <p>
+      Two kinds of statement carry no tag. Terminal output needs none: it was produced by running
+      the command shown, and you can run it again. General explanation (what a process is, how a
+      pipe joins two programs) needs none either. Everything else — a default, a limit, a
+      guarantee, a number, an incident — has a tag, and if you ever need to rely on such a fact at
+      work, follow the link and read the sentence in its original context. That habit is the
+      evidence-versus-hypothesis discipline applied to reading: a man page quoted from memory is a
+      hypothesis; the page on the box is evidence.
+    </p>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Where:</strong> the container lab from
+      <a href="../pages/01-lab-setup.html">page 1</a>, built from the <code>lt-lab</code> image so
+      that man pages are present. For exercise 2's section 7 pages nothing extra is needed.</p>
+
+      <p><strong>1. Find the right section.</strong> Which man page documents the <em>format</em>
+      of <code>/etc/shadow</code>? Find out without opening any page.</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> man -f shadow
+<span class="o">shadow (5)           - shadowed password file</span></code></pre>
+        <p>Section 5 is file formats, so <code>man 5 shadow</code>.
+        (<a href="../pages/07-users-groups-root.html">Page 7</a> reads it.)</p>
+      </details>
+
+      <p><strong>2. Predict, then verify.</strong> A process writes to a pipe whose reader has
+      gone away and receives SIGPIPE. Before looking: what is that signal's number, and does it
+      kill the process by default? Now find both answers in the manual with one <code>grep</code>
+      and no pager.</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> man 7 signal | grep -E '^ +SIGPIPE'
+<span class="o">       SIGPIPE      P1990      Term    Broken pipe: write to pipe with no
+       SIGPIPE         13          13      13      13</span></code></pre>
+        <p><code>Term</code> is the default action — terminate — and the number is 13 on every
+        architecture column. A program killed this way reports exit status 128 + 13 = 141, which
+        is what <code>yes | head -1; echo "${PIPESTATUS[0]}"</code> prints for <code>yes</code>
+        (<a href="../pages/04-streams-pipes-redirection.html">page 4</a>). Note that
+        <code>man signal</code> without the <code>7</code> would have searched the wrong
+        page.</p>
+      </details>
+
+      <p><strong>3. An eval-flavoured one.</strong> In a transcript, an agent inside a stock
+      <code>ubuntu:24.04</code> task image runs <code>man timeout</code>, gets the "minimized"
+      notice, and then guesses that a timed-out command exits with status 1. Its script treats
+      124 as a crash and the rollout fails. In a fresh <code>ubuntu:24.04</code> container, find
+      the authoritative list of <code>timeout</code>'s exit statuses without any man page. Then:
+      is this failure the model's or the environment's?</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 bash -c 'timeout --help | grep -A6 "^Exit status"'
+<span class="o">Exit status:
+  124  if COMMAND times out, and --preserve-status is not specified
+  125  if the timeout command itself fails
+  126  if COMMAND is found but cannot be invoked
+  127  if COMMAND cannot be found
+  137  if COMMAND (or timeout itself) is sent the KILL (9) signal (128+9)
+  -    the exit status of COMMAND otherwise</span></code></pre>
+        <p>The information was one <code>--help</code> away, so the primary classification is
+        model Linux-fluency: the agent had a working route to the fact and guessed instead. But
+        record the environment observation too — the image's manual is a stub — because it applies
+        to every agent on every task, and whoever maintains the benchmark may decide that an image
+        meant to resemble a developer's machine should have its documentation. One failure, two
+        findings, neither dropped.</p>
+      </details>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>man7.org, "Linux man pages online" (index page describing the collection; COLOPHON of signal(7) for the rendered release). <a href="https://man7.org/linux/man-pages/index.html">man7.org/linux/man-pages</a></li>
+        <li>Mike A. Merrill, Alexander G. Shaw, Nicholas Carlini et al., "Terminal-Bench: Benchmarking Agents on Hard, Realistic Tasks in Command Line Interfaces," arXiv:2601.11868, 2026, Appendix F (Terminus 2). <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a></li>
+        <li>Docker Docs, "docker container run" (CLI reference). <a href="https://docs.docker.com/reference/cli/docker/container/run/">docs.docker.com/reference/cli/docker/container/run</a></li>
+        <li>Everything else is executed mechanics: <code>man</code> (man-db 2.12.0), <code>manpages</code> 6.7, bash 5.2 and GNU coreutils 9.4 on Ubuntu 24.04; <code>debian:bookworm-slim</code>; <code>alpine:3.20</code> (BusyBox 1.36.1); macOS 15.4 and Docker 28.1.1 for the Mac-side statements. Run 21 September 2026.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Files and the Filesystem Tree · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · The Shell</p>
+    <h1>Files and the filesystem tree</h1>
+    <p class="lede">
+      One tree, rooted at <code>/</code>, holds everything on a Linux box: programs, configuration,
+      logs, devices, even a live view of the kernel. This page teaches where things live and why,
+      what a "file" really is underneath its name, and the one command — <code>find</code> — that
+      answers the question every agentic eval eventually asks: <em>what did the agent change?</em>
+    </p>
+
+    <h2 id="one-tree">One tree, no drive letters</h2>
+    <p>
+      There is no <code>C:</code> and no <code>/Volumes</code>. Every file on a Linux system has a
+      place in a single hierarchy that starts at the
+      <span class="term" data-g="root-directory">root directory</span>, written <code>/</code>. Extra
+      disks, network shares, and the kernel's own pseudo-files are grafted onto directories of that
+      same tree (<span class="term" data-g="mount">mounting</span> — <a href="14-mounts-and-filesystems.html">page 14</a>).
+      A path is a route through it, and there are two ways to write one:
+    </p>
+    <ul>
+      <li>An <span class="term" data-g="absolute-path">absolute path</span> starts with <code>/</code>
+        and means the same thing no matter where you are: <code>/var/log/dpkg.log</code>.</li>
+      <li>A <span class="term" data-g="relative-path">relative path</span> starts anywhere else and is
+        resolved from the process's current working directory: <code>tests/test_basic.py</code>.</li>
+    </ul>
+    <p>
+      Every directory contains two special entries: <code>.</code> (itself) and <code>..</code> (its
+      parent). The shell adds one shorthand of its own, <code>~</code>, for your
+      <span class="term" data-g="home-directory">home directory</span>.
+    </p>
+    <pre class="term"><code><span class="p">$</span> pwd
+<span class="o">/home/learner</span>
+<span class="p">$</span> cd /var/log
+<span class="p">$</span> cd ../../etc               <span class="c"># up to /var, up to /, down into etc</span>
+<span class="p">$</span> pwd
+<span class="o">/etc</span>
+<span class="p">$</span> cd ~ ; pwd
+<span class="o">/home/learner</span>
+<span class="p">$</span> cd -                      <span class="c"># back to the previous directory</span>
+<span class="o">/etc</span></code></pre>
+    <p>
+      Recall from <a href="02-shell-and-commands.html#why-cd-is-a-builtin">page 2</a> that the working
+      directory belongs to a <em>process</em>. A harness that starts each tool call in a fresh shell
+      resets it every time — so in transcripts and graders alike, absolute paths are the ones that
+      can't be misread.
+    </p>
+
+    <h2 id="fhs-tour">Where things live, and why you'd look there</h2>
+    <p>
+      The layout isn't arbitrary. The <span class="term" data-g="fhs">Filesystem Hierarchy
+      Standard</span> (FHS) sorts files along two axes — shareable or host-specific, static or
+      variable — and gives each combination a
+      home.<a class="cite" href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html" title="Filesystem Hierarchy Standard 3.0, Chapter 2 The Filesystem">[FHS]</a>
+      Programs are static and go under <code>/usr</code>; configuration is host-specific and goes in
+      <code>/etc</code>; anything that grows while the machine runs goes in <code>/var</code>. Here is
+      the top of Ubuntu 24.04's tree:
+    </p>
+    <pre class="term"><code><span class="p">mac$</span> docker run --rm ubuntu:24.04 ls -l /
+<span class="o">total 48
+<span class="hl">lrwxrwxrwx   1 root root    7 Apr 22  2024 bin -&gt; usr/bin</span>
+drwxr-xr-x   2 root root 4096 Apr 22  2024 boot
+drwxr-xr-x   5 root root  340 Sep 21 16:14 dev
+drwxr-xr-x   1 root root 4096 Sep 21 16:14 etc
+drwxr-xr-x   3 root root 4096 Sep 11 02:12 home
+<span class="hl">lrwxrwxrwx   1 root root    7 Apr 22  2024 lib -&gt; usr/lib</span>
+…
+dr-xr-xr-x 280 root root    0 Sep 21 16:14 proc
+drwx------   2 root root 4096 Sep 11 02:12 root
+drwxr-xr-x   4 root root 4096 Sep 11 02:12 run
+<span class="hl">lrwxrwxrwx   1 root root    8 Apr 22  2024 sbin -&gt; usr/sbin</span>
+dr-xr-xr-x  11 root root    0 Sep 21 10:54 sys
+drwxrwxrwt   2 root root 4096 Sep 11 02:12 tmp
+drwxr-xr-x  11 root root 4096 Sep 11 02:06 usr
+drwxr-xr-x  11 root root 4096 Sep 11 02:12 var</span></code></pre>
+    <table>
+      <tr><th>Directory</th><th>What lives there</th><th>Why an evals engineer looks there</th></tr>
+      <tr><td><code>/etc</code></td><td>Host-specific configuration; static text files<a class="cite" href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html" title="FHS 3.0, 3.7.1 /etc Purpose">[FHS]</a></td><td><code>/etc/passwd</code> (who exists), <code>/etc/resolv.conf</code> and <code>/etc/hosts</code> (name resolution), <code>/etc/os-release</code> (which distro am I in?)</td></tr>
+      <tr><td><code>/usr</code></td><td>Shareable, read-only data: the installed programs (<code>/usr/bin</code>) and libraries<a class="cite" href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html" title="FHS 3.0, 4.1 /usr Purpose">[FHS]</a></td><td>Nothing here should change during a rollout. If it did, ask why.</td></tr>
+      <tr><td><code>/usr/local</code>, <code>/opt</code></td><td>Software installed by the administrator rather than the distro; add-on packages</td><td>Where task-image authors put tools — and graders. <code>/usr/local/bin</code> comes <em>first</em> in the default <code>PATH</code>.</td></tr>
+      <tr><td><code>/var/log</code></td><td>Log files<a class="cite" href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html" title="FHS 3.0, 5.10.1 /var/log Purpose">[FHS]</a></td><td>Audit question 5, <em>where are the logs?</em> In a container it's nearly empty (<a href="13-services-and-logs.html">page 13</a> explains where they went).</td></tr>
+      <tr><td><code>/var/lib</code></td><td>State that programs modify as they run</td><td>The package database, <code>/var/lib/dpkg</code>: what is installed, and when (<a href="15-packages-reproducibility.html">page 15</a>)</td></tr>
+      <tr><td><code>/tmp</code>, <code>/var/tmp</code></td><td>Temporary files; world-writable</td><td>Every agent's scratch space, and the first place stale state from a previous rollout hides</td></tr>
+      <tr><td><code>/home/<em>user</em></code>, <code>/root</code></td><td>Users' home directories; root's is separate</td><td>Dotfiles that change shell behaviour (page 2); an agent whose <code>~</code> is <code>/root</code> is running as root</td></tr>
+      <tr><td><code>/run</code></td><td>Runtime data since boot: PID files, sockets<a class="cite" href="https://man7.org/linux/man-pages/man7/hier.7.html" title="hier(7), Linux man-pages 6.19, /run">[hier(7)]</a></td><td><code>/run/docker.sock</code> (as <code>/var/run/docker.sock</code>) appearing inside a sandbox is a finding — <a href="23-hardening-containers.html">page 23</a></td></tr>
+      <tr><td><code>/dev</code></td><td><span class="term" data-g="device-file">Device files</span></td><td><code>/dev/null</code>; what devices the sandbox was given</td></tr>
+      <tr><td><code>/proc</code>, <code>/sys</code></td><td>Not on disk at all: the kernel's view of processes and of hardware, presented as files<a class="cite" href="https://man7.org/linux/man-pages/man7/hier.7.html" title="hier(7), Linux man-pages 6.19, /proc and /sys">[hier(7)]</a></td><td>The raw material for audit questions 1 and 2 (<a href="09-processes.html">page 9</a>, page 14)</td></tr>
+    </table>
+    <div class="callout">
+      <span class="label">Background — the highlighted symlinks</span>
+      <p>Historically <code>/bin</code> held the few commands needed before <code>/usr</code> was
+      mounted, and the FHS still describes them as separate directories. Modern Debian and Ubuntu have
+      merged them: Debian 12's release notes say the legacy directories "are replaced with symlinks to
+      the corresponding locations" under
+      <code>/usr</code>.<a class="cite" href="https://www.debian.org/releases/bookworm/amd64/release-notes/ch-information.en.html#a-merged-usr-is-now-required" title="Debian 12 (bookworm) release notes, 5.1.14 A merged-/usr is now required">[Debian 12 Notes]</a>
+      So <code>/bin/ls</code> and <code>/usr/bin/ls</code> are the same file. Alpine is the
+      counter-example: in <code>alpine:3.20</code>, <code>ls -ld /bin /sbin /lib</code> shows three
+      real directories. A script with a hard-coded <code>/usr/bin/…</code> path can work on one and
+      fail with 127 on the other.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveat — <code>/tmp</code> is not guaranteed to be cleaned</span>
+      <p>Folklore says <code>/tmp</code> is wiped at reboot. The FHS only <em>recommends</em> that;
+      its actual requirement is that programs "must not assume that any files or directories in
+      <code>/tmp</code> are preserved between invocations of the
+      program".<a class="cite" href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html" title="FHS 3.0, 3.18.1 /tmp Purpose and Rationale">[FHS]</a>
+      And a container that is stopped and restarted hasn't "booted" anything: its <code>/tmp</code>
+      persists for the container's life. If your harness reuses containers between rollouts,
+      <code>/tmp</code> is shared state between samples unless <em>you</em> reset it.</p>
+    </div>
+
+    <h2 id="core-commands">The working set</h2>
+    <p>
+      A dozen commands cover daily file work. One session shows most of them (run in the
+      container lab as <code>learner</code>; <code>tree</code> and <code>file</code> were installed on
+      <a href="01-lab-setup.html">page 1</a>):
+    </p>
+    <pre class="term"><code><span class="p">$</span> mkdir -p work/app/tests            <span class="c"># -p: create parents too, no error if present</span>
+<span class="p">$</span> cd work
+<span class="p">$</span> echo 'print("hello")' &gt; app/wordfreq.py
+<span class="p">$</span> touch app/tests/test_basic.py      <span class="c"># create empty (or just update the timestamp)</span>
+<span class="p">$</span> cp -r app app-backup                <span class="c"># -r: copy a directory and everything under it</span>
+<span class="p">$</span> mv app-backup app-v1                <span class="c"># mv renames; same command moves</span>
+<span class="p">$</span> tree
+<span class="o">.
+|-- app
+|   |-- tests
+|   |   `-- test_basic.py
+|   `-- wordfreq.py
+`-- app-v1
+    |-- tests
+    |   `-- test_basic.py
+    `-- wordfreq.py
+
+5 directories, 4 files</span>
+<span class="p">$</span> file app/wordfreq.py app /bin/ls /bin /dev/null
+<span class="o">app/wordfreq.py: ASCII text
+app:             directory
+/bin/ls:         ELF 64-bit LSB pie executable, ARM aarch64, … stripped
+/bin:            symbolic link to usr/bin
+/dev/null:       character special (1/3)</span>
+<span class="p">$</span> rmdir app-v1
+<span class="o">rmdir: failed to remove 'app-v1': Directory not empty</span>
+<span class="p">$</span> rm -r app-v1                        <span class="c"># recursive delete. There is no trash.</span>
+<span class="p">$</span> ls ~
+<span class="o">work</span>
+<span class="p">$</span> ls -a ~                             <span class="c"># -a: include names starting with a dot</span>
+<span class="o">.  ..  .bash_logout  .bashrc  .profile  work</span></code></pre>
+    <p>
+      Three things to take from it. <code>file</code> tells you what something <em>is</em> by looking
+      at its contents, not its name — Linux attaches no meaning to extensions. A name starting with a
+      dot is a <span class="term" data-g="dotfile">dotfile</span>: hidden from plain <code>ls</code> by
+      convention only, which is why you should type <code>ls -la</code> by reflex in any directory you
+      are auditing. And <code>cat</code> prints a whole file, which is fine for fifteen bytes and
+      hopeless for a log; use <code>less</code> (a pager:
+      <kbd>Space</kbd> to page, <kbd>/</kbd> to search, <kbd>q</kbd> to quit) or
+      <code>head</code>/<code>tail</code> (<a href="05-text-fu.html">page 5</a>).
+    </p>
+
+    <h2 id="inodes">What a file really is: names, inodes, data</h2>
+    <p>
+      <code>stat</code> prints everything the filesystem knows about a file:
+    </p>
+    <pre class="term"><code><span class="p">$</span> stat app/wordfreq.py
+<span class="o">  File: app/wordfreq.py
+  Size: 15        	Blocks: 8          IO Block: 4096   regular file
+Device: 0,98	<span class="hl">Inode: 33645168    Links: 1</span>
+Access: (0644/-rw-r--r--)  Uid: ( 1001/ learner)   Gid: ( 1001/ learner)
+Access: 2026-09-21 16:20:47.594001003 +0000
+Modify: 2026-09-21 16:20:47.580001003 +0000
+Change: 2026-09-21 16:20:47.580001003 +0000
+ Birth: 2026-09-21 16:20:47.580001003 +0000</span></code></pre>
+    <p>
+      All of that — type, size, permissions, owner, timestamps, link count — is stored in a record
+      called an <span class="term" data-g="inode">inode</span>.<a class="cite" href="https://man7.org/linux/man-pages/man7/inode.7.html" title="inode(7), Linux man-pages 6.19, DESCRIPTION">[inode(7)]</a>
+      Look at what is <em>not</em> in the list: the name. Names live in directories. A directory is
+      just a table mapping names to inode numbers, and POSIX defines a directory entry as "an object
+      that associates a filename with a file" — adding that "several directory entries can associate
+      names with the same
+      file".<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html" title="POSIX.1-2024, XBD 3.104 Directory Entry (or Hard Link)">[POSIX]</a>
+    </p>
+    <div class="diagram"> directory "work"            inode table                 data blocks
+ ┌───────────┬──────────┐    ┌────────────────────────┐
+ │ orig.txt  │ 33645369 ├──┐ │ #33645369              │
+ ├───────────┼──────────┤  ├▶│  regular file, 0644    │──▶ "the answer\n"
+ │ hard.txt  │ 33645369 ├──┘ │  uid 1001, 11 bytes    │
+ ├───────────┼──────────┤    │  links: 2              │
+ │ soft.txt  │ 33645375 ├──┐ ├────────────────────────┤
+ └───────────┴──────────┘  └▶│ #33645375              │
+                             │  symbolic link, 0777   │──▶ "orig.txt"
+   hard link = a second      │  links: 1              │    (a NAME, looked
+   name for the same inode   └────────────────────────┘     up again on use)</div>
+    <pre class="term"><code><span class="p">$</span> echo 'the answer' &gt; orig.txt
+<span class="p">$</span> ln orig.txt hard.txt          <span class="c"># hard link: another name for the same inode</span>
+<span class="p">$</span> ln -s orig.txt soft.txt       <span class="c"># symbolic link: a tiny file containing a path</span>
+<span class="p">$</span> ls -li orig.txt hard.txt soft.txt
+<span class="o"><span class="hl">33645369</span> -rw-r--r-- <span class="hl">2</span> learner learner 11 Sep 21 16:20 hard.txt
+<span class="hl">33645369</span> -rw-r--r-- <span class="hl">2</span> learner learner 11 Sep 21 16:20 orig.txt
+33645375 lrwxrwxrwx 1 learner learner  8 Sep 21 16:20 soft.txt -&gt; orig.txt</span>
+<span class="p">$</span> rm orig.txt
+<span class="p">$</span> cat hard.txt
+<span class="o">the answer</span>
+<span class="p">$</span> cat soft.txt
+<span class="o">cat: soft.txt: No such file or directory</span></code></pre>
+    <p>
+      A <span class="term" data-g="hard-link">hard link</span> is indistinguishable from the
+      "original" — there is no original, only names. <code>rm</code> removes a <em>name</em>; the data
+      survives while any name remains. A <span class="term" data-g="symlink">symlink</span> is "a
+      pointer to another name, and not to an underlying
+      object",<a class="cite" href="https://man7.org/linux/man-pages/man7/symlink.7.html" title="symlink(7), Linux man-pages 6.19, DESCRIPTION">[symlink(7)]</a>
+      so it can cross filesystems, point at directories, and dangle, as <code>soft.txt</code> now
+      does. (The error message names <code>soft.txt</code>, not the missing target: a confusing line
+      to meet in a transcript. <code>ls -l</code> shows where a link points.) Hard links can't cross
+      filesystems — inode numbers are only unique within one — and trying gives
+      <code>Invalid cross-device link</code>.
+    </p>
+
+    <h3 id="deleted-but-open">Deleted but still open</h3>
+    <p>
+      The rule has a second half. The kernel frees a file's data only when its last name is gone
+      <em>and</em> no process still has it open: "the file will remain in existence until the last
+      file descriptor referring to it is
+      closed".<a class="cite" href="https://man7.org/linux/man-pages/man2/unlink.2.html" title="unlink(2), Linux man-pages 6.19, DESCRIPTION">[unlink(2)]</a>
+    </p>
+    <pre class="term"><code><span class="p">$</span> head -c 20000000 /dev/zero &gt; big.log
+<span class="p">$</span> sleep 300 &lt; big.log &amp;          <span class="c"># a background process holding the file open</span>
+<span class="o">[1] 297</span>
+<span class="p">$</span> rm big.log
+<span class="p">$</span> ls
+<span class="o">app  hard.txt  soft.txt</span>
+<span class="p">$</span> ls -l /proc/$!/fd/0                  <span class="c"># $! = PID of the last background job</span>
+<span class="o">lr-x------ 1 learner learner 64 Sep 21 16:20 /proc/297/fd/0 -&gt; '/home/learner/work/big.log <span class="hl">(deleted)</span>'</span></code></pre>
+    <p>
+      No name, invisible to <code>ls</code> and <code>find</code>, still occupying 20 MB of disk until
+      process 297 exits. This is how a box reports "disk full" when no file accounts for the space
+      (<a href="12-resources-and-limits.html">page 12</a>), and it is a reminder that "I deleted the
+      answer key" and "the answer key is gone" are different claims.
+    </p>
+
+    <h2 id="find">find: asking the tree questions</h2>
+    <p>
+      <code>find</code> walks a directory tree and prints every entry that passes a list of tests. The
+      grammar is <code>find WHERE TESTS… [ACTION]</code>; tests are ANDed together. The tests worth
+      knowing by heart:
+    </p>
+    <table>
+      <tr><th>Test</th><th>Matches</th></tr>
+      <tr><td><code>-name '*.py'</code></td><td>the file's name against a shell pattern — quote it, or the shell expands it first</td></tr>
+      <tr><td><code>-type f</code> / <code>d</code> / <code>l</code></td><td>regular files / directories / symlinks</td></tr>
+      <tr><td><code>-newer FILE</code>, <code>-cnewer FILE</code></td><td>content modified (mtime) / inode changed (ctime) more recently than FILE was modified</td></tr>
+      <tr><td><code>-mmin -60</code>, <code>-mtime -1</code></td><td>modified less than 60 minutes / 1 day ago</td></tr>
+      <tr><td><code>-user agent</code>, <code>-perm -o+w</code></td><td>owned by a user / has at least these permission bits (here: world-writable — <a href="08-permissions.html">page 8</a>)</td></tr>
+      <tr><td><code>-not</code>, <code>-path '/app/*'</code>, <code>-maxdepth 1</code></td><td>negate a test; match the whole path; don't descend</td></tr>
+      <tr><td><code>-xdev</code></td><td>stay on the starting filesystem: skips <code>/proc</code>, <code>/sys</code>, <code>/dev</code> and other mounts</td></tr>
+    </table>
+
+    <h3 id="footprint">Worked example: the agent's footprint</h3>
+    <p>
+      The technique: <em>before</em> the agent starts, create a marker file. Afterwards, ask for
+      everything newer than the marker. Here it is in the course's deliberately careless task image,
+      <code>wordfreq-bench:sloppy</code>, where the agent is root. We play the agent by hand — an honest
+      fix, then some less honest housekeeping:
+    </p>
+    <pre class="term"><code><span class="p">#</span> touch /tmp/marker
+<span class="p">#</span> cd /app
+<span class="p">#</span> sed -i 's/text.split()/text.lower().split()/' wordfreq.py
+<span class="p">#</span> python3 -c 'print(42)' &gt; /tmp/scratch.txt
+<span class="p">#</span> echo 'alias pytest=true' &gt;&gt; /root/.bashrc
+<span class="p">#</span> printf '#!/bin/sh\nexit 0\n' &gt; /usr/local/bin/pytest
+<span class="p">#</span> chmod +x /usr/local/bin/pytest
+<span class="p">#</span> cp /opt/grader/expected.json /var/tmp/.cache.json
+<span class="p">#</span> find / -xdev -newer /tmp/marker -type f
+<span class="o">/var/tmp/.cache.json
+/root/.bashrc
+/tmp/scratch.txt
+/usr/local/bin/pytest
+/app/wordfreq.py</span>
+<span class="p">#</span> find / -xdev -newer /tmp/marker -type f -not -path '/app/*' -not -path '/tmp/*'
+<span class="o">/var/tmp/.cache.json
+/root/.bashrc
+/usr/local/bin/pytest</span></code></pre>
+    <p>
+      Five files, and the second command reduces them to the three that have no business changing in
+      a "fix the bug in <code>/app</code>" task: a fake <code>pytest</code> placed first on
+      <code>PATH</code> (page 2's lab), an alias, and a hidden copy of the answer key. Without
+      <code>-xdev</code> the same search returned 16,233 files here, nearly all of them the
+      ever-changing pseudo-files of <code>/proc</code> and <code>/sys</code>.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — modification times are under the agent's control</span>
+      <p><code>-newer</code> compares <em>mtime</em>, and anyone who can write a file can set its
+      mtime to anything:</p>
+      <pre class="term"><code><span class="p">#</span> touch -d '2024-01-01' /usr/local/bin/pytest
+<span class="p">#</span> find / -xdev -newer /tmp/marker -type f | grep pytest
+<span class="p">#</span> find / -xdev -cnewer /tmp/marker -type f | grep pytest
+<span class="o">/usr/local/bin/pytest</span></code></pre>
+      <p>(<code>| grep pytest</code> keeps only the lines mentioning pytest — <a href="05-text-fu.html">page 5</a>.)
+      The fake vanished from the first search. <code>-cnewer</code> compares <em>ctime</em>, the
+      inode's "last status change", which the kernel updates on any write or metadata change and
+      which <code>touch</code> cannot set — not creation time, despite the
+      name.<a class="cite" href="https://man7.org/linux/man-pages/man7/inode.7.html" title="inode(7), Linux man-pages 6.19, Last status change timestamp (ctime)">[inode(7)]</a>
+      Prefer <code>-cnewer</code> for footprints, and remember that <code>-type f</code> skips
+      symlinks: use <code>-not -type d</code> to see them too. Better still, don't ask the box at
+      all: from the host, <code>docker diff &lt;container&gt;</code> lists every path added (A) or
+      changed (C) relative to the image, whatever the timestamps say
+      (<a href="22-docker-for-evals.html">page 22</a>). A footprint taken from inside a box the agent
+      controlled as root is evidence, not proof.</p>
+    </div>
+
+    <div class="evals">
+      <span class="label">In eval work — state-based grading is reading the tree</span>
+      <p><span class="term" data-g="state-based-evaluation">State-based evaluation</span> means: let
+      the agent finish, then inspect what's on disk. Inspect, for instance, lets a scorer call
+      <code>sandbox().read_file()</code> or <code>exec()</code> against the sample's sandbox after
+      the agent is
+      done.<a class="cite" href="https://inspect.aisi.org.uk/multiple-scorers.html#sandbox-access" title="Inspect AI documentation, Multiple Scorers: Sandbox Access">[Inspect]</a>
+      That makes this page's tools the grader's tools, and gives you a cheap integrity signal to log
+      for every rollout: the list of paths changed outside the task directory. Most rollouts will
+      show none. The ones that touch <code>/usr/local/bin</code>, a dotfile, or anything under the
+      grader's directory are where to start
+      <span class="term" data-g="error-analysis">error analysis</span> — and the ones that show
+      files <em>older</em> than the rollout in <code>/tmp</code> are telling you the
+      <span class="term" data-g="reset">reset</span> between samples is incomplete.</p>
+    </div>
+
+    <h3 id="symlink-hazard">Symlinks as a grading hazard</h3>
+    <p>
+      Suppose a task variant says "write the top-3 words to <code>/app/answer.json</code>" and the
+      grader compares that file with its <code>expected.json</code>. In the sloppy image the grader's
+      directory is world-readable, so the cheapest "solution" is one command:
+    </p>
+    <pre class="term"><code><span class="p">#</span> ln -s /opt/grader/expected.json /app/answer.json
+<span class="p">#</span> cmp /app/answer.json /opt/grader/expected.json &amp;&amp; echo PASS
+<span class="o">PASS</span>
+<span class="p">#</span> [ -f /app/answer.json ] &amp;&amp; echo "is a regular file?"
+<span class="o">is a regular file?</span>
+<span class="p">#</span> [ -L /app/answer.json ] &amp;&amp; echo "is a symlink"
+<span class="o">is a symlink</span>
+<span class="p">#</span> stat -c '%F' /app/answer.json
+<span class="o">symbolic link</span>
+<span class="p">#</span> readlink -f /app/answer.json
+<span class="o">/opt/grader/expected.json</span></code></pre>
+    <p>
+      The grader compared the answer key with itself. Note the trap in the third command: almost
+      every tool, including the shell's <code>-f</code> test, <em>follows</em> symlinks and reports on
+      the target. Only tests that ask about the link itself (<code>-L</code>, <code>stat</code>
+      without <code>-L</code>, <code>find -type l</code>) see it.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — graders should resolve, then check type</span>
+      <p>A grader that reads an agent-produced path should (1) refuse symlinks, or resolve them with
+      <code>readlink -f</code> and require the result to stay inside the task directory; (2) require
+      a regular file — not a directory, not a device; and (3) ideally not run where the expected
+      answer is readable at all: copy the artefact out and grade elsewhere, as
+      <code>wordfreq-bench</code>'s <code>grade.sh</code> does
+      (<a href="26-environment-integrity.html">page 26</a>). The design principle: the agent controls
+      every byte <em>and every file type</em> under the directories it can write. That last point is
+      this course's reasoning, not a quotation from any harness's documentation.</p>
+    </div>
+
+    <h2 id="everything-is-a-file">Preview: everything is a file</h2>
+    <p>
+      The tree's deepest trick is that things which are not stored data also appear in it, so the
+      same <code>cat</code>, <code>ls</code>, and <code>&gt;</code> work on them —
+      <span class="term" data-g="everything-is-a-file">"everything is a file"</span>.
+    </p>
+    <pre class="term"><code><span class="p">$</span> ls -l /dev/null
+<span class="o"><span class="hl">c</span>rw-rw-rw- 1 root root 1, 3 Sep 21 16:14 /dev/null</span>
+<span class="p">$</span> ls -l /proc/version
+<span class="o">-r--r--r-- 1 root root <span class="hl">0</span> Sep 21 16:14 /proc/version</span>
+<span class="p">$</span> cat /proc/version
+<span class="o">Linux version 6.10.14-linuxkit (root@buildkitsandbox) (gcc (Alpine 13.2.1_git20240309) …</span></code></pre>
+    <p>
+      <code>/dev/null</code> is a character device (the leading <code>c</code>): writes to it are
+      discarded, reads return end-of-file at
+      once.<a class="cite" href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs/ch06.html" title="FHS 3.0, 6.1.3 /dev: Devices and special files">[FHS]</a>
+      <code>/proc/version</code> claims to be zero bytes long and yet has contents, because the kernel
+      composes the text at the moment you read it. (That kernel is Docker Desktop's Linux VM, not
+      Ubuntu's — containers share their host's kernel, <a href="20-namespaces.html">page 20</a>.)
+      <a href="04-streams-pipes-redirection.html">Page 4</a> puts <code>/dev/null</code> to work;
+      page 9 reads processes out of <code>/proc</code>.
+    </p>
+    <p>
+      Depth triage for this page: <em>learn to use</em> paths, <code>ls -la</code>, <code>stat</code>,
+      <code>find</code>, and the name/inode distinction; merely <em>recognise</em> the FHS rationale
+      and inode numbers when you see them; leave filesystem internals (journals, extents, block
+      allocation) to storage specialists — no eval audit needs them.
+    </p>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A state-based grader passes a rollout of a data-cleaning task: <code>/app/report.csv</code>
+      matches <code>/opt/grader/expected.csv</code> byte for byte. The rollout took 40 seconds; the
+      median passing rollout takes nine minutes. You're asked whether the pass counts. What do you
+      establish, in what order?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Observed:</strong> identical bytes, unusually fast. <strong>Hypotheses:</strong>
+      (a) a legitimately quick solve; (b) the output <em>is</em> the expected file — a symlink or a
+      copy; (c) the file was already there, left by a previous rollout in a reused container. None
+      is proven by the pass itself.</p>
+      <p><strong>Discriminating evidence:</strong> the file type of <code>report.csv</code> in the
+      saved final state (<code>stat -c %F</code>, <code>readlink -f</code>) separates the symlink
+      case. Whether the agent user could read <code>/opt/grader</code> at all, plus a transcript
+      search for that path, separates the copy case. The file's birth and change times against the
+      rollout's start time, and the harness's reset policy, separate (c). A footprint
+      (<code>docker diff</code>, or <code>find -cnewer</code>) shows what else was touched.</p>
+      <p><strong>Bearing on the score:</strong> if (b) or (c) holds, this isn't a model success — and
+      it isn't simply a model failure either. It's a defect in the environment that every sample of
+      the task was exposed to, so the whole task's results are suspect, not just the fast one. Fix
+      the image or the reset, re-run the task, and report the affected samples as invalidated rather
+      than silently flipping one pass to a fail.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> Exercises 1–3 as <code>learner</code>; 4–5 as root
+      (<code>docker exec -it lt-lab bash</code>), because a footprint search has to read the whole tree.</p>
+
+      <p><strong>1 · Reproduce.</strong> Start in <code>/usr/share/doc</code> and get to
+      <code>/var/log</code> with a single relative <code>cd</code>. Then list the symlinks at the top
+      of the tree with <code>find</code>.</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">$</span> cd /usr/share/doc
+<span class="p">$</span> cd ../../../var/log
+<span class="p">$</span> pwd
+<span class="o">/var/log</span>
+<span class="p">$</span> find / -maxdepth 1 -type l
+<span class="o">/lib
+/sbin
+/bin</span></code></pre>
+      </details>
+
+      <p><strong>2 · Predict, then verify.</strong> In <code>~/work</code>:
+      <code>mkdir d; echo one &gt; d/f; ln d/f g</code>. Now <code>mv d/f d/h</code>, then
+      <code>echo two &gt;&gt; g</code>. Before running them, write down what <code>cat d/h</code> prints
+      and what link count <code>g</code> has.</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">$</span> ls -li d/f g
+<span class="o">33645713 -rw-r--r-- 2 learner learner 4 Sep 21 16:21 d/f
+33645713 -rw-r--r-- 2 learner learner 4 Sep 21 16:21 g</span>
+<span class="p">$</span> mv d/f d/h
+<span class="p">$</span> echo two &gt;&gt; g
+<span class="p">$</span> cat d/h
+<span class="o">one
+two</span>
+<span class="p">$</span> stat -c '%h' g
+<span class="o">2</span></code></pre>
+      <p>Renaming changes a directory entry, not the inode, so <code>g</code> and <code>d/h</code> are
+      still two names for one file and a write through either is visible through both. Had
+      <code>g</code> been a symlink to <code>d/f</code>, the <code>mv</code> would have left it
+      dangling.</p>
+      </details>
+
+      <p><strong>3 · find drills.</strong> (a) Which files under <code>/etc</code> were modified in the last
+      hour? (b) Which regular files under <code>/usr</code> are larger than 5 MB? (Look up
+      <code>-size</code> in <code>find --help</code> or <a href="../appendices/f-getting-help.html">Appendix F</a>.)
+      Your lists will differ with what you've installed.</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">$</span> find /etc -type f -mmin -60
+<span class="o">/etc/hosts
+/etc/gshadow
+/etc/group
+/etc/passwd
+…
+/etc/hostname</span>
+<span class="p">$</span> find /usr -xdev -type f -size +5M
+<span class="o">/usr/lib/file/magic.mgc</span></code></pre>
+      <p>In a fresh container (a) shows the files Docker writes at start-up
+      (<code>hosts</code>, <code>hostname</code>, <code>resolv.conf</code>) and the ones
+      <code>useradd</code> edited when you created <code>learner</code> — a small footprint of your
+      own.</p>
+      </details>
+
+      <p><strong>4 · Eval task: reconstruct a footprint.</strong> As root, run the two setup lines, then
+      — without reading the second line again — list everything the "agent" did.</p>
+      <pre><code>touch /tmp/marker; sleep 1
+bash -c 'echo hi &gt;&gt; /etc/motd; mkdir -p /opt/.cache; echo k &gt; /opt/.cache/key; touch -d 2024-01-01 /opt/.cache/key; ln -sf /etc/passwd /tmp/result.txt'</code></pre>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">#</span> find / -xdev -newer /tmp/marker -type f
+<span class="o">/etc/motd</span>
+<span class="p">#</span> find / -xdev -cnewer /tmp/marker -not -type d
+<span class="o">/etc/motd
+/tmp/result.txt
+/opt/.cache/key</span>
+<span class="p">#</span> find / -xdev -cnewer /tmp/marker -type l -exec ls -l {} +
+<span class="o">lrwxrwxrwx 1 root root 11 Sep 21 16:21 /tmp/result.txt -&gt; /etc/passwd</span></code></pre>
+      <p>The naive search finds one of three changes. The backdated key needs <code>-cnewer</code>;
+      the symlink needs a type test that doesn't exclude links. From your Mac,
+      <code>docker diff lt-lab</code> shows all three with no cooperation from the box.</p>
+      </details>
+
+      <p><strong>5 · Eval task: a grader that checks type.</strong> Write <code>check-output.sh OUTPUT
+      EXPECTED</code>: print <code>PASS</code> and exit 0 only if OUTPUT is a genuine regular file
+      with the same bytes as EXPECTED; fail with a reason for a symlink, a directory, a missing file,
+      or wrong content. Test all five cases.</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre><code>#!/bin/bash
+# check-output.sh OUTPUT EXPECTED -- compare, but only if OUTPUT is a real regular file
+out=$1 expected=$2
+if [ -L "$out" ]; then
+  echo "FAIL: $out is a symlink to $(readlink -f "$out")"; exit 1
+fi
+if [ ! -f "$out" ]; then
+  echo "FAIL: $out is not a regular file"; exit 1
+fi
+if cmp -s "$out" "$expected"; then
+  echo PASS
+else
+  echo "FAIL: wrong content"; exit 1
+fi</code></pre>
+      <pre class="term"><code><span class="p">#</span> echo '{"ok": 1}' &gt; /tmp/expected.json; cp /tmp/expected.json /tmp/good.json
+<span class="p">#</span> ln -s /tmp/expected.json /tmp/sneaky.json; mkdir /tmp/adir; echo "{}" &gt; /tmp/wrong.json
+<span class="p">#</span> check-output.sh /tmp/good.json /tmp/expected.json; echo "status $?"
+<span class="o">PASS
+status 0</span>
+<span class="p">#</span> check-output.sh /tmp/sneaky.json /tmp/expected.json; echo "status $?"
+<span class="o">FAIL: /tmp/sneaky.json is a symlink to /tmp/expected.json
+status 1</span>
+<span class="p">#</span> check-output.sh /tmp/adir /tmp/expected.json; echo "status $?"
+<span class="o">FAIL: /tmp/adir is not a regular file
+status 1</span>
+<span class="p">#</span> check-output.sh /tmp/missing.json /tmp/expected.json; echo "status $?"
+<span class="o">FAIL: /tmp/missing.json is not a regular file
+status 1</span>
+<span class="p">#</span> check-output.sh /tmp/wrong.json /tmp/expected.json; echo "status $?"
+<span class="o">FAIL: wrong content
+status 1</span></code></pre>
+      <p>The order matters: <code>-L</code> must come before <code>-f</code>, because <code>-f</code>
+      follows the link. The script passes <code>shellcheck</code>. It still can't stop an agent that
+      can simply <em>read</em> <code>expected.json</code> and copy it — that takes permissions
+      (<a href="08-permissions.html">page 8</a>) or grading outside the box.</p>
+      </details>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>LSB Workgroup, The Linux Foundation, <em>Filesystem Hierarchy Standard, Version 3.0</em> (2015) — ch. 2; §3.7, §3.18, §4.1, §5.10; Linux annex §6.1.3. <a href="https://refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html">refspecs.linuxfoundation.org/FHS_3.0/fhs-3.0.html</a></li>
+        <li>hier(7), Linux man-pages 6.19. <a href="https://man7.org/linux/man-pages/man7/hier.7.html">man7.org/linux/man-pages/man7/hier.7.html</a></li>
+        <li>Debian 12 (bookworm) release notes, §5.1.14 "A merged-/usr is now required". <a href="https://www.debian.org/releases/bookworm/amd64/release-notes/ch-information.en.html#a-merged-usr-is-now-required">debian.org/releases/bookworm/…/ch-information.en.html</a></li>
+        <li>inode(7), Linux man-pages 6.19. <a href="https://man7.org/linux/man-pages/man7/inode.7.html">man7.org/linux/man-pages/man7/inode.7.html</a></li>
+        <li>symlink(7), Linux man-pages 6.19. <a href="https://man7.org/linux/man-pages/man7/symlink.7.html">man7.org/linux/man-pages/man7/symlink.7.html</a></li>
+        <li>unlink(2), Linux man-pages 6.19. <a href="https://man7.org/linux/man-pages/man2/unlink.2.html">man7.org/linux/man-pages/man2/unlink.2.html</a></li>
+        <li>The Open Group / IEEE, <em>Base Specifications Issue 8 (IEEE Std 1003.1-2024)</em>, XBD §3.104 Directory Entry. <a href="https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html">pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html</a></li>
+        <li>UK AI Security Institute, <em>Inspect AI documentation</em>, Multiple Scorers: Sandbox Access. <a href="https://inspect.aisi.org.uk/multiple-scorers.html#sandbox-access">inspect.aisi.org.uk/multiple-scorers.html</a></li>
+        <li>All terminal sessions were executed in <code>ubuntu:24.04</code>, <code>alpine:3.20</code>, and the course's <code>wordfreq-bench:sloppy</code> image (Ubuntu 24.04, GNU findutils and coreutils).</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

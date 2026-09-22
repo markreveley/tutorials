@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reliability: pass^k and Repeated Trials · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 4 · Evaluating Agents</p>
+    <h1>Reliability: pass^k and repeated trials</h1>
+    <p class="lede">
+      "Succeeds 61% of the time" sounds like a property of an agent. It isn't — it's an average that
+      hides the question a deployer actually asks: <em>if I give it the same kind of task tomorrow, will
+      it work again?</em> This page covers tau-bench and its metric pass^k, the cleanest tool yet for
+      measuring dependability rather than luck.
+    </p>
+
+    <h2 id="tau-bench">tau-bench in brief</h2>
+    <p>
+      tau-bench (Yao, Shinn, Razavi &amp; Narasimhan, at Sierra) evaluates customer-service agents the
+      way <a href="11-evaluating-agents.html">page 11</a> previewed: the agent has database API tools
+      and a policy document; a simulated user (GPT-4-played) converses with it; success requires both
+      that "the final database is identical to the unique ground truth outcome database" and that the
+      agent's replies contained the required
+      information.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, tau-bench, §3">[tau-bench]</a>
+      Two domains: retail (115 tasks) and airline (50 tasks), each task annotated until only one correct
+      final state is possible — objectivity bought with annotation labor, capping the benchmark at 165
+      tasks.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §3, Table 1">[tau-bench]</a>
+      Baseline results: the best agent (gpt-4o with function calling) reached 61.2% on retail and just
+      35.2% on airline.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, Table 2">[tau-bench]</a>
+    </p>
+
+    <h2 id="two-metrics">Two metrics from the same trials</h2>
+    <p>
+      Run each task <i>n</i> times and count <i>c</i> successes. Two opposite questions can be answered
+      from that same data:<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §3">[tau-bench]</a>
+    </p>
+    <div class="card">
+      <p><strong><span class="term" data-g="pass-at-k">pass@k</span></strong> — the chance that
+      <em>at least one</em> of <i>k</i> trials succeeds. The discovery metric: right when you can verify
+      candidates and keep the winner (code with tests). Estimator:
+      1 − C(n−c, k) / C(n, k).</p>
+      <p style="margin-bottom:0"><strong><span class="term" data-g="pass-hat-k">pass^k</span></strong>
+      ("pass hat k") — the chance that <em>all k</em> trials succeed. The reliability metric: right when
+      every attempt faces a real user and there is no retry oracle. Estimator: C(c, k) / C(n, k).
+      The two coincide at k = 1.</p>
+    </div>
+    <p>
+      A worked miniature shows how far they diverge. Suppose one task is run n = 8 times with c = 6
+      successes:
+    </p>
+    <div class="math">pass@2 = 1 − C(2,2)/C(8,2) = 1 − 1/28 ≈ <span class="plain"><strong>0.96</strong></span>&emsp;&emsp;pass^2 = C(6,2)/C(8,2) = 15/28 ≈ <span class="plain"><strong>0.54</strong></span></div>
+    <p>
+      Same agent, same trials: "96% with a retry" or "54% twice in a row." Neither number is more true —
+      they answer different questions, and quoting one where the other belongs is how agents get
+      deployed on false expectations. (The combinatorics, including why these estimators are unbiased,
+      is <a href="../appendices/d-combinatorics-pass-at-k.html">Appendix D</a>.)
+    </p>
+
+    <h2 id="headline">The headline: capable on average, unreliable in series</h2>
+    <p>
+      tau-bench's signature finding: gpt-4o's 61.2% average on retail collapses to <strong>below 25% at
+      pass^8</strong> — fewer than a quarter of tasks are solved dependably eight-for-eight, even though
+      the tasks and database transitions are <em>identical</em> across trials; the only randomness is
+      the sampling of the agent's and simulated user's
+      messages.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §5.1, Figure 4">[tau-bench]</a>
+      The authors' framing: "it is important and challenging not just to build agents with high average
+      success (pass^1), but with more robustness and consistency (pass^k
+      trend)."<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §5.1">[tau-bench]</a>
+    </p>
+    <div class="callout">
+      <span class="label">Why the decay is steep — and what its shape tells you</span>
+      <p>If every task had the same success probability p = 0.612, consistency would decay like
+      p<sup>k</sup>: 0.612<sup>8</sup> ≈ 2%. The observed pass^8 (~25%) is far above that, which itself
+      is informative: tasks are heterogeneous — some the agent solves nearly always, others nearly never
+      — so the population splits into "reliable" and "coin-flip" tasks rather than uniform mediocrity.
+      The pass^k <em>curve</em>, not any single point, is the fingerprint of that split. The same data
+      shows it directly: tasks requiring more database writes fail
+      more.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, Figure 6">[tau-bench]</a></p>
+    </div>
+
+    <h2 id="probing">Probing what the score measures</h2>
+    <p>
+      tau-bench's authors ran the kind of follow-up experiment this course keeps advocating: ablate an
+      input and see if the score cares. Removing the <em>policy document</em> — the rules the agent is
+      supposedly following — cost gpt-4o only 4.4 points on retail (61.2 → 56.8) but 22.4 points on
+      airline (33.2 → 10.8). Their conclusion: retail successes "mostly stem from using tools in an
+      intuitive and common sense way," not from reading the
+      policy.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §5.2, Table 3">[tau-bench]</a>
+      The retail score, in other words, partly measures something other than what the benchmark was
+      built to measure — found with one cheap ablation. (Construct validity, formally, in
+      <a href="20-validity.html">Module 6</a>.)
+    </p>
+    <p>
+      Their failure analysis models another habit worth copying: of 40 failed retail trajectories
+      examined by hand, 4 turned out to be <em>benchmark bugs</em> (instruction typos and ambiguity,
+      subsequently fixed) — and the remaining 36 split into wrong arguments to tools (33.3%), wrong
+      decisions against the rules (25.0%), wrong information given (22.2%), and partially resolved
+      compound requests (19.4%).<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §5.2, Figure 5">[tau-bench]</a>
+      Even purpose-built benchmarks ship bugs; error analysis (<a href="04-error-analysis.html">page
+      4</a>) applies to the eval itself.
+    </p>
+
+    <div class="warn">
+      <span class="label">Caveats the authors themselves flag</span>
+      <p>The reward is "necessary but not sufficient" — a policy-violating run can still score 1
+      (<a href="11-evaluating-agents.html">page 11</a>). The simulated user is GPT-4 with its own
+      quirks, and its instructions were tuned while testing against a GPT-4-based agent — a subtle
+      coupling between instrument and measured system. And the oft-quoted "&lt;50%" headline is the
+      <em>domain-averaged</em> figure (48.2); retail alone is
+      61.2.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §3, §6, Table 2">[tau-bench]</a></p>
+    </div>
+
+    <h2 id="practice">Using pass^k on your own system</h2>
+    <ul>
+      <li><strong>Decide which metric your product implies.</strong> Retryable-with-verification →
+        pass@k. Every-attempt-counts (user-facing, irreversible actions) → pass^k. Most deployed agents
+        are the second kind; most published numbers are the first.</li>
+      <li><strong>Budget n &gt; k trials per task</strong> and use the unbiased estimators rather than
+        raw "ran it k times" frequencies — the raw version is noisy and wasteful
+        (<a href="../appendices/d-combinatorics-pass-at-k.html">Appendix D</a>).</li>
+      <li><strong>Report the curve.</strong> pass^1 through pass^8 tells a deployer what one number
+        can't: how much of your average is dependable skill versus coin-flips.</li>
+      <li><strong>Mind the cost.</strong> Repeated trials multiply eval spend — a full tau-bench retail
+        trial ran roughly $0.61 per task in 2024 prices<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, experimental setup">[tau-bench]</a> —
+        which is exactly the tension <a href="15-cost-and-capability.html">the next page</a> takes up.</li>
+    </ul>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Average success and dependable success are different quantities, and the gap between them — the
+      pass^k decay curve — is itself a measurement of your agent's character: skill that repeats, or
+      variance that occasionally lands. For anything user-facing, reliability <em>is</em> the product;
+      measure it as one.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Shunyu Yao, Noah Shinn, Pedram Razavi, Karthik Narasimhan, "τ-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains," arXiv:2406.12045, 2024. <a href="https://arxiv.org/abs/2406.12045">arxiv.org/abs/2406.12045</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

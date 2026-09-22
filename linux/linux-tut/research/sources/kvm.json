@@ -1,0 +1,122 @@
+{
+ "id": "kvm",
+ "tag": "[Kernel: KVM]",
+ "citation": {
+  "authors": "The Linux kernel development community; KVM project",
+  "title": "The Definitive KVM (Kernel-based Virtual Machine) API Documentation; Running nested guests with KVM; linux-kvm.org Main Page",
+  "venue": "docs.kernel.org (The Linux Kernel documentation); linux-kvm.org",
+  "year": "2026 (living documentation)",
+  "url": "https://docs.kernel.org/virt/kvm/api.html"
+ },
+ "fetched_urls": [
+  "https://docs.kernel.org/virt/kvm/index.html",
+  "https://docs.kernel.org/virt/kvm/api.html",
+  "https://linux-kvm.org/page/Main_Page",
+  "https://docs.kernel.org/virt/kvm/x86/running-nested-guests.html",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/getting-started.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/dev-machine-setup.md"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "KVM is a Linux kernel module that turns Linux into a hypervisor using hardware virtualization extensions (Intel VT-x / AMD-V; ARM virt extensions); exposed as /dev/kvm; userspace VMM (QEMU, Firecracker, Cloud Hypervisor) drives it",
+   "verdict": "confirmed",
+   "finding": "Kernel module(s) + hardware extensions. linux-kvm.org's description is x86-centric (Intel VT or AMD-V): kvm.ko plus kvm-intel.ko or kvm-amd.ko. It does not itself say 'turns Linux into a hypervisor', and the fetched pages do not describe ARM in a sentence (the kernel docs index just lists ARM sections). Say 'KVM is virtualization infrastructure in the Linux kernel' rather than the folklore phrase.",
+   "quote": "KVM (for Kernel-based Virtual Machine) is a full virtualization solution for Linux on x86 hardware containing virtualization extensions (Intel VT or AMD-V). It consists of a loadable kernel module, kvm.ko, that provides the core virtualization infrastructure and a processor specific module, kvm-intel.ko or kvm-amd.ko.",
+   "location": "linux-kvm.org Main Page",
+   "cite_url": "https://linux-kvm.org/page/Main_Page"
+  },
+  {
+   "planned": "KVM is a Linux kernel module that turns Linux into a hypervisor using hardware virtualization extensions (Intel VT-x / AMD-V; ARM virt extensions); exposed as /dev/kvm; userspace VMM (QEMU, Firecracker, Cloud Hypervisor) drives it",
+   "verdict": "unverifiable",
+   "finding": "The 'ARM virt extensions' part: none of the fetched KVM pages states this in a sentence. linux-kvm.org describes KVM as for 'x86 hardware'; the kernel docs index merely lists ARM, s390, PPC, x86 and LoongArch sub-sections. If ARM must be mentioned, cite Kata's README platform table ('aarch64 ... ARM Hyp') or Firecracker's 'x86_64 and aarch64' support statement instead.",
+   "quote": "",
+   "location": "docs.kernel.org/virt/kvm/index.html (section list only)",
+   "cite_url": "https://docs.kernel.org/virt/kvm/index.html"
+  },
+  {
+   "planned": "KVM is a Linux kernel module that turns Linux into a hypervisor using hardware virtualization extensions (Intel VT-x / AMD-V; ARM virt extensions); exposed as /dev/kvm; userspace VMM (QEMU, Firecracker, Cloud Hypervisor) drives it",
+   "verdict": "confirmed",
+   "finding": "/dev/kvm + ioctls on file descriptors: open(\"/dev/kvm\") -> system fd; KVM_CREATE_VM -> VM fd; KVM_CREATE_VCPU -> vCPU fd. That is the whole userspace interface a VMM drives.",
+   "quote": "The kvm API is centered around different kinds of file descriptors and ioctls that can be issued to these file descriptors. An initial open(“/dev/kvm”) obtains a handle to the kvm subsystem; this handle can be used to issue system ioctls. A KVM_CREATE_VM ioctl on this handle will create a VM file descriptor which can be used to issue VM ioctls.",
+   "location": "KVM API documentation, §1 General description",
+   "cite_url": "https://docs.kernel.org/virt/kvm/api.html"
+  },
+  {
+   "planned": "KVM is a Linux kernel module that turns Linux into a hypervisor using hardware virtualization extensions (Intel VT-x / AMD-V; ARM virt extensions); exposed as /dev/kvm; userspace VMM (QEMU, Firecracker, Cloud Hypervisor) drives it",
+   "verdict": "confirmed",
+   "finding": "Userspace VMM drives it: linux-kvm.org names QEMU as the userspace component; Firecracker and Cloud Hypervisor state their own use of KVM (see [Firecracker] and [Kata] notes).",
+   "quote": "KVM is open source software. The kernel component of KVM is included in mainline Linux, as of 2.6.20. The userspace component of KVM is included in mainline QEMU, as of 1.3.",
+   "location": "linux-kvm.org Main Page",
+   "cite_url": "https://linux-kvm.org/page/Main_Page"
+  },
+  {
+   "planned": "Nested virtualization is needed to use KVM inside a cloud VM; bare metal hosts expose it directly (supports: why microVM sandboxes usually need bare metal or nested-virt instances)",
+   "verdict": "confirmed",
+   "finding": "Kernel docs define nested virtualization with L0/L1/L2 terminology: to run KVM inside a VM (L1), the L0 hypervisor must expose virtualization to the guest. From Linux v4.20 the KVM 'nested' parameter is enabled by default on Intel and AMD (distros may override) — but that is about an L0 that runs KVM; whether a CLOUD provider exposes it is the provider's choice and is not covered by kernel docs.",
+   "quote": "A nested guest is the ability to run a guest inside another guest (it can be KVM-based or a different hypervisor). The straightforward example is a KVM guest that in turn runs on a KVM guest",
+   "location": "Kernel docs, 'Running nested guests with KVM'",
+   "cite_url": "https://docs.kernel.org/virt/kvm/x86/running-nested-guests.html"
+  },
+  {
+   "planned": "Nested virtualization is needed to use KVM inside a cloud VM; bare metal hosts expose it directly (supports: why microVM sandboxes usually need bare metal or nested-virt instances)",
+   "verdict": "confirmed",
+   "finding": "'Bare metal or nested-virt' requirement for microVMs, in Firecracker's own words. Firecracker's getting-started doc (as fetched 2026-09-20) further says EC2 only supports KVM on .metal instance types; the AISI Proxmox plugin README, however, mentions an 'EC2 with nested virtualization' setup path, so treat the EC2-specific statement as possibly dated and prefer the general form.",
+   "quote": "Firecracker uses KVM for the actual resource virtualization, hence setting up a development environment requires either a bare-metal machine (with hardware virtualization), or a virtual machine that supports nested virtualization.",
+   "location": "Firecracker docs/dev-machine-setup.md, introduction",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/dev-machine-setup.md"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Default-on since v4.20.",
+   "quote": "From Linux kernel v4.20 onwards, the nested KVM parameter is enabled by default for Intel and AMD. (Though your Linux distribution might override this default.)",
+   "location": "Kernel docs, 'Running nested guests with KVM' > Enabling “nested” (x86)",
+   "cite_url": "https://docs.kernel.org/virt/kvm/x86/running-nested-guests.html"
+  },
+  {
+   "finding": "L0/L1/L2 vocabulary.",
+   "quote": "L0 – level-0; the bare metal host, running KVM [...] L1 – level-1 guest; a VM running on L0; also called the “guest hypervisor”, as it itself is capable of running KVM. [...] L2 – level-2 guest; a VM running on L1, this is the “nested guest”",
+   "location": "Kernel docs, 'Running nested guests with KVM' > Terminology",
+   "cite_url": "https://docs.kernel.org/virt/kvm/x86/running-nested-guests.html"
+  },
+  {
+   "finding": "How to check on a host: lsmod | grep -i kvm shows kvm and kvm_intel (or kvm_amd); modinfo kvm_intel | grep -i nested.",
+   "quote": "On the bare metal host (L0), list the kernel modules and ensure that the KVM modules:",
+   "location": "Kernel docs, 'Running nested guests with KVM' > Enabling “nested” (x86)",
+   "cite_url": "https://docs.kernel.org/virt/kvm/x86/running-nested-guests.html"
+  },
+  {
+   "finding": "A kernel-docs use case for nesting that matches sandboxing.",
+   "quote": "Some OSes use virtualization internally for security (e.g. to let applications run safely in isolation).",
+   "location": "Kernel docs, 'Running nested guests with KVM' > Use Cases",
+   "cite_url": "https://docs.kernel.org/virt/kvm/x86/running-nested-guests.html"
+  },
+  {
+   "finding": "VM ioctls are bound to the creating process; a VM lives as long as its file descriptor.",
+   "quote": "VM ioctls must be issued from the same process (address space) that was used to create the VM.",
+   "location": "KVM API documentation, §1 General description",
+   "cite_url": "https://docs.kernel.org/virt/kvm/api.html"
+  },
+  {
+   "finding": "KVM ABI stable since Linux 2.6.22.",
+   "quote": "As of Linux 2.6.22, the KVM ABI has been stabilized: no backward incompatible change are allowed.",
+   "location": "KVM API documentation, §3 Extensions",
+   "cite_url": "https://docs.kernel.org/virt/kvm/api.html"
+  },
+  {
+   "finding": "Access control is ordinary file permissions on /dev/kvm (Firecracker docs: needs read/write; often managed by the kvm group; check with a test on -r and -w).",
+   "quote": "Firecracker requires read/write access to /dev/kvm exposed by the KVM module.",
+   "location": "Firecracker docs/getting-started.md > Prerequisites > KVM",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md"
+  },
+  {
+   "finding": "gVisor's take on nesting cost: KVM platform best on bare metal; systrap preferred inside a VM.",
+   "quote": "Note that while running within a nested VM is feasible with the KVM platform, the systrap platform will often provide better performance in such a setup, due to the overhead of nested virtualization.",
+   "location": "gVisor Platform Guide > KVM",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/platforms/"
+  }
+ ],
+ "teaching_notes": "For the reader's ten-minute audit: `ls -l /dev/kvm` tells you whether this box can host KVM guests at all; inside an ordinary cloud VM or a Docker container on a Mac it is usually absent, which is why Firecracker/Kata-style sandboxes need bare-metal or nested-virtualization instances while gVisor's systrap platform does not. Avoid two folklore phrasings the sources don't support: 'KVM turns Linux into a type-1 hypervisor' (linux-kvm.org says 'full virtualization solution ... loadable kernel module') and any blanket claim about which clouds allow nesting (kernel docs are silent; Firecracker's docs say EC2 needs .metal, which may be dated). The ARM half of the planned claim is unverifiable from the fetched pages beyond the docs index listing ARM sections; Kata's README lists 'ARM Hyp' as the aarch64 virtualization technology."
+}

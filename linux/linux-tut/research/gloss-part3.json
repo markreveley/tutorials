@@ -1,0 +1,936 @@
+{
+  "container": {
+    "name": "Container",
+    "short": "An ordinary Linux process (or group of them) that the kernel shows a restricted view of the system: its own filesystem, process list, network, and resource limits, while sharing the host's kernel.",
+    "def": "A container is not a small virtual machine; it is a normal Linux process that was started with extra kernel bookkeeping. <a href='pages/20-namespaces.html'>Namespaces</a> decide what the process can see (its own root filesystem, PID numbers, network interfaces, hostname), cgroups decide how much it can use, and capabilities and seccomp decide what it may ask the kernel to do. Containers exist because this is far cheaper than booting a whole machine: starting one takes about as long as starting a process. The price is that every container on a host shares one kernel, so a kernel bug is a shared weakness. Most agentic benchmarks run each task in a container, which means the properties of your sandbox are exactly the properties of these mechanisms, as configured. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a>.",
+    "see": [
+      "namespace",
+      "cgroup",
+      "image",
+      "isolation",
+      "virtual-machine"
+    ]
+  },
+  "image": {
+    "name": "Image",
+    "short": "A read-only, packaged filesystem plus metadata (default command, environment variables, user) from which containers are started; the template, where a container is the running instance.",
+    "def": "An image is a packaged root filesystem, stored as a stack of read-only <a href='pages/22-docker-for-evals.html'>layers</a>, plus a small config recording the default command, environment variables, working directory, and user. Starting a container means giving a process that filesystem with a thin writable layer on top; the image itself never changes. Images exist so that an environment can be built once and started identically many times, on any machine. For an evals engineer the image is the specification of the task environment: which tools are installed, which versions, which files the agent can find. Anything baked into the image, including an answer key someone copied in by accident, is visible to every run. Refer to images by digest, not by tag, if you need runs to be comparable.",
+    "also": "container image, Docker image",
+    "see": [
+      "layer",
+      "dockerfile",
+      "image-digest",
+      "tag",
+      "task-image"
+    ]
+  },
+  "layer": {
+    "name": "Layer",
+    "short": "One read-only filesystem diff inside an image, usually produced by a single Dockerfile instruction; layers are stacked to form the container's filesystem.",
+    "def": "A layer is a recorded set of filesystem changes: files added, modified, or marked deleted by one build step. An image is an ordered stack of layers, and at run time a union filesystem (overlayfs on a typical Docker install) presents the stack as one directory tree with a writable layer on top. Layers exist so that builds can be cached and images that share a base can share storage and downloads. The consequence that catches people: deleting a file in a later layer only hides it. The bytes still sit in the earlier layer, and anyone with the image can extract them. A Dockerfile that copies in reference solutions and then runs <code>rm</code> has not removed them from the image. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/14-mounts-and-filesystems.html'>Mounts and Filesystems</a>.",
+    "see": [
+      "image",
+      "overlayfs",
+      "dockerfile",
+      "solution-leakage"
+    ]
+  },
+  "dockerfile": {
+    "name": "Dockerfile",
+    "short": "A text file of build instructions (FROM, RUN, COPY, USER, ENTRYPOINT…) that Docker executes in order to produce an image.",
+    "def": "A Dockerfile is the recipe for an image: start <code>FROM</code> a base image, <code>RUN</code> commands to install software, <code>COPY</code> files in, set the <code>USER</code>, <code>WORKDIR</code>, and the default command. Each instruction that changes the filesystem produces a layer. It exists so that an environment is described in a reviewable file instead of being assembled by hand. Read one the way you would read a lab protocol. <code>FROM ubuntu:latest</code> and an unpinned <code>apt-get install</code> mean the image you build next month differs from the one you built today, so scores drift for reasons that have nothing to do with the model. No <code>USER</code> line means the agent runs as root. A <code>COPY . .</code> may drag in tests or solutions you never meant to ship. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a>.",
+    "see": [
+      "image",
+      "layer",
+      "base-image",
+      "version-pinning",
+      "entrypoint"
+    ]
+  },
+  "docker": {
+    "name": "Docker",
+    "short": "The most widely used toolset for building images and running containers: a command-line client that talks to a background daemon, which sets up namespaces, cgroups, and networking for you.",
+    "def": "Docker is a packaging of kernel features into a usable tool. The <code>docker</code> command is a client; it sends requests to the Docker daemon, which pulls images, creates the namespaces and cgroups, wires up a network, and starts your process. Nothing Docker does is magic: every <code>docker run</code> flag maps onto a mechanism from <a href='pages/20-namespaces.html'>pages 20</a> and <a href='pages/21-cgroups-capabilities-seccomp.html'>21</a> (<code>--memory</code> is a cgroup limit, <code>--network none</code> is an empty network namespace, <code>--cap-drop</code> edits the capability set). On a Mac, Docker Desktop runs a hidden Linux virtual machine, because containers need a Linux kernel. Docker is the default sandbox of agentic evals, so reading a harness's Docker configuration is how you learn what the agent was actually allowed to do. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a>.",
+    "see": [
+      "container",
+      "docker-daemon",
+      "image",
+      "docker-compose",
+      "container-runtime"
+    ]
+  },
+  "docker-daemon": {
+    "name": "Docker Daemon",
+    "short": "The long-running background service (dockerd) that actually builds images and creates containers; by default it runs as root and takes orders from the docker client over a socket.",
+    "def": "The Docker daemon, <code>dockerd</code>, is the server half of Docker. The <code>docker</code> command you type only sends API requests; the daemon does the privileged work of creating namespaces, mounting filesystems, and configuring networks, which is why in the default setup it runs as root. That design has a direct security consequence: whoever can send requests to the daemon can ask it to start a container with the host's filesystem mounted, so control of the daemon is equivalent to root on the host. Docker's own documentation says only trusted users should be allowed to control it. In an eval, the harness talks to the daemon and the agent must not be able to. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>.",
+    "also": "dockerd",
+    "see": [
+      "docker",
+      "docker-socket",
+      "daemon",
+      "rootless",
+      "trust-boundary"
+    ]
+  },
+  "docker-socket": {
+    "name": "Docker Socket",
+    "short": "The Unix socket file, normally /var/run/docker.sock, through which clients send commands to the Docker daemon; access to it is effectively root access to the host.",
+    "def": "The Docker socket is a Unix domain socket at <code>/var/run/docker.sock</code>: a file that acts as the daemon's front door. It is protected by ordinary file permissions (owned by root, with group <code>docker</code>), and that is all that protects it. Any process that can write to the socket can tell the daemon to start a new container with any mount and any privilege, so it can read and modify the host. People bind-mount the socket into a container to let it launch sibling containers; doing that to a container an agent controls removes the sandbox entirely. The audit check is simple: look for <code>docker.sock</code> in the container's mounts (<code>findmnt</code>, <code>docker inspect</code>) and make sure it is not there. See <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>.",
+    "also": "docker.sock",
+    "see": [
+      "docker-daemon",
+      "socket",
+      "bind-mount",
+      "container-escape",
+      "privilege-escalation"
+    ]
+  },
+  "docker-compose": {
+    "name": "Docker Compose",
+    "short": "A tool that starts a group of related containers, networks, and volumes from one declarative YAML file (compose.yaml) instead of a series of long docker run commands.",
+    "def": "Docker Compose describes a multi-container setup in one file: each service's image or build context, its mounts, environment variables, resource limits, and the networks that connect services. <code>docker compose up</code> creates it all; <code>docker compose down</code> removes it. It exists because real environments are rarely one container: a task might need the agent's box, a database, and a mock web service, reachable from each other and from nothing else. Harnesses lean on it for the same reason; Inspect's Docker sandbox, for example, is configured with a <code>compose.yaml</code>. When you audit an eval, the compose file is where the facts live: which network the agent's container is on, what is mounted and whether read-only, and what memory and CPU limits apply. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "also": "compose, compose.yaml",
+    "see": [
+      "docker",
+      "container",
+      "bridge-network",
+      "volume",
+      "inspect"
+    ]
+  },
+  "registry": {
+    "name": "Registry",
+    "short": "A server that stores container images and serves them by name, such as Docker Hub; docker pull downloads from one and docker push uploads to one.",
+    "def": "A registry is a storage service for images. An image name like <code>ubuntu:24.04</code> is shorthand for a repository on a default registry (Docker Hub); a name with a hostname in front points at a different one. Registries exist so an image built once can be fetched by any machine that needs it, layer by layer, skipping layers it already has. Two things matter for evals. First, a registry is a network dependency: a harness that pulls images at run time fails, or is rate-limited, when the registry is unreachable, and that is an infrastructure failure, not a model failure. Second, a tag on a registry can be re-pointed to new content at any time, so pulling by tag does not guarantee the same environment twice; pulling by digest does. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a>.",
+    "also": "container registry, Docker Hub",
+    "see": [
+      "image",
+      "tag",
+      "image-digest",
+      "repository",
+      "infrastructure-failure"
+    ]
+  },
+  "image-digest": {
+    "name": "Image Digest",
+    "short": "A SHA-256 hash of an image's content, written image@sha256:…, that identifies exactly one immutable image, unlike a tag, which can be moved.",
+    "def": "A digest is a cryptographic hash computed from an image's content. Because any change to the content changes the hash, <code>ubuntu@sha256:…</code> names one specific image forever, and Docker verifies what it downloaded against it. Digests exist because tags are only labels: <code>python:3.12</code> points at whatever the publisher most recently pushed under that name. For a benchmark this is the difference between a fixed instrument and a drifting one. If the base image silently gains a newer library, a task can become easier, harder, or broken, and the score changes with no change to the model. Pin <code>FROM</code> lines and task images by digest, and record the digest in the run log so a result can be reproduced later. See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a> and <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a>.",
+    "also": "sha256 digest",
+    "see": [
+      "tag",
+      "image",
+      "version-pinning",
+      "reproducible-build",
+      "registry"
+    ]
+  },
+  "tag": {
+    "name": "Tag",
+    "short": "The human-readable label after the colon in an image name (ubuntu:24.04, python:latest); a movable pointer to an image, not a fixed identity.",
+    "def": "A tag is a name a publisher attaches to an image in a repository, such as <code>24.04</code> or <code>latest</code>. If you give no tag, Docker assumes <code>latest</code>, which is only a conventional name and carries no guarantee of being the newest anything. Tags exist for convenience: people want to say <q>the current 24.04 image</q> without quoting a hash. The catch is that a tag is mutable. Publishers routinely rebuild and re-push the same tag to pick up security updates, so the same <code>docker pull</code> returns different content on different days. That is fine for a laptop and a problem for a benchmark, where two runs a month apart are supposed to be measuring the same thing. Use tags to find an image and digests to pin it. See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a>.",
+    "also": "image tag",
+    "see": [
+      "image-digest",
+      "image",
+      "registry",
+      "version-pinning"
+    ]
+  },
+  "entrypoint": {
+    "name": "Entrypoint",
+    "short": "The command an image is configured to run when a container starts; that process becomes PID 1 inside the container and the container lives exactly as long as it does.",
+    "def": "An image's config names the program to start, set in a Dockerfile with <code>ENTRYPOINT</code> and <code>CMD</code> (roughly: the fixed command, and its default arguments, which <code>docker run</code> arguments replace). Whatever starts becomes PID 1 in the container's PID namespace, and when it exits the container stops. Two details follow from mechanisms elsewhere in the course. Written in shell form (<code>ENTRYPOINT my-server --flag</code>), the command runs under <code>/bin/sh -c</code>, so the shell is PID 1 and your program may never receive the <code>SIGTERM</code> that <code>docker stop</code> sends. And PID 1 gets special signal treatment from the kernel, which is why containers that ignore a polite stop are eventually killed. Harnesses often override the entrypoint with something like <code>sleep infinity</code> and drive the box with <code>docker exec</code>. See <a href='pages/22-docker-for-evals.html'>page 22</a> and <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+    "also": "ENTRYPOINT, CMD",
+    "see": [
+      "pid-1",
+      "dockerfile",
+      "sigterm",
+      "container",
+      "pid-namespace"
+    ]
+  },
+  "namespace": {
+    "name": "Namespace",
+    "short": "A kernel feature that gives a group of processes their own private view of one global resource, such as the process list, the mount table, the network stack, or the hostname.",
+    "def": "Normally every process on a machine sees the same process list, the same mounts, the same network interfaces. A namespace wraps one such global resource so that processes inside it see their own isolated instance, and changes are invisible outside. Linux has several kinds (mount, PID, network, user, UTS, IPC, cgroup, time), and a process belongs to one of each. A <q>container</q> is just a process placed in a fresh set of them. Namespaces control <em>visibility</em>, not consumption or permitted operations; those are the jobs of cgroups, capabilities, and seccomp. You can list them with <code>lsns</code> and look at any process's membership under <code>/proc/&lt;pid&gt;/ns</code>. For auditing a sandbox, the useful question is always which namespaces are <em>not</em> separate: a container started with <code>--network host</code> or <code>--pid host</code> shares that view with the host. See <a href='pages/20-namespaces.html'>Namespaces: What a Container Really Is</a>.",
+    "see": [
+      "pid-namespace",
+      "mount-namespace",
+      "network-namespace",
+      "user-namespace",
+      "container"
+    ]
+  },
+  "pid-namespace": {
+    "name": "PID Namespace",
+    "short": "A namespace with its own process ID numbering: the first process inside is PID 1, and processes inside cannot see or signal processes outside.",
+    "def": "A PID namespace gives a set of processes a private numbering starting from 1. Run <code>ps</code> in a container and you see a handful of processes, not the host's hundreds; the same processes are visible from the host under different, larger PIDs. The first process in the namespace takes on the role of init: orphaned children are re-parented to it, the kernel delivers to it only signals it has installed a handler for (when sent from inside), and when it exits the kernel kills everything else in the namespace with <code>SIGKILL</code>. That explains two things you will see in transcripts: zombies piling up under an entrypoint that never reaps them, and background jobs an agent started vanishing the instant the main process ends. See <a href='pages/20-namespaces.html'>Namespaces</a> and <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+    "see": [
+      "namespace",
+      "pid-1",
+      "pid",
+      "zombie-process",
+      "entrypoint"
+    ]
+  },
+  "mount-namespace": {
+    "name": "Mount Namespace",
+    "short": "A namespace with its own mount table, so a group of processes can have a completely different filesystem tree from the host, including a different root directory.",
+    "def": "The mount table is the kernel's list of which filesystem is attached at which directory. A mount namespace gives a process group a private copy of that list: mounts made inside are not seen outside. Combined with switching the root directory to an image's unpacked filesystem (<code>pivot_root</code>), this is how a container gets its own <code>/</code> with its own <code>/etc</code> and <code>/usr</code> while the host's files are simply not reachable by any path. For eval work, the mount table is where you verify claims about the environment: <code>findmnt</code> inside the sandbox shows every bind mount from the host, and whether each is <code>ro</code> or <code>rw</code>. A test directory bind-mounted read-write is one the agent can edit. See <a href='pages/20-namespaces.html'>Namespaces</a> and <a href='pages/14-mounts-and-filesystems.html'>Mounts and Filesystems</a>.",
+    "see": [
+      "namespace",
+      "mount",
+      "bind-mount",
+      "read-only-mount",
+      "chroot"
+    ]
+  },
+  "network-namespace": {
+    "name": "Network Namespace",
+    "short": "A namespace with its own network stack: its own interfaces, IP addresses, routing table, firewall rules, and port numbers, separate from the host's.",
+    "def": "A network namespace is a private copy of the kernel's networking state. A brand-new one contains only a loopback interface, and that one is down: no route to anywhere. Connectivity has to be added deliberately, typically with a veth pair, a virtual cable with one end inside the namespace and the other on a bridge on the host. It exists so that each container can bind port 80, have its own <code>localhost</code>, and be firewalled independently. This is the mechanism behind <code>docker run --network none</code>: the agent gets the empty namespace and nothing is plugged in, the strongest and simplest form of egress control. It is also why <code>localhost</code> inside a container is not the host's <code>localhost</code>, a standard cause of <q>connection refused</q> in transcripts. See <a href='pages/20-namespaces.html'>Namespaces</a> and <a href='pages/19-firewalls-and-egress.html'>Firewalls and Egress Control</a>.",
+    "also": "netns",
+    "see": [
+      "namespace",
+      "veth",
+      "bridge-network",
+      "egress",
+      "loopback"
+    ]
+  },
+  "user-namespace": {
+    "name": "User Namespace",
+    "short": "A namespace with its own mapping of user and group IDs, so a process can be UID 0 (root) inside while being an ordinary unprivileged user as far as the host is concerned.",
+    "def": "A user namespace translates IDs: a mapping says that UID 0 inside corresponds to, say, UID 100000 outside. Inside, the process looks like root and holds capabilities, but those capabilities apply only to resources owned by that namespace; to the rest of the system it is user 100000 with no special rights. It exists to make <q>root in the container</q> stop meaning <q>root on the host</q>, and it is the foundation of rootless containers. The point to remember when auditing: a standard Docker setup does <em>not</em> put containers in a separate user namespace unless configured to (<code>userns-remap</code> or rootless mode). There, UID 0 in the container is the host's UID 0, held back only by the reduced capability set, seccomp, and the other namespaces. Check <code>/proc/self/uid_map</code> to see which situation you are in. See <a href='pages/20-namespaces.html'>Namespaces</a> and <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>.",
+    "also": "userns",
+    "see": [
+      "namespace",
+      "uid",
+      "root-user",
+      "rootless",
+      "capability"
+    ]
+  },
+  "uts-namespace": {
+    "name": "UTS Namespace",
+    "short": "The namespace that isolates the hostname (and NIS domain name), letting each container have its own hostname without affecting the host.",
+    "def": "The UTS namespace isolates two small pieces of system identity: the hostname and the NIS domain name. (UTS stands for <q>UNIX Time-sharing System</q>, from the name of the kernel structure that holds them.) It exists so a container can call itself <code>web-1</code> or have its hostname set by an orchestrator without renaming the machine it runs on. It is the simplest namespace, which makes it the ideal first experiment: <code>unshare --uts</code>, change the hostname, and confirm from another terminal that the host's is untouched. In eval work it explains the random hex string in shell prompts inside transcripts (Docker sets the hostname to the container ID by default), and a hostname that matches the host's is a quick hint that a container was started with host namespaces shared. See <a href='pages/20-namespaces.html'>Namespaces: What a Container Really Is</a>.",
+    "see": [
+      "namespace",
+      "container",
+      "pid-namespace",
+      "network-namespace"
+    ]
+  },
+  "cgroup": {
+    "name": "Cgroup",
+    "short": "A control group: a kernel mechanism that puts processes into a group and meters and limits the group's total memory, CPU time, number of processes, and I/O.",
+    "def": "Namespaces limit what a process can see; cgroups limit what it can use. A cgroup is a directory under <code>/sys/fs/cgroup</code>; processes are assigned to it, and files in it set limits for the whole group: <code>memory.max</code>, <code>cpu.max</code>, <code>pids.max</code> in cgroup v2, the version Ubuntu 24.04 uses. Docker's <code>--memory</code>, <code>--cpus</code>, and <code>--pids-limit</code> flags just write these files. They exist because per-process limits are trivially dodged by starting more processes; a group limit is not. When a group hits its memory limit and nothing can be reclaimed, the OOM killer kills a process in it, which shows up as exit code 137 with no error message. A benchmark without limits lets one runaway task starve its neighbours; one with limits set too tight scores resource exhaustion as model failure. See <a href='pages/21-cgroups-capabilities-seccomp.html'>Cgroups, Capabilities, and Seccomp</a> and <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+    "also": "control group, cgroup v2",
+    "see": [
+      "oom-killer",
+      "rlimit",
+      "namespace",
+      "container",
+      "infrastructure-failure"
+    ]
+  },
+  "capability": {
+    "name": "Capability",
+    "short": "One named slice of root's power, such as CAP_NET_ADMIN or CAP_SYS_ADMIN, that can be granted or removed individually so a process gets only the privileges it needs.",
+    "def": "Traditionally Linux had two privilege levels: root, which bypasses every permission check, and everyone else. Capabilities split root's power into separately switchable units: <code>CAP_NET_BIND_SERVICE</code> to bind low ports, <code>CAP_CHOWN</code> to change file ownership, <code>CAP_NET_ADMIN</code> to configure networking, <code>CAP_SYS_ADMIN</code> for a large grab-bag including mounting filesystems. They exist so that <q>needs one privileged operation</q> no longer means <q>gets all of them</q>. Docker starts containers, even those running as root, with a reduced set, which is why root in a container cannot load kernel modules or change firewall rules by default. <code>--cap-drop ALL</code> removes the rest; <code>--cap-add</code> and <code>--privileged</code> hand power back. To audit, read <code>CapEff</code> in <code>/proc/self/status</code> and decode it with <code>capsh --decode</code>. An agent container holding <code>CAP_SYS_ADMIN</code> deserves an explanation. See <a href='pages/21-cgroups-capabilities-seccomp.html'>Cgroups, Capabilities, and Seccomp</a>.",
+    "also": "Linux capabilities, CAP_*",
+    "see": [
+      "root-user",
+      "least-privilege",
+      "privileged-container",
+      "seccomp",
+      "no-new-privileges"
+    ]
+  },
+  "seccomp": {
+    "name": "Seccomp",
+    "short": "A kernel facility that filters the system calls a process is allowed to make, so that calls it has no business using are refused before the kernel acts on them.",
+    "def": "Every interaction between a program and the kernel is a system call. Seccomp lets you attach a filter to a process: a small program the kernel runs on each system call to decide whether to allow it, fail it with an error, or kill the process. Filters are inherited by children and cannot be removed once installed. It exists to shrink the kernel's attack surface: a bug in an obscure system call cannot be exploited by a process that is not allowed to call it. Docker applies a default profile to every container, and <code>--security-opt seccomp=unconfined</code> or <code>--privileged</code> switches it off. In a transcript, a blocked call usually surfaces as a baffling <q>Operation not permitted</q> from a command running as root; <code>Seccomp:</code> in <code>/proc/self/status</code> tells you whether a filter is active. See <a href='pages/21-cgroups-capabilities-seccomp.html'>Cgroups, Capabilities, and Seccomp</a>.",
+    "also": "seccomp-bpf, secure computing mode",
+    "see": [
+      "system-call",
+      "capability",
+      "attack-surface",
+      "gvisor",
+      "apparmor"
+    ]
+  },
+  "no-new-privileges": {
+    "name": "no-new-privileges",
+    "short": "A per-process kernel flag that guarantees the process and all its descendants can never gain more privileges than they have now, which neutralises setuid programs such as sudo.",
+    "def": "Normally, executing a program can <em>raise</em> privilege: a setuid-root binary like <code>sudo</code> or <code>su</code> runs as root whoever launches it, and files can carry capabilities too. The <code>no_new_privs</code> flag turns that off. Once set on a process it is inherited by every child and cannot be unset, and from then on <code>execve</code> ignores setuid bits and file capabilities. It exists so that a confined process cannot climb out through some privileged helper that happens to be installed. In Docker you set it with <code>--security-opt no-new-privileges</code>. It matters for evals because running the agent as a non-root user is only a real restriction if there is no route back to root, and a stray setuid binary in the task image is such a route. Check <code>NoNewPrivs:</code> in <code>/proc/self/status</code>. See <a href='pages/21-cgroups-capabilities-seccomp.html'>Cgroups, Capabilities, and Seccomp</a> and <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>.",
+    "also": "no_new_privs, PR_SET_NO_NEW_PRIVS",
+    "see": [
+      "setuid",
+      "privilege-escalation",
+      "sudo",
+      "capability",
+      "seccomp"
+    ]
+  },
+  "apparmor": {
+    "name": "AppArmor",
+    "short": "A Linux security module, enabled by default on Ubuntu, that confines a program to a profile listing the files, capabilities, and network access it may use, even when it runs as root.",
+    "def": "Ordinary Unix permissions are discretionary: the owner of a file decides who may touch it, and root bypasses the lot. AppArmor adds <em>mandatory</em> access control: a per-program profile, loaded into the kernel, lists which paths may be read, written, or executed and which capabilities may be used, and the kernel enforces it regardless of user ID. It exists as a backstop: if a confined program is compromised, it still cannot reach outside its profile. On hosts where AppArmor is enabled, Docker applies a default profile (<code>docker-default</code>) to containers. You will mostly meet it as a puzzle: an operation fails with <q>Permission denied</q> although the permission bits and capabilities say it should work, and the explanation is a denial recorded in the host's kernel log. Red Hat-family systems use SELinux for the same job. See <a href='pages/21-cgroups-capabilities-seccomp.html'>Cgroups, Capabilities, and Seccomp</a>.",
+    "also": "LSM, mandatory access control",
+    "see": [
+      "seccomp",
+      "capability",
+      "permission-bits",
+      "dmesg",
+      "privileged-container"
+    ]
+  },
+  "privileged-container": {
+    "name": "Privileged Container",
+    "short": "A container started with docker run --privileged, which switches off most of Docker's protections: all capabilities granted, seccomp and AppArmor disabled, host devices exposed.",
+    "def": "<code>--privileged</code> is a single flag that undoes the restrictions that make a container a sandbox. Per Docker's reference, it enables all kernel capabilities, disables the default seccomp and AppArmor profiles, grants access to all host devices, and makes <code>/sys</code> and the cgroup mounts read-write. Docker's documentation is blunt: a privileged container <q>is not a securely sandboxed process</q> and can take control of the host. The flag exists for special cases like running Docker inside Docker, and it spreads because it makes confusing permission errors go away. For an eval it means the namespaces still give the agent a separate <em>view</em>, but almost nothing stops it acting on the host. Check with <code>docker inspect --format '{{.HostConfig.Privileged}}'</code>, and treat <code>true</code> on an agent's container as a finding. This course uses the flag only on throwaway lab containers. See <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>.",
+    "also": "--privileged",
+    "see": [
+      "capability",
+      "seccomp",
+      "apparmor",
+      "container-escape",
+      "least-privilege"
+    ]
+  },
+  "rootless": {
+    "name": "Rootless",
+    "short": "A way of running the container engine itself, and every container it starts, as an ordinary non-root user, using user namespaces, so that a breakout does not land as root on the host.",
+    "def": "In the default Docker setup the daemon runs as root, so anything that subverts the daemon or escapes a container arrives with root's powers. Rootless mode runs both the daemon and the containers inside a user namespace owned by an unprivileged user: <q>root</q> in the container maps to that user on the host. It exists to limit the damage of a vulnerability in the daemon or the runtime. It is distinct from merely running the container's process as a non-root user (<code>USER</code> in a Dockerfile, <code>--user</code>), which is also worth doing but leaves the daemon privileged. Podman can run this way too. The trade-offs are practical ones, mainly around networking and some storage and resource-limit features, which is why many eval setups still run rootful Docker and rely on the hardening flags instead. See <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>.",
+    "also": "rootless mode, rootless Docker",
+    "see": [
+      "user-namespace",
+      "docker-daemon",
+      "root-user",
+      "least-privilege",
+      "container-escape"
+    ]
+  },
+  "container-escape": {
+    "name": "Container Escape",
+    "short": "Any way a process inside a container gains access to the host or to other containers, defeating the isolation the container was supposed to provide.",
+    "def": "In practice escapes come in two kinds. The common kind is misconfiguration: a mounted Docker socket, <code>--privileged</code>, a broad capability like <code>CAP_SYS_ADMIN</code>, a bind mount of a sensitive host directory, shared host namespaces. No exploit is needed; the door was left open. The rare kind is a genuine vulnerability in the kernel or the container runtime, which matters because every container shares the host kernel. This course teaches you to check for and close the first kind, and to choose a stronger boundary (gVisor, a microVM) when the second kind is within your threat model. For evals the concern is concrete: the harness, the grader, other tasks' answers, and API keys usually live on the host side. See <a href='pages/23-hardening-containers.html'>Locking Down a Container</a> and <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "also": "container breakout, sandbox escape",
+    "see": [
+      "docker-socket",
+      "privileged-container",
+      "attack-surface",
+      "isolation",
+      "threat-model"
+    ]
+  },
+  "chroot": {
+    "name": "chroot",
+    "short": "A command and system call that changes which directory a process treats as / (the root of its filesystem); an ancestor of containers, but not a security boundary on its own.",
+    "def": "<code>chroot /some/dir command</code> runs a command with <code>/some/dir</code> as its root directory, so <code>/bin/sh</code> resolves to <code>/some/dir/bin/sh</code> and paths above it are unreachable by name. It exists for practical jobs like repairing an installed system from a rescue disk or building software against a different set of libraries. It is the oldest idea behind containers, <q>give the process a different filesystem tree</q>, but the man page is explicit that it changes one ingredient of path resolution and is not intended for security: a root process can get out, and nothing else (processes, network, users) is isolated at all. Containers use mount namespaces and <code>pivot_root</code> instead. Knowing this lets you evaluate a sandbox that claims isolation by <code>chroot</code> alone: it is a convenience, not a wall. See <a href='pages/20-namespaces.html'>Namespaces: What a Container Really Is</a>.",
+    "also": "chroot jail",
+    "see": [
+      "root-directory",
+      "mount-namespace",
+      "namespace",
+      "isolation"
+    ]
+  },
+  "oci": {
+    "name": "OCI",
+    "short": "The Open Container Initiative: the industry standards body whose specifications define what a container image is and how a runtime must run it, so tools from different vendors interoperate.",
+    "def": "The Open Container Initiative publishes the specifications that make <q>a container</q> a portable thing and not a Docker-only format. The image specification defines how layers and config are packaged; the runtime specification defines the bundle (a root filesystem plus a <code>config.json</code> listing namespaces, mounts, capabilities, cgroup limits) that a low-level runtime turns into a running process; the distribution specification covers how registries serve images. The standards exist so that an image built with one tool runs under another. This is what makes the isolation ladder practical for evals: because runtimes such as runc and gVisor's <code>runsc</code> both implement the OCI runtime interface, you can keep the same task images and the same harness and swap only the runtime underneath to get a stronger boundary. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a> and <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a>.",
+    "also": "Open Container Initiative",
+    "see": [
+      "runc",
+      "container-runtime",
+      "image",
+      "gvisor",
+      "registry"
+    ]
+  },
+  "runc": {
+    "name": "runc",
+    "short": "The standard low-level container runtime: the small program that actually creates the namespaces and cgroups and starts the container's process, following the OCI runtime specification.",
+    "def": "When you type <code>docker run</code>, Docker does not create the container itself. The daemon hands the job down a chain (dockerd, then containerd, then runc), and runc is the piece at the bottom that makes the system calls: create the namespaces, apply the cgroup limits, drop capabilities, install the seccomp filter, pivot into the image's filesystem, and <code>exec</code> your command. It is the reference implementation of the OCI runtime specification and Docker's default. It earns a glossary entry because it is the swappable part: <code>docker run --runtime=runsc</code> replaces it with gVisor, and other runtimes start a small VM instead, with no change to the image. When someone asks what isolates the agent, <q>runc</q> means <q>namespaces and a shared kernel</q>. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "see": [
+      "container-runtime",
+      "oci",
+      "docker-daemon",
+      "gvisor",
+      "namespace"
+    ]
+  },
+  "container-runtime": {
+    "name": "Container Runtime",
+    "short": "The software that turns an image into a running, isolated process; the choice of runtime (runc, gVisor, a microVM-based runtime) decides how strong the sandbox boundary is.",
+    "def": "<q>Container runtime</q> is used at two levels. High-level runtimes such as containerd manage images, storage, and container lifecycles. Low-level runtimes do the actual isolating: runc sets up namespaces and cgroups around a process on the shared host kernel; gVisor's <code>runsc</code> puts a user-space kernel between the process and the host; Kata-style runtimes boot a lightweight virtual machine per container. Because they all speak the OCI interface, the layer above does not care which is in use. For an evals engineer this is the most consequential single setting in the stack that nobody looks at. Two labs can run the same benchmark from the same images with very different exposure if one uses the default runtime and the other a sandboxed one. <code>docker info</code> lists the configured runtimes and the default. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder: Containers, gVisor, MicroVMs</a>.",
+    "also": "OCI runtime",
+    "see": [
+      "runc",
+      "gvisor",
+      "oci",
+      "microvm",
+      "isolation"
+    ]
+  },
+  "gvisor": {
+    "name": "gVisor",
+    "short": "An open-source sandbox that runs containers on top of its own user-space 'application kernel', which intercepts their system calls so they never talk to the host kernel directly.",
+    "def": "A normal container's system calls go straight to the host kernel it shares with everything else. gVisor inserts a layer: in its documentation's words, it is <q>an application kernel that implements a Linux-like interface</q>, which <q>intercepts application system calls and acts as the guest kernel, without the need for translation through virtualized hardware</q>. The component that does this is called the Sentry; file access goes through a separate host process, the Gofer. It ships an OCI runtime, <code>runsc</code>, that integrates with Docker and Kubernetes, so existing images run with <code>--runtime=runsc</code>. The documented price is <q>reduced application compatibility and higher per-system call overhead</q>. In eval terms: a stronger boundary for untrusted agent code, at the risk that some task's software behaves differently or runs slower than under runc, which you must rule out first. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "also": "runsc",
+    "see": [
+      "container-runtime",
+      "system-call",
+      "seccomp",
+      "microvm",
+      "attack-surface"
+    ]
+  },
+  "microvm": {
+    "name": "MicroVM",
+    "short": "A stripped-down virtual machine, with its own guest kernel but only a handful of emulated devices, designed to start quickly and cheaply enough to be used like a container.",
+    "def": "A microVM is a real virtual machine reduced to the minimum. It boots its own Linux kernel under hardware virtualization, so the workload's system calls hit the <em>guest's</em> kernel and not the host's, but it drops the legacy hardware a general-purpose VM emulates, leaving little more than a network device, a disk, and a console. It exists to answer a specific trade-off: containers are fast but share a kernel; traditional VMs have a strong boundary but are heavy. Firecracker, whose documentation says microVMs combine the isolation of VMs with <q>the speed and resource efficiency of containers</q>, is the best-known implementation. For running code written by an agent you do not trust, on hosts shared with other tenants or with your secrets, this is the top rung of the ladder. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder: Containers, gVisor, MicroVMs</a>.",
+    "also": "micro virtual machine",
+    "see": [
+      "firecracker",
+      "virtual-machine",
+      "kvm",
+      "hypervisor",
+      "isolation"
+    ]
+  },
+  "firecracker": {
+    "name": "Firecracker",
+    "short": "An open-source virtual machine monitor from Amazon Web Services that uses Linux KVM to create and manage microVMs with a deliberately minimal set of emulated devices.",
+    "def": "Firecracker describes itself as <q>an open source virtualization technology purpose-built for creating and managing secure, multi-tenant container and function-based services</q>, built at Amazon Web Services for services such as AWS Lambda. It <q>runs in user space and uses the Linux Kernel-based Virtual Machine (KVM) to create microVMs</q>. Its security argument is subtraction: only a few emulated devices (virtio network, block, and vsock devices, a serial console, a minimal keyboard controller), so there is little device-emulation code for a guest to attack, plus a companion program, the <code>jailer</code>, that confines the Firecracker process itself as a second line of defence. It also supports snapshots that save guest memory and emulated hardware state so a microVM can be resumed later. When a sandbox vendor says your agent runs in a <q>microVM</q>, this is the kind of technology meant. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "see": [
+      "microvm",
+      "kvm",
+      "hypervisor",
+      "snapshot",
+      "tenancy"
+    ]
+  },
+  "hypervisor": {
+    "name": "Hypervisor",
+    "short": "The software layer that creates and runs virtual machines, giving each guest operating system the illusion of its own hardware while keeping guests separated from each other and from the host.",
+    "def": "A hypervisor (or virtual machine monitor) sits between physical hardware and guest operating systems. It uses CPU virtualization features to let each guest kernel run at near-native speed while trapping the operations that would let one guest affect another, and it presents virtual devices (disk, network card) in place of the real ones. It exists so that many mutually distrusting systems can share one physical machine; it is the foundation of every cloud. On Linux the kernel itself becomes the hypervisor through KVM, with a user-space program such as QEMU or Firecracker supplying the devices. The contrast that matters for sandboxing: the interface a guest sees is a small set of virtual hardware, whereas the interface a container sees is the entire Linux system-call surface. A narrower interface means fewer places for a boundary-crossing bug. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "also": "virtual machine monitor, VMM",
+    "see": [
+      "virtual-machine",
+      "kvm",
+      "microvm",
+      "attack-surface",
+      "isolation"
+    ]
+  },
+  "kvm": {
+    "name": "KVM",
+    "short": "Kernel-based Virtual Machine: the part of the Linux kernel that uses the CPU's hardware virtualization support to run virtual machines, exposed to programs as the device /dev/kvm.",
+    "def": "KVM turns the Linux kernel into a hypervisor. It does not emulate a computer by itself; it exposes the CPU's virtualization extensions through the device file <code>/dev/kvm</code>, and a user-space program (QEMU, Firecracker) opens that file to create a VM, give it memory, and run guest code directly on the processor. The user-space program supplies the virtual devices. The split exists so that the performance-critical, hardware-specific part lives in the kernel once, and different VM monitors can build on it. Practical consequence for evals infrastructure: microVM sandboxes need <code>/dev/kvm</code>, and if your harness itself runs inside a cloud VM, that requires nested virtualization, which not every cloud instance type offers. Checking whether <code>/dev/kvm</code> exists is the first step in finding out which rungs of the isolation ladder a host can support. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "also": "Kernel-based Virtual Machine",
+    "see": [
+      "hypervisor",
+      "virtual-machine",
+      "firecracker",
+      "microvm",
+      "device-file"
+    ]
+  },
+  "virtual-machine": {
+    "name": "Virtual Machine",
+    "short": "A complete emulated computer, with its own kernel, memory, disks, and network card, running as a guest on a physical host under the control of a hypervisor.",
+    "def": "A virtual machine is a software-defined computer. It boots its own operating system kernel, which believes it owns the hardware; the hypervisor underneath maps that virtual hardware onto a share of the real thing. This is the key difference from a container, which is only a process on the <em>host's</em> kernel. A VM costs more (memory for a second kernel, seconds to boot, a disk image to manage) and buys a stronger, narrower boundary plus a kernel of your own, which the systemd and firewall labs need. You are already using one: Docker Desktop on a Mac runs all containers inside a hidden Linux VM. Cloud instances are VMs too, so a typical eval stack is containers inside a VM, and knowing which layer a setting belongs to saves hours of confusion. See <a href='pages/01-lab-setup.html'>Lab Setup</a> and <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "also": "VM, guest",
+    "see": [
+      "hypervisor",
+      "kvm",
+      "microvm",
+      "container",
+      "kernel"
+    ]
+  },
+  "snapshot": {
+    "name": "Snapshot",
+    "short": "A saved point-in-time copy of an environment's state (a disk, or a whole VM including memory) that can be restored later to get back exactly that state.",
+    "def": "A snapshot freezes state so you can return to it. A disk snapshot captures the filesystem; a full VM snapshot also captures memory and device state, so the restored machine continues mid-thought with its processes still running. Firecracker, for instance, documents snapshots that save guest memory and emulated hardware state and can be loaded into a new process to resume the guest. Container images play the same role for filesystems only: every container starts from the image's frozen layers. Snapshots are how evals get a clean, identical starting line cheaply: prepare the environment once (install, warm up, seed the database), snapshot it, and restore per attempt. The caveat is that a snapshot faithfully preserves mistakes too, and restored memory state can duplicate things meant to be unique, such as random seeds or clocks. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "also": "checkpoint",
+    "see": [
+      "reset",
+      "virtual-machine",
+      "firecracker",
+      "image",
+      "nondeterminism"
+    ]
+  },
+  "attack-surface": {
+    "name": "Attack Surface",
+    "short": "Everything an untrusted party can reach and interact with: every interface, service, file, and system call through which a flaw could be triggered. Less surface means fewer ways in.",
+    "def": "Attack surface is a way of counting exposure without knowing where the bugs are. You cannot list the vulnerabilities in a kernel, but you can list what the untrusted code is able to touch: which system calls it may make, which devices it sees, which sockets and mounted files it can open, which network services answer it. Every hardening step in this course is a surface reduction: dropping capabilities, a seccomp filter, a read-only root filesystem, <code>--network none</code>, not mounting the Docker socket. It is also the honest way to compare isolation technologies: a container faces the host kernel's whole system-call interface; a microVM guest faces a few virtual devices. For an agent sandbox, include the eval-specific surface too: files that reveal answers, credentials in environment variables, reachable graders. See <a href='pages/23-hardening-containers.html'>Locking Down a Container</a> and <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "see": [
+      "threat-model",
+      "trust-boundary",
+      "seccomp",
+      "least-privilege",
+      "isolation"
+    ]
+  },
+  "threat-model": {
+    "name": "Threat Model",
+    "short": "An explicit statement of what you are protecting, from whom, and what that adversary is assumed able to do; the basis for deciding how much isolation is enough.",
+    "def": "A threat model answers three questions before you pick any technology: what could go wrong, who or what would cause it, and what are they capable of? For an agent sandbox the usual candidates are: the agent damaging the host by accident (a stray <code>rm -rf</code>, a fork bomb); the agent gaming the eval by reading answers or editing tests; model-written code reaching the internet or your cloud credentials; and, at the far end, a capable model deliberately trying to break out. A hardened container handles the first few well. The last, or running strangers' tasks next to your secrets, argues for gVisor or a microVM. Writing the model down also tells auditors what you did <em>not</em> defend against, which is part of reporting a result honestly. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+    "see": [
+      "attack-surface",
+      "trust-boundary",
+      "isolation",
+      "tenancy",
+      "environment-integrity"
+    ]
+  },
+  "trust-boundary": {
+    "name": "Trust Boundary",
+    "short": "A line in a system where data or control passes between parts trusted to different degrees; whatever crosses it must be checked, because the less-trusted side may be hostile or wrong.",
+    "def": "A trust boundary separates components you rely on from components you do not. In an agentic eval the central one runs between the harness (your code, holding API keys, the answer key, and the scorer) and the sandbox (where model-generated commands run). Everything crossing that line deserves suspicion in both directions. Inward: mounts, environment variables, and network routes are all things you handed the agent; a read-write mount of the tests directory moves the grader to the wrong side of the line. Outward: the files and output the harness reads back were produced by the untrusted side, so a scorer that trusts a <code>results.json</code> written inside the sandbox is trusting the agent's own report of its grade. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity: Where Cheating Lives</a>.",
+    "see": [
+      "threat-model",
+      "attack-surface",
+      "harness",
+      "sandbox",
+      "test-tampering"
+    ]
+  },
+  "isolation": {
+    "name": "Isolation",
+    "short": "The degree to which a workload is prevented from seeing, affecting, or being affected by anything outside it; a matter of degree and of which resources, not a yes/no property.",
+    "def": "Isolation is not one thing, so <q>is it isolated?</q> is the wrong question. Ask: isolated <em>with respect to what</em>? Filesystem (what is mounted, read-only or not), processes (PID namespace), network (what it can reach), resources (cgroup limits), privileges (user, capabilities, seccomp), and the kernel itself (shared, intercepted, or separate). Different technologies sit at different points: a bare process, a hardened container, a gVisor sandbox, a microVM, a separate physical machine. This course calls that the isolation ladder; each rung costs more and shares less. Evals need isolation for two distinct reasons that are worth keeping apart: <em>safety</em> (the agent cannot harm the host or reach secrets) and <em>validity</em> (runs cannot contaminate each other and the agent cannot reach the answers). A setup can be strong on one and weak on the other. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a> and <a href='pages/20-namespaces.html'>Namespaces</a>.",
+    "see": [
+      "namespace",
+      "sandbox",
+      "container-runtime",
+      "threat-model",
+      "tenancy"
+    ]
+  },
+  "tenancy": {
+    "name": "Tenancy",
+    "short": "Who shares a piece of infrastructure with whom: single-tenant means one owner's workloads per host or kernel; multi-tenant means mutually distrusting workloads run side by side.",
+    "def": "A tenant is a party whose workloads should not be able to see or disturb another's. Tenancy describes the sharing arrangement: one tenant per physical host, per VM, per kernel, or many tenants on a shared kernel. The idea transfers directly to evals. Running forty task containers in parallel on one host makes each task a tenant of the same kernel, the same disk, and often the same Docker network: a task that fills the disk or saturates the CPU changes its neighbours' results, and containers on a shared bridge may be able to reach each other. If the host also holds your API keys or the answer keys, the harness is a tenant too. Decide the tenancy first, then the isolation rung. See <a href='pages/24-isolation-ladder.html'>The Isolation Ladder</a>.",
+    "also": "multi-tenancy, single-tenant",
+    "see": [
+      "isolation",
+      "threat-model",
+      "cgroup",
+      "microvm",
+      "bridge-network"
+    ]
+  },
+  "eval": {
+    "name": "Eval",
+    "short": "A repeatable test that measures how well an AI system performs a task, by running it on a fixed set of inputs and scoring the results.",
+    "def": "An eval (short for evaluation) is a repeatable measurement of how well an AI system does something: run the system on a fixed set of tasks, score each result, and aggregate the scores into a number you can track and compare. Evals exist because you cannot tell whether a change helped by eyeballing a few outputs. This course is about the kind where the system under test is an agent acting inside a Linux box. There, the measuring instrument is not just a dataset and a scoring rule; it includes a container image, a network policy, resource limits, timeouts, and a harness that drives it all. If any of those is misconfigured, the number measures the misconfiguration. That is the argument for learning Linux as an evals engineer, made in full in <a href='pages/00-orientation.html'>Orientation: Why Linux, for Evals</a>.",
+    "also": "evaluation",
+    "see": [
+      "benchmark",
+      "harness",
+      "environment",
+      "scorer",
+      "agent"
+    ]
+  },
+  "benchmark": {
+    "name": "Benchmark",
+    "short": "A standardized, published eval, with fixed tasks and fixed scoring rules, that lets different models or agents be compared on the same footing.",
+    "def": "A benchmark is an eval that has been standardized and published so anyone can run it and compare results: a fixed set of tasks and fixed scoring rules. Standardization is the whole point; numbers from different task sets or rules cannot be compared. For an agentic benchmark, <q>fixed</q> has to cover far more than the questions. Physically, the benchmark is a pile of Linux environments, usually one container image per task, plus a harness and test scripts. If the images are rebuilt from unpinned packages, if one lab runs with internet access and another without, or if time and memory limits differ, the labs are running different benchmarks under the same name. Reading a benchmark therefore means reading its Dockerfiles and harness configuration, not just its paper. See <a href='pages/00-orientation.html'>Orientation</a> and <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "see": [
+      "eval",
+      "task-image",
+      "harness",
+      "swe-bench",
+      "terminal-bench"
+    ]
+  },
+  "agent": {
+    "name": "Agent",
+    "short": "An LLM-powered system that works toward a goal over many steps, choosing actions such as running shell commands, observing the results, and deciding what to do next.",
+    "def": "An agent is a language model wrapped in a loop: it reads the situation, picks an action (usually a tool call), sees the result, and repeats until it finishes or gives up. Agents exist because real tasks, like fixing a bug or configuring a server, cannot be done in one reply; they require acting and reacting. In the evals this course covers, the action is nearly always <q>run this command in a Linux shell</q>. From the operating system's point of view the agent is a user at a terminal: an unusually fast one, with no intuition about what is dangerous and no ability to press <kbd>Ctrl</kbd>+<kbd>C</kbd> when a command hangs. Everything you learn about permissions, processes, and networks applies to it as it would to any user you did not fully trust. See <a href='pages/00-orientation.html'>Orientation</a> and <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "see": [
+      "tool-call",
+      "bash-tool",
+      "trajectory",
+      "sandbox",
+      "harness"
+    ]
+  },
+  "harness": {
+    "name": "Harness",
+    "short": "The software that runs an eval end to end: it starts each task's environment, passes the agent's actions in and results out, enforces limits, runs the scorer, and records everything.",
+    "def": "A harness is the program that turns a benchmark into results. For a simple eval it loads inputs, calls the model, and scores the outputs. For an agentic eval it is also a systems orchestrator: it builds or pulls the task image, starts the container with the right mounts, network, and limits, relays each command the model requests (typically via <code>docker exec</code> or an equivalent), captures stdout, stderr, and the exit status, enforces timeouts, runs the verifier, tears everything down, and writes the log. It is also where many scoring errors originate, because each of those steps is ordinary Linux plumbing that can be wrong: a captured stream dropped, a timeout that kills the wrong process, a container reused between tasks. Inspect is an example of a harness. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "also": "evaluation framework, eval harness",
+    "see": [
+      "sandbox",
+      "bash-tool",
+      "timeout",
+      "scorer",
+      "inspect"
+    ]
+  },
+  "sandbox": {
+    "name": "Sandbox",
+    "short": "An isolated, disposable execution environment, usually a container or VM, where an agent can run commands and change files without affecting anything real.",
+    "def": "A sandbox is a walled-off machine for the agent to work in: typically a Docker container, sometimes a gVisor sandbox or a microVM. Evals need one for two reasons. Safety: the agent runs arbitrary model-written commands, which you do not want touching your laptop, your cloud account, or the harness. Reproducibility: every attempt starts from the same clean state, so results are comparable. The word names an intent, not a guarantee. A container with the Docker socket mounted, <code>--privileged</code> set, or unrestricted internet is called a sandbox in somebody's config file right now. This course's job is to let you check the claim: what is mounted, which user the agent runs as, which capabilities it holds, what it can reach over the network, what limits apply. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>, <a href='pages/23-hardening-containers.html'>Locking Down a Container</a>, and <a href='pages/28-ten-minute-audit.html'>The Ten-Minute Audit</a>.",
+    "see": [
+      "container",
+      "isolation",
+      "environment",
+      "harness",
+      "egress"
+    ]
+  },
+  "environment": {
+    "name": "Environment",
+    "short": "The world an agent acts in during an eval; in this course, a Linux system with its files, users, running processes, installed packages, and network access.",
+    "def": "The environment is everything the agent can act on and observe. Agent benchmarks differ from question-answering ones chiefly in that they must ship an environment, not just questions. In this course's territory that means a Linux box: a filesystem with the task's repository or data, particular package versions, a user account the agent runs as, perhaps background services, and a network that reaches some things and not others. The environment is part of the measuring instrument. A missing tool, a stale package index, a full disk, or a reachable answer key changes the score without any change in the model's ability, and a too-forgiving environment quietly measures the wrong thing. (Do not confuse this with <em>environment variables</em>, a separate Linux concept with its own entry.) See <a href='pages/00-orientation.html'>Orientation</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+    "also": "task environment",
+    "see": [
+      "sandbox",
+      "task-image",
+      "environment-integrity",
+      "agent",
+      "reset"
+    ]
+  },
+  "trajectory": {
+    "name": "Trajectory",
+    "short": "The full step-by-step record of one agent run: every model message, every tool call, and every result that came back, in order.",
+    "def": "A trajectory is the complete sequence of what an agent did in one attempt: each piece of reasoning, each tool call, each observation returned. It matters because the final pass or fail says almost nothing about <em>why</em>; the information is in the steps. In a Linux-sandbox eval a trajectory is, in substance, a terminal session: commands, their output, their exit codes. Reading one well is a Linux skill. <code>command not found</code> (exit 127) means a missing package or a <code>PATH</code> problem; <code>Permission denied</code> points at the user the agent runs as; a step that returns nothing until the timeout fires is often a program waiting for keyboard input. These distinguish a model that could not do the task from an environment that would not let it. See <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+    "also": "trace, episode",
+    "see": [
+      "transcript",
+      "tool-call",
+      "rollout",
+      "error-analysis",
+      "exit-status"
+    ]
+  },
+  "transcript": {
+    "name": "Transcript",
+    "short": "The logged, human-readable record of an agent run, showing the commands it issued and the terminal output it received; the primary evidence for understanding a result.",
+    "def": "A transcript is the trajectory as written down by the harness: the text you actually open when you want to know what happened. In terminal-based evals it shows each command, the captured output, and usually the exit status and timing. Two cautions make this a Linux topic. First, a transcript shows only what the harness captured. If it recorded stdout but not stderr, error messages are absent; if output was truncated at a size limit, the decisive line may be gone; if the agent drove a full-screen program, you may see raw escape sequences. Second, the transcript is the agent's-eye view, which can differ from the truth: a command can report success inside a sandbox whose network was silently blocked. When a transcript and a score disagree, check the environment. See <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a> and <a href='pages/04-streams-pipes-redirection.html'>Streams, Pipes, and Redirection</a>.",
+    "also": "log, terminal transcript",
+    "see": [
+      "trajectory",
+      "stderr",
+      "error-analysis",
+      "tty",
+      "infrastructure-failure"
+    ]
+  },
+  "tool-call": {
+    "name": "Tool Call",
+    "short": "A single action an agent takes on the outside world, such as running a shell command, requested by the model in structured form and executed on its behalf by the harness.",
+    "def": "A tool call is how a model acts instead of only talking: it emits a structured request (<q>run <code>ls -la /app</code></q>), the surrounding program executes it, and the result is fed back into the model's context. The model never touches the machine; the harness does, which means each call passes through Linux plumbing you can reason about. For a shell tool, the harness starts a process in the sandbox, as some user, in some working directory, with some environment variables, waits up to some timeout, and collects stdout, stderr, and the exit status. Each <q>some</q> is a harness design decision that shapes what the agent experiences: whether <code>cd</code> persists between calls, whether a background process survives, what happens to a command that prompts for input. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "also": "function call, action",
+    "see": [
+      "bash-tool",
+      "agent",
+      "harness",
+      "trajectory",
+      "exit-status"
+    ]
+  },
+  "bash-tool": {
+    "name": "Bash Tool",
+    "short": "The tool a harness gives an agent for running shell commands inside the sandbox; the model supplies a command string and gets back the output and exit status.",
+    "def": "The bash tool is the agent's hands. The model supplies a command string; the harness runs it with a shell inside the sandbox and returns what was printed. Inspect, for example, ships a <code>bash()</code> tool that executes its commands in the sample's sandbox. It is simple to describe and full of consequences. Usually there is no terminal attached, so programs that expect one (pagers, editors, <code>sudo</code> password prompts, <code>apt</code> asking <q>[Y/n]</q>) hang until the timeout. In many implementations each call is a fresh shell, so <code>cd</code> and <code>export</code> do not carry over. Output may be truncated. The command runs as whichever user the harness chose. Much of what looks like strange agent behaviour in a transcript is a sensible reaction to these constraints. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a> and <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+    "also": "shell tool, execute tool",
+    "see": [
+      "tool-call",
+      "bash",
+      "interactive-prompt",
+      "tty",
+      "timeout"
+    ]
+  },
+  "task-image": {
+    "name": "Task Image",
+    "short": "The container image that defines one benchmark task's starting environment: the operating system, installed tools, and the task's files, exactly as the agent will find them.",
+    "def": "In container-based benchmarks each task (or family of tasks) ships with an image: a base distribution, the dependencies at specific versions, and the task's materials, such as a repository checked out at the right commit. The task image is what makes a task reproducible, since every attempt by every model starts from the same bytes. It is also where environment bugs are baked in. Audit one the way this course teaches: which base and is it pinned by digest; which user does it run as; is it Alpine, where the agent's assumptions about <code>bash</code> and GNU tools fail; what is in the layer history; does the filesystem contain anything the agent should not see, such as tests, solutions, or git history from the future; were credentials used at build time left behind? See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+    "see": [
+      "image",
+      "dockerfile",
+      "base-image",
+      "environment",
+      "solution-leakage"
+    ]
+  },
+  "verifier": {
+    "name": "Verifier",
+    "short": "The script or test suite that checks, after the agent finishes, whether the task was actually accomplished, usually by running tests or inspecting the final state of the sandbox.",
+    "def": "A verifier is the task-specific check that decides success: run the unit tests, confirm the service answers on its port, compare a file against the expected content. Terminal-Bench, for instance, describes each task as including <q>a test script to verify if the language model / agent completed the task successfully</q>. It exists because in agentic tasks there is no single right output string to compare against; success is a property of the world the agent left behind. A verifier is a program, so the course's concerns apply. Its verdict usually travels as an exit status, so a verifier that crashes must not be read as <q>tests failed</q>. If it runs inside the agent's container, the agent could have altered what it runs. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+    "also": "test script, checker, grader",
+    "see": [
+      "scorer",
+      "held-out-tests",
+      "test-tampering",
+      "exit-status",
+      "flaky-test"
+    ]
+  },
+  "scorer": {
+    "name": "Scorer",
+    "short": "The component of an eval harness that turns the result of one attempt into a grade, by exact match, by running checks, or by asking a model to judge.",
+    "def": "A scorer is the grading half of a harness: it takes what an attempt produced and emits a verdict, pass/fail or a number, which is then aggregated into the headline metric. The term is Inspect's, where a scorer <q>evaluates the output—using text comparisons, model grading, or other custom schemes</q>, but every framework has the role. In sandbox evals the scorer typically reaches into the environment: it executes the verifier or reads files from the container, then maps the outcome to a score. That mapping is where Linux details corrupt results silently. Exit code 137 (killed, often by the OOM killer), 124 (timed out), and 1 (tests failed) are three different stories; a scorer that collapses them all to <q>fail</q> counts infrastructure problems as model failures. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a> and <a href='pages/10-signals-exit-codes.html'>Signals, Exit Codes, and Timeouts</a>.",
+    "also": "grader",
+    "see": [
+      "verifier",
+      "harness",
+      "exit-status",
+      "infrastructure-failure",
+      "state-based-evaluation"
+    ]
+  },
+  "oracle-solution": {
+    "name": "Oracle Solution",
+    "short": "A known-correct reference solution shipped with a benchmark task, used to prove the task is solvable and the verifier works, and which must never be visible to the agent.",
+    "def": "An oracle (or reference, or gold) solution is the benchmark author's own answer to a task: a script of commands or a patch that, applied to the fresh environment, makes the verifier pass. Terminal-Bench tasks include <q>a reference (“oracle”) solution that solves the task</q>; SWE-bench's dataset carries a gold patch for each instance. It exists for quality control. Running the oracle through the real harness shows that the task is solvable, the environment builds, and the tests can pass at all; when the oracle fails, the task is broken, not the model. That makes it the best single smoke test after any infrastructure change. The obligation it creates is secrecy: the file must not be copied into the task image, left in an earlier layer, mounted into the sandbox, or recoverable from version-control history. See <a href='pages/26-environment-integrity.html'>Environment Integrity: Where Cheating Lives</a>.",
+    "also": "reference solution, gold patch, answer key",
+    "see": [
+      "solution-leakage",
+      "verifier",
+      "task-image",
+      "layer",
+      "infrastructure-failure"
+    ]
+  },
+  "held-out-tests": {
+    "name": "Held-Out Tests",
+    "short": "Grading tests that are kept outside the sandbox while the agent works and only brought in afterwards, so the agent can neither read them nor change them.",
+    "def": "Held-out tests are a defence built from one observation: an agent cannot tamper with or overfit to a file that does not exist in its filesystem. The task image contains the problem but not the grading tests; when the agent is finished, the harness copies the tests in (or copies the agent's work out to a clean container) and runs them. The alternative, leaving the tests in the working directory and hoping, invites both innocent and deliberate failure: agents edit failing tests to make them pass, or special-case the exact inputs they can see. Implementing it is pure Linux: check what is present in the image and its layers, keep any test mounts read-only, run the verifier as a different user or in a fresh container, and restore any test files the agent's work overlaps. See <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+    "also": "hidden tests",
+    "see": [
+      "test-tampering",
+      "verifier",
+      "read-only-mount",
+      "environment-integrity",
+      "reward-hacking"
+    ]
+  },
+  "reward-hacking": {
+    "name": "Reward Hacking",
+    "short": "When an agent gets a passing score by exploiting a flaw in how success is measured, instead of doing the task the measurement was meant to capture.",
+    "def": "A score is a proxy for what you care about, and an optimizer pushed against a proxy finds the gaps. Reward hacking (also called specification gaming) is an agent satisfying the letter of the check and not the intent: editing the tests, hard-coding expected outputs, overwriting the results file, finding the answer on disk or online. The term comes from reinforcement learning. This course treats it as a fact about environments more than about models: most hacks need an opening, and the openings are Linux facts you can inspect. Tests writable by the agent's user, a verifier running inside the agent's container, open egress, leftover solution files. Closing them is environment engineering; detecting what slipped through is transcript reading. A benchmark that ignores this reports cheating as capability. See <a href='pages/26-environment-integrity.html'>Environment Integrity: Where Cheating Lives</a>.",
+    "also": "specification gaming, cheating",
+    "see": [
+      "environment-integrity",
+      "test-tampering",
+      "solution-leakage",
+      "held-out-tests",
+      "trust-boundary"
+    ]
+  },
+  "environment-integrity": {
+    "name": "Environment Integrity",
+    "short": "The property that an eval environment gives the agent no illegitimate route to a passing score and no spurious obstacle to an honest one, so the score reflects the task.",
+    "def": "Environment integrity asks whether the sandbox measures what it claims to. It fails in two directions. Too permissive: the answer is reachable (solution files, future git history, the open internet), the grader is editable, or state leaks between attempts, so scores are inflated. Too hostile: a tool is missing, a network dependency is down, a limit is too tight, so scores are deflated by failures that have nothing to do with the model. Both are properties of a Linux system and both are checkable with the tools in this course: <code>findmnt</code> for what is mounted and whether read-only, <code>ls -l</code> and <code>id</code> for who can write what, <code>git log --all</code> for what history is present, <code>ss</code> and <code>curl</code> for what is reachable. Treat it as a checklist you run before trusting a number. See <a href='pages/26-environment-integrity.html'>Environment Integrity</a> and <a href='pages/28-ten-minute-audit.html'>The Ten-Minute Audit</a>.",
+    "see": [
+      "reward-hacking",
+      "solution-leakage",
+      "test-tampering",
+      "infrastructure-failure",
+      "threat-model"
+    ]
+  },
+  "solution-leakage": {
+    "name": "Solution Leakage",
+    "short": "When a task hands the agent its own answer by accident: in the task description, or in files, image layers, version-control history, or network resources reachable from the sandbox.",
+    "def": "Solution leakage is contamination inside a single task: the answer, or a near-complete recipe for it, is available to the agent, so <q>solving</q> becomes retrieval. The sibling course covers the textual form (an issue report that spells out the fix); this course covers the form where the leak is on the machine. A reference solution copied into the image. A file deleted in a later Dockerfile step but still present in an earlier layer. A repository whose <code>.git</code> directory contains the commit that fixed the bug. A package index or website, reachable because egress was left open, that hosts the upstream fix. No memorization is involved, and looking around the filesystem is what a good engineer does. The task is broken, and only an audit of the environment finds it. See <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+    "also": "answer leakage",
+    "see": [
+      "git-history-leak",
+      "oracle-solution",
+      "layer",
+      "egress",
+      "environment-integrity"
+    ]
+  },
+  "test-tampering": {
+    "name": "Test Tampering",
+    "short": "An agent passing a task by altering the thing that grades it: editing or deleting test files, changing the test configuration, or replacing the programs the verifier runs.",
+    "def": "If the verifier's inputs live where the agent can write, the agent can change the verdict. The direct form is editing a failing test so it passes, or deleting it. Indirect forms are more Linux-flavoured: adding a config file that makes the test runner skip tests, placing a fake <code>pytest</code> earlier in <code>PATH</code>, or writing the results file the scorer reads. The defences are permissions and boundaries, not instructions. Keep grading tests out of the sandbox until the agent is done, or mount them read-only; run the verifier from a clean container or as a different user; restore known test files before grading; and compare test-file hashes before and after. If the agent runs as root inside the container, file permissions alone stop nothing. See <a href='pages/26-environment-integrity.html'>Environment Integrity</a> and <a href='pages/08-permissions.html'>Permissions and Ownership</a>.",
+    "see": [
+      "held-out-tests",
+      "reward-hacking",
+      "read-only-mount",
+      "permission-bits",
+      "verifier"
+    ]
+  },
+  "git-history-leak": {
+    "name": "Git History Leak",
+    "short": "Solution leakage through version control: the task's repository still contains commits, branches, tags, or reflog entries from after the bug was fixed, so the agent can read the fix.",
+    "def": "Benchmarks built from real repositories check the code out at the commit just before a fix and ask the agent to produce the fix. But a git repository is a database of <em>all</em> its history, and <code>git checkout</code> only changes the working files. If the clone in the task image still holds later commits, the real fix is a query away. The SWE-bench maintainers documented this in their issue tracker: agents used <code>git log --all</code>, which, in their words, <q>leaks future commits that directly fix the issue</q>; their stated mitigation was to remove future repository state and related artifacts (<q>reflogs, branches, origins, tags, and more</q>). The audit is the same commands run defensively inside the task image: <code>git log --all</code>, <code>git branch -a</code>, <code>git tag</code>, <code>git reflog</code>, <code>git remote -v</code>. See <a href='pages/26-environment-integrity.html'>Environment Integrity: Where Cheating Lives</a>.",
+    "also": "future commit leak",
+    "see": [
+      "solution-leakage",
+      "swe-bench",
+      "task-image",
+      "environment-integrity",
+      "egress"
+    ]
+  },
+  "flaky-test": {
+    "name": "Flaky Test",
+    "short": "A test that sometimes passes and sometimes fails on exactly the same code, because its result depends on something uncontrolled like timing, ordering, network, or leftover state.",
+    "def": "A flaky test gives different verdicts on identical input. In an eval this is measurement noise injected at the last step: a correct solution is marked wrong, or a wrong one right, by chance. The causes are nearly all environmental. Timing: a test that waits one second for a server to start passes on an idle host and fails when forty containers share the CPU. Network: a test that downloads something fails when the registry or mirror hiccups. Ordering and state: a test that relies on files or ports left by an earlier test. You find flakiness by running the verifier repeatedly against the oracle solution on a loaded machine; a task whose known-good answer does not pass every time should be fixed or dropped before it touches a leaderboard. See <a href='pages/26-environment-integrity.html'>Environment Integrity</a> and <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+    "also": "flaky verifier, intermittent failure",
+    "see": [
+      "nondeterminism",
+      "verifier",
+      "oracle-solution",
+      "infrastructure-failure",
+      "wall-clock-time"
+    ]
+  },
+  "nondeterminism": {
+    "name": "Nondeterminism",
+    "short": "Any source of run-to-run variation: the same task and the same model producing different results because of sampling randomness or because the environment was not identical.",
+    "def": "Some variation in agent evals is inherent: models sample their outputs, so two attempts differ, which is why results are reported over repeated runs. The rest is environmental, and it is the part you control. Unpinned packages mean Tuesday's image differs from Monday's. Wall-clock timeouts mean a loaded host fails tasks an idle one passes. Live network dependencies change or disappear. Directory listing order, process scheduling, random port assignment, the current date, and hash-seed randomization all vary between runs. State that survives a sloppy reset couples one attempt to the last. The discipline is to remove every source you can (pin by digest, cut the network, set generous and consistent limits, reset completely) so that the variance left over is the model's, and to record the rest (image digests, harness version). See <a href='pages/15-packages-reproducibility.html'>Packages and Reproducible Environments</a> and <a href='pages/26-environment-integrity.html'>Environment Integrity</a>.",
+    "also": "run-to-run variance",
+    "see": [
+      "flaky-test",
+      "reproducible-build",
+      "version-pinning",
+      "reset",
+      "rollout"
+    ]
+  },
+  "reset": {
+    "name": "Reset",
+    "short": "Returning a task environment to its exact initial state before each attempt, normally by destroying the container or VM and creating a fresh one from the image or snapshot.",
+    "def": "Every attempt at a task must start from the same state, or attempts are not comparable and one run can leak into the next. With containers the reliable reset is not to clean up but to throw away: remove the container and start a new one from the image,. Inspect's documentation, for example, notes that each sample gets its own sandbox instance so samples do not interfere. What survives a careless reset is the part that lives <em>outside</em> the container's writable layer: named volumes, bind-mounted host directories, a shared database service. Any of these can carry one attempt's work, or damage, into the next. Auditing a reset means listing the mounts and asking of each: is this fresh per attempt? See <a href='pages/22-docker-for-evals.html'>Docker for Eval Environments</a> and <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "also": "environment reset, teardown",
+    "see": [
+      "snapshot",
+      "volume",
+      "bind-mount",
+      "environment",
+      "nondeterminism"
+    ]
+  },
+  "rollout": {
+    "name": "Rollout",
+    "short": "One complete attempt by an agent at one task, from fresh environment to final verdict; evals typically run many rollouts per task and aggregate them.",
+    "def": "A rollout is a single start-to-finish attempt: fresh environment, agent loop until done or out of budget, verification, teardown. The term comes from reinforcement learning; in eval write-ups you will also see <q>attempt</q>, <q>trial</q>, <q>episode</q>, or <q>sample</q>. Because agents are stochastic, serious evals run several rollouts per task, which turns an eval into a throughput problem on real machines. Each rollout costs a container or VM, memory, CPU, disk for its writable layer and logs, and wall-clock time, and running dozens in parallel on one host makes them compete. Overcommit the host and rollouts start failing from timeouts and OOM kills that have nothing to do with the model. Sizing concurrency is part of measurement hygiene. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a> and <a href='pages/12-resources-and-limits.html'>Resources, Limits, and the OOM Killer</a>.",
+    "also": "attempt, trial, episode",
+    "see": [
+      "trajectory",
+      "reset",
+      "nondeterminism",
+      "infrastructure-failure",
+      "tenancy"
+    ]
+  },
+  "infrastructure-failure": {
+    "name": "Infrastructure Failure",
+    "short": "A failed attempt caused by the eval's own machinery (a container that would not start, a network outage, a full disk, a harness bug) and not by the agent's ability.",
+    "def": "An infrastructure failure is a rollout that failed for reasons the model had no say in: the image pull was rate-limited, the container was OOM-killed because the limit was set too low, the disk filled with logs, DNS inside the sandbox was broken, the package mirror was down. Scored naively these all look like <q>the agent failed the task</q>, and they depress results unevenly, since they cluster on busy days and heavy tasks. The discipline is to classify before you count. Linux gives you the evidence: exit codes (137, 124, 125 to 127 each mean something specific), <code>dmesg</code> or the journal for OOM kills, <code>docker inspect</code> for a container's final state, <code>df</code> for disk. Infrastructure failures should be retried or excluded and reported separately, never silently merged into the score. See <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a> and <a href='appendices/b-exit-codes-signals.html'>Appendix B</a>.",
+    "also": "infra failure, harness error",
+    "see": [
+      "error-analysis",
+      "failure-mode",
+      "exit-status",
+      "oom-killer",
+      "flaky-test"
+    ]
+  },
+  "inspect": {
+    "name": "Inspect",
+    "short": "An open-source Python framework for AI evaluations, developed by the UK AI Security Institute and Meridian Labs, with built-in support for running agents' tools inside sandboxes.",
+    "def": "Inspect is, in its own documentation's words, <q>a framework for frontier AI evaluations developed by the UK AI Security Institute and Meridian Labs</q>. An eval is assembled from a dataset, a solver, and a scorer. What makes it a recurring example in this course is its sandboxing, which the docs describe as <q>provisioning containers in which tools, agents and scorers can execute commands and code</q>. Docker support is built in, configured with a <code>Dockerfile</code> or a <code>compose.yaml</code>; a <code>local</code> option uses the host's own filesystem with no sandbox; other sandbox types come as extension packages. Standard tools such as <code>bash()</code> run their commands in the sandbox, and your own code can call <code>sandbox().exec()</code>. Each sample gets its own sandbox instance, cleaned up when the task completes. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "also": "Inspect AI, inspect_ai",
+    "see": [
+      "harness",
+      "sandbox",
+      "bash-tool",
+      "docker-compose",
+      "scorer"
+    ]
+  },
+  "terminal-bench": {
+    "name": "Terminal-Bench",
+    "short": "A benchmark for testing AI agents in real terminal environments, made of a dataset of tasks plus an execution harness that connects a language model to a terminal sandbox.",
+    "def": "Terminal-Bench describes itself as <q>the benchmark for testing AI agents in real terminal environments</q>. Per its README it has two parts: <q>a dataset of tasks, and an execution harness that connects a language model to our terminal sandbox</q>. Each task includes an instruction in English, a test script that verifies whether the agent completed the task, and a reference (<q>oracle</q>) solution; running it requires Docker. Its task anatomy illustrates the pattern most agentic benchmarks share: an instruction, a containerized Linux environment, a verifier, and a known-good solution for checking the task itself. The tasks are the everyday work this course teaches, at a command line, so the things that trip agents there (missing tools, interactive prompts, permissions, hung processes) are the things you will learn to recognise. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "also": "T-Bench",
+    "see": [
+      "benchmark",
+      "oracle-solution",
+      "verifier",
+      "task-image",
+      "terminal"
+    ]
+  },
+  "swe-bench": {
+    "name": "SWE-bench",
+    "short": "A benchmark that tests whether a model can resolve real GitHub issues: given a codebase and an issue, it must produce a patch, which is graded by running the repository's tests in Docker.",
+    "def": "SWE-bench is, per its documentation, <q>a benchmark for evaluating large language models on real world software issues collected from GitHub. Given a codebase and an issue, a language model is tasked with generating a patch that resolves the described problem.</q> Evaluation applies the generated patch to the repository and runs the repository's tests, in <q>a containerized Docker environment to ensure consistent results across different platforms</q>; each instance records which tests should go from failing to passing (<code>FAIL_TO_PASS</code>) and which should keep passing (<code>PASS_TO_PASS</code>), and carries a gold patch. For this course it is the standard case study in environment engineering: containerized per-task environments, and a documented integrity problem in which agents could read the fix from the repository's future git history. The sibling course covers its scoring and variants. See <a href='pages/25-how-harnesses-use-linux.html'>page 25</a> and <a href='pages/26-environment-integrity.html'>page 26</a>.",
+    "see": [
+      "benchmark",
+      "git-history-leak",
+      "task-image",
+      "held-out-tests",
+      "oracle-solution"
+    ]
+  },
+  "state-based-evaluation": {
+    "name": "State-Based Evaluation",
+    "short": "Grading an agent by examining the final state of its environment (files, running services, database contents) against the goal, regardless of the path it took.",
+    "def": "State-based evaluation checks the world, not the words: after the agent finishes, the harness examines what is true in the environment and compares it with what the task required. In a Linux sandbox the <q>state</q> is concrete. Does <code>/etc/nginx/nginx.conf</code> contain the right directive, with the right owner and mode? Is a process listening on port 8080 (<code>ss -ltn</code>)? Does <code>curl localhost:8080/health</code> return 200? Is the cron entry installed? This naturally allows many valid paths to the goal and needs no judge model. Its limits are the flip side: it cannot tell a careful run from a destructive one that happened to end in the right place, and it is only as good as the checks. Check too little and a hard-coded shortcut passes; check incidental details and correct solutions fail. See <a href='pages/25-how-harnesses-use-linux.html'>How Harnesses Drive a Sandbox</a>.",
+    "see": [
+      "outcome-based-evaluation",
+      "verifier",
+      "environment",
+      "scorer",
+      "reward-hacking"
+    ]
+  },
+  "outcome-based-evaluation": {
+    "name": "Outcome-Based Evaluation",
+    "short": "Grading an agent only on whether the end result is correct (do the tests pass?), without judging the steps it took to get there.",
+    "def": "Outcome-based evaluation scores the final result and ignores the route: the tests pass or they do not. Its appeal is objectivity; no judge is needed to read a test suite's exit status. Most terminal and coding benchmarks are graded this way. Its blind spot is everything in between, and in a Linux sandbox that blind spot has specific contents. An agent can reach a passing outcome by <code>chmod -R 777</code> on the project, by <code>kill -9</code> on whatever was in its way, by editing the tests, or by fetching the answer from the network, and outcome grading sees only <q>pass</q>. That is why this course pairs outcome scores with two other habits: hardening the environment so illegitimate routes are closed, and reading transcripts so the ones that remain are noticed. See <a href='pages/26-environment-integrity.html'>Environment Integrity</a> and <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+    "see": [
+      "state-based-evaluation",
+      "trajectory",
+      "reward-hacking",
+      "verifier",
+      "transcript"
+    ]
+  },
+  "error-analysis": {
+    "name": "Error Analysis",
+    "short": "The practice of reading real runs one at a time, noting what actually went wrong in each, and grouping the notes into recurring failure categories.",
+    "def": "Error analysis means opening the transcripts and reading them, one run at a time, writing down what went wrong, then grouping the notes into categories. It exists because intuition about how a system fails is reliably wrong. For agentic evals, the first and most valuable cut is between failures of the model and failures of the environment, and making that cut is a Linux reading skill. <code>bash: jq: command not found</code> is a missing package. <code>E: Could not get lock /var/lib/dpkg/lock-frontend</code> is another process holding apt. A step that produces nothing for ten minutes is a pager or a prompt waiting for a keypress the agent cannot send. <code>Killed</code> with exit code 137 is usually the memory limit. None of these says anything about capability, and each points at a fix in the image or harness. See <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+    "also": "transcript review, failure analysis",
+    "see": [
+      "failure-mode",
+      "transcript",
+      "infrastructure-failure",
+      "trajectory",
+      "exit-status"
+    ]
+  },
+  "failure-mode": {
+    "name": "Failure Mode",
+    "short": "A recurring, named way that runs go wrong, such as 'hangs on an interactive prompt' or 'assumes bash on Alpine', specific enough to count and to fix.",
+    "def": "A failure mode is a pattern of failure with a label. The label matters: until a pattern has a name you cannot count it, rank it against other problems, or tell whether a fix worked. In terminal-based evals a large share turn out to be interactions between agent habits and Linux realities, and they recur across benchmarks: waiting forever on an interactive prompt or pager; using <code>sudo</code> where it is not installed; assuming <code>bash</code> or GNU options on an Alpine image; starting a server in the foreground and blocking on it; running out of disk or memory; fighting a permissions error by making everything world-writable. Naming them lets you separate those that reveal a model weakness from those that reveal an environment bug, and report each honestly. See <a href='pages/27-reading-terminal-transcripts.html'>Reading Terminal Transcripts</a>.",
+    "see": [
+      "error-analysis",
+      "infrastructure-failure",
+      "interactive-prompt",
+      "transcript",
+      "reward-hacking"
+    ]
+  }
+}

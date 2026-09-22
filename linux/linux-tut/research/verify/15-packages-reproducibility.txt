@@ -1,0 +1,329 @@
+### 15 verification — 2026-09-21T16:22:55Z — Docker 28.1.1
+## A. fresh image, no index
+$ docker run --rm ubuntu:24.04 bash -c "ls /var/lib/apt/lists/ | wc -l; apt-get install -y curl; echo exit=\$?"
+0
+Reading package lists...
+Building dependency tree...
+Reading state information...
+E: Unable to locate package curl
+exit=100
+## B. lab container: update
+$ apt-get update
+Get:16 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Packages [1631 kB]
+Get:17 http://ports.ubuntu.com/ubuntu-ports noble-security/restricted arm64 Packages [2717 kB]
+Get:18 http://ports.ubuntu.com/ubuntu-ports noble-security/multiverse arm64 Packages [89.7 kB]
+Get:19 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages [1317 kB]
+Fetched 34.5 MB in 2min 4s (277 kB/s)
+Reading package lists...
+
+real	2m5.802s
+user	0m4.083s
+sys	0m2.879s
+22
+54M	/var/lib/apt/lists
+$ apt-cache policy curl; apt-cache madison curl
+curl:
+  Installed: (none)
+  Candidate: 8.5.0-2ubuntu10.13
+  Version table:
+     8.5.0-2ubuntu10.13 500
+        500 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages
+        500 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages
+     8.5.0-2ubuntu10 500
+        500 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 Packages
+      curl | 8.5.0-2ubuntu10.13 | http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages
+      curl | 8.5.0-2ubuntu10.13 | http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages
+      curl | 8.5.0-2ubuntu10 | http://ports.ubuntu.com/ubuntu-ports noble/main arm64 Packages
+
+Types: deb
+URIs: http://ports.ubuntu.com/ubuntu-ports/
+Suites: noble noble-updates noble-backports
+Components: main universe restricted multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+Types: deb
+URIs: http://ports.ubuntu.com/ubuntu-ports/
+Suites: noble-security
+Components: main universe restricted multiverse
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+## C. pins
+$ apt-get install -y curl=8.5.0-2ubuntu10.4
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Package curl is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+
+E: Version '8.5.0-2ubuntu10.4' for 'curl' was not found
+exit=100
+$ apt-get install -y curl=8.5.0-2ubuntu10 | tail
+requested an impossible situation or if you are using the unstable
+distribution that some required packages have not yet been created
+or been moved out of Incoming.
+The following information may help to resolve the situation:
+
+The following packages have unmet dependencies:
+ curl : Depends: libcurl4t64 (= 8.5.0-2ubuntu10) but 8.5.0-2ubuntu10.13 is to be installed
+E: Unable to correct problems, you have held broken packages.
+exit=100
+
+## D. fingerprint before
+92
+92
+apt=2.8.3
+base-files=13ubuntu10.5
+base-passwd=3.6.3build1
+$ dpkg -l bash ; dpkg -S /usr/bin/ls ; dpkg -L bash | head -4
+||/ Name           Version         Architecture Description
++++-==============-===============-============-=================================
+ii  bash           5.2.21-2ubuntu4 arm64        GNU Bourne Again SHell
+coreutils: /usr/bin/ls
+/.
+/etc
+/etc/bash.bashrc
+/etc/skel
+
+## E. install python (timed)
+0 upgraded, 24 newly installed, 0 to remove and 1 not upgraded.
+Need to get 12.6 MB of archives.
+After this operation, 44.8 MB of additional disk space will be used.
+
+real	0m26.810s
+user	0m6.030s
+sys	0m1.870s
+exit=0
+116
+5a6
+> ca-certificates=20260601~24.04.1
+35a37
+> libexpat1=2.6.1-2ubuntu0.5
+58a61,64
+> libpython3-stdlib=3.12.3-0ubuntu2.1
+> libpython3.12-minimal=3.12.3-1ubuntu0.17
+> libpython3.12-stdlib=3.12.3-1ubuntu0.17
+24
+
+## F. upgradable in a fresh image
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+Listing...
+perl-base/noble-updates,noble-security 5.38.2-3.2ubuntu0.6 arm64 [upgradable from: 5.38.2-3.2ubuntu0.4]
+
+## G. PEP 668
+Python 3.12.3
+pip 24.0 from /usr/lib/python3/dist-packages/pip (python 3.12)
+error: externally-managed-environment
+
+× This environment is externally managed
+╰─> To install Python packages system-wide, try apt install
+    python3-xyz, where xyz is the package you are trying to
+    install.
+    
+    If you wish to install a non-Debian-packaged Python package,
+    create a virtual environment using python3 -m venv path/to/venv.
+    Then use path/to/venv/bin/python and path/to/venv/bin/pip. Make
+    sure you have python3-full installed.
+    
+    If you wish to install a non-Debian packaged Python application,
+    it may be easiest to use pipx install xyz, which will manage a
+    virtual environment for you. Make sure you have pipx installed.
+    
+    See /usr/share/doc/python3.12/README.venv for more information.
+
+note: If you believe this is a mistake, please contact your Python installation or OS distribution provider. You can override this, at the risk of breaking your Python installation or OS, by passing --break-system-packages.
+hint: See PEP 668 for the detailed specification.
+exit=1
+-rw-r--r-- 1 root root 645 Aug 31 10:18 /usr/lib/python3.12/EXTERNALLY-MANAGED
+
+## H. venv + pinned top-level only
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PATH=/tmp/v/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+/tmp/v/bin/python
+/tmp/v/bin/pip
+exit=0
+certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.20
+requests==2.32.3
+urllib3==2.8.0
+
+## I. hashes
+/tmp/d/requests-2.32.3-py3-none-any.whl:
+--hash=sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6
+requests==2.32.3 --hash=sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6
+Collecting requests==2.32.3 (from -r hashed.txt (line 1))
+  Using cached requests-2.32.3-py3-none-any.whl (64 kB)
+Collecting charset-normalizer<4,>=2 (from requests==2.32.3->-r hashed.txt (line 1))
+ERROR: In --require-hashes mode, all requirements must have their versions pinned with ==. These do not:
+    charset-normalizer<4,>=2 from https://files.pythonhosted.org/packages/9a/4c/be49ada26b1f0232d57aa89bbebf997a5cc2332a5616b6eca26ff680044d/charset_normalizer-3.5.1-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl (from requests==2.32.3->-r hashed.txt (line 1))
+exit=1
+
+## J. tzdata without DEBIAN_FRONTEND, stdin attached (-i), 40 s timeout
+$ docker exec -i lt-15-lab timeout 40 apt-get install -y tzdata  </dev/zero-ish (stdin kept open with sleep)
+Reading package lists...
+Building dependency tree...
+Reading state information...
+tzdata is already the newest version (2026c-0ubuntu0.24.04.1).
+tzdata set to manually installed.
+0 upgraded, 0 newly installed, 0 to remove and 1 not upgraded.
+exit=0
+$ DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata | tail -4
+Reading package lists...
+Building dependency tree...
+Reading state information...
+tzdata is already the newest version (2026c-0ubuntu0.24.04.1).
+0 upgraded, 0 newly installed, 0 to remove and 1 not upgraded.
+exit=0
+Etc/UTC
+
+## K. lock
+E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 2795 (apt-get)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), is another process using it?
+exit=100
+
+## L. no network
+$ docker run --rm --network none ubuntu:24.04 bash -c "apt-get update; echo exit=\$?"
+Reading package lists...
+W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble/InRelease  Temporary failure resolving 'ports.ubuntu.com'
+W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-updates/InRelease  Temporary failure resolving 'ports.ubuntu.com'
+W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-backports/InRelease  Temporary failure resolving 'ports.ubuntu.com'
+W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-security/InRelease  Temporary failure resolving 'ports.ubuntu.com'
+W: Some index files failed to download. They have been ignored, or old ones used instead.
+exit=0
+
+## M. no network: update exits 0, then install says "Unable to locate"; pip error
+update exit=0
+E: Unable to locate package curl
+install exit=100
+WARNING: Retrying (Retry(total=0, connect=None, read=None, redirect=None, status=None)) after connection broken by 'NewConnectionError('<pip._vendor.urllib3.connection.HTTPSConnection object at 0xffffb4c9b920>: Failed to establish a new connection: [Errno -3] Temporary failure in name resolution')': /simple/idna/
+ERROR: Could not find a version that satisfies the requirement idna (from versions: none)
+ERROR: No matching distribution found for idna
+exit=1
+
+## N. digest
+$ docker image inspect --format "{{index .RepoDigests 0}}" ubuntu:24.04
+ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+2026-09-11T11:53:37.343727408Z
+
+## O. alpine
+(17/17) Installing python3-pyc (3.12.13-r0)
+Executing busybox-1.36.1-r31.trigger
+OK: 54 MiB in 31 packages
+0
+/bin/busybox is owned by busybox-1.36.1-r31
+-rwxr-xr-x    1 root     root        199464 Sep 21 16:28 /x/ls-glibc
+sh: /x/ls-glibc: not found
+exit=127
+/lib/ld-musl-aarch64.so.1
+
+## P. snapshot session (lt-15-snap), full log
+$ apt-get update -q --snapshot 20240601T000000Z | grep -E "^(E|W|Err)"
+$ apt-get update -q >/dev/null; apt-get install -y -q ca-certificates
+exit=0
+$ timeout 420 apt-get update -q --snapshot 20240601T000000Z
+Get:16 https://snapshot.ubuntu.com/ubuntu/20240601T000000Z noble-security/main arm64 Packages [106 kB]
+Get:17 https://snapshot.ubuntu.com/ubuntu/20240601T000000Z noble-security/universe arm64 Packages [40.7 kB]
+Fetched 22.1 MB in 36s (621 kB/s)
+Reading package lists...
+exit=0
+$ apt-cache policy curl | head -4
+curl:
+  Installed: (none)
+  Candidate: 8.5.0-2ubuntu10.13
+  Version table:
+     8.5.0-2ubuntu10.13 500
+        500 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages
+        500 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages
+     8.5.0-2ubuntu10 500
+$ timeout 240 apt-get install -y --no-install-recommends --snapshot 20240601T000000Z curl
+Setting up libgssapi-krb5-2:arm64 (1.20.1-6ubuntu2) ...
+Setting up libssh-4:arm64 (0.10.6-2build2) ...
+Setting up libcurl4t64:arm64 (8.5.0-2ubuntu10.1) ...
+Setting up curl (8.5.0-2ubuntu10.1) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+exit=0
+curl 8.5.0-2ubuntu10.1
+libcurl4t64 8.5.0-2ubuntu10.1
+
+## P2. snapshot without ca-certificates (fresh container)
+Fetched 34.5 MB in 51s (681 kB/s)
+Reading package lists...
+exit=0
+
+## P3. same, showing Get/Err/Ign lines + then install
+Get:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease [256 kB]
+Get:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease [126 kB]
+Fetched 34.5 MB in 57s (608 kB/s)
+exit=0
+0
+
+## P4. fresh container: update --snapshot, then simulate install with --snapshot: which curl?
+update exit=0
+E: Unable to locate package curl
+--- second update --snapshot in same container:
+Err:2 https://snapshot.ubuntu.com/ubuntu/20240601T000000Z noble InRelease
+Err:4 https://snapshot.ubuntu.com/ubuntu/20240601T000000Z noble-updates InRelease
+Err:7 https://snapshot.ubuntu.com/ubuntu/20240601T000000Z noble-backports InRelease
+Err:8 https://snapshot.ubuntu.com/ubuntu/20240601T000000Z noble-security InRelease
+W: https://snapshot.ubuntu.com/ubuntu/20240601T000000Z/dists/noble/InRelease: No system certificates available. Try installing ca-certificates.
+
+## Q. fingerprint.sh
+#!/usr/bin/env bash
+# Print a sorted, diffable fingerprint of this environment. Usage: fingerprint.sh [VENV]
+set -euo pipefail
+venv=${1:-}
+grep -E '^(ID|VERSION_ID)=' /etc/os-release
+uname -m
+dpkg-query -W -f='deb ${Package}=${Version}\n' | sort
+if [ -n "$venv" ]; then
+  "$venv/bin/pip" freeze | sed 's/^/pip /'
+fi
+124
+VERSION_ID="24.04"
+ID=ubuntu
+aarch64
+deb apt=2.8.3
+pip requests==2.32.3
+pip urllib3==2.8.0
+5b168c397dc0b9a2
+$ fresh ubuntu:24.04 vs lab
+30
+< deb perl-base=5.38.2-3.2ubuntu0.4
+> deb perl-base=5.38.2-3.2ubuntu0.6
+> deb tzdata=2026c-0ubuntu0.24.04.1
+> pip certifi==2026.7.22
+> pip charset-normalizer==3.5.1
+> pip idna==3.20
+> pip requests==2.32.3
+> pip urllib3==2.8.0
+
+## R. tzdata prompt in a fresh container (stdin open, no DEBIAN_FRONTEND), timeout 45
+Selecting previously unselected package tzdata.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ..
+Preparing to unpack .../tzdata_2026c-0ubuntu0.24.04.1_all.deb ...
+Unpacking tzdata (2026c-0ubuntu0.24.04.1) ...
+Setting up tzdata (2026c-0ubuntu0.24.04.1) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+debconf: unable to initialize frontend: Readline
+debconf: (Can't locate Term/ReadLine.pm in @INC (you may need to install the Term::ReadLine module) (@INC entries checke
+debconf: falling back to frontend: Teletype
+Configuring tzdata
+------------------
+
+Please select the geographic area in which you live. Subsequent configuration
+questions will narrow this down by presenting a list of cities, representing
+the time zones in which they are located.
+
+  1. Africa      4. Arctic    7. Australia  10. Pacific
+  2. America     5. Asia      8. Europe     11. Etc
+  3. Antarctica  6. Atlantic  9. Indian     12. Legacy
+Geographic area: 
+exit=124
+
+## S. lab 5 exact form
+30

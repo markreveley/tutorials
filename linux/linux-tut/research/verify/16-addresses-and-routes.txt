@@ -1,0 +1,250 @@
+### page 16 verification, 2026-09-21 ; Docker 28.1.1; image lt-16-tools:local = ubuntu:24.04 + iproute2 iputils-ping curl netcat-openbsd python3 procps, user learner
+
+$ docker run --rm ubuntu:24.04 bash -c "ip addr; echo exit=\$?; ifconfig; echo exit=\$?; netstat -tln; echo exit=\$?"
+bash: line 1: ip: command not found
+exit=127
+bash: line 1: ifconfig: command not found
+exit=127
+bash: line 1: netstat: command not found
+exit=127
+
+### A: default bridge, as learner
++ id -un
+learner
++ ip addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: tunl0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+3: gre0@NONE: <NOARP> mtu 1476 qdisc noop state DOWN group default qlen 1000
+    link/gre 0.0.0.0 brd 0.0.0.0
+4: gretap0@NONE: <BROADCAST,MULTICAST> mtu 1462 qdisc noop state DOWN group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+5: erspan0@NONE: <BROADCAST,MULTICAST> mtu 1450 qdisc noop state DOWN group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+6: ip_vti0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+7: ip6_vti0@NONE: <NOARP> mtu 1428 qdisc noop state DOWN group default qlen 1000
+    link/tunnel6 :: brd :: permaddr 1604:d59b:631a::
+8: sit0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/sit 0.0.0.0 brd 0.0.0.0
+9: ip6tnl0@NONE: <NOARP> mtu 1452 qdisc noop state DOWN group default qlen 1000
+    link/tunnel6 :: brd :: permaddr a96:3024:708e::
+10: ip6gre0@NONE: <NOARP> mtu 1448 qdisc noop state DOWN group default qlen 1000
+    link/gre6 :: brd :: permaddr 4292:7733:2cf7::
+11: eth0@if471: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 65535 qdisc noqueue state UP group default 
+    link/ether 2e:53:81:d5:01:a6 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    inet 172.17.0.3/16 brd 172.17.255.255 scope global eth0
+       valid_lft forever preferred_lft forever
++ ip -br addr
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+tunl0@NONE       DOWN           
+gre0@NONE        DOWN           
+gretap0@NONE     DOWN           
+erspan0@NONE     DOWN           
+ip_vti0@NONE     DOWN           
+ip6_vti0@NONE    DOWN           
+sit0@NONE        DOWN           
+ip6tnl0@NONE     DOWN           
+ip6gre0@NONE     DOWN           
+eth0@if471       UP             172.17.0.3/16 
++ ip -br link
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+tunl0@NONE       DOWN           0.0.0.0 <NOARP> 
+gre0@NONE        DOWN           0.0.0.0 <NOARP> 
+gretap0@NONE     DOWN           00:00:00:00:00:00 <BROADCAST,MULTICAST> 
+erspan0@NONE     DOWN           00:00:00:00:00:00 <BROADCAST,MULTICAST> 
+ip_vti0@NONE     DOWN           0.0.0.0 <NOARP> 
+ip6_vti0@NONE    DOWN           :: <NOARP> 
+sit0@NONE        DOWN           0.0.0.0 <NOARP> 
+ip6tnl0@NONE     DOWN           :: <NOARP> 
+ip6gre0@NONE     DOWN           :: <NOARP> 
+eth0@if471       UP             2e:53:81:d5:01:a6 <BROADCAST,MULTICAST,UP,LOWER_UP> 
++ ip route
+default via 172.17.0.1 dev eth0 
+172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3 
++ ip route get 1.1.1.1
+1.1.1.1 via 172.17.0.1 dev eth0 src 172.17.0.3 uid 1001 
+    cache 
++ ip route get 172.17.0.9
+172.17.0.9 dev eth0 src 172.17.0.3 uid 1001 
+    cache 
++ ip route get 127.0.0.1
+local 127.0.0.1 dev lo src 127.0.0.1 uid 1001 
+    cache <local> 
++ ip route get 169.254.169.254
+169.254.169.254 via 172.17.0.1 dev eth0 src 172.17.0.3 uid 1001 
+    cache 
++ cat /sys/class/net/eth0/iflink
+471
++ cat /proc/sys/net/ipv6/conf/all/disable_ipv6
+0
++ ip -6 route
++ hostname -I
+172.17.0.3 
++ cat /etc/hosts
+127.0.0.1	localhost
+::1	localhost ip6-localhost ip6-loopback
+fe00::	ip6-localnet
+ff00::	ip6-mcastprefix
+ff02::1	ip6-allnodes
+ff02::2	ip6-allrouters
+172.17.0.3	a4476a934aec
+
+### B: --network none
++ ip -br addr
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+tunl0@NONE       DOWN           
+gre0@NONE        DOWN           
+gretap0@NONE     DOWN           
+erspan0@NONE     DOWN           
+ip_vti0@NONE     DOWN           
+ip6_vti0@NONE    DOWN           
+sit0@NONE        DOWN           
+ip6tnl0@NONE     DOWN           
+ip6gre0@NONE     DOWN           
++ ip route
++ ip route get 1.1.1.1
+RTNETLINK answers: Network is unreachable
+exit=2
++ echo exit=2
++ ping -c1 -W2 1.1.1.1
+exit=2
+ping: connect: Network is unreachable
++ echo exit=2
++ curl -sS -m 5 http://1.1.1.1/
+curl: (7) Failed to connect to 1.1.1.1 port 80 after 0 ms: Couldn't connect to server
+exit=7
++ echo exit=7
++ ping -c1 127.0.0.1
++ tail -2
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.523/0.523/0.523/0.000 ms
+
+### C: user-defined network
+11164c4a144d3874d5db95ad0a2fb160efa0b32ef98605b49d1aa81eee7b7485
+c70bc98fbfabd1263896764c173097de4211e857c4c3903b860778dd2a282444
++ ip -br addr
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+tunl0@NONE       DOWN           
+gre0@NONE        DOWN           
+gretap0@NONE     DOWN           
+erspan0@NONE     DOWN           
+ip_vti0@NONE     DOWN           
+ip6_vti0@NONE    DOWN           
+sit0@NONE        DOWN           
+ip6tnl0@NONE     DOWN           
+ip6gre0@NONE     DOWN           
+eth0@if483       UP             172.18.0.3/16 
++ ip route
+default via 172.18.0.1 dev eth0 
+172.18.0.0/16 dev eth0 proto kernel scope link src 172.18.0.3 
++ cat /etc/resolv.conf
++ head -3
+# Generated by Docker Engine.
+# This file can be edited; Docker Engine will not make further changes once it
+# has been modified.
++ getent hosts lt-16-a
+172.18.0.2      lt-16-a
++ ping -c1 lt-16-a
++ sed -n 1,2p
+PING lt-16-a (172.18.0.2) 56(84) bytes of data.
+64 bytes from lt-16-a.lt-16-net (172.18.0.2): icmp_seq=1 ttl=64 time=0.855 ms
++ ip neigh
+172.18.0.2 dev eth0 lladdr 26:f3:53:ea:08:ef REACHABLE 
+172.18.0.0/16 gw 172.18.0.1
+
+### D: default bridge neighbours + gateway + metadata
+4aa188317a0793d30e78a965cbc6bb52f2c038292024c7f38a5d4ccfad081750
+lt-16-c is 172.17.0.3
++ ip -br addr show eth0
++ ping -c1 -W2 172.17.0.3
++ sed -n '1,2p;$p'
+eth0@if486       UP             172.17.0.10/16 
+PING 172.17.0.3 (172.17.0.3) 56(84) bytes of data.
+64 bytes from 172.17.0.3: icmp_seq=1 ttl=64 time=0.501 ms
+rtt min/avg/max/mdev = 0.501/0.501/0.501/0.000 ms
++ ping -c1 -W2 172.17.0.1
++ sed -n '2p;$p'
+64 bytes from 172.17.0.1: icmp_seq=1 ttl=64 time=0.063 ms
+rtt min/avg/max/mdev = 0.063/0.063/0.063/0.000 ms
++ getent hosts lt-16-c
+exit=2
++ echo exit=2
++ curl -sS -m 3 http://169.254.169.254/latest/meta-data/
+curl: (28) Connection timed out after 3012 milliseconds
+exit=28
++ echo exit=28
++ ip neigh
+172.17.0.1 dev eth0 lladdr 8a:74:6b:f8:07:c4 REACHABLE 
+172.17.0.3 dev eth0 lladdr 2a:8a:ab:33:31:0a REACHABLE 
+
+### E: host (VM) side: --network host
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+eth0             UP             192.168.65.3/24 fdc4:f303:9324::3/64 fe80::ccca:dcff:feb7:830a/64 
+docker0          UP             172.17.0.1/16 fe80::8874:6bff:fef8:7c4/64 
+10
+127.0.0.0/8 dev lo scope host 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 
+172.18.0.0/16 dev br-11164c4a144d proto kernel scope link src 172.18.0.1 
+192.168.65.0/24 dev eth0 scope link mtu 65520 
+192.168.65.7 dev services1 scope link 
+172.17.0.0/16 gw 172.17.0.1 masq=true icc=true name=docker0
+
+### F: the veth pair, both ends
+$ docker exec lt-16-c ip -br link show eth0; docker exec lt-16-c cat /sys/class/net/eth0/iflink
+eth0@if485       UP             2a:8a:ab:33:31:0a <BROADCAST,MULTICAST,UP,LOWER_UP> 
+485
+$ docker run --rm --network host lt-16-tools:local ip -d link show  | grep -A3 '^485:'
+485: veth4c1cb72@if11: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 65535 qdisc noqueue master docker0 state UP mode DEFAULT group default 
+    link/ether 3e:ed:54:1c:18:6c brd ff:ff:ff:ff:ff:ff link-netnsid 9 promiscuity 1  allmulti 1 minmtu 68 maxmtu 65535 
+    veth 
+    bridge_slave state forwarding priority 32 cost 2 hairpin on guard off root_block off fastleave off learning on flood on port_id 0x8002 port_no 0x2 designated_port 32770 designated_cost 0 designated_bridge 8000.8a:74:6b:f8:7:c4 designated_root 8000.8a:74:6b:f8:7:c4 hold_timer    0.00 message_age_timer    0.00 forward_delay_timer    0.07 topology_change_ack 0 config_pending 0 proxy_arp off proxy_arp_wifi off mcast_router 1 mcast_fast_leave off mcast_flood on bcast_flood on mcast_to_unicast off neigh_suppress off group_fwd_mask 0 group_fwd_mask_str 0x0 vlan_tunnel off isolated off locked off addrgenmode eui64 numtxqueues 10 numrxqueues 10 gso_max_size 65536 gso_max_segs 65535 tso_max_size 524280 tso_max_segs 65535 gro_max_size 65536 
+veth6465a79@if11 UP             ce:d2:c4:30:2e:e8 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth224ec80@if11 UP             36:a7:4d:f6:dd:b0 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+vethad97327@if11 UP             f2:3b:d5:c5:6e:c3 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+vethfb91090@if11 UP             ce:f2:9a:f6:43:90 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+vetha8cf248@if11 UP             ce:ab:92:b7:11:bf <BROADCAST,MULTICAST,UP,LOWER_UP> 
+vethc38a39d@if11 UP             36:a4:cd:a9:09:46 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+vethf833ac8@if11 UP             d6:47:36:65:da:cd <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth3f18640@if11 UP             02:e0:e4:f7:26:c6 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth4c1cb72@if11 UP             3e:ed:54:1c:18:6c <BROADCAST,MULTICAST,UP,LOWER_UP> 
+docker0          UP             172.17.0.1/16 fe80::8874:6bff:fef8:7c4/64 
+br-11164c4a144d  UP             172.18.0.1/16 fe80::d88c:12ff:fea6:7a70/64 
+
+### LAB 2: route get predictions (default bridge, learner)
+local 127.0.0.53 dev lo src 127.0.0.1 uid 1001 
+172.17.200.200 dev eth0 src 172.17.0.9 uid 1001 
+192.168.1.1 via 172.17.0.1 dev eth0 src 172.17.0.9 uid 1001 
+8.8.8.8 via 172.17.0.1 dev eth0 src 172.17.0.9 uid 1001 
+
+### LAB 3: python ipaddress
+172.17.0.3 -> 172.16.0.0/12
+172.31.255.255 -> 172.16.0.0/12
+172.32.0.1 -> none of them: public
+192.169.0.1 -> none of them: public
+169.254.169.254 -> 169.254.0.0/16
+127.8.8.8 -> 127.0.0.0/8
+
+### LAB 4: adjacency. two rollouts on default bridge vs one network each
+r2=172.17.0.10
+$ docker exec lt-16-r1 ping -c1 -W2 172.17.0.10
+64 bytes from 172.17.0.10: icmp_seq=1 ttl=64 time=0.263 ms
+rtt min/avg/max/mdev = 0.263/0.263/0.263/0.000 ms
+r2=172.20.0.2
+eth0@if501       UP             172.19.0.2/16 
+$ docker exec lt-16-r1 ip route get 172.20.0.2
+172.20.0.2 via 172.19.0.1 dev eth0 src 172.19.0.2 uid 0 
+$ docker exec lt-16-r1 ping -c1 -W2 172.20.0.2; echo exit=$?
+PING 172.20.0.2 (172.20.0.2) 56(84) bytes of data.
+
+--- 172.20.0.2 ping statistics ---
+1 packets transmitted, 0 received, 100% packet loss, time 0ms
+
+exit=1
+gw=172.19.0.1
+64 bytes from 172.19.0.1: icmp_seq=1 ttl=64 time=0.087 ms

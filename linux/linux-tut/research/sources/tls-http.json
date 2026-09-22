@@ -1,0 +1,139 @@
+{
+ "id": "tls-http",
+ "tag": "[RFC 8446]",
+ "citation": {
+  "authors": "Rescorla, E. (RFC 8446); Fielding, R., Nottingham, M., Reschke, J., Eds. (RFC 9110); Eastlake, D. (RFC 6066); Huitema, C., Rescorla, E. (RFC 8744); Debian ca-certificates maintainers",
+  "title": "The Transport Layer Security (TLS) Protocol Version 1.3 (RFC 8446); HTTP Semantics (RFC 9110); TLS Extensions (RFC 6066); Issues and Requirements for SNI Encryption in TLS (RFC 8744); update-ca-certificates(8)",
+  "venue": "IETF RFC / Debian manpages",
+  "year": "2018 / 2022 / 2011 / 2020",
+  "url": "https://www.rfc-editor.org/rfc/rfc8446"
+ },
+ "fetched_urls": [
+  "https://www.rfc-editor.org/rfc/rfc8446.txt",
+  "https://www.rfc-editor.org/rfc/rfc9110.txt",
+  "https://www.rfc-editor.org/rfc/rfc6066.txt",
+  "https://www.rfc-editor.org/rfc/rfc8744.txt",
+  "https://manpages.debian.org/bookworm/ca-certificates/update-ca-certificates.8.en.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "TLS goals: authentication (server always, via certificate), confidentiality, integrity (RFC 8446 s1)",
+   "verdict": "confirmed",
+   "finding": "RFC 8446 s1 lists exactly three properties. Nuance: server is \"always authenticated\", client optionally; authentication can be by certificate (asymmetric crypto) OR a pre-shared key, so \"via certificate\" is the usual, not the only, case. Confidentiality does not hide data length.",
+   "quote": "Authentication: The server side of the channel is always authenticated; the client side is optionally authenticated. ... Confidentiality: Data sent over the channel after establishment is only visible to the endpoints. ... Integrity: Data sent over the channel after establishment cannot be modified by attackers without detection.",
+   "location": "RFC 8446 section 1, Introduction",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc8446#section-1"
+  },
+  {
+   "planned": "HTTP status classes 1xx-5xx; methods GET/POST; 407 Proxy Authentication Required; 403 vs 404",
+   "verdict": "confirmed",
+   "finding": "RFC 9110 s15: 1xx Informational, 2xx Successful, 3xx Redirection, 4xx Client Error, 5xx Server Error. 403 = server understood but refuses; 404 = no representation found \"or is not willing to disclose that one exists\" (so a 404 may hide a 403). 407 = like 401 but the client must authenticate to a PROXY (Proxy-Authenticate / Proxy-Authorization headers). GET s9.3.1, POST s9.3.3, CONNECT s9.3.6 (the tunnel method HTTPS-through-proxy uses).",
+   "quote": "The 407 (Proxy Authentication Required) status code is similar to 401 (Unauthorized), but it indicates that the client needs to authenticate itself in order to use a proxy for this request.",
+   "location": "RFC 9110 section 15.5.8",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc9110#section-15.5.8"
+  },
+  {
+   "planned": "System trust store on Debian/Ubuntu: /etc/ssl/certs/ca-certificates.crt built by update-ca-certificates from /usr/local/share/ca-certificates; minimal images lack the ca-certificates package so HTTPS fails with a certificate error until installed (verify by running)",
+   "verdict": "corrected",
+   "finding": "Man page: update-ca-certificates updates /etc/ssl/certs and generates ca-certificates.crt from (a) certs under /usr/share/ca-certificates that are listed in /etc/ca-certificates.conf and (b) every *.crt under /usr/local/share/ca-certificates (\"implicitly trusted\"). Files MUST have a .crt extension (PEM). Executed on ubuntu:24.04: the base image has no /etc/ssl/certs at all; after `apt-get install --no-install-recommends curl`, HTTPS fails with curl exit 77 \"error setting certificate file: /etc/ssl/certs/ca-certificates.crt\" - a missing-file error, not a \"certificate verify failed\" (exit 60) error. Plain HTTP works. After `apt-get install ca-certificates` the bundle exists (182140 bytes, 243 entries in /etc/ssl/certs) and HTTPS returns 200. With default apt settings curl's dependency chain RECOMMENDS ca-certificates, so the failure shows up with --no-install-recommends or with tools other than apt-installed curl.",
+   "quote": "update-ca-certificates is a program that updates the directory /etc/ssl/certs to hold SSL certificates and generates ca-certificates.crt, a concatenated single-file list of certificates. ... Furthermore all certificates with a .crt extension found below /usr/local/share/ca-certificates are also included as implicitly trusted.",
+   "location": "update-ca-certificates(8) DESCRIPTION",
+   "cite_url": "https://manpages.debian.org/bookworm/ca-certificates/update-ca-certificates.8.en.html"
+  },
+  {
+   "planned": "A TLS-intercepting egress proxy requires its CA to be installed in the sandbox trust store; SNI is visible in cleartext enabling hostname allowlists without decryption (RFC 8446 / RFC 6066)",
+   "verdict": "confirmed",
+   "finding": "SNI part confirmed by primary text: RFC 6066 s3 defines server_name as a ClientHello extension; RFC 8446 s1.2 says only handshake messages AFTER the ServerHello are encrypted; RFC 8744 states outright \"The SNI extension is carried in cleartext in the TLS ClientHello message\" and lists firewall/filtering uses by middleboxes. The \"proxy CA must be installed\" part follows from RFC 8446 server authentication plus curl's documented verification (cert must chain to a CA in the store; see curl note) and the executed exit 60 for an untrusted issuer; no RFC says it in those words - present it as a consequence, cite update-ca-certificates(8) for the how (/usr/local/share/ca-certificates/*.crt then run update-ca-certificates).",
+   "quote": "In that variant, the SNI extension carries the domain name of the target server. The SNI extension is carried in cleartext in the TLS \"ClientHello\" message.",
+   "location": "RFC 8744 section 2, History of the TLS SNI Extension",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc8744#section-2"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "TLS 1.3 encrypts everything after ServerHello (so the server certificate is hidden in 1.3, but the ClientHello with SNI is not).",
+   "quote": "All handshake messages after the ServerHello are now encrypted. The newly introduced EncryptedExtensions message allows various extensions previously sent in the clear in the ServerHello to also enjoy confidentiality protection.",
+   "location": "RFC 8446 section 1.2, Major Differences from TLS 1.2"
+  },
+  {
+   "finding": "Threat model sentence.",
+   "quote": "These properties should be true even in the face of an attacker who has complete control of the network, as described in [RFC3552].",
+   "location": "RFC 8446 section 1"
+  },
+  {
+   "finding": "SNI definition.",
+   "quote": "In order to provide any of the server names, clients MAY include an extension of type \"server_name\" in the (extended) client hello.",
+   "location": "RFC 6066 section 3, Server Name Indication",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc6066#section-3"
+  },
+  {
+   "finding": "Middlebox use of SNI (supports \"hostname allowlist without decryption\").",
+   "quote": "Firewalls within enterprise networks blocking websites not deemed appropriate for work ... Firewalls within enterprise networks exempting specific websites from man-in-the-middle (MITM) inspection",
+   "location": "RFC 8744 section 2.1, Unanticipated Usage of SNI Information"
+  },
+  {
+   "finding": "In TLS 1.2 and earlier server certificates were also cleartext; in 1.3 they are encrypted.",
+   "quote": "In TLS versions 1.0 [RFC2246], 1.1 [RFC4346], and 1.2 [RFC5246], servers send certificates in cleartext, ensuring that there would be limited benefits in hiding the SNI. However, in TLS 1.3 [RFC8446], server certificates are encrypted in transit.",
+   "location": "RFC 8744 section 2.2"
+  },
+  {
+   "finding": "Status class definitions.",
+   "quote": "1xx (Informational): The request was received, continuing process; 2xx (Successful): The request was successfully received, understood, and accepted; 3xx (Redirection): Further action needs to be taken in order to complete the request; 4xx (Client Error): The request contains bad syntax or cannot be fulfilled; 5xx (Server Error): The server failed to fulfill an apparently valid request",
+   "location": "RFC 9110 section 15",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc9110#section-15"
+  },
+  {
+   "finding": "403.",
+   "quote": "The 403 (Forbidden) status code indicates that the server understood the request but refuses to fulfill it.",
+   "location": "RFC 9110 section 15.5.4"
+  },
+  {
+   "finding": "404 may conceal existence.",
+   "quote": "The 404 (Not Found) status code indicates that the origin server did not find a current representation for the target resource or is not willing to disclose that one exists.",
+   "location": "RFC 9110 section 15.5.5"
+  },
+  {
+   "finding": "401 vs 407.",
+   "quote": "The 401 (Unauthorized) status code indicates that the request has not been applied because it lacks valid authentication credentials for the target resource.",
+   "location": "RFC 9110 section 15.5.2"
+  },
+  {
+   "finding": "Proxy/gateway errors an agent behind an egress proxy will see: 502 Bad Gateway (invalid upstream response), 503 Service Unavailable, 504 Gateway Timeout (no timely upstream response).",
+   "quote": "The 504 (Gateway Timeout) status code indicates that the server, while acting as a gateway or proxy, did not receive a timely response from an upstream server it needed to access in order to complete the request.",
+   "location": "RFC 9110 section 15.6.5"
+  },
+  {
+   "finding": "CONNECT: how HTTPS goes through an HTTP proxy (proxy sees host:port, then blind-forwards bytes).",
+   "quote": "The CONNECT method requests that the recipient establish a tunnel to the destination origin server identified by the request target and, if successful, thereafter restrict its behavior to blind forwarding of data, in both directions, until the tunnel is closed.",
+   "location": "RFC 9110 section 9.3.6"
+  },
+  {
+   "finding": "GET / POST definitions.",
+   "quote": "The GET method requests transfer of a current selected representation for the target resource. ... The POST method requests that the target resource process the representation enclosed in the request according to the resource's own specific semantics.",
+   "location": "RFC 9110 sections 9.3.1 and 9.3.3"
+  },
+  {
+   "finding": "update-ca-certificates files.",
+   "quote": "/etc/ca-certificates.conf: A configuration file. /etc/ssl/certs/ca-certificates.crt: A single-file version of CA certificates. ... /usr/share/ca-certificates: Directory of CA certificates. /usr/local/share/ca-certificates: Directory of local CA certificates (with .crt extension).",
+   "location": "update-ca-certificates(8) FILES"
+  },
+  {
+   "finding": "ca-certificates.conf syntax: \"!\" prefix deselects a CA; --fresh option rebuilds symlinks; hooks in /etc/ca-certificates/update.d run afterwards.",
+   "quote": "Lines that begin with \"!\" are deselected, causing the deactivation of the CA certificate in question. Certificates must have a .crt extension in order to be included by update-ca-certificates.",
+   "location": "update-ca-certificates(8) DESCRIPTION"
+  },
+  {
+   "finding": "Executed transcript.",
+   "quote": "# apt-get install -y --no-install-recommends curl   (apt prints: Recommended packages: ca-certificates krb5-locales libldap-common publicsuffix libsasl2-modules)\n# ls /etc/ssl/certs\nls: cannot access '/etc/ssl/certs': No such file or directory\n# curl -sS https://example.com -o /dev/null\ncurl: (77) error setting certificate file: /etc/ssl/certs/ca-certificates.crt\n# apt-get install -y ca-certificates\nSetting up ca-certificates (20260601~24.04.1) ...\nUpdating certificates in /etc/ssl/certs...\n# ls -l /etc/ssl/certs/ca-certificates.crt\n-rw-r--r-- 1 root root 182140 Sep 21 10:45 /etc/ssl/certs/ca-certificates.crt\n# curl -sS https://example.com -o /dev/null -w \"%{http_code}\\n\"\n200",
+   "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1, arm64; ubuntu:24.04; curl 8.5.0)"
+  },
+  {
+   "finding": "Executed: untrusted issuer vs wrong protocol.",
+   "quote": "# curl -sS https://self-signed.badssl.com/ -o /dev/null\ncurl: (60) SSL certificate problem: self-signed certificate\n# curl -sS -k https://self-signed.badssl.com/ -o /dev/null -w \"%{http_code}\\n\"\n200\n# curl -sS https://example.com:80/\ncurl: (35) OpenSSL/3.0.13: error:0A00010B:SSL routines::wrong version number",
+   "location": "executed lt-r4-tools:local = ubuntu:24.04 (Docker Desktop 28.1.1, arm64; ubuntu:24.04; curl 8.5.0)"
+  }
+ ],
+ "teaching_notes": "Most important correction: \"HTTPS fails with a certificate error until ca-certificates is installed\" - on Ubuntu 24.04 the actual failure is curl exit 77 (cannot read the CA file), and it only happens when recommends are skipped; exit 60 is the untrusted-issuer case. RFC 8744 (not in sources.json) is the cleanest citable statement that SNI is cleartext; RFC 6066 itself never says so. Encrypted ClientHello / ECH is not covered by any fetched source - do not discuss it as fact. Python requests/certifi, Node and Java use their own CA bundles rather than /etc/ssl/certs - NOT verified here; if a page wants that, it needs its own source."
+}

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Locking Down a Container · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Containers &amp; Isolation</p>
+    <h1>Locking down a container</h1>
+    <p class="lede">
+      A default <code>docker run</code> is built for convenience: root user, fourteen capabilities,
+      writable filesystem, open network, no resource limits. This page turns it into a defensible
+      agent sandbox one flag at a time — and for every flag asks the two questions an evals engineer
+      must: how do I verify it from inside, and which legitimate task behaviour did I just break?
+    </p>
+
+    <h2 id="threats">Start from what the agent could do</h2>
+    <p>
+      Hardening without a list of threats is cargo cult. For an agent
+      <span class="term" data-g="sandbox">sandbox</span>, the
+      <span class="term" data-g="threat-model">threat model</span> is short, and every item is
+      something a capable model might do while honestly trying to finish its task:
+    </p>
+    <table>
+      <thead><tr><th>#</th><th>Threat</th><th>What it does to the eval</th><th>Rungs that address it</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Tamper with the grader or tests</td><td>Pass without solving (<a href="26-environment-integrity.html">page 26</a>)</td><td>grade outside; non-root; read-only</td></tr>
+        <tr><td>2</td><td>Read the answer key</td><td>Same</td><td>keep it out of the box; non-root</td></tr>
+        <tr><td>3</td><td>Reach the network</td><td>Fetch the fix; leak data; abuse</td><td>no network</td></tr>
+        <tr><td>4</td><td>Exhaust the host</td><td>Neighbouring rollouts fail for no reason of their own</td><td>memory / CPU / pids limits</td></tr>
+        <tr><td>5</td><td>Escape to the host</td><td>Everything above, for every rollout</td><td>capabilities, no-new-privileges, the never-list; then <a href="24-isolation-ladder.html">page 24</a></td></tr>
+        <tr><td>6</td><td>Persist between rollouts</td><td>Samples stop being independent</td><td>fresh container, no shared volumes (<a href="22-docker-for-evals.html#reset">page 22</a>)</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The starting point is the course's running example. <code>wordfreq-bench:hardened</code>
+      already does the image-level work (<a href="22-docker-for-evals.html#dockerfile">page 22</a>):
+      non-root default user, no grader, no solution, no git history. What follows is the
+      <em>run-time</em> half.
+    </p>
+
+    <h2 id="ladder">The hardening ladder</h2>
+
+    <h3 id="rung-user">Rung 1 — not root: <code>--user</code></h3>
+    <p>
+      Root inside a default container is host uid 0 wearing a restricted set of capabilities: Docker
+      can map container root to an unprivileged host user, but that facility "is available but not
+      enabled by
+      default."<a class="cite" href="https://docs.docker.com/engine/security/#other-kernel-security-features" title="Docker Docs, Docker Engine security: other kernel security features">[Docker: security]</a>
+      Inside the box, root also owns nearly every file. One flag changes that:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -u root wordfreq-bench:hardened bash -c 'echo pwned &gt;&gt; /etc/passwd &amp;&amp; echo root-wrote-it'
+<span class="o">root-wrote-it</span>
+<span class="p">$</span> docker run --rm wordfreq-bench:hardened bash -c 'echo pwned &gt;&gt; /etc/passwd'
+<span class="o">bash: line 1: /etc/passwd: Permission denied</span></code></pre>
+    <p>
+      <strong>Verify inside:</strong> <code>id -u</code> is not 0. <strong>Cost:</strong> the agent can
+      no longer install software, and it will try:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm wordfreq-bench:hardened bash -c 'apt-get install -y git 2&gt;&amp;1 | tail -2'
+<span class="o">E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?</span></code></pre>
+    <p>
+      If the task needs a tool, install it at build time. Don't hand the agent
+      <span class="term" data-g="sudo">sudo</span> — that is rung 1 undone
+      (<a href="07-users-groups-root.html">page 7</a>).
+    </p>
+
+    <h3 id="rung-caps">Rung 2 — no capabilities: <code>--cap-drop ALL</code></h3>
+    <p>
+      A <span class="term" data-g="capability">capability</span> is one slice of root's power
+      (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>). Docker's own advice: "The best
+      practice for users would be to remove all capabilities except those explicitly required for
+      their
+      processes."<a class="cite" href="https://docs.docker.com/engine/security/#linux-kernel-capabilities" title="Docker Docs, Docker Engine security: Linux kernel capabilities">[Docker: security]</a>
+      Read the masks from <code>/proc/self/status</code> — <code>CapEff</code> is what the process
+      can use now, <code>CapBnd</code> (the bounding set) is the ceiling on what it could ever
+      regain:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -u root wordfreq-bench:hardened grep -E 'CapEff|CapBnd' /proc/self/status
+<span class="o">CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb</span>
+<span class="p">$</span> docker run --rm wordfreq-bench:hardened grep -E 'CapEff|CapBnd' /proc/self/status   <span class="c"># user agent</span>
+<span class="o">CapEff:	0000000000000000
+CapBnd:	<span class="hl">00000000a80425fb</span></span>
+<span class="p">$</span> docker run --rm --cap-drop ALL wordfreq-bench:hardened grep -E 'CapEff|CapBnd' /proc/self/status
+<span class="o">CapEff:	0000000000000000
+CapBnd:	0000000000000000</span></code></pre>
+    <p>
+      The middle case is the subtle one. A non-root user has no effective capabilities, which looks
+      safe — but the ceiling is still Docker's default
+      fourteen,<a class="cite" href="https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities" title="Docker Docs, Running containers: runtime privilege and Linux capabilities">[Docker: run]</a>
+      so anything that turns the agent
+      into root (a <span class="term" data-g="setuid">setuid</span> binary, a misconfigured
+      <code>sudo</code>) gets them all back. <code>--cap-drop ALL</code> empties the ceiling. Even
+      root is then nearly powerless:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -u root --cap-drop ALL wordfreq-bench:hardened bash -c 'id -u; chown agent /etc/hostname'
+<span class="o">0
+chown: changing ownership of '/etc/hostname': <span class="hl">Operation not permitted</span></span>
+<span class="p">$</span> docker run --rm -u root --cap-drop ALL --cap-add CHOWN wordfreq-bench:hardened bash -c 'chown agent /etc/hostname &amp;&amp; echo chown-ok'
+<span class="o">chown-ok</span></code></pre>
+    <p>
+      <strong>Verify inside:</strong> <code>CapEff</code> and <code>CapBnd</code> all zeros.
+      <strong>Cost:</strong> tasks that legitimately need a capability — a networking task that uses
+      raw sockets needs <code>NET_RAW</code>; a service binding port 80 needs
+      <code>NET_BIND_SERVICE</code><a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), Linux man-pages">[capabilities(7)]</a>
+      — fail with a permission error. Add back per task family with <code>--cap-add</code>, as
+      above, and write down why.
+    </p>
+
+    <h3 id="rung-nnp">Rung 3 — no way back up: <code>--security-opt no-new-privileges</code></h3>
+    <p>
+      The classic route from user to root is a setuid-root program: the kernel runs it as root no
+      matter who starts it (<a href="08-permissions.html">page 8</a>). The stock image ships eight
+      (<code>su</code>, <code>mount</code>, <code>passwd</code>, …;
+      <code>find / -xdev -perm -4000</code> lists them). The kernel's
+      <span class="term" data-g="no-new-privileges">no_new_privs</span> bit switches the mechanism
+      off for a process and all its descendants: "the setuid and setgid bits will no longer change
+      the uid or gid", and once set it "cannot be
+      unset."<a class="cite" href="https://docs.kernel.org/userspace-api/no_new_privs.html" title="Linux kernel documentation, No New Privileges Flag">[seccomp(2)]</a>
+      To see it, I planted a setuid-root copy of <code>id</code> in two containers (as root,
+      beforehand) and ran it as <code>agent</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker exec lt-23-nnp0 ls -l /usr/local/bin/rootid
+<span class="o">-rw<span class="hl">s</span>r-xr-x 1 root root 67952 Sep 21 16:14 /usr/local/bin/rootid</span>
+<span class="p">$</span> docker exec -u agent lt-23-nnp0 /usr/local/bin/rootid          <span class="c"># default container</span>
+<span class="o">uid=1001(agent) gid=1001(agent) <span class="hl">euid=0(root)</span> groups=1001(agent)</span>
+<span class="p">$</span> docker exec -u agent lt-23-nnp1 /usr/local/bin/rootid          <span class="c"># --security-opt no-new-privileges</span>
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span>
+<span class="p">$</span> docker exec -u agent lt-23-nnp1 grep NoNewPrivs /proc/self/status
+<span class="o">NoNewPrivs:	1</span></code></pre>
+    <p>
+      <strong>Verify inside:</strong> <code>NoNewPrivs: 1</code>. <strong>Cost:</strong> Docker says it
+      plainly — "commands that raise privileges such as <code>su</code> or <code>sudo</code> no longer
+      work."<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#security-opt" title="Docker Docs, docker container run: security-opt">[Docker: run]</a>
+      For an agent sandbox that is the point.
+    </p>
+
+    <h3 id="rung-readonly">Rung 4 — a read-only root: <code>--read-only</code>, <code>--tmpfs</code>, one volume</h3>
+    <p>
+      Make the whole root filesystem a <span class="term" data-g="read-only-mount">read-only
+      mount</span>, then add back exactly the writable places the task needs: a size-capped
+      <span class="term" data-g="tmpfs">tmpfs</span> at <code>/tmp</code> and a fresh anonymous
+      <span class="term" data-g="volume">volume</span> at <code>/app</code> (Docker copies the image's
+      <code>/app</code> into an empty volume, so the task files are
+      there<a class="cite" href="https://docs.docker.com/engine/storage/volumes/#mounting-a-volume-over-existing-data" title="Docker Docs, Volumes: mounting a volume over existing data">[Docker: storage]</a>). Unlike file permissions,
+      a read-only mount binds root too, short of <code>CAP_SYS_ADMIN</code> — which rung 2 removed
+      (<a href="14-mounts-and-filesystems.html">page 14</a>).
+    </p>
+<pre class="term"><code><span class="p">$</span> docker exec lt-23-rollout bash -c 'touch /app/ok &amp;&amp; echo app-writable; touch /etc/x; touch /home/agent/x'
+<span class="o">app-writable
+touch: cannot touch '/etc/x': Read-only file system
+touch: cannot touch '/home/agent/x': Read-only file system</span>
+<span class="p">$</span> docker exec lt-23-rollout bash -c 'grep -E " / | /app | /tmp " /proc/mounts | cut -c1-60'
+<span class="o">overlay / overlay <span class="hl">ro</span>,relatime,lowerdir=/var/lib/desktop-contai
+tmpfs /tmp tmpfs rw,nosuid,nodev,noexec,relatime,size=65536k
+/dev/vda1 /app ext4 rw,relatime,discard 0 0</span></code></pre>
+    <p>
+      <strong>Verify inside:</strong> <code>findmnt -n -O ro /</code> prints a line.
+      <strong>Cost:</strong> the largest of any rung, because so much software assumes a writable
+      home directory. Observed here:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --read-only --tmpfs /tmp:size=64m wordfreq-bench:hardened bash -c 'python3 -m venv /home/agent/venv 2&gt;&amp;1 | tail -1'
+<span class="o">Error: [Errno 30] Read-only file system: '/home/agent/venv'</span>
+<span class="p">$</span> docker run --rm --read-only --tmpfs /tmp:size=64m wordfreq-bench:hardened bash -c 'head -c 100m /dev/zero &gt; /tmp/big'
+<span class="o">head: error writing 'standard output': No space left on device</span>
+<span class="p">$</span> docker cp fix.py lt-23-rollout:/tmp/fix.py
+<span class="o">Error response from daemon: container rootfs is marked read-only</span></code></pre>
+    <p>
+      The last one bites the <em>harness</em>: <code>docker cp</code> into a read-only container is
+      refused, even when the target is the writable tmpfs. Copy into the volume
+      (<code>docker cp fix.py NAME:/app/</code> works), or stream over stdin:
+      <code>docker exec -i NAME bash -c 'cat &gt; /tmp/fix.py' &lt; fix.py</code>. Note too that the
+      tmpfs is <code>noexec</code> (lab exercise 3) and that its contents count against the
+      container's memory
+      limit.<a class="cite" href="https://docs.docker.com/engine/storage/tmpfs/#limitations-of-tmpfs-mounts" title="Docker Docs, tmpfs mounts: limitations">[Docker: storage]</a>
+    </p>
+
+    <h3 id="rung-network">Rung 5 — no network: <code>--network none</code></h3>
+    <p>
+      The container gets its own network namespace with only a loopback
+      interface.<a class="cite" href="https://docs.docker.com/engine/network/drivers/none/" title="Docker Docs, None network driver">[Docker: run]</a>
+      No route, no DNS, nothing to misconfigure:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --network none wordfreq-bench:hardened bash -c 'cat /proc/net/route; python3 -c "import socket; socket.create_connection((\"1.1.1.1\", 443), 3)" 2&gt;&amp;1 | tail -1'
+<span class="o">Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT
+OSError: [Errno 101] Network is unreachable</span></code></pre>
+    <p>
+      <strong>Verify inside:</strong> the routing table is a header and nothing else.
+      <strong>Cost:</strong> every <code>pip install</code>, <code>git clone</code> and
+      <code>curl</code> fails. When a task truly needs some network, the next step is an internal
+      network plus an allowlisting proxy — <a href="19-firewalls-and-egress.html">page 19</a> has the
+      Linux side, and
+      <a href="../../../networking/networking-tut/pages/14-containers.html">Networking for LLM Evals, lesson 14</a>
+      the concepts. A pass rate with network and one without are different measurements; say which
+      you ran.
+    </p>
+
+    <h3 id="rung-limits">Rung 6 — budgets: <code>--memory</code>, <code>--cpus</code>, <code>--pids-limit</code></h3>
+    <p>
+      Docker's default is no limit at all, so one runaway rollout can starve the host and fail its
+      neighbours. The <span class="term" data-g="cgroup">cgroup</span> controllers enforce ceilings
+      (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>); Docker's security page calls them
+      "essential to fend off some denial-of-service
+      attacks."<a class="cite" href="https://docs.docker.com/engine/security/#control-groups" title="Docker Docs, Docker Engine security: control groups">[Docker: security]</a>
+      The one people forget is processes. With <code>pids.max</code> set, <code>fork()</code> "will
+      return -EAGAIN if the creation of a new process would cause a cgroup policy to be
+      violated"<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html#pid" title="Linux kernel documentation, Control Group v2: PID controller">[Kernel: cgroup-v2]</a>
+      — a fork bomb stalls instead of taking the host down. A safe demonstration — one hundred
+      harmless <code>sleep</code>s against a limit of fifty:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --pids-limit 50 --memory 128m wordfreq-bench:hardened \
+    bash -c 'for i in $(seq 1 100); do sleep 3 &amp; done 2&gt;&amp;1 | sort | uniq -c; cat /sys/fs/cgroup/pids.events'
+<span class="o">      4 bash: fork: retry: Resource temporarily unavailable
+max 4</span></code></pre>
+    <p>
+      (Use <code>--pids-limit</code>, not <code>--ulimit nproc</code>: Linux applies
+      <code>nproc</code> "to a user, not to a
+      container."<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#ulimit" title="Docker Docs, docker container run: ulimit">[Docker: run]</a>)
+      <strong>Verify inside:</strong> <code>memory.max</code>, <code>cpu.max</code> and
+      <code>pids.max</code> under <code>/sys/fs/cgroup</code> are numbers, not <code>max</code>.
+      <strong>Cost:</strong> this is the rung that most directly moves scores. Too little memory and
+      capable rollouts die with exit 137; too little CPU and they time out. Terminal-Bench 2.1 found
+      eight tasks whose resource budgets were insufficient "for at least one valid approach" to
+      finish
+      consistently.<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Terminal-Bench; TB 2.1 release notes, tbench.ai/news/terminal-bench-2-1">[Terminal-Bench]</a>
+    </p>
+
+    <h3 id="never-list">The never-list</h3>
+    <p>Four things no agent sandbox should have, whatever the task author says:</p>
+    <ul>
+      <li><strong><code>--privileged</code>.</strong> Docker: "A container with
+        <code>--privileged</code> is not a securely sandboxed process. Containers in this mode can get
+        a root shell on the host and take control over the
+        system."<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#privileged" title="Docker Docs, docker container run: privileged">[Docker: run]</a>
+        (The course's lab uses it for namespace demos on a throwaway container. A lab is not a
+        sandbox.)</li>
+      <li><strong>The Docker socket</strong> (<code>-v /var/run/docker.sock:…</code>) or a reachable
+        Docker API. Mounting the <span class="term" data-g="docker-socket">socket</span> gives "the
+        full access to create and manipulate the host's Docker
+        daemon"<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#read-only" title="Docker Docs, docker container run">[Docker: run]</a>,
+        and daemon access is host root: "The <code>docker</code> group grants root-level privileges to
+        the
+        user."<a class="cite" href="https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user" title="Docker Docs, Linux post-installation steps">[Docker: security]</a>
+        The network variant is the one that has actually happened. Docker warns that a TCP API
+        endpoint "can be still accessible from containers, and it can easily result in the privilege
+        escalation."<a class="cite" href="https://docs.docker.com/engine/security/#docker-daemon-attack-surface" title="Docker Docs, Docker Engine security: daemon attack surface">[Docker: security]</a>
+        In OpenAI's September 2024 o1 system card, o1-preview — facing a challenge container that had
+        failed to start — scanned its network and "found that the Docker daemon API running on the
+        evaluation host VM was accessible due to a misconfiguration", then used it to start a new
+        container with the command <code>cat flag.txt</code> and read the flag from its
+        logs.<a class="cite" href="https://cdn.openai.com/o1-system-card.pdf" title="OpenAI o1 System Card (Sept 12, 2024), §4.2.1">[o1 System Card]</a>
+        No kernel boundary was broken; the front door was on the network
+        (<a href="17-ports-and-sockets.html">page 17</a>).</li>
+      <li><strong>Writable bind mounts of host paths.</strong> "Bind mounts have write access to files
+        on the host by
+        default."<a class="cite" href="https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints" title="Docker Docs, Bind mounts">[Docker: storage]</a>
+        If you must mount, add <code>readonly</code>.</li>
+      <li><strong><code>--pid=host</code>, <code>--network=host</code>.</strong> Each deletes one
+        namespace wall (<a href="20-namespaces.html">page 20</a>).</li>
+    </ul>
+    <p>The check that you haven't — from outside, against a live sandbox:</p>
+<pre class="term"><code><span class="p">$</span> docker inspect --format 'privileged={{.HostConfig.Privileged}} pid={{.HostConfig.PidMode}} net={{.HostConfig.NetworkMode}} binds={{json .HostConfig.Binds}} capdrop={{json .HostConfig.CapDrop}} secopt={{json .HostConfig.SecurityOpt}} ro={{.HostConfig.ReadonlyRootfs}} user={{.Config.User}}' lt-23-h
+<span class="o">privileged=false pid= net=none binds=null capdrop=["ALL"] secopt=["no-new-privileges"] ro=true user=agent</span></code></pre>
+    <p>
+      and, for task definitions you were handed,
+      <code>grep -rnE 'privileged|docker\.sock|pid: *"?host|network_mode: *"?host'</code> over the
+      compose files. Terminal-Bench runs a check of this kind — no privileged containers — in CI on
+      every submitted
+      task.<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Terminal-Bench, App. B.2">[Terminal-Bench]</a>
+    </p>
+
+    <h3 id="daemon-level">The daemon-level upgrade: userns-remap and rootless</h3>
+    <p>
+      Everything so far configures one container. Two settings change the daemon.
+      <em>userns-remap</em> maps container root to an unprivileged host uid using a
+      <span class="term" data-g="user-namespace">user namespace</span>; Docker positions it for
+      "containers whose processes must run as the <code>root</code> user", noting the best defence is
+      still unprivileged
+      users.<a class="cite" href="https://docs.docker.com/engine/security/userns-remap/" title="Docker Docs, Isolate containers with a user namespace">[Docker: security]</a>
+      <span class="term" data-g="rootless">Rootless</span> mode goes further: "both the daemon and the
+      container are running without root
+      privileges."<a class="cite" href="https://docs.docker.com/engine/security/rootless/#how-it-works" title="Docker Docs, Rootless mode: how it works">[Docker: security]</a>
+      Its documented limitations include resource limits only with cgroup v2 and systemd, and no
+      AppArmor.<a class="cite" href="https://docs.docker.com/engine/security/rootless/troubleshoot/#known-limitations" title="Docker Docs, Rootless mode: known limitations">[Docker: security]</a>
+    </p>
+    <div class="callout">
+      <span class="label">Depth triage</span>
+      <p><strong>Learn to use:</strong> the six rungs, the never-list, the verification script below —
+      you should be able to write and defend this policy. <strong>Recognise:</strong> seccomp profiles
+      (keep Docker's default; check <code>Seccomp:</code> in <code>/proc/self/status</code>), AppArmor's
+      <code>docker-default</code>, userns-remap and rootless — know what they are and ask whether they
+      are on. <strong>Leave to a security specialist:</strong> custom seccomp or AppArmor profiles,
+      kernel CVE assessment, and the decision that containers are enough isolation for a given model
+      (<a href="24-isolation-ladder.html">page 24</a>).</p>
+    </div>
+
+    <h2 id="assembled">Assembled: <code>run-hardened.sh</code></h2>
+    <p>The whole ladder as one command — <code>research/wordfreq-bench/run-hardened.sh</code>, verbatim:</p>
+<pre><code>#!/usr/bin/env bash
+# Start one hardened rollout sandbox. Usage: run-hardened.sh NAME
+set -euo pipefail
+name=${1:?usage: run-hardened.sh NAME}
+docker run -d --name "$name" \
+  --user agent \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --read-only --tmpfs /tmp:size=64m \
+  --mount type=volume,dst=/app \
+  --network none \
+  --memory 512m --cpus 1 --pids-limit 128 \
+  --init \
+  wordfreq-bench:hardened</code></pre>
+    <p>
+      (<code>--init</code> is not security: it gives the box a real
+      PID 1 that reaps zombies and forwards signals, so
+      teardown is prompt — <a href="10-signals-exit-codes.html">page 10</a>.) Every flag has a Compose
+      key, which is the form harnesses like Inspect
+      consume:<a class="cite" href="https://docs.docker.com/reference/compose-file/services/" title="Docker Docs, Compose file reference: services">[Compose]</a>
+    </p>
+<pre><code>services:
+  default:
+    image: wordfreq-bench:hardened
+    user: agent
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges]
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+    volumes: ["/app"]            # anonymous volume: writable, removed by `down -v`
+    network_mode: none
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    init: true</code></pre>
+
+    <h3 id="verify-script">Trust nothing you haven't checked from inside</h3>
+    <p>
+      A flag in a script is an intention. The property is what the kernel reports to a process in the
+      box. This script (29 lines, ShellCheck-clean)
+      checks each rung from inside and exits non-zero if any fails:
+    </p>
+<pre><code>#!/usr/bin/env bash
+# Inside-out check of a hardened sandbox. Run INSIDE the box: exits 0 only if every line is PASS.
+# Usage (read-only root, so feed it on stdin): docker exec -i NAME bash -s &lt; verify-sandbox.sh
+set -u
+fails=0
+check() { # check DESCRIPTION COMMAND...
+  local desc=$1; shift
+  if "$@" &gt;/dev/null 2&gt;&amp;1; then echo "PASS  $desc"; else echo "FAIL  $desc"; fails=$((fails + 1)); fi
+}
+status() { awk -v k="$1:" '$1 == k { print $2 }' /proc/self/status; }
+cg() { cat "/sys/fs/cgroup/$1"; }
+
+check "not root (uid $(id -u))"               test "$(id -u)" -ne 0
+check "effective capabilities empty"          test "$(status CapEff)" = 0000000000000000
+check "bounding set empty"                    test "$(status CapBnd)" = 0000000000000000
+check "no_new_privs set"                      test "$(status NoNewPrivs)" = 1
+check "root filesystem mounted read-only"     findmnt -n -O ro /
+check "/etc, /usr, /home not writable"        bash -c '[ ! -w /etc ] &amp;&amp; [ ! -w /usr ] &amp;&amp; [ ! -w /home ]'
+check "/tmp writable"                         touch /tmp/.probe
+check "/app writable"                         touch /app/.probe
+check "no route off the box"                  test "$(wc -l &lt;/proc/net/route)" -le 1
+check "memory limit set ($(cg memory.max))"   test "$(cg memory.max)" != max
+check "pids limit set ($(cg pids.max))"       test "$(cg pids.max)" != max
+check "cpu limit set ($(cg cpu.max))"         bash -c '! grep -q "^max" /sys/fs/cgroup/cpu.max'
+check "no Docker socket in the box"           test ! -e /var/run/docker.sock
+check "no grader directory in the box"        test ! -e /opt/grader
+rm -f /tmp/.probe /app/.probe
+echo "$fails check(s) failed"
+exit "$((fails &gt; 0))"</code></pre>
+    <p>Against the hardened sandbox, and against a plain <code>docker run -d wordfreq-bench:sloppy</code>:</p>
+<pre class="term"><code><span class="p">$</span> ./run-hardened.sh lt-23-h
+<span class="p">$</span> docker exec -i lt-23-h bash -s &lt; verify-sandbox.sh
+<span class="o">PASS  not root (uid 1001)
+PASS  effective capabilities empty
+PASS  bounding set empty
+PASS  no_new_privs set
+PASS  root filesystem mounted read-only
+PASS  /etc, /usr, /home not writable
+PASS  /tmp writable
+PASS  /app writable
+PASS  no route off the box
+PASS  memory limit set (536870912)
+PASS  pids limit set (128)
+PASS  cpu limit set (100000 100000)
+PASS  no Docker socket in the box
+PASS  no grader directory in the box
+0 check(s) failed</span>
+<span class="p">$</span> docker exec -i lt-23-s bash -s &lt; verify-sandbox.sh | grep -c FAIL
+<span class="o">11</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall — a check that cannot fail</span>
+      <p>My first draft of the last check was <code>bash -c '! ls -d /opt/grader /tmp/solution'</code>.
+      It printed PASS on the sloppy image, where <code>/opt/grader</code> plainly exists:
+      <code>ls</code> exits non-zero if <em>either</em> path is missing, and <code>!</code> turned that
+      into success. A verification script is a grader, with a grader's bugs
+      (<a href="06-shell-scripting.html">page 6</a>). Always run it against a box you know is bad and
+      confirm it says so.</p>
+    </div>
+
+    <h2 id="measurement">Hardening is a measurement decision</h2>
+    <p>
+      The sandbox is now part of the instrument, so changing it can change scores. The discipline that
+      catches this is Terminal-Bench's "solvability" criterion: every task ships an
+      <span class="term" data-g="oracle-solution">oracle solution</span>, and CI runs it to confirm
+      all tests
+      pass.<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Terminal-Bench, §2.3">[Terminal-Bench]</a>
+      Do the same under <em>your</em> policy: apply the oracle fix inside the hardened sandbox, then
+      grade from outside with <code>grade.sh</code>
+      (<a href="26-environment-integrity.html">page 26</a> explains the design):
+    </p>
+<pre class="term"><code><span class="p">$</span> ./run-hardened.sh lt-23-oracle
+<span class="p">$</span> docker exec -i lt-23-oracle bash -c 'cat &gt; /tmp/fix.py' &lt; fix.py &amp;&amp; docker exec lt-23-oracle python3 /tmp/fix.py
+<span class="p">$</span> ./grade.sh lt-23-oracle results.jsonl; cat results.jsonl
+<span class="o">{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.002s  OK "}</span></code></pre>
+    <div class="evals">
+      <span class="label">In eval work — what the oracle run caught here</span>
+      <p>When I first ran that sequence for this page, the oracle <em>failed</em>
+      (<code>"passed": false … FAILED (failures=2)</code>), although
+      <code>python3 wordfreq.py data/sample.txt</code> inside the sandbox printed the right answer.
+      <strong>Observed:</strong> correct in the box, failing grade outside it.
+      <strong>Hypotheses:</strong> <code>docker cp</code> missed the volume, or the grader imported
+      the wrong code. <strong>Discriminating tests:</strong> <code>grep</code> the copied-out file
+      (the fix was there); run the hidden tests by hand from another directory (they passed). The
+      cause: the grading container's working directory was the image's <code>WORKDIR /app</code>,
+      which holds the image's own buggy <code>wordfreq.py</code>, and <code>python3 -m</code> puts
+      the working directory first on the import path — the grader graded the image, not the
+      submission. Every model would have scored zero. The fix in <code>grade.sh</code> is one flag,
+      <code>--workdir /tmp</code>. An oracle that must pass and a no-op that must fail are the two
+      cheapest tests an environment can have.</p>
+    </div>
+    <div class="evals">
+      <span class="label">In eval work — ship the self-test</span>
+      <p><em>Design:</em> run the verification script in a fresh sandbox before every eval and
+      abort if it fails; record the policy (the <code>docker inspect</code> line above) with the
+      results. When a hardened run puts <code>Read-only file system</code>,
+      <code>Operation not permitted</code> or <code>Network is unreachable</code> into transcripts,
+      those are effects of <em>your</em> policy. A task unsolvable under the policy is an environment
+      defect: exclude it for every model and say so. Don't leave it in the denominator as a model
+      failure, and don't drop it for some models only.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveat — this is still one shared kernel</span>
+      <p>Docker's security page lists four areas to review: the kernel's namespace and cgroup support,
+      "the attack surface of the Docker daemon itself", "loopholes in the container configuration
+      profile", and the kernel's hardening
+      features.<a class="cite" href="https://docs.docker.com/engine/security/" title="Docker Docs, Docker Engine security">[Docker: security]</a>
+      This page closed the third and kept the agent away from the second. It did nothing about the
+      first: every system call the agent makes still lands in the host's kernel, and a kernel bug is a
+      way out that no flag here addresses. Two machine-specific notes: a stock Linux Docker Engine
+      applies a default <span class="term" data-g="seccomp">seccomp</span> profile (you'd see
+      <code>Seccomp: 2</code>), but the Docker Desktop daemon used for this page runs unconfined
+      (<code>Seccomp: 0</code>), so check <code>docker info</code> on the hosts you measure on; and
+      Docker Desktop has no AppArmor. Whether a shared kernel is acceptable is a threat-model
+      question — <a href="24-isolation-ladder.html">page 24</a>.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>Your team hardens a 200-task benchmark with exactly this page's policy. The headline pass
+      rate for the same model drops from 61% to 48%. A colleague says: "Good — 13 points of that score
+      were cheating." What would you need to see before agreeing?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Observed:</strong> a 13-point drop after a policy change. <strong>Supposed:</strong>
+      that the lost passes were illegitimate. At least three causes produce the same drop: (a) the
+      old passes used the network or root to shortcut tasks — integrity gain; (b) tasks legitimately
+      need something the policy removed (<code>pip install</code>, a writable home, a capability,
+      more than 512 MB) — validity loss, the benchmark now measures the sandbox; (c) the harness
+      itself broke (<code>docker cp</code> into a read-only root, a grader bug like the one above).
+      Discriminating evidence: run every oracle solution under the new policy — any oracle that fails
+      identifies (b) or (c) with no model involved; diff the per-task results and read transcripts of
+      tasks that flipped, looking for <code>Read-only file system</code>,
+      <code>Network is unreachable</code>, <code>Operation not permitted</code>, exit 137; check
+      <code>memory.events</code> for OOM kills. For the old passes, look for the shortcut in the
+      trajectory. Only flips where the old transcript shows a shortcut count as "cheating removed".
+      Report tasks unsolvable under the policy as excluded (for all models), report infrastructure
+      deaths separately from wrong answers, and state the policy next to the score.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong>, from your Mac's terminal in
+      <code>research/wordfreq-bench/</code> with both images built. Save the verification script above
+      as <code>verify-sandbox.sh</code>.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Start a sandbox with <code>./run-hardened.sh h1</code> and run
+          the verification script in it. Then confirm two properties by hand: read
+          <code>CapBnd</code>, and try to create <code>/etc/x</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> ./run-hardened.sh h1
+<span class="p">$</span> docker exec -i h1 bash -s &lt; verify-sandbox.sh | tail -1
+<span class="o">0 check(s) failed</span>
+<span class="p">$</span> docker exec h1 grep -E 'CapEff|CapBnd|NoNewPrivs' /proc/self/status
+<span class="o">CapEff:	0000000000000000
+CapBnd:	0000000000000000
+NoNewPrivs:	1</span>
+<span class="p">$</span> docker exec h1 touch /etc/x
+<span class="o">touch: cannot touch '/etc/x': Read-only file system</span></code></pre>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Run the image with <em>only</em>
+          <code>--user agent</code> (the default) and no other flag. Before looking: will
+          <code>CapEff</code> be zero? Will <code>CapBnd</code>? What does the difference mean?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm wordfreq-bench:hardened grep -E 'CapEff|CapBnd' /proc/self/status
+<span class="o">CapEff:	0000000000000000
+CapBnd:	00000000a80425fb</span></code></pre>
+          <p>Effective is empty, the bounding set is not: a setuid-root binary would hand the agent
+          Docker's default capabilities. <code>--cap-drop ALL</code> closes the ceiling;
+          <code>no-new-privileges</code> closes the route.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> In <code>h1</code>, write a two-line shell script
+          to <code>/tmp/t.sh</code>, <code>chmod +x</code> it, and run it as <code>/tmp/t.sh</code>.
+          Then run it as <code>sh /tmp/t.sh</code>. Predict both outcomes from the <code>/tmp</code>
+          line of <code>/proc/mounts</code> shown in rung 4.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec h1 bash -c 'printf "#!/bin/sh\necho ran\n" &gt; /tmp/t.sh; chmod +x /tmp/t.sh; /tmp/t.sh; sh /tmp/t.sh'
+<span class="o">bash: line 1: /tmp/t.sh: Permission denied
+ran</span></code></pre>
+          <p>The tmpfs is mounted <code>noexec</code>: the kernel refuses to execute files from it
+          whatever their mode bits say, but <code>sh</code> (which lives on <code>/</code>) can still
+          <em>read</em> the script and interpret it. In a transcript this is a
+          <code>Permission denied</code> that <code>chmod</code> cannot fix — an effect of the
+          sandbox policy, not a model error. An agent that compiles a binary into <code>/tmp</code>
+          will hit it; have it build in <code>/app</code>, or mount the tmpfs with
+          <code>exec</code> and say so in the policy.</p>
+          </details></li>
+        <li><strong>Eval task: the hardened rollout, end to end.</strong> Apply a fix inside
+          <code>h1</code> without <code>docker cp</code> to <code>/tmp</code> (it is refused — try it),
+          grade from outside with <code>./grade.sh h1 results.jsonl</code>, then grade a fresh,
+          untouched sandbox <code>h2</code>. You should get one pass and one fail. Clean up with
+          <code>docker rm -f -v h1 h2</code>.
+          <details class="solution"><summary>Solution</summary>
+          <p>Any correct edit works; the oracle is in <code>solution/wordfreq.patch.py</code>. For
+          example, stream a small Python patch script in over stdin as the page did, or edit with
+          <code>docker exec h1 sed -i …</code>. Then:</p>
+<pre class="term"><code><span class="p">$</span> ./grade.sh h1 results.jsonl; echo "exit=$?"
+<span class="o">exit=0</span>
+<span class="p">$</span> ./run-hardened.sh h2 &gt;/dev/null; ./grade.sh h2 results.jsonl; echo "exit=$?"
+<span class="o">exit=1</span>
+<span class="p">$</span> cat results.jsonl
+<span class="o">{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.001s  OK "}
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}</span></code></pre>
+          <p>The oracle passes and the no-op fails: the two cheapest tests of an environment.
+          <code>-v</code> on <code>docker rm</code> removes the anonymous <code>/app</code> volume;
+          without it, volumes pile up on the host.</p>
+          </details></li>
+        <li><strong>Eval task: audit from outside.</strong> You are handed a running sandbox
+          (<code>docker run -d --name s1 wordfreq-bench:sloppy</code>). Using only
+          <code>docker inspect</code>, list which rungs of this page are missing.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker inspect --format 'privileged={{.HostConfig.Privileged}} net={{.HostConfig.NetworkMode}} capdrop={{json .HostConfig.CapDrop}} secopt={{json .HostConfig.SecurityOpt}} ro={{.HostConfig.ReadonlyRootfs}} user={{.Config.User}} mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}}' s1
+<span class="o">privileged=false net=bridge capdrop=null secopt=null ro=false user= mem=0 pids=&lt;nil&gt;</span></code></pre>
+          <p>Empty <code>user</code> means root; no cap drop; no <code>no-new-privileges</code>;
+          writable root; bridge network; <code>mem=0</code> and <code>pids=&lt;nil&gt;</code> mean no limit. Rungs 1–6 are all missing. The
+          one thing in its favour: not privileged.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>[Docker: security] Docker Inc., <em>Docker Engine security</em>; <em>Rootless mode</em> (and its known limitations); <em>Isolate containers with a user namespace</em>; <em>Linux post-installation steps</em>. Docker Docs. <a href="https://docs.docker.com/engine/security/">docs.docker.com/engine/security/</a></li>
+        <li>[Docker: run] Docker Inc., <em>docker container run</em> (CLI reference: privileged, security-opt, read-only, ulimit); <em>None network driver</em>. Docker Docs. <a href="https://docs.docker.com/reference/cli/docker/container/run/">docs.docker.com/reference/cli/docker/container/run/</a></li>
+        <li>[Docker: storage] Docker Inc., <em>Storage: bind mounts; volumes; tmpfs mounts</em>. Docker Docs. <a href="https://docs.docker.com/engine/storage/">docs.docker.com/engine/storage/</a></li>
+        <li>[Compose] Docker Inc., <em>Compose file reference: services</em>. Docker Docs. <a href="https://docs.docker.com/reference/compose-file/services/">docs.docker.com/reference/compose-file/services/</a></li>
+        <li>[seccomp(2)] Linux man-pages project, <em>seccomp(2)</em>, with Linux kernel documentation <em>No New Privileges Flag</em>. <a href="https://man7.org/linux/man-pages/man2/seccomp.2.html">man7.org/…/seccomp.2.html</a> · <a href="https://docs.kernel.org/userspace-api/no_new_privs.html">docs.kernel.org/userspace-api/no_new_privs.html</a></li>
+        <li>[capabilities(7)] Linux man-pages project, <em>capabilities(7)</em>. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html">man7.org/…/capabilities.7.html</a></li>
+        <li>[Kernel: cgroup-v2] Linux kernel documentation, <em>Control Group v2</em> (PID controller). <a href="https://docs.kernel.org/admin-guide/cgroup-v2.html">docs.kernel.org/admin-guide/cgroup-v2.html</a></li>
+        <li>[o1 System Card] OpenAI, <em>OpenAI o1 System Card</em>, version dated Sept 12, 2024 (o1-preview and o1-mini), §4.2.1. <a href="https://cdn.openai.com/o1-system-card.pdf">cdn.openai.com/o1-system-card.pdf</a></li>
+        <li>[Terminal-Bench] Merrill, Shaw, Carlini et al., <em>Terminal-Bench: Benchmarking Agents on Hard, Realistic Tasks in Command Line Interfaces</em>, arXiv:2601.11868 (2026), §2.3 and App. B.2; and the Terminal-Bench 2.1 release notes. <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a> · <a href="https://www.tbench.ai/news/terminal-bench-2-1">tbench.ai/news/terminal-bench-2-1</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

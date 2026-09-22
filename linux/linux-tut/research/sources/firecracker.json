@@ -1,0 +1,421 @@
+{
+ "id": "firecracker",
+ "tag": "[Firecracker]",
+ "citation": {
+  "authors": "Alexandru Agache, Marc Brooker, Andreea Florescu, Alexandra Iordache, Anthony Liguori, Rolf Neugebauer, Phil Piwonka, Diana-Maria Popa (Amazon Web Services)",
+  "title": "Firecracker: Lightweight Virtualization for Serverless Applications",
+  "venue": "17th USENIX Symposium on Networked Systems Design and Implementation (NSDI '20), pp. 419-434; plus Firecracker project docs (firecracker-microvm.github.io and github.com/firecracker-microvm/firecracker, main branch)",
+  "year": "2020 (paper); docs fetched 2026",
+  "url": "https://www.usenix.org/conference/nsdi20/presentation/agache"
+ },
+ "fetched_urls": [
+  "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf",
+  "https://firecracker-microvm.github.io/",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/README.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/SPECIFICATION.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/FAQ.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/design.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/snapshotting/snapshot-support.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/snapshotting/random-for-clones.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/jailer.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/getting-started.md",
+  "https://raw.githubusercontent.com/firecracker-microvm/firecracker/main/docs/dev-machine-setup.md"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Firecracker is a VMM using KVM to create microVMs; minimal device model (virtio-net, virtio-block, serial, minimal keyboard controller; no BIOS/PCI in classic design); written in Rust; powers AWS Lambda and Fargate",
+   "verdict": "confirmed",
+   "finding": "VMM on KVM creating microVMs; developed at AWS for Lambda and Fargate.",
+   "quote": "The main component of Firecracker is a virtual machine monitor (VMM) that uses the Linux Kernel Virtual Machine (KVM) to create and run microVMs. Firecracker has a minimalist design. It excludes unnecessary devices and guest-facing functionality to reduce the memory footprint and attack surface area of each microVM.",
+   "location": "Firecracker README, Overview",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/README.md"
+  },
+  {
+   "planned": "Firecracker is a VMM using KVM to create microVMs; minimal device model (virtio-net, virtio-block, serial, minimal keyboard controller; no BIOS/PCI in classic design); written in Rust; powers AWS Lambda and Fargate",
+   "verdict": "corrected",
+   "finding": "DEVICE MODEL — the site now says FIVE emulated devices, and the list includes virtio-vsock: virtio-net, virtio-block, virtio-vsock, serial console, minimal keyboard controller (used only to stop the microVM). The planned list of four omits vsock. (The README additionally lists optional entropy (virtio-rng) and pmem devices and memory hotplug, so 'five' is the site's headline, not a complete inventory of what main can attach.) Written in Rust: confirmed.",
+   "quote": "only 5 emulated devices are available: virtio-net, virtio-block, virtio-vsock, serial console, and a minimal keyboard controller used only to stop the microVM",
+   "location": "firecracker-microvm.github.io, FAQ 'What is the difference between Firecracker and QEMU?'",
+   "cite_url": "https://firecracker-microvm.github.io/"
+  },
+  {
+   "planned": "Firecracker is a VMM using KVM to create microVMs; minimal device model (virtio-net, virtio-block, serial, minimal keyboard controller; no BIOS/PCI in classic design); written in Rust; powers AWS Lambda and Fargate",
+   "verdict": "corrected",
+   "finding": "'No BIOS / no PCI' is true of the 2020 PAPER's design and must be attributed to it. It is no longer safe as a present-tense claim: the current README lists '[Developer Preview] Hot-plug and hot-unplug virtio PCI devices while the VM is running'. Write 'the NSDI'20 paper describes a VMM with no BIOS, no PCI and no legacy devices'.",
+   "quote": "It does not offer a BIOS, cannot boot arbitrary kernels, does not emulate legacy devices nor PCI, and does not support VM migration. Firecracker could not boot Microsoft Windows without significant changes to Firecracker.",
+   "location": "NSDI'20 paper, §1 Introduction (p. 420)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Firecracker is a VMM using KVM to create microVMs; minimal device model (virtio-net, virtio-block, serial, minimal keyboard controller; no BIOS/PCI in classic design); written in Rust; powers AWS Lambda and Fargate",
+   "verdict": "confirmed",
+   "finding": "Lambda and Fargate.",
+   "quote": "Firecracker was developed at Amazon Web Services to accelerate the speed and efficiency of services like AWS Lambda and AWS Fargate. Firecracker is open sourced under Apache version 2.0.",
+   "location": "Firecracker README, Overview",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/README.md"
+  },
+  {
+   "planned": "Headline numbers: boots to user space in ≤125 ms; <5 MiB memory overhead per microVM; creation rate up to 150 microVMs/sec/host — verify each against site and paper",
+   "verdict": "corrected",
+   "finding": "125 ms — three wordings, three meanings. SITE: 'Boot in <125ms' / '< 125 ms startup time'. SPECIFICATION.md (the precise one): '<= 125 ms' from the InstanceStart API call to the start of guest /sbin/init, with serial console disabled, minimal kernel+rootfs, 1 vCPU + 128 MiB. PAPER: 'boots to application code in less than 125ms'. So it is time-to-init for a minimal guest measured from InstanceStart — it excludes starting the Firecracker process and the configuration API calls, and is not the boot time of an Ubuntu image.",
+   "quote": "It takes <= 125 ms to go from receiving the Firecracker InstanceStart API call to the start of the Linux guest user-space /sbin/init process. The boot time is measured using a VM with the serial console disabled and a minimal kernel and root file system.",
+   "location": "Firecracker SPECIFICATION.md, item 'Overhead'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/SPECIFICATION.md"
+  },
+  {
+   "planned": "Headline numbers: boots to user space in ≤125 ms; <5 MiB memory overhead per microVM; creation rate up to 150 microVMs/sec/host — verify each against site and paper",
+   "verdict": "corrected",
+   "finding": "5 MiB — SITE: '<5 MiB overhead per VM' / '< 5 MiB memory footprint'. SPECIFICATION.md: VMM threads' memory overhead '<= 5 MiB' for a 1 vCPU/128 MiB microVM, workload-dependent (e.g. many vsock connections can exceed it) and excluding the MMDS data store. PAPER abstract/intro: 'less than 5MB per container'; PAPER measurement (§5.2): 'around 3MB' vs ~13MB Cloud Hypervisor and ~131MB QEMU. This is VMM overhead ON TOP OF guest RAM, not total footprint.",
+   "quote": "Firecracker's virtual machine manager threads have a memory overhead <= 5 MiB. The memory overhead is dependent on the workload (e.g. a workload with multiple vsock connections might generate a memory overhead > 5MiB)",
+   "location": "Firecracker SPECIFICATION.md, item 'Overhead'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/SPECIFICATION.md"
+  },
+  {
+   "planned": "Headline numbers: boots to user space in ≤125 ms; <5 MiB memory overhead per microVM; creation rate up to 150 microVMs/sec/host — verify each against site and paper",
+   "verdict": "confirmed",
+   "finding": "150/s — SITE: 'Create up to 150 microVMs per second per host.' PAPER: identical number. design.md gives the underlying rate instead: 5 microVMs per host core per second, 'e.g., one can create 180 microVMs per second on a host with 36 physical cores' — so 150 is not a hard limit and depends on core count.",
+   "quote": "With the provided minimal Linux guest kernel configuration, it offers memory overhead of less than 5MB per container, boots to application code in less than 125ms, and allows creation of up to 150 MicroVMs per second per host.",
+   "location": "NSDI'20 paper, §1 Introduction (p. 420)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Headline numbers: boots to user space in ≤125 ms; <5 MiB memory overhead per microVM; creation rate up to 150 microVMs/sec/host — verify each against site and paper",
+   "verdict": "confirmed",
+   "finding": "Site wording of the three numbers, verbatim.",
+   "quote": "Boot in <125ms. Create up to 150 microVMs per second per host. [...] <5 MiB overhead per VM. Pack thousands on a single server with built-in rate limiters.",
+   "location": "firecracker-microvm.github.io, 'Why Firecracker-based MicroVMs?'",
+   "cite_url": "https://firecracker-microvm.github.io/"
+  },
+  {
+   "planned": "Paper's argument: containers share the host kernel and rely on syscall filtering trade-offs (compatibility vs security); VMs give stronger isolation with a narrow interface; Firecracker aims for both isolation and low overhead — exact quotes from §2",
+   "verdict": "confirmed",
+   "finding": "Containers: single shared kernel => fundamental security/compatibility trade-off. (Exact location is §1 Introduction, not §2.)",
+   "quote": "Together, these tools provide a powerful toolkit for isolating containers, but their reliance on a single operating system kernel means that there is a fundamental tradeoff between security and code compatibility. Container implementors can choose to improve security by limiting syscalls, at the cost of breaking code which requires the restricted calls.",
+   "location": "NSDI'20 paper, §1 Introduction (p. 419)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Paper's argument: containers share the host kernel and rely on syscall filtering trade-offs (compatibility vs security); VMs give stronger isolation with a narrow interface; Firecracker aims for both isolation and low overhead — exact quotes from §2",
+   "verdict": "confirmed",
+   "finding": "§2.1 side-by-side: in containers untrusted code calls the HOST kernel directly; in virtualization it gets a full GUEST kernel that is explicitly untrusted.",
+   "quote": "In Linux containers, untrusted code calls the host kernel directly, possibly with the kernel surface area restricted (such as with seccomp-bpf). It also interacts directly with other services provided by the host kernel, like filesystems and the page cache.",
+   "location": "NSDI'20 paper, §2.1 Evaluating the Isolation Options (p. 421)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Paper's argument: containers share the host kernel and rely on syscall filtering trade-offs (compatibility vs security); VMs give stronger isolation with a narrow interface; Firecracker aims for both isolation and low overhead — exact quotes from §2",
+   "verdict": "confirmed",
+   "finding": "Continuation (virtualization side).",
+   "quote": "In virtualization, untrusted code is generally allowed full access to a guest kernel, allowing all kernel features to be used, but explicitly treating the guest kernel as untrusted. Hardware virtualization and the VMM limit the guest kernel’s access to the privileged domain and host kernel.",
+   "location": "NSDI'20 paper, §2.1 Evaluating the Isolation Options (p. 421)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Paper's argument: containers share the host kernel and rely on syscall filtering trade-offs (compatibility vs security); VMs give stronger isolation with a narrow interface; Firecracker aims for both isolation and low overhead — exact quotes from §2",
+   "verdict": "confirmed",
+   "finding": "§2.1.1: seccomp-bpf is called the most important container security boundary; syscall limitation = security vs compatibility trade-off. Numbers: a trivial Linux app needs 15 unique syscalls; a typical Ubuntu 15.04 install needs 224 syscalls and 52 unique ioctls (citing Tsai et al.).",
+   "quote": "Different Linux container implementations use these tools in different combinations, but seccomp-bpf provides the most important security isolation boundary. The fact that containers rely on syscall limitations for their security represents a tradeoff between security and compatibility.",
+   "location": "NSDI'20 paper, §2.1.1 Linux Containers (p. 421)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Paper's argument: containers share the host kernel and rely on syscall filtering trade-offs (compatibility vs security); VMs give stronger isolation with a narrow interface; Firecracker aims for both isolation and low overhead — exact quotes from §2",
+   "verdict": "confirmed",
+   "finding": "§2.1.3: the key isolation benefit of virtualization.",
+   "quote": "From an isolation perspective, the most compelling benefit is that it moves the security-critical interface from the OS boundary to a boundary supported in hardware and comparatively simpler software. It removes the need to trade off between kernel features and security: the guest kernel can supply its full feature set with no change to the threat model.",
+   "location": "NSDI'20 paper, §2.1.3 Virtualization (p. 422)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Paper's argument: containers share the host kernel and rely on syscall filtering trade-offs (compatibility vs security); VMs give stronger isolation with a narrow interface; Firecracker aims for both isolation and low overhead — exact quotes from §2",
+   "verdict": "confirmed",
+   "finding": "'Both': the paper's thesis sentence.",
+   "quote": "implementors of serverless and container services can choose between hypervisor-based virtualization (and the potentially unacceptable overhead related to it), and Linux containers (and the related compatibility vs. security tradeoffs). We built Firecracker because we didn’t want to choose.",
+   "location": "NSDI'20 paper, §1 Introduction (pp. 419-420)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Jailer: defence in depth — the VMM process itself is chrooted, namespaced, cgroup'd, seccomp-filtered, runs unprivileged",
+   "verdict": "corrected",
+   "finding": "Split by source. PAPER (§3.4.1): jailer runs Firecracker in a chroot, in pid and network namespaces, drops privileges, and sets a restrictive seccomp-bpf profile (24 syscalls + 30 ioctls whitelisted, as of 2020). CURRENT DOCS: the jailer does cgroups, a new MOUNT namespace + pivot_root + chroot, optionally joins a network namespace (--netns) and a new PID namespace (--new-pid-ns), sets rlimits, closes inherited fds, clears env vars, drops to the given uid/gid, then exec()s Firecracker. Seccomp filters are installed by FIRECRACKER ITSELF (per-thread, before guest code runs), not by the jailer. PID/net namespaces are opt-in flags, not automatic.",
+   "quote": "The jailer sets up system resources that require elevated permissions (e.g., cgroup, chroot), drops privileges, and then exec()s into the Firecracker binary, which then runs as an unprivileged process. Past this point, Firecracker can only access resources that a privileged third-party grants access to",
+   "location": "Firecracker docs/design.md, Sandboxing > Jailer process",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "planned": "Jailer: defence in depth — the VMM process itself is chrooted, namespaced, cgroup'd, seccomp-filtered, runs unprivileged",
+   "verdict": "confirmed",
+   "finding": "Defence-in-depth framing and who installs seccomp.",
+   "quote": "This is achieved by the following: seccomp filters for disallowing unwanted system calls, cgroups and namespaces for resource isolation, and dropping privileges by jailing the process. Seccomp filters are automatically installed by Firecracker, while for the latter, we recommend starting Firecracker with the jailer binary that's part of each Firecracker release.",
+   "location": "Firecracker docs/design.md, Sandboxing > Firecracker process",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "planned": "Jailer: defence in depth — the VMM process itself is chrooted, namespaced, cgroup'd, seccomp-filtered, runs unprivileged",
+   "verdict": "confirmed",
+   "finding": "The paper's jailer description (2020).",
+   "quote": "The jailer implements a wrapper around Firecracker which places it into a restrictive sandbox before it boots the guest, including running it in a chroot, isolating it in pid and network namespaces, dropping privileges, and setting a restrictive seccomp-bpf profile.",
+   "location": "NSDI'20 paper, §3.4.1 Jailer (p. 424)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "planned": "Snapshots capture full guest memory + device state; docs WARN that resuming the same snapshot multiple times duplicates state that must be unique (entropy/RNG state, identifiers, tokens), and that secrets in guest memory are in the snapshot file — exact wording",
+   "verdict": "confirmed",
+   "finding": "What a snapshot contains: full guest memory + emulated HW state (KVM and Firecracker), as separate files: guest memory file, microVM state file, and zero or more user-managed disk files.",
+   "quote": "In order to make restoring possible, Firecracker snapshots save the full state of the following resources: the guest memory, the emulated HW state (both KVM and Firecracker emulated HW).",
+   "location": "snapshot-support.md, Snapshotting in Firecracker > Overview",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "planned": "Snapshots capture full guest memory + device state; docs WARN that resuming the same snapshot multiple times duplicates state that must be unique (entropy/RNG state, identifiers, tokens), and that secrets in guest memory are in the snapshot file — exact wording",
+   "verdict": "confirmed",
+   "finding": "THE uniqueness warning, verbatim. List is: identifiers, random numbers and random number seeds, the guest OS entropy pool, cryptographic tokens. Verdict word is 'insecure'.",
+   "quote": "When snapshots are used in a such a manner that a given guest's state is resumed from more than once, guest information assumed to be unique may in fact not be; this information can include identifiers, random numbers and random number seeds, the guest OS entropy pool, as well as cryptographic tokens.",
+   "location": "snapshot-support.md, 'Snapshot security and uniqueness'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "planned": "Snapshots capture full guest memory + device state; docs WARN that resuming the same snapshot multiple times duplicates state that must be unique (entropy/RNG state, identifiers, tokens), and that secrets in guest memory are in the snapshot file — exact wording",
+   "verdict": "confirmed",
+   "finding": "Second sentence of the warning.",
+   "quote": "Without a strong mechanism that enables users to guarantee that unique things stay unique across snapshot restores, we consider resuming execution from the same state more than once insecure.",
+   "location": "snapshot-support.md, 'Snapshot security and uniqueness'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "planned": "Snapshots capture full guest memory + device state; docs WARN that resuming the same snapshot multiple times duplicates state that must be unique (entropy/RNG state, identifiers, tokens), and that secrets in guest memory are in the snapshot file — exact wording",
+   "verdict": "corrected",
+   "finding": "SECRETS: the docs do NOT contain a sentence saying 'secrets in guest memory are in the snapshot file'. What they say: (a) the full contents of guest memory are written to the snapshot; (b) Firecracker TRUSTS snapshot files and only CRC-checks the state file; (c) users must secure snapshot files with authentication and encryption. 'Any secret in guest RAM at snapshot time is in the memory file' is a correct inference from (a) but must be presented as inference.",
+   "quote": "To ensure a secure integration with the snapshot functionality, users need to secure snapshot files by implementing authentication and encryption schemes while managing their lifecycle or moving them across the trust boundary, like for example when provisioning them from a repository to a host over the network.",
+   "location": "snapshot-support.md, 'Snapshot files management'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "planned": "Snapshots capture full guest memory + device state; docs WARN that resuming the same snapshot multiple times duplicates state that must be unique (entropy/RNG state, identifiers, tokens), and that secrets in guest memory are in the snapshot file — exact wording",
+   "verdict": "confirmed",
+   "finding": "Supporting quote for (a): a full snapshot writes all guest memory.",
+   "quote": "Taking a full snapshot of a microVM results in the full contents of guest memory being written to the snapshot, and particularly, in all guest memory being faulted in.",
+   "location": "snapshot-support.md, 'Firecracker Snapshotting characteristics'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "planned": "Each microVM has its own guest kernel → a guest kernel exploit does not directly give the host; the attack surface is KVM + the VMM's small device model",
+   "verdict": "confirmed",
+   "finding": "Own guest kernel; guest treated as malicious from the first instruction; first isolation layer is KVM + the Firecracker virtualization boundary, with the jailed/seccomp'd process as second. The paper says virtualization 'relies on security of the VMM, possibly augmented sandboxing' (Fig. 1). Neither source claims a guest-kernel exploit is harmless — only that the host boundary is KVM+VMM rather than the full syscall surface.",
+   "quote": "From a security perspective, all vCPU threads are considered to be running malicious code as soon as they have been started; these malicious threads need to be contained.",
+   "location": "Firecracker docs/design.md, Internal Architecture > Threat Containment",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "planned": "Each microVM has its own guest kernel → a guest kernel exploit does not directly give the host; the attack surface is KVM + the VMM's small device model",
+   "verdict": "confirmed",
+   "finding": "Layering statement.",
+   "quote": "Firecracker is designed to assure secure isolation using multiple layers. The first layer of isolation is provided by the Linux KVM and the Firecracker virtualization boundary. To assure defense in depth, Firecracker should only run constrained at the process level.",
+   "location": "Firecracker docs/design.md, Sandboxing > Firecracker process",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Abstract's one-sentence statement of the container-vs-VM folk trade-off (the most quotable line for an isolation page).",
+   "quote": "The traditional view is that there is a choice between virtualization with strong security and high overhead, and container technologies with weaker security and minimal overhead. This tradeoff is unacceptable to public infrastructure providers, who need both strong security and minimal overhead.",
+   "location": "NSDI'20 paper, Abstract (p. 419)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "finding": "Snapshot cloning example 3 (the eval-farm pattern: boot once, snapshot, fan out N clones) is explicitly labelled 'potentially insecure'.",
+   "quote": "Here, both microVM B and C do work starting from the state stored in snapshot S. Unique identifiers, random numbers, and cryptographic tokens that are meant to be used once may be used twice.",
+   "location": "snapshot-support.md, 'Usage examples' > Example 3: potentially insecure usage",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "The only pattern called secure: A snapshots then terminates; exactly one B resumes.",
+   "quote": "Here, microVM A terminates after creating the snapshot without ever resuming work, and a single microVM B resumes execution from snapshot S. In this case, unique identifiers, random numbers, and cryptographic tokens that are meant to be used once are indeed only used once.",
+   "location": "snapshot-support.md, 'Usage examples' > Example 1: secure usage",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "Mitigation that exists: VMGenID. Firecracker always enables it; on resume it changes the 16-byte ID and notifies the guest; Linux >= 5.18 (ACPI; 6.10 for DeviceTree) reseeds its PRNG.",
+   "quote": "As a result, guests that run Linux versions >= 5.18 will re-seed their in-kernel PRNG upon snapshot resume. User space applications can rely on the guest kernel for randomness.",
+   "location": "snapshot-support.md, 'Reusing snapshotted states securely'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "What VMGenID does NOT fix — everything outside the kernel entropy pool is still duplicated; de-duplication is the user's job.",
+   "quote": "State other than the guest kernel entropy pool, such as unique identifiers, cached random numbers, cryptographic tokens, etc will still be replicated across multiple microVMs resumed from the same snapshot. Users need to implement mechanisms for ensuring de-duplication of such state, where needed.",
+   "location": "snapshot-support.md, 'Reusing snapshotted states securely'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "Even with VMGenID there is a race window right after resume.",
+   "quote": "As a result, values returned by getrandom() and /dev/(u)random are distinct in all VMs started from the same snapshot, after the kernel handles the VMGenID notification. This leaves a race window between resuming vCPUs and Linux CSPRNG getting successfully re-seeded.",
+   "location": "random-for-clones.md, 'Linux kernels with VMGenID support'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/random-for-clones.md"
+  },
+  {
+   "finding": "Userspace RNG state (libraries with their own pools) is cloned too, with no generic fix.",
+   "quote": "Some userspace applications or libraries keep their own equivalent of entropy pools and suffer from the same potential issues after being cloned. There is no generic solution under the current programming model, and all we can do is recommend against their use in pre-snapshot logic.",
+   "location": "random-for-clones.md, introduction",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/random-for-clones.md"
+  },
+  {
+   "finding": "Concrete cloned identifiers named by the docs: systemd's random seed file and the kernel boot_id. Directly relevant to 'are my N sandboxes really independent samples?'.",
+   "quote": "There’s also the /proc/sys/kernel/random/boot_id special file, which gets initialized with a random string at boot time, and is read-only afterwards. All clones restored from the same snapshot will implicitly read the same value from this file.",
+   "location": "random-for-clones.md, 'User space considerations'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/random-for-clones.md"
+  },
+  {
+   "finding": "Recommendation list, first item.",
+   "quote": "Delete /var/lib/systemd/random-seed, or any equivalent files.",
+   "location": "random-for-clones.md, 'Recommendations'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/random-for-clones.md"
+  },
+  {
+   "finding": "Snapshot files are inside Firecracker's trust boundary; integrity check is only a CRC on the state file.",
+   "quote": "It only verifies integrity using a 64-bit CRC value embedded in the vm state file, but this is only a partial measure to protect against accidental corruption, as the disk files and memory file need to be secured as well.",
+   "location": "snapshot-support.md, 'Snapshot files management'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "How restore is fast: MAP_PRIVATE mapping of the memory file, pages loaded on demand, writes go copy-on-write to anonymous memory; the memory file must stay around for the clone's lifetime.",
+   "quote": "Firecracker creates a MAP_PRIVATE mapping of the memory file, resulting in runtime on-demand loading of memory pages. Any subsequent memory writes go to a copy-on-write anonymous memory mapping.",
+   "location": "snapshot-support.md, Snapshotting in Firecracker > Overview",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "Network state is not guaranteed across restore; open vsock connections are closed.",
+   "quote": "Both network and vsock packet loss can be expected on guests that are resumed from snapshots in another Firecracker process. It is also not guaranteed that the state of the network connections survives the process.",
+   "location": "snapshot-support.md, Snapshotting in Firecracker > Overview",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "Snapshots are tied to identical hardware+software configuration.",
+   "quote": "Snapshots must be resumed on an software and hardware configuration which is identical to what they were generated on.",
+   "location": "snapshot-support.md, 'Where can I resume my snapshots?'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "Diff snapshots are still developer preview; restore is slow on cgroup v1 hosts (docs recommend cgroup v2).",
+   "quote": "Diff snapshots are still in developer preview while we are diving deep into how the feature can be combined with guest_memfd support in Firecracker.",
+   "location": "snapshot-support.md, 'Developer preview status'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/snapshotting/snapshot-support.md"
+  },
+  {
+   "finding": "Production rule: always start via the jailer.",
+   "quote": "In production environments, Firecracker should be started only via the jailer binary.",
+   "location": "Firecracker docs/design.md, Host Integration",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "finding": "Jailer operation list (current docs), filesystem step.",
+   "quote": "Call unshare() into a new mount namespace, use pivot_root() to switch the old system root mount point with a new one base in <chroot_dir>, switch the current working directory to the new root, unmount the old root mount point, and call chroot into the current directory.",
+   "location": "docs/jailer.md, 'Jailer Operation'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md"
+  },
+  {
+   "finding": "Jailer hygiene steps: close inherited fds; wipe environment variables; default no-file rlimit 2048; default chroot base /srv/jailer; default --cgroup-version is 1.",
+   "quote": "Close all open file descriptors based on /proc/<jailer-pid>/fd except input, output and error. Cleanup all environment variables received from the parent process.",
+   "location": "docs/jailer.md, 'Jailer Operation'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md"
+  },
+  {
+   "finding": "Jailer copies the Firecracker binary into each jail so processes do not share memory; creates /dev/net/tun and /dev/kvm inside the jail with mknod; chowns them to the target uid:gid.",
+   "quote": "Copy the file specified with --exec-file to <chroot_dir>/<exec_file_name>. This ensures the new process will not share memory with any other Firecracker process.",
+   "location": "docs/jailer.md, 'Jailer Operation'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md"
+  },
+  {
+   "finding": "PID namespace is opt-in (--new-pid-ns).",
+   "quote": "When present, --new-pid-ns causes the jailer to spawn the provided binary into a new PID namespace. It makes use of the libc clone() function with the CLONE_NEWPID flag.",
+   "location": "docs/jailer.md, 'Jailer Usage'",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/jailer.md"
+  },
+  {
+   "finding": "Seccomp details (current docs): default filters, per-thread, loaded before any guest code.",
+   "quote": "Seccomp filters are used by default to limit the host system calls Firecracker can use. The default filters only allow the bare minimum set of system calls and parameters that Firecracker needs in order to function correctly.",
+   "location": "Firecracker docs/design.md, Sandboxing > Seccomp",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "finding": "Paper's 2020 seccomp numbers (historical).",
+   "quote": "The seccomp-bpf profile whitelists 24 syscalls, each with additional argument filtering, and 30 ioctls (of which 22 are required by KVM ioctl-based API).",
+   "location": "NSDI'20 paper, §3.4.1 Jailer (p. 424)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "finding": "Firecracker does NO network filtering — egress control is the host's job. Key for eval sandboxes.",
+   "quote": "Firecracker does not perform any network traffic filtering. All egress traffic from a guest is therefore considered untrusted, and should be filtered at the host-level.",
+   "location": "Firecracker docs/design.md, Internal Architecture > Threat Containment",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "finding": "One Firecracker process per microVM; threads: API, VMM, vCPU(s).",
+   "quote": "Each Firecracker process encapsulates one and only one microVM. The process runs the following threads: API, VMM and vCPU(s).",
+   "location": "Firecracker docs/design.md, Internal Architecture",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "finding": "Creation-rate figure in design.md differs from the 150/s headline.",
+   "quote": "Firecracker supports a steady mutation rate of 5 microVMs per host core per second (e.g., one can create 180 microVMs per second on a host with 36 physical cores).",
+   "location": "Firecracker docs/design.md, Scope > Features",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/design.md"
+  },
+  {
+   "finding": "Size comparison from the paper: QEMU >1.4 million LOC (+120,000 lines of KVM); Firecracker ~50k lines of Rust, '96% fewer lines than QEMU'.",
+   "quote": "Firecracker contains approximately 50k lines of Rust code (96% fewer lines than QEMU), including multiple levels of automated tests, and auto-generated bindings.",
+   "location": "NSDI'20 paper, §2.1.3 Virtualization (p. 422)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "finding": "Paper's measured memory overhead per VMM (128MB-class microVMs).",
+   "quote": "Firecracker has the smallest overhead (around 3MB) of all VMM sizes measured. Cloud Hypervisors overhead is around 13MB per VM. QEMU has the highest overhead of around 131MB per MicroVM.",
+   "location": "NSDI'20 paper, §5.2 Memory overhead (pp. 428-429)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "finding": "Paper concedes typical VM startup is seconds, and that Firecracker replaces QEMU, not Docker/Kubernetes.",
+   "quote": "it replaces QEMU, rather than Docker or Kubernetes, in the container stack.",
+   "location": "NSDI'20 paper, §1 Introduction (p. 420)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "finding": "Paper names gVisor as the 'OS functionality in userspace' approach.",
+   "quote": "One approach to this challenge is to provide some of the operating system functionality in userspace, requiring a significantly smaller amount of kernel functionality to provide the programmer with the appearance of a fully featured environment. Graphene [56], Drawbridge [45], Bascule [6] and Google’s gvisor [15] take this approach.",
+   "location": "NSDI'20 paper, §2.1.1 Linux Containers (p. 421)",
+   "cite_url": "https://www.usenix.org/system/files/nsdi20-paper-agache.pdf"
+  },
+  {
+   "finding": "Needs /dev/kvm; on EC2 the project uses bare-metal (.metal) instances; elsewhere a VM with nested virtualization works (GCE example in docs).",
+   "quote": "We exclusively use .metal instance types, because EC2 only supports KVM on .metal instance types.",
+   "location": "Firecracker docs/getting-started.md, Prerequisites",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md"
+  },
+  {
+   "finding": "Same point, general form.",
+   "quote": "Firecracker uses KVM for the actual resource virtualization, hence setting up a development environment requires either a bare-metal machine (with hardware virtualization), or a virtual machine that supports nested virtualization.",
+   "location": "Firecracker docs/dev-machine-setup.md, introduction",
+   "cite_url": "https://github.com/firecracker-microvm/firecracker/blob/main/docs/dev-machine-setup.md"
+  },
+  {
+   "finding": "Origins: forked from Chromium OS's crosvm; Lambda originally used per-customer EC2 instances for isolation. Users listed on the site include E2B, Fly.io, Kata Containers, Koyeb, Northflank.",
+   "quote": "Firecracker started from Chromium OS's Virtual Machine Monitor, crosvm , an open source VMM written in Rust.",
+   "location": "firecracker-microvm.github.io, FAQ 'Who developed Firecracker?'",
+   "cite_url": "https://firecracker-microvm.github.io/"
+  },
+  {
+   "finding": "Site: jailer described as the second line of defence.",
+   "quote": "The jailer provides a second line of defense in case the virtualization barrier is ever compromised.",
+   "location": "firecracker-microvm.github.io, 'How It Works'",
+   "cite_url": "https://firecracker-microvm.github.io/"
+  },
+  {
+   "finding": "Supported OSes per site: Linux hosts and guests (kernel 4.14 and above per the site FAQ) and OSv guests. No Windows guests.",
+   "quote": "Firecracker supports Linux host and guest operating systems with kernel versions 4.14 and above, as well as OSv guests.",
+   "location": "firecracker-microvm.github.io, FAQ 'What operating systems are supported by Firecracker?'",
+   "cite_url": "https://firecracker-microvm.github.io/"
+  }
+ ],
+ "teaching_notes": "Corrections that matter: (1) The three headline numbers are conditional. '125 ms' is InstanceStart-to-/sbin/init for a minimal kernel/rootfs, serial console off, 1 vCPU/128 MiB — and the paper says 'boots to application code in less than 125ms', the SPEC says '<= 125 ms', the site says '<125ms'. '5 MiB' is VMM overhead on top of guest RAM, workload-dependent; the paper measured ~3MB. '150/s' is per host; design.md says 5 per core per second (180/s on 36 cores). (2) Device list is now FIVE including virtio-vsock. (3) 'No PCI' is 2020-paper-only; main now has developer-preview virtio PCI hotplug. (4) In current docs seccomp is installed by Firecracker itself, not by the jailer; jailer PID/network namespaces are opt-in flags (--new-pid-ns, --netns); the always-on namespace is the mount namespace. (5) The snapshot docs never say 'secrets are in the snapshot' in so many words — they say full guest memory is written, snapshot files are trusted, and users must apply authentication and encryption. (6) The shared-kernel argument quote lives in §1 and §2.1/§2.1.1, and the single best sentence is in §2.1.3 ('moves the security-critical interface from the OS boundary to a boundary supported in hardware and comparatively simpler software'). For evals engineers the snapshot material is the most transferable: cloning N sandboxes from one snapshot duplicates boot_id, machine identifiers, cached randomness and tokens — which can correlate supposedly independent samples and leak whatever was in memory — and network connections do not survive restore. The site (2026) now also advertises 'AWS Lambda MicroVMs', a managed product 'Purpose-built for AI agents'; treat as marketing context only."
+}

@@ -1,0 +1,437 @@
+window.GLOSSARY = {
+  "host": {
+    "name": "Host",
+    "short": "A computer participating in a network.",
+    "def": "A computer participating in a network. A host can run many processes and have several network interfaces."
+  },
+  "process": {
+    "name": "Process",
+    "short": "A running program.",
+    "def": "A running program. A server process must listen on an address and port to accept network connections."
+  },
+  "client": {
+    "name": "Client",
+    "short": "A program acting as the initiator of a request.",
+    "def": "A program acting as the initiator of a request. The same program can be a client on one connection and a server on another."
+  },
+  "server": {
+    "name": "Server",
+    "short": "A program or machine providing a service to clients.",
+    "def": "A program or machine providing a service to clients. Context tells you whether someone means the process, machine, or whole service."
+  },
+  "packet": {
+    "name": "Packet",
+    "short": "A bounded unit of data carried by a network protocol, such as an IP packet.",
+    "def": "A bounded unit of data carried by a network protocol, such as an IP packet. An application message can span many packets."
+  },
+  "frame": {
+    "name": "Frame",
+    "short": "A unit sent over a link-layer network, such as Ethernet.",
+    "def": "A unit sent over a link-layer network, such as Ethernet. A frame can carry an IP packet as its payload."
+  },
+  "protocol": {
+    "name": "Protocol",
+    "short": "An agreement about message formats and behavior between communicating participants, including what they send and how they respond.",
+    "def": "An agreement about message formats and behavior between communicating participants, including what they send and how they respond."
+  },
+  "encapsulation": {
+    "name": "Encapsulation",
+    "short": "Wrapping higher-level data in a lower-level protocol\u2019s headers or other framing.",
+    "def": "Wrapping higher-level data in a lower-level protocol\u2019s headers or other framing. Receivers interpret the layers in reverse order."
+  },
+  "ip-address": {
+    "name": "IP address",
+    "short": "An Internet Protocol address used for delivery in a particular network context.",
+    "def": "An Internet Protocol address used for delivery in a particular network context. An address does not by itself identify a person or grant permission."
+  },
+  "port": {
+    "name": "Port",
+    "short": "A transport-level number that helps distinguish communication endpoints on a host.",
+    "def": "A transport-level number that helps distinguish communication endpoints on a host. TCP port 443 and UDP port 443 are different protocol endpoints."
+  },
+  "socket": {
+    "name": "Socket",
+    "short": "An operating-system communication endpoint used by a process.",
+    "def": "An operating-system communication endpoint used by a process. Network sockets are associated with protocols and addresses; not every socket uses IP."
+  },
+  "loopback": {
+    "name": "Loopback",
+    "short": "An interface for communication within the local network environment.",
+    "def": "An interface for communication within the local network environment. 127.0.0.1 is an IPv4 loopback address; ::1 is its familiar IPv6 counterpart."
+  },
+  "localhost": {
+    "name": "Localhost",
+    "short": "A conventional hostname for loopback.",
+    "def": "A conventional hostname for loopback. Inside a container or Pod, its meaning follows that environment\u2019s network namespace."
+  },
+  "listener": {
+    "name": "Listener",
+    "short": "A server socket waiting for incoming connections on a bound address and port.",
+    "def": "A server socket waiting for incoming connections on a bound address and port. A running process may have no listener, or may listen only on loopback."
+  },
+  "dns": {
+    "name": "DNS",
+    "short": "The Domain Name System: a distributed system for looking up records associated with names.",
+    "def": "The Domain Name System: a distributed system for looking up records associated with names. Resolving an address does not prove the application is reachable."
+  },
+  "resolver": {
+    "name": "Resolver",
+    "short": "Software that performs name lookups.",
+    "def": "Software that performs name lookups. A recursive DNS resolver can obtain answers from other DNS servers and cache them."
+  },
+  "ttl": {
+    "name": "TTL",
+    "short": "Time to live.",
+    "def": "Time to live. In DNS, a cache lifetime for a record. In IP discussions, TTL refers to a different field limiting packet lifetime through hops; do not confuse the two."
+  },
+  "cname": {
+    "name": "CNAME",
+    "short": "A DNS record that makes one name an alias for another canonical name.",
+    "def": "A DNS record that makes one name an alias for another canonical name. Resolving the alias can require additional lookups."
+  },
+  "nxdomain": {
+    "name": "NXDOMAIN",
+    "short": "A DNS response indicating that the queried name does not exist according to that response.",
+    "def": "A DNS response indicating that the queried name does not exist according to that response. It is distinct from a resolver failing to answer."
+  },
+  "cidr": {
+    "name": "CIDR",
+    "short": "Classless Inter-Domain Routing notation represents an address prefix using an address and slash length.",
+    "def": "Classless Inter-Domain Routing notation represents an address prefix using an address and slash length. In IPv4, /24 leaves eight bits for addresses in the range."
+  },
+  "subnet": {
+    "name": "Subnet",
+    "short": "An address range and associated network subdivision.",
+    "def": "An address range and associated network subdivision. Provider rules determine which addresses can be assigned to resources."
+  },
+  "route": {
+    "name": "Route",
+    "short": "A forwarding rule connecting a destination prefix to a next hop or interface.",
+    "def": "A forwarding rule connecting a destination prefix to a next hop or interface. A route alone does not prove permissions or a working return path."
+  },
+  "router": {
+    "name": "Router",
+    "short": "A device or system forwarding traffic between IP networks.",
+    "def": "A device or system forwarding traffic between IP networks. Forwarding commonly uses the most specific matching destination prefix."
+  },
+  "switch": {
+    "name": "Switch",
+    "short": "A device commonly used to forward frames within a link-layer network.",
+    "def": "A device commonly used to forward frames within a link-layer network. Modern hardware may also route IP traffic, so the exact role matters."
+  },
+  "gateway": {
+    "name": "Gateway",
+    "short": "A system connecting or mediating between environments.",
+    "def": "A system connecting or mediating between environments. A default IP gateway forwards packets; an API gateway applies application-level policy. Ask which meaning is intended."
+  },
+  "nat": {
+    "name": "NAT",
+    "short": "Network Address Translation: rewriting address information, often with port mappings so multiple private clients can share public IPv4 addresses.",
+    "def": "Network Address Translation: rewriting address information, often with port mappings so multiple private clients can share public IPv4 addresses."
+  },
+  "ipv4": {
+    "name": "IPv4",
+    "short": "The widely used version of IP with 32-bit addresses, usually written as four decimal octets.",
+    "def": "The widely used version of IP with 32-bit addresses, usually written as four decimal octets. Private and public addressing have different routing contexts."
+  },
+  "ipv6": {
+    "name": "IPv6",
+    "short": "The version of IP with 128-bit addresses.",
+    "def": "The version of IP with 128-bit addresses. A service can have IPv4 and IPv6 paths with different reachability."
+  },
+  "arp": {
+    "name": "ARP",
+    "short": "Address Resolution Protocol: a mechanism for finding a local-link address for a directly reachable IPv4 destination, commonly the next-hop router.",
+    "def": "Address Resolution Protocol: a mechanism for finding a local-link address for a directly reachable IPv4 destination, commonly the next-hop router."
+  },
+  "mtu": {
+    "name": "MTU",
+    "short": "Maximum Transmission Unit: the largest network-layer packet size carried on a link without link-specific fragmentation.",
+    "def": "Maximum Transmission Unit: the largest network-layer packet size carried on a link without link-specific fragmentation. Tunnels and other encapsulation can reduce the usable size."
+  },
+  "tcp": {
+    "name": "TCP",
+    "short": "Transmission Control Protocol: a transport that supplies an ordered, reliable byte stream while a connection is usable.",
+    "def": "Transmission Control Protocol: a transport that supplies an ordered, reliable byte stream while a connection is usable. It does not guarantee application completion."
+  },
+  "udp": {
+    "name": "UDP",
+    "short": "User Datagram Protocol: a transport for datagrams without built-in guarantees of delivery or order.",
+    "def": "User Datagram Protocol: a transport for datagrams without built-in guarantees of delivery or order. Higher-level protocols can add reliability over it."
+  },
+  "quic": {
+    "name": "QUIC",
+    "short": "A secure transport over UDP that supplies streams and congestion control.",
+    "def": "A secure transport over UDP that supplies streams and congestion control. HTTP/3 uses QUIC instead of TCP."
+  },
+  "handshake": {
+    "name": "Handshake",
+    "short": "An exchange used to establish connection state or security parameters.",
+    "def": "An exchange used to establish connection state or security parameters. TCP and TLS have different handshakes."
+  },
+  "flow-control": {
+    "name": "Flow control",
+    "short": "Mechanisms preventing a sender from overwhelming the receiver\u2019s available capacity.",
+    "def": "Mechanisms preventing a sender from overwhelming the receiver\u2019s available capacity. In TCP this is distinct from protecting shared network capacity."
+  },
+  "congestion-control": {
+    "name": "Congestion control",
+    "short": "Mechanisms that adapt sending to shared network capacity.",
+    "def": "Mechanisms that adapt sending to shared network capacity. They are different from application quotas such as requests per minute."
+  },
+  "connection-pool": {
+    "name": "Connection pool",
+    "short": "A finite set of reusable client connections.",
+    "def": "A finite set of reusable client connections. Pool waiting and connection establishment are different contributors to elapsed time."
+  },
+  "tls": {
+    "name": "TLS",
+    "short": "Transport Layer Security: a protocol providing protected communication and authentication mechanisms.",
+    "def": "Transport Layer Security: a protocol providing protected communication and authentication mechanisms. HTTPS normally validates the server\u2019s identity through certificates."
+  },
+  "https": {
+    "name": "HTTPS",
+    "short": "HTTP using a secure transport with server authentication.",
+    "def": "HTTP using a secure transport with server authentication. Successful HTTPS does not guarantee API authorization or a correct model answer."
+  },
+  "certificate": {
+    "name": "Certificate",
+    "short": "A signed statement binding identity information to a public key under a trust system.",
+    "def": "A signed statement binding identity information to a public key under a trust system. Clients validate the chain, name, dates, and applicable rules."
+  },
+  "sni": {
+    "name": "SNI",
+    "short": "Server Name Indication: TLS information identifying the hostname the client intends to contact, allowing servers to select appropriate configuration and certificates.",
+    "def": "Server Name Indication: TLS information identifying the hostname the client intends to contact, allowing servers to select appropriate configuration and certificates."
+  },
+  "mtls": {
+    "name": "mTLS",
+    "short": "Mutual TLS: TLS with certificate-based client authentication as well as server authentication.",
+    "def": "Mutual TLS: TLS with certificate-based client authentication as well as server authentication. It is not automatically used by ordinary API-key-based HTTPS."
+  },
+  "authentication": {
+    "name": "Authentication",
+    "short": "Establishing an identity.",
+    "def": "Establishing an identity. TLS server identity and the client\u2019s API identity are separate authentication questions."
+  },
+  "authorization": {
+    "name": "Authorization",
+    "short": "Deciding what an identified caller is permitted to do.",
+    "def": "Deciding what an identified caller is permitted to do. A reachable service can still reject an authenticated request."
+  },
+  "http": {
+    "name": "HTTP",
+    "short": "Hypertext Transfer Protocol: application-level request/response semantics, including methods, fields, and status codes.",
+    "def": "Hypertext Transfer Protocol: application-level request/response semantics, including methods, fields, and status codes. HTTP versions differ in framing and transport."
+  },
+  "header": {
+    "name": "Header",
+    "short": "A field carrying message metadata, such as Content-Type or Authorization.",
+    "def": "A field carrying message metadata, such as Content-Type or Authorization. Some headers are sensitive and should be redacted from diagnostics."
+  },
+  "api": {
+    "name": "API",
+    "short": "Application Programming Interface: a contract for interacting with software.",
+    "def": "Application Programming Interface: a contract for interacting with software. A network API adds application rules above its underlying protocols."
+  },
+  "rpc": {
+    "name": "RPC",
+    "short": "Remote Procedure Call: a style of invoking an operation on another process or machine.",
+    "def": "Remote Procedure Call: a style of invoking an operation on another process or machine. Failures can leave uncertainty about whether remote work happened."
+  },
+  "grpc": {
+    "name": "gRPC",
+    "short": "An RPC framework commonly using HTTP/2 and Protocol Buffers.",
+    "def": "An RPC framework commonly using HTTP/2 and Protocol Buffers. Its application status must be interpreted in addition to the HTTP exchange."
+  },
+  "cors": {
+    "name": "CORS",
+    "short": "Cross-Origin Resource Sharing: browser-enforced rules governing a page\u2019s access to responses from other origins.",
+    "def": "Cross-Origin Resource Sharing: browser-enforced rules governing a page\u2019s access to responses from other origins. curl success does not establish browser permission."
+  },
+  "sse": {
+    "name": "SSE",
+    "short": "Server-sent events: a text event-stream format commonly used for server-to-client streaming over HTTP.",
+    "def": "Server-sent events: a text event-stream format commonly used for server-to-client streaming over HTTP. Event framing and application completion are separate concerns."
+  },
+  "websocket": {
+    "name": "WebSocket",
+    "short": "A protocol for bidirectional messages over a persistent connection.",
+    "def": "A protocol for bidirectional messages over a persistent connection. It differs from SSE and from raw TCP read boundaries."
+  },
+  "ttft": {
+    "name": "Time to first token",
+    "short": "Elapsed time until the client identifies the first generated content token or event under a stated measurement definition.",
+    "def": "Elapsed time until the client identifies the first generated content token or event under a stated measurement definition. It is distinct from first byte and completion latency."
+  },
+  "latency": {
+    "name": "Latency",
+    "short": "Elapsed time for a defined operation.",
+    "def": "Elapsed time for a defined operation. Always name the boundaries: connection setup, first token, completed response, or whole logical sample."
+  },
+  "rtt": {
+    "name": "RTT",
+    "short": "Round-trip time: elapsed time for a network exchange to go to a destination and back.",
+    "def": "Round-trip time: elapsed time for a network exchange to go to a destination and back. It is not the same as total model response time."
+  },
+  "bandwidth": {
+    "name": "Bandwidth",
+    "short": "A capacity for carrying data, commonly measured in bits per second.",
+    "def": "A capacity for carrying data, commonly measured in bits per second. It differs from achieved throughput and from latency."
+  },
+  "throughput": {
+    "name": "Throughput",
+    "short": "The achieved rate of useful work, such as completed samples per second.",
+    "def": "The achieved rate of useful work, such as completed samples per second. Specify whether you count attempts, logical samples, bytes, or tokens."
+  },
+  "percentile": {
+    "name": "Percentile",
+    "short": "A value locating an observation within a distribution under a chosen convention.",
+    "def": "A value locating an observation within a distribution under a chosen convention. Tail percentiles need enough observations and a clear failure-handling policy."
+  },
+  "concurrency": {
+    "name": "Concurrency",
+    "short": "The number of operations active at the same time.",
+    "def": "The number of operations active at the same time. It is not a rate per minute and does not by itself enforce a provider quota."
+  },
+  "rate-limit": {
+    "name": "Rate limit",
+    "short": "A restriction on work over time, such as requests or tokens within a policy window.",
+    "def": "A restriction on work over time, such as requests or tokens within a policy window. Limits can apply across many workers or clients."
+  },
+  "backpressure": {
+    "name": "Backpressure",
+    "short": "Slowing or limiting upstream production when downstream capacity is constrained, so waiting and resource use stay bounded.",
+    "def": "Slowing or limiting upstream production when downstream capacity is constrained, so waiting and resource use stay bounded."
+  },
+  "timeout": {
+    "name": "Timeout",
+    "short": "A limit on a particular wait.",
+    "def": "A limit on a particular wait. Library semantics vary; distinguish connection, pool, idle-read, and total-operation limits."
+  },
+  "deadline": {
+    "name": "Deadline",
+    "short": "A time budget or cutoff for an operation.",
+    "def": "A time budget or cutoff for an operation. An end-to-end deadline must account for its included waits and retries."
+  },
+  "retry": {
+    "name": "Retry",
+    "short": "Another attempt after an outcome that the policy deems retryable.",
+    "def": "Another attempt after an outcome that the policy deems retryable. It can duplicate work and should retain its own attempt identity."
+  },
+  "idempotency": {
+    "name": "Idempotency",
+    "short": "The property that repeating an operation has the same intended effect as performing it once.",
+    "def": "The property that repeating an operation has the same intended effect as performing it once. It does not imply identical responses or zero additional cost."
+  },
+  "jitter": {
+    "name": "Jitter",
+    "short": "In retry policies, randomized delay that reduces synchronized retries.",
+    "def": "In retry policies, randomized delay that reduces synchronized retries. In network performance discussions, it can instead mean variation in delay."
+  },
+  "proxy": {
+    "name": "Proxy",
+    "short": "An intermediary handling traffic on behalf of a caller or service.",
+    "def": "An intermediary handling traffic on behalf of a caller or service. It can affect destinations, security boundaries, buffering, timing, and error responses."
+  },
+  "load-balancer": {
+    "name": "Load balancer",
+    "short": "A component distributing traffic across backends.",
+    "def": "A component distributing traffic across backends. Its decision unit may be a connection or an application request, depending on its layer and implementation."
+  },
+  "vpc": {
+    "name": "VPC",
+    "short": "Virtual Private Cloud: AWS terminology for a configurable virtual network.",
+    "def": "Virtual Private Cloud: AWS terminology for a configurable virtual network. It contains addressing and connectivity configuration, not automatic trust or encryption."
+  },
+  "egress": {
+    "name": "Egress",
+    "short": "Traffic leaving an environment.",
+    "def": "Traffic leaving an environment. An eval worker\u2019s outbound model request is egress from the worker network."
+  },
+  "ingress": {
+    "name": "Ingress",
+    "short": "Traffic entering an environment.",
+    "def": "Traffic entering an environment. Kubernetes also uses Ingress as the name of an API object describing incoming HTTP routing."
+  },
+  "security-group": {
+    "name": "Security group",
+    "short": "In AWS, a stateful allow control associated with resources.",
+    "def": "In AWS, a stateful allow control associated with resources. It is separate from route tables, network ACLs, and application authorization."
+  },
+  "network-namespace": {
+    "name": "Network namespace",
+    "short": "An isolated view of networking resources such as interfaces, routes, and sockets.",
+    "def": "An isolated view of networking resources such as interfaces, routes, and sockets. Containers can have separate namespaces or deliberately share one."
+  },
+  "container": {
+    "name": "Container",
+    "short": "An isolated process environment using operating-system facilities.",
+    "def": "An isolated process environment using operating-system facilities. Its networking depends on namespace and runtime configuration, not merely on its image."
+  },
+  "pod": {
+    "name": "Pod",
+    "short": "A Kubernetes unit whose containers share networking and some other resources.",
+    "def": "A Kubernetes unit whose containers share networking and some other resources. localhost can connect containers in the same Pod, not arbitrary Pods."
+  },
+  "service": {
+    "name": "Kubernetes Service",
+    "short": "An abstraction for accessing a set of backends.",
+    "def": "An abstraction for accessing a set of backends. A typical ClusterIP Service provides stable cluster-internal access, but other Service types and headless Services exist."
+  },
+  "endpointslice": {
+    "name": "EndpointSlice",
+    "short": "A Kubernetes object describing network endpoints associated with a Service.",
+    "def": "A Kubernetes object describing network endpoints associated with a Service. Checking it helps distinguish a Service name from usable backend targets."
+  },
+  "networkpolicy": {
+    "name": "NetworkPolicy",
+    "short": "A Kubernetes object constraining selected traffic flows when enforced by a supporting network plugin.",
+    "def": "A Kubernetes object constraining selected traffic flows when enforced by a supporting network plugin. Its presence alone does not prove enforcement."
+  },
+  "region": {
+    "name": "Region",
+    "short": "A provider-defined geographical deployment area.",
+    "def": "A provider-defined geographical deployment area. Different regions can imply different routes, latency, availability assumptions, and transfer costs."
+  },
+  "availability-zone": {
+    "name": "Availability zone",
+    "short": "A provider-defined isolated deployment location within a region.",
+    "def": "A provider-defined isolated deployment location within a region. Specific failure and placement guarantees depend on the cloud provider."
+  },
+  "nccl": {
+    "name": "NCCL",
+    "short": "NVIDIA\u2019s library for collective communication among GPUs.",
+    "def": "NVIDIA\u2019s library for collective communication among GPUs. Its internal traffic is distinct from the external HTTPS path to a model endpoint."
+  },
+  "trace": {
+    "name": "Trace",
+    "short": "Related observations representing a request\u2019s path through operations.",
+    "def": "Related observations representing a request\u2019s path through operations. A distributed trace depends on instrumentation and propagated context."
+  },
+  "span": {
+    "name": "Span",
+    "short": "A timed operation within a trace, with identifiers and attributes that help relate it to other operations.",
+    "def": "A timed operation within a trace, with identifiers and attributes that help relate it to other operations."
+  },
+  "request-id": {
+    "name": "Request ID",
+    "short": "An identifier supplied or propagated by a component for correlating a request with logs.",
+    "def": "An identifier supplied or propagated by a component for correlating a request with logs. Different systems may use different IDs for the same logical sample."
+  },
+  "attempt": {
+    "name": "Attempt",
+    "short": "One execution of a request or operation.",
+    "def": "One execution of a request or operation. Several attempts may belong to one logical evaluation sample."
+  },
+  "circuit-breaker": {
+    "name": "Circuit breaker",
+    "short": "A policy that temporarily stops calls to a failing dependency and controls recovery probes.",
+    "def": "A policy that temporarily stops calls to a failing dependency and controls recovery probes. It is not a substitute for recording failed or unattempted work."
+  },
+  "sandbox": {
+    "name": "Sandbox",
+    "short": "An environment that constrains code or tool execution.",
+    "def": "An environment that constrains code or tool execution. Its filesystem, identity, and network permissions are part of an agent evaluation\u2019s task conditions."
+  }
+};

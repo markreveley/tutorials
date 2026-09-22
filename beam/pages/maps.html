@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maps: Flat & Hashed</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .heap-stage { height: 230px; }
+  .mblk { position:absolute; width:auto; }
+  .arr { display:flex; flex-wrap:wrap; gap:5px; }
+  .acell { padding:5px 9px; border:1px solid var(--line); border-radius:6px; background:var(--bg-2);
+           font-family:var(--mono); font-size:12px; transition:all .3s; }
+  .acell.k { border-color:var(--accent-2); color:var(--accent-2); }
+  .acell.v { color:var(--imm); }
+  .acell.fresh { border-color:var(--accent); background:rgba(201,138,75,.16); }
+  .acell.shared { border-color:var(--imm); }
+  /* HAMT tree */
+  .trie { display:flex; flex-direction:column; align-items:center; gap:6px; font-family:var(--mono); font-size:12px; }
+  .tnode { display:flex; gap:3px; padding:5px; border:1px solid var(--line); border-radius:7px; background:var(--bg-2); transition:all .3s; }
+  .tslot { width:30px; height:26px; display:flex; align-items:center; justify-content:center;
+           border:1px solid var(--line-soft); border-radius:4px; color:var(--ink-faint); background:var(--bg-3); }
+  .tslot.filled { color:var(--accent-2); border-color:var(--accent-2); }
+  .trow { display:flex; gap:26px; }
+  .tcol { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .leaf2 { padding:5px 10px; border:1px solid var(--imm); border-radius:6px; background:#121a14; color:var(--imm); }
+  .copied { border-color:var(--accent)!important; background:rgba(201,138,75,.16)!important; box-shadow:0 0 0 2px var(--accent); }
+  .dim { opacity:.4; }
+  .onpath { box-shadow:0 0 0 2px var(--accent-2); }
+  .edge { color:var(--ink-faint); font-size:18px; line-height:.5; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 6 · data structures</p>
+    <h1>Maps: Flat &amp; Hashed</h1>
+    <p class="lede">
+      <code>%{}</code> is one syntax, but the BEAM stores maps in <strong>two</strong> completely different
+      shapes depending on size — and the switch is invisible to you. Both reuse the structural-sharing idea
+      from rung 4; they just arrange it differently. This is the last data-structure rung before we drop to
+      the metal.
+    </p>
+
+    <p>
+      A map is a <strong>boxed</strong> term — its header carries the <code>MAP</code> subtag
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.5</a>. What sits behind
+      that header depends on how many keys it has:
+    </p>
+    <ul>
+      <li><strong>Small map → <em>flatmap</em></strong> (up to ~32 keys): keys and values stored in flat,
+          sorted arrays.</li>
+      <li><strong>Large map → <em>hashmap</em></strong> (more than ~32 keys): a <em>Hash Array Mapped Trie</em>
+          (HAMT), a shallow tree indexed by slices of each key's hash.</li>
+    </ul>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">one syntax, two layouts</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <div class="seg" id="mapSeg">
+            <button data-m="flat" class="on">small map · flatmap</button>
+            <button data-m="hash">large map · hashmap (HAMT)</button>
+          </div>
+          <button class="btn primary" id="mapAct"></button>
+          <button class="btn" id="mapRst">reset</button>
+        </div>
+
+        <div id="flatView">
+          <div class="heap-stage" id="fstage"><svg class="wires" id="fwires"></svg></div>
+        </div>
+        <div id="hashView" style="display:none">
+          <div class="trie" id="trie"></div>
+        </div>
+
+        <div class="readout" id="mapOut"></div>
+        <div class="legend">
+          <span class="key"><span class="swatch" style="background:var(--accent-2)"></span> keys</span>
+          <span class="key"><span class="swatch" style="background:var(--imm)"></span> values / leaves</span>
+          <span class="key"><span class="swatch" style="background:var(--accent)"></span> newly allocated (copied)</span>
+        </div>
+      </div>
+      <div class="viz-foot">The <code>MAP</code> boxed tag is per BEAM Book Ch.4.5. The flatmap/HAMT split and the ~32-key threshold are the OTP implementation (<code>erl_map.h</code>, <code>MAP_SMALL_MAP_LIMIT</code>) — the book's data-structures chapter is still WIP, so treat these as current-implementation detail.</div>
+    </div>
+
+    <h2>Flatmap: sorted arrays, shared keys</h2>
+    <p>
+      A flatmap is essentially two arrays behind the header: a tuple of <strong>keys in term order</strong>
+      and a parallel array of <strong>values</strong>. Lookup searches the sorted keys; because they're sorted,
+      two flatmaps with the same key set can <strong>share the very same keys tuple</strong>. So updating a
+      <em>value</em> (keys unchanged) allocates a new values array but reuses the keys tuple — the same
+      "new container, shared contents" move from rung 4. Adding or removing a <em>key</em> needs a new keys
+      tuple too.
+    </p>
+
+    <h2>Hashmap: a shallow trie indexed by hash</h2>
+    <p>
+      Past the threshold, scanning a sorted array gets slow, so the map becomes a <strong>HAMT</strong>. Each
+      node is a small array; to find a key you hash it and use successive <em>slices</em> of that hash to pick
+      a slot at each level, descending until you hit the leaf. The tree is wide and shallow, so lookups and
+      updates are effectively constant-ish (≈ log₃₂ n levels).
+    </p>
+    <p>
+      The payoff for immutability is <strong>path copying</strong>: updating one key copies only the nodes
+      <em>along the path</em> from the root to that leaf — every untouched subtree is shared with the old map,
+      pointer-for-pointer. A big map update touches a handful of nodes, not the whole structure. Step through
+      a lookup and an update above to see which nodes get copied and which are shared.
+    </p>
+
+    <div class="callout aha">
+      <span class="label">The through-line</span>
+      Tuple update, flatmap value update, HAMT key update — all three are the same principle wearing different
+      clothes: <strong>allocate a new spine, share everything you didn't touch.</strong> Immutability is what
+      makes the sharing safe; the data structure just decides how big the "spine" is.
+    </div>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.4.5 (boxed terms, the <code>MAP</code> tag). Flatmap/HAMT specifics from the OTP source (<code>erts/emulator/beam/erl_map.{h,c}</code>).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('maps');
+
+let mode='flat';
+const fstage=document.getElementById('fstage'), fwires=document.getElementById('fwires');
+
+/* ---------- flatmap view ---------- */
+let flatUpdated=false;
+function renderFlat(){
+  [...fstage.querySelectorAll('.mblk')].forEach(n=>n.remove());
+  fwires.innerHTML=WIKI.arrowDefs('var(--boxed)');
+  // header block
+  fstage.insertAdjacentHTML('beforeend',
+    `<div class="block mblk" id="f_hdr" style="left:14px;top:80px;border-color:var(--violet)">
+       <div class="bhead"><span>%{…}</span><span>map · flatmap</span></div>
+       <div class="slot" id="f_kp"><span class="idx">keys →</span><span class="ptr">→</span></div>
+       <div class="slot" id="f_vp"><span class="idx">values →</span><span class="ptr">→</span></div>
+     </div>`);
+  // shared keys tuple
+  fstage.insertAdjacentHTML('beforeend',
+    `<div class="mblk" id="f_keys" style="left:300px;top:24px">
+       <div style="font-size:11px;color:var(--accent-2);font-family:var(--mono);margin-bottom:4px">sorted keys tuple</div>
+       <div class="arr">${['a','b','c','d'].map(k=>`<span class="acell k">:${k}</span>`).join('')}</div>
+     </div>`);
+  // values array (fresh if updated)
+  const vfresh = flatUpdated;
+  fstage.insertAdjacentHTML('beforeend',
+    `<div class="mblk" id="f_vals" style="left:300px;top:130px">
+       <div style="font-size:11px;color:var(--imm);font-family:var(--mono);margin-bottom:4px">values ${vfresh?'(new array)':''}</div>
+       <div class="arr">${[1,2,3,4].map((v,i)=>`<span class="acell v ${vfresh?'fresh':''}">${i===2&&vfresh?'99':v}</span>`).join('')}</div>
+     </div>`);
+  if(flatUpdated){
+    // old values array, faded, still pointed by old map (conceptual) - keep simple: just annotate
+  }
+  requestAnimationFrame(()=>{
+    fwires.innerHTML=WIKI.arrowDefs('var(--boxed)');
+    WIKI.drawArrow(fwires, document.getElementById('f_kp'), document.getElementById('f_keys'), {color:'var(--accent-2)',width:2.2});
+    WIKI.drawArrow(fwires, document.getElementById('f_vp'), document.getElementById('f_vals'), {color: flatUpdated?'var(--accent)':'var(--imm)', width:2.2});
+  });
+  document.getElementById('mapOut').innerHTML = flatUpdated
+    ? `<code>%{m | c: 99}</code> → a <b style="color:var(--accent)">new values array</b> was allocated, but the <b style="color:var(--accent-2)">keys tuple is shared</b> (keys didn\'t change). Same move as a tuple update — new container, shared contents.`
+    : `A flatmap = header → a sorted <b style="color:var(--accent-2)">keys tuple</b> + a parallel <b style="color:var(--imm)">values array</b>. Press the button to update a value.`;
+}
+
+/* ---------- HAMT view ---------- */
+// fixed tiny trie: root[ _, A, _, B ] ; A -> [x,y,z leaves] ; B -> [p,q leaves]
+let hStep=0; // 0 idle, 1 lookup done, 2 update done
+function renderHash(){
+  const root=document.getElementById('trie');
+  const lookup = hStep>=1, update = hStep>=2;
+  // classes for path: root -> A -> leaf y  (the key we act on hashes down this path)
+  const c = (cond,cls)=>cond?cls:'';
+  root.innerHTML = `
+    <div class="tnode ${c(update,'copied')} ${c(lookup&&!update,'onpath')}" id="n_root">
+      <div class="tslot">·</div>
+      <div class="tslot filled ${c(lookup,'onpath')}">A</div>
+      <div class="tslot">·</div>
+      <div class="tslot filled">B</div>
+    </div>
+    <div class="edge">╱        ╲</div>
+    <div class="trow">
+      <div class="tcol">
+        <div class="tnode ${c(update,'copied')} ${c(lookup&&!update,'onpath')}" id="n_A">
+          <div class="tslot filled">x</div>
+          <div class="tslot filled ${c(lookup,'onpath')}">y</div>
+          <div class="tslot filled">z</div>
+        </div>
+        <div class="edge">| | |</div>
+        <div style="display:flex;gap:8px">
+          <div class="leaf2 ${c(update,'dim')}">:x→1</div>
+          <div class="leaf2 ${c(update,'copied')}">:y→${update?'99':'2'}</div>
+          <div class="leaf2 ${c(update,'dim')}">:z→3</div>
+        </div>
+      </div>
+      <div class="tcol ${c(update,'dim')}">
+        <div class="tnode" id="n_B">
+          <div class="tslot filled">p</div>
+          <div class="tslot filled">q</div>
+        </div>
+        <div class="edge">| |</div>
+        <div style="display:flex;gap:8px">
+          <div class="leaf2">:p→4</div>
+          <div class="leaf2">:q→5</div>
+        </div>
+      </div>
+    </div>`;
+  let msg;
+  if(hStep===0) msg = `A HAMT. To find <code>:y</code>, hash it and use slices of the hash to pick a slot at each level. Press <b>lookup</b>.`;
+  else if(hStep===1) msg = `<b style="color:var(--accent-2)">Lookup :y</b> — hash slice 1 picks root slot <b>A</b>; slice 2 picks node-A slot <b>y</b> → leaf <code>:y→2</code>. Two hops, no scan of unrelated keys.`;
+  else msg = `<b style="color:var(--accent)">Update :y→99</b> — only the nodes on the path were copied: <b>root</b>, <b>node A</b>, and the <b>leaf</b>. Subtree <b>B</b> and leaves :x, :z are <b>shared</b> with the old map, untouched. A handful of new words, not a whole rebuild.`;
+  document.getElementById('mapOut').innerHTML = msg;
+}
+
+function setMode(m){
+  mode=m;
+  document.querySelectorAll('#mapSeg button').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
+  document.getElementById('flatView').style.display = m==='flat'?'':'none';
+  document.getElementById('hashView').style.display = m==='hash'?'':'none';
+  if(m==='flat'){ document.getElementById('mapAct').textContent='%{m | c: 99}  (update a value)'; renderFlat(); }
+  else { hStep=0; renderHash(); syncHashBtn(); }
+}
+function syncHashBtn(){
+  const labels=['lookup :y →','update :y → 99','done — reset to replay'];
+  const btn=document.getElementById('mapAct');
+  btn.textContent=labels[hStep];
+  btn.disabled = hStep>=2;
+}
+document.getElementById('mapSeg').addEventListener('click',e=>{const b=e.target.closest('button'); if(b) setMode(b.dataset.m);});
+document.getElementById('mapAct').addEventListener('click',()=>{
+  if(mode==='flat'){ flatUpdated=true; renderFlat(); }
+  else if(hStep<2){ hStep++; renderHash(); syncHashBtn(); }
+});
+document.getElementById('mapRst').addEventListener('click',()=>{
+  if(mode==='flat'){ flatUpdated=false; renderFlat(); }
+  else { hStep=0; renderHash(); syncHashBtn(); }
+  document.getElementById('mapAct').disabled=false;
+});
+window.addEventListener('resize',()=>{ if(mode==='flat') renderFlat(); });
+setMode('flat');
+</script>
+</body>
+</html>

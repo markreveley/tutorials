@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cost Frontiers and Time Horizons · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 4 · Evaluating Agents</p>
+    <h1>Cost frontiers and time horizons</h1>
+    <p class="lede">
+      Two research programs close out the agents module by fixing the units we measure in. Princeton's
+      "AI Agents That Matter" argues accuracy without cost is meaningless for agents; METR's time-horizon
+      work converts benchmark scores into a unit a human can actually picture. Both are arguments about
+      <em>metric design</em>.
+    </p>
+
+    <h2 id="cost">Accuracy alone cannot identify progress</h2>
+    <p>
+      The Princeton critique starts from an uncomfortable arithmetic fact: agent accuracy "can be
+      improved by scientifically meaningless methods such as retrying." Their illustration: AlphaCode's
+      accuracy climbs from near 0% zero-shot to over 15% with 1,000 retries and over 30% with a million
+      retries.<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, AI Agents That Matter, §2">[Agents That Matter]</a>
+      An axis you can buy your way up isn't measuring intelligence; it's measuring budget. Their fix:
+      <span class="term" data-g="cost-controlled-evaluation">cost-controlled evaluation</span> — report
+      accuracy <em>jointly</em> with dollar cost, as a
+      <span class="term" data-g="pareto-frontier">Pareto frontier</span>, and compare agents only
+      against that frontier.
+    </p>
+    <p>
+      The empirical centerpiece re-evaluated three state-of-the-art HumanEval agents — LDB, LATS, and
+      Reflexion — against three deliberately boring baselines (retry up to five times; "warming," retries
+      with gradually rising temperature; and model escalation, trying cheaper models first). The verified
+      result: "There is no significant accuracy difference between our warming strategy and the
+      best-performing agent architecture" — while "the cost can differ by almost two orders of
+      magnitude." Reflexion and LDB cost over 50% more than warming; LATS over <strong>50 times</strong>
+      more.<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §2.2–2.3, Figure 1">[Agents That Matter]</a>
+      Note the precise claim: the baselines <em>match</em> the complex agents' accuracy at a fraction of
+      the cost — a Pareto improvement, not an accuracy win. The deeper implication: because agent papers
+      hadn't tested simple baselines, "the question of whether debugging, reflection, and other such
+      'System 2' approaches are useful for code generation remains
+      open."<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §2.3">[Agents That Matter]</a>
+      Without a cost axis and a baseline, an entire research narrative had gone unchecked.
+    </p>
+    <div class="callout">
+      <span class="label">Who needs the cost axis — and who doesn't</span>
+      <p>The paper draws a clean line the field had been blurring: "Model evaluation is a scientific
+      question of interest to researchers" — there, abstracting away dollar costs makes sense. "Downstream
+      evaluation is an engineering question that helps inform a procurement decision … Here, cost is the
+      actual construct of interest."<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §4">[Agents That Matter]</a>
+      Their case study of how proxies mislead: NovelQA, by asking all questions about a novel at once,
+      made retrieval look only 2× cheaper than long-context processing when the realistic sequential
+      workload makes it 20× cheaper — "a tenfold overestimate" of RAG's relative
+      cost.<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §4.1">[Agents That Matter]</a>
+      Their practical recommendation: publish input/output token counts alongside dollars, so costs can
+      be recomputed as prices change.</p>
+    </div>
+    <p>
+      Cost corrupts measurement a second way: it prices rigor out. With a SWE-bench run costing
+      potentially over $8,000 (at the SWE-Agent authors' $4-per-task cap across 2,000+ tasks), almost
+      nobody runs replicates — and when the Princeton team ran five, they "found that many reported
+      accuracy scores were above the maximum of five runs that we performed in our reproduction
+      attempts."<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §6">[Agents That Matter]</a>
+      Expensive evals get single runs; single runs get cherry-picked; and the leaderboard inherits the
+      bias. (Module 5 makes the statistical case; the same paper's holdout framework — four levels of
+      intended generality, each demanding a different kind of held-out set, with only 5 of 17 agent
+      benchmarks passing<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §5, Table 1">[Agents That Matter]</a> —
+      already appeared on <a href="13-agentic-benchmark-landscape.html">page 13</a>.)
+    </p>
+
+    <h2 id="metr">METR's time horizon: a unit humans can picture</h2>
+    <p>
+      Benchmark scores don't compose into a picture of <em>how capable</em> agents are getting — 14% on
+      WebArena, 61% on tau-bench retail, 33% on SWE-bench Verified are three incommensurable numbers.
+      METR's contribution is a metric with interpretable units: the
+      <strong>50%-task-completion <span class="term" data-g="time-horizon">time horizon</span></strong> —
+      "the time humans typically take to complete tasks that AI models can complete with 50% success
+      rate."<a class="cite" href="https://arxiv.org/abs/2503.14499" title="Kwa, West et al. 2025/2026, Measuring AI Ability to Complete Long Software Tasks (v3)">[METR]</a>
+      Note the direction: it's a <em>human</em> duration, indexed by model success — "the model has a
+      2-hour horizon" means it succeeds half the time on tasks that take skilled humans two hours, not
+      that the model runs for two hours.
+    </p>
+    <p>
+      The methodology is a model of doing measurement properly, and expensively: a 170-task suite
+      spanning 1-second micro-tasks to 8-hour research engineering; <strong>800+ human baseline runs
+      totaling 2,529 hours</strong> to price each task in human time (geometric mean of successful
+      baselines); then a logistic regression relating an agent's success probability to log task
+      duration, whose midpoint is the agent's horizon — explicitly modeled on psychometrics' item
+      response theory, with human time standing in for learned difficulty. Fit quality: R² ≈ 0.80
+      regressing model success against log human
+      time.<a class="cite" href="https://arxiv.org/abs/2503.14499" title="Kwa, West et al., §3.1, Figure 2">[METR]</a>
+    </p>
+    <p>
+      The headline finding (v3, February 2026): the 50% horizon has <strong>doubled every ~207 days</strong>
+      (95% bootstrapped CI 166–240 days) from 2019 through early 2025 — GPT-2 at 2 seconds, o3 at
+      around 110 minutes — with the most recent models sitting <em>above</em> the long-run trend
+      (o3: p = 0.006), hinting at acceleration.<a class="cite" href="https://arxiv.org/abs/2503.14499" title="Kwa, West et al., §3.2 (v3)">[METR]</a>
+      Naive extrapolation reaches a one-month horizon between mid-2028 and mid-2031 — a projection the
+      authors immediately flag as hostage to external validity and trend
+      changes.<a class="cite" href="https://arxiv.org/abs/2503.14499" title="Kwa, West et al., §4">[METR]</a>
+    </p>
+    <div class="keyidea">
+      <span class="label">The 50% vs 80% finding — this module in one statistic</span>
+      <p>Re-fit the same data demanding 80% success instead of 50%, and the horizons come out
+      <strong>4–6× shorter</strong>, while growing at the same doubling rate (204 vs 207 days). The
+      authors' reading: "even models that sometimes succeed on difficult and diverse tasks cannot
+      reliably perform tasks of moderate length."<a class="cite" href="https://arxiv.org/abs/2503.14499" title="Kwa, West et al., §3.2.1">[METR]</a>
+      That is <a href="14-reliability-pass-hat-k.html">the pass^k lesson</a> in a different coordinate
+      system — and proof that the reliability threshold in your metric is a <em>design choice</em> that
+      changes the answer several-fold. Anyone quoting a time horizon without its success threshold is
+      quoting half a number.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveats the authors put on their own metric</span>
+      <p>The horizon is relative to a task distribution (software and research engineering — not "all
+      work") and to a reference human population: on internal pull-request tasks, external contractors
+      took 5–18× longer than the repository's own maintainers, which shifts the metric by the same
+      factor.<a class="cite" href="https://arxiv.org/abs/2503.14499" title="Kwa, West et al., limitations">[METR]</a>
+      And version your citations: the March 2025 release headlined Claude 3.7 Sonnet at ~50 minutes;
+      the February 2026 v3 headlines o3 at ~110 — same paper, different snapshots. Date-stamp or
+      mislead.</p>
+    </div>
+
+    <h2 id="synthesis">What Module 4 adds up to</h2>
+    <p>
+      Reading an agentic eval now means asking, beyond <a href="02-anatomy-of-an-eval.html">the harness
+      questions</a>: outcome or process? Real or simulated environment, and who verified its graders?
+      What's the human baseline, measured how? Reliability at what threshold — pass^1 or pass^8, 50% or
+      80%? At what cost, against what baseline, on whose holdout? Every one of those is a place a
+      headline number can quietly mean less than it appears — and every one is checkable from public
+      artifacts, as this module's papers demonstrated. The remaining threat is deeper: what if the
+      <em>data itself</em> is compromised, or the score measures the wrong construct entirely? That's
+      <a href="20-validity.html">Module 6</a> — after <a href="16-error-bars.html">Module 5</a> arms you
+      with the statistics.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Sayash Kapoor, Benedikt Stroebl, Zachary S. Siegel, Nitya Nadgir, Arvind Narayanan, "AI Agents That Matter," arXiv:2407.01502, 2024. <a href="https://arxiv.org/abs/2407.01502">arxiv.org/abs/2407.01502</a></li>
+        <li>Thomas Kwa, Ben West et al. (METR), "Measuring AI Ability to Complete Long Software Tasks," arXiv:2503.14499 (v3, February 2026). <a href="https://arxiv.org/abs/2503.14499">arxiv.org/abs/2503.14499</a>; summary at <a href="https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/">metr.org</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

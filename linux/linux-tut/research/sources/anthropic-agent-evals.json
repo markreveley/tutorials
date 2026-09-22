@@ -1,0 +1,52 @@
+{
+  "id": "anthropic-agent-evals",
+  "tag": "[Anthropic: Agent Evals]",
+  "citation": {
+    "authors": "Anthropic (Engineering at Anthropic)",
+    "title": "Demystifying evals for AI agents",
+    "venue": "anthropic.com/engineering",
+    "year": "2026 (Published Jan 09, 2026)",
+    "url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+  },
+  "fetched_urls": [
+    "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+  ],
+  "fetched_on": "2026-09-21",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Statements about environment stability/isolation: each trial should start from a clean environment; shared state between runs (leftover files, cached data, resource exhaustion) causes correlated failures / inflated results — exact wording",
+      "verdict": "confirmed",
+      "finding": "Confirmed almost word for word. Under 'Step 4: Build a robust eval harness with a stable environment': the environment must not 'introduce further noise'; each trial 'isolated' by starting from a clean environment; shared state (leftover files, cached data, resource exhaustion) causes 'correlated failures due to infrastructure flakiness rather than agent performance'; 'Shared state can also artificially inflate performance'; and trials that fail from the same environmental limit (e.g. limited CPU memory) 'are not independent'.",
+      "quote": "Each trial should be \"isolated\" by starting from a clean environment. Unnecessary shared state between runs (leftover files, cached data, resource exhaustion) can cause correlated failures due to infrastructure flakiness rather than agent performance. Shared state can also artificially inflate performance.",
+      "location": "'Step 4: Build a robust eval harness with a stable environment'",
+      "cite_url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+    },
+    {
+      "planned": "Statements about infrastructure flakiness vs model failure, reading transcripts, and grading outcomes (environment state) vs the agent's claims",
+      "verdict": "confirmed",
+      "finding": "Outcome vs claim: 'The outcome is the final state in the environment at the end of the trial. A flight-booking agent might say \"Your flight has been booked\" at the end of the transcript, but the outcome is whether a reservation exists in the environment's SQL database.' Independence: 'If multiple distinct trials fail because of the same limitation in the environment (like limited CPU memory), these trials are not independent because they're affected by the same factor, and the eval results become unreliable for measuring agent performance.' Transcripts: 'When a task fails, the transcript tells you whether the agent made a genuine mistake or whether your graders rejected a valid solution.' Rule: 'we do not take eval scores at face value until someone digs into the details of the eval and reads some transcripts.' Also: 'With frontier models, a 0% pass rate across many trials (i.e. 0% pass@100) is most often a signal of a broken task, not an incapable agent'.",
+      "quote": "As a rule, we do not take eval scores at face value until someone digs into the details of the eval and reads some transcripts. If grading is unfair, tasks are ambiguous, valid solutions are penalized, or the harness constrains the model, the eval should be revised.",
+      "location": "Definitions list (Introduction); Step 4; 'Step 6: Check the transcripts'; Step 7 closing paragraph; Step 2",
+      "cite_url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+    },
+    {
+      "planned": "Any concrete anecdote about an eval environment bug or an agent exploiting the environment (e.g. inspecting git history) — exact wording",
+      "verdict": "confirmed",
+      "finding": "Yes — and note the detail: the git history was from PREVIOUS TRIALS (state shared between runs), which is a different leak from SWE-bench #465 (future upstream history baked into the image). Other anecdotes: Opus 4.5 'initially scored 42% on CORE-Bench' until a researcher found 'rigid grading that penalized \"96.12\" when expecting \"96.124991...\", ambiguous task specs, and stochastic tasks that were impossible to reproduce exactly. After fixing bugs and using a less constrained scaffold, Opus 4.5's score jumped to 95%'; METR time-horizon tasks that 'asked agents to optimize to a stated score threshold, but the grading required exceeding that threshold'; Opus 4.5 solving a τ2-bench flight-booking problem 'by discovering a loophole in the policy. It \"failed\" the evaluation as written, but actually came up with a better solution for the user.'",
+      "quote": "For example, in some internal evals we observed Claude gaining an unfair advantage on some tasks by examining the git history from previous trials.",
+      "location": "Step 4 (git history); Step 5 'Design graders thoughtfully' (CORE-Bench, METR); Introduction (τ2-bench)",
+      "cite_url": "https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents"
+    }
+  ],
+  "extra_findings": [
+    "Vocabulary the course can adopt verbatim: task; trial ('Each attempt at a task is a trial'); grader; transcript ('also called a trace or trajectory... the complete record of a trial, including outputs, tool calls, reasoning, intermediate results'); outcome; evaluation harness ('the infrastructure that runs evals end-to-end. It provides instructions and tools, runs tasks concurrently, records all the steps, grades outputs, and aggregates results'); agent harness (or scaffold). 'When we evaluate \"an agent,\" we're evaluating the harness and the model working together.' (Introduction definitions)",
+    "On grader robustness: 'Make your graders resistant to bypasses or hacks. The agent shouldn't be able to easily \"cheat\" the eval. Tasks and graders should be designed so that passing genuinely requires solving the problem rather than exploiting unintended loopholes.' (Step 5)",
+    "Reference solutions: 'For each task, it's useful to create a reference solution: a known working output that passes all graders. This proves that the task is solvable and verifies graders are correctly configured.' And on hidden path assumptions: if 'the tests assume a particular filepath for the script, the agent might fail through no fault of its own. Everything the grader checks should be clear from the task description'. (Step 2)",
+    "Why agent evals are harder: 'Agents use tools across many turns, modifying state in the environment and adapting as they go—which means mistakes can propagate and compound.' (Introduction)",
+    "Tooling pointer: 'Harbor is designed for running agents in containerized environments, with infrastructure for running trials at scale across cloud providers and a standardized format for defining tasks and graders. Popular benchmarks like Terminal-Bench 2.0 ship through the Harbor registry'. (Appendix: eval frameworks)",
+    "Saturation remark: 'SWE-Bench Verified scores started at 30% this year, and frontier models are now nearing saturation at >80%.' (Step 7; 'this year' = 2025 context)",
+    "Companion post with the quantitative infrastructure-noise results: see note anthropic-infra-noise ([Anthropic: Infra Noise], https://www.anthropic.com/engineering/infrastructure-noise, Feb 05, 2026)."
+  ],
+  "teaching_notes": "The single best quotable paragraph for page 0 and the reset/cleanliness pages is Step 4: clean environment per trial; leftover files, cached data, resource exhaustion; correlated failures; inflated performance; the git-history-from-previous-trials anecdote. Keep the two git incidents distinct: Anthropic's is cross-TRIAL leakage (a reused workspace), SWE-bench #465 is future upstream history shipped inside the image. The 'outcome = final state in the environment, not what the agent says' definition justifies state-based grading by shell. The post itself gives no numbers on infrastructure noise — those are in the companion Feb 2026 post (separate note)."
+}

@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capstone: The Ten-Minute Audit · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 7 · Linux in Eval Harnesses</p>
+    <h1>Capstone: the ten-minute audit</h1>
+    <p class="lede">
+      The whole course as one timed procedure: dropped into a benchmark's task container with a
+      shell, answer the five audit questions from inside, finish the picture from outside, and
+      write down whether scores from this box can be trusted — then defend an environment design
+      of your own.
+    </p>
+
+    <h2 id="scenario">The scenario</h2>
+    <p>
+      A team hands you shell access to one of their task containers and asks: <em>can we trust
+      scores from this?</em> Ten minutes is not enough to prove a box is safe. It is enough to find
+      every problem this course has named, or to show it isn't there, and to say what you did not
+      check. The procedure is five blocks of about two minutes each, after a thirty-second orient.
+      Each block answers one of the five audit questions, and each question exists because a
+      wrong answer changes what the score means.
+    </p>
+    <div class="diagram">  inside the box (audit.sh, ~1 min)       outside the box (~3 min)
+  ---------------------------------       ------------------------------
+  0 orient   who am I? container or VM?   docker inspect  (the policy)
+  1 running  processes, listeners         docker history  (the layers)
+  2 mounted  ro/rw, writable dirs         docker logs     (PID 1 output)
+  3 owns     caps, setuid, answer keys    where does grading run?
+  4 reach    routes, DNS, TCP connects
+  5 logs     cgroup limits, OOM counts    =&gt; write-up: finding, impact,
+                                             fix, residual risk</div>
+
+    <h2 id="procedure">The procedure, block by block</h2>
+    <p>
+      On a full distribution you would use the commands in the second column. Task images are
+      rarely full: <code>ubuntu:24.04</code> has <code>ps</code> but ships without <code>ss</code>,
+      <code>ip</code>, <code>curl</code> or even <code>python3</code> (<a href="../appendices/a-command-reference.html">Appendix
+      A</a> lists which package provides each), and installing them changes the box you were asked
+      to audit — and may be impossible with no network. So the third column reads the same facts
+      from the kernel's own files, which are always there
+      (<a href="09-processes.html">page 9</a>, <span class="term" data-g="proc-filesystem">/proc</span>).
+    </p>
+    <table>
+      <tr><th>Block</th><th>Full-distro commands</th><th>Minimal-image equivalent</th><th>Look for → validity question</th></tr>
+      <tr><td><strong>0 Orient</strong></td><td><code>id; hostname; cat /etc/os-release; uname -r</code></td><td><code>ls -la /.dockerenv; cat /proc/1/cgroup; cat /proc/1/cmdline</code></td><td>uid 0? container or VM? What is PID 1? → Is this the environment the paper describes?</td></tr>
+      <tr><td><strong>1 Running</strong> (<a href="09-processes.html">p9</a>, <a href="17-ports-and-sockets.html">p17</a>)</td><td><code>ps -ef --forest; ss -tulpn; systemctl --failed</code></td><td>Walk <code>/proc/[0-9]*/cmdline</code>; state <code>0A</code> in <code>/proc/net/tcp</code> = listening</td><td>Anything you can't explain — a grader, a leftover from the last rollout, a service the agent could query → are rollouts independent?</td></tr>
+      <tr><td><strong>2 Mounted</strong> (<a href="14-mounts-and-filesystems.html">p14</a>)</td><td><code>findmnt; findmnt -O ro; df -hT</code></td><td><code>findmnt</code> is in util-linux, present; <code>find / -writable -type d</code></td><td>Is <code>/</code> read-only? Which few paths are writable, and does the grader later read any of them? → can the agent change what gets graded?</td></tr>
+      <tr><td><strong>3 Owns</strong> (<a href="07-users-groups-root.html">p7</a>, <a href="08-permissions.html">p8</a>, <a href="21-cgroups-capabilities-seccomp.html">p21</a>, <a href="26-environment-integrity.html">p26</a>)</td><td><code>ls -la / /app /opt; sudo -l</code>; setuid sweep; <code>grep -E 'Cap|NoNew|Seccomp' /proc/self/status</code>; <code>git log --all | head</code></td><td>Same, minus <code>sudo -l</code></td><td>Answer keys, tests, <code>.git</code> history readable; capabilities left → can the agent obtain a pass without doing the task?</td></tr>
+      <tr><td><strong>4 Reach</strong> (<a href="16-addresses-and-routes.html">p16</a>, <a href="19-firewalls-and-egress.html">p19</a>)</td><td>Page 19's <code>probe.sh</code> (uses <code>ip</code>, <code>curl</code>)</td><td><code>/proc/net/route</code>; <code>getent hosts</code>; bash's <code>/dev/tcp</code> with <code>timeout</code></td><td>Internet, metadata service, host → can it fetch the answer, and can it exfiltrate?</td></tr>
+      <tr><td><strong>5 Logs &amp; limits</strong> (<a href="12-resources-and-limits.html">p12</a>, <a href="13-services-and-logs.html">p13</a>)</td><td><code>journalctl -p err</code>; <code>ls /var/log</code></td><td><code>cat /sys/fs/cgroup/{memory.max,cpu.max,pids.max,memory.events}</code></td><td>Budgets set and documented? Any <code>oom_kill</code> already? → are failures the model's or the box's?</td></tr>
+    </table>
+
+    <h2 id="audit-script">audit.sh</h2>
+    <p>
+      The course's rule is that shell scripts stay under thirty lines and anything longer becomes
+      Python (<a href="06-shell-scripting.html">page 6</a>). This one is 61 lines and stays in bash
+      on purpose: it must run in boxes that have bash, coreutils, util-linux and
+      <code>getent</code> and nothing else — and a stock <code>ubuntu:24.04</code> has no Python.
+      It is <strong>read-only</strong>: it reads files and
+      <code>/proc</code>, and its only side effect is three outbound TCP connection attempts. It
+      passes <span class="term" data-g="shellcheck">shellcheck</span>. Because the box's root may
+      be read-only, you feed it on stdin rather than copying it in:
+      <code>docker exec -i NAME bash -s &lt; audit.sh</code>.
+    </p>
+<pre><code>#!/usr/bin/env bash
+# audit.sh: the inside half of the ten-minute audit. READ-ONLY: it reads files and /proc and
+# attempts three outbound TCP connections; it writes nothing. Works in minimal images (no ps, ss,
+# ip or curl needed). The root may be read-only, so feed it on stdin:
+#   docker exec -i NAME bash -s &lt; audit.sh
+set -u
+sec() { printf '\n== %s\n' "$1"; }
+st() { awk -v k="$1:" '$1 == k { print $2 }' /proc/self/status; }
+cg() { cat "/sys/fs/cgroup/$1" 2&gt;/dev/null || echo n/a; }
+prune=(\( -path /proc -o -path /sys -o -path /dev -o -path /usr \) -prune -o)
+
+sec "0 orient: who am I, on what?"
+echo "id:      $(id)"
+echo "os:      $(sed -n 's/^PRETTY_NAME=//p' /etc/os-release | tr -d '"'), kernel $(uname -r) $(uname -m)"
+echo "box:     /.dockerenv $([ -e /.dockerenv ] &amp;&amp; echo present || echo absent); /proc/1/cgroup $(cat /proc/1/cgroup)"
+echo "pid 1:   $(tr '\0' ' ' &lt;/proc/1/cmdline)"
+
+sec "1 running: processes (read from /proc) and listening TCP ports"
+for d in /proc/[0-9]*; do
+  cmd=$(tr '\0' ' ' &lt;"$d/cmdline" 2&gt;/dev/null | cut -c1-60) || continue
+  [ -n "$cmd" ] &amp;&amp; printf '%6s %-8s %s\n' "${d#/proc/}" "$(stat -c %U "$d" 2&gt;/dev/null)" "$cmd"
+done
+while read -r _ local _ state _; do
+  [ "$state" = 0A ] &amp;&amp; echo "listening: TCP port $((16#${local##*:}))"
+done &lt; &lt;(tail -q -n +2 /proc/net/tcp /proc/net/tcp6 2&gt;/dev/null)
+
+sec "2 mounted: filesystems, and where this user can write"
+findmnt -rn -o TARGET,FSTYPE,OPTIONS | awk '$1 !~ /^\/(proc|sys|dev)\// { split($3, o, ","); print "  " o[1], $2, $1 }'
+w=$(find / "${prune[@]}" -type d -writable -print 2&gt;/dev/null)
+echo "writable directories: $(grep -c . &lt;&lt;&lt;"$w"), first few: $(head -4 &lt;&lt;&lt;"$w" | tr '\n' ' ')"
+
+sec "3 owns: privilege, and answers within reach"
+echo "CapEff=$(st CapEff) CapBnd=$(st CapBnd) NoNewPrivs=$(st NoNewPrivs) Seccomp=$(st Seccomp)"
+echo "setuid: $(find / -xdev -perm -4000 -type f 2&gt;/dev/null | tr '\n' ' ')"
+command -v sudo &gt;/dev/null &amp;&amp; echo "sudo: installed"
+find / "${prune[@]}" -type f -readable \( -iname '*expected*' -o -iname '*solution*' \
+  -o -iname '*answer*' -o -iname 'test_hidden*' -o -iname 'run-tests*' \) -print 2&gt;/dev/null |
+  sed 's/^/readable, answer-like: /'
+find / "${prune[@]}" -name .git -type d -print 2&gt;/dev/null | while read -r g; do
+  echo "git repo ${g%/.git}: $(git -C "${g%/.git}" log --all --oneline 2&gt;/dev/null | wc -l) commits on all refs"
+done
+[ -S /var/run/docker.sock ] &amp;&amp; echo "DOCKER SOCKET MOUNTED: root on the host"
+
+sec "4 reach: routes, DNS, three TCP connects (2 s each)"
+for f in /sys/class/net/*/operstate; do  # skip DOWN devices (e.g. fallback tunnels)
+  s=$(cat "$f"); i=${f%/operstate}; [ "$s" != down ] &amp;&amp; echo "interface ${i##*/}: $s"
+done
+echo "IPv4 routes: $(($(wc -l &lt;/proc/net/route) - 1))"
+echo "resolver: $(grep -m1 '^nameserver' /etc/resolv.conf 2&gt;/dev/null || echo none)"
+if timeout 3 getent hosts example.com &gt;/dev/null; then echo "DNS: external names resolve"; else echo "DNS: no"; fi
+for t in example.com:443 1.1.1.1:443 169.254.169.254:80; do
+  if timeout 2 bash -c "exec 3&lt;&gt;/dev/tcp/${t%:*}/${t#*:}" 2&gt;/dev/null; then r=OPEN; else r=closed; fi
+  echo "tcp $t: $r"
+done
+
+sec "5 logs and limits"
+echo "memory.max=$(cg memory.max) cpu.max=$(cg cpu.max | tr ' ' /) pids.max=$(cg pids.max)"
+echo "memory.events: $(cg memory.events | tr '\n' ' ')"
+echo "/var/log: $(find /var/log -mindepth 1 -maxdepth 1 -printf '%f ' 2&gt;/dev/null)"
+if [ -d /run/systemd/system ]; then echo "init: systemd, read journalctl"
+else echo "init: not systemd; the main process's output is in 'docker logs' (outside)"; fi</code></pre>
+    <p>
+      Three details worth reading closely. The listening-port loop decodes
+      <code>/proc/net/tcp</code>, where state <code>0A</code> is LISTEN and the port is hex after
+      the colon — exactly what <code>ss -tln</code> does for you. The reach block uses bash's
+      <code>/dev/tcp/HOST/PORT</code>, a path bash intercepts and turns into a TCP connection, so a
+      box with no <code>curl</code> can still be probed; it answers "can a TCP connection be made",
+      not "does HTTP work", which is enough for an egress question. And the answer-key search
+      matches names, so it finds careless layouts, not determined hiding — a limit to state in the
+      write-up.
+    </p>
+
+    <h3 id="two-reports">Two reports</h3>
+    <p>
+      Run for real against the course's two builds (<a href="26-environment-integrity.html">page
+      26</a>): the sloppy image started with a plain <code>docker run -d</code>, and the hardened
+      one started by <code>run-hardened.sh</code> (<a href="23-hardening-containers.html">page 23</a>).
+      The sloppy audit took three seconds, the hardened one under one.
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-28-sloppy wordfreq-bench:sloppy
+<span class="p">$</span> docker exec -i lt-28-sloppy bash -s &lt; audit.sh
+<span class="o">
+== 0 orient: who am I, on what?
+id:      uid=0(root) gid=0(root) groups=0(root)
+os:      Ubuntu 24.04.5 LTS, kernel 6.10.14-linuxkit aarch64
+box:     /.dockerenv present; /proc/1/cgroup 0::/
+pid 1:   sleep infinity
+
+== 1 running: processes (read from /proc) and listening TCP ports
+     1 root     sleep infinity
+   173 root     bash -s
+
+== 2 mounted: filesystems, and where this user can write
+  <span class="hl">rw overlay /</span>
+  rw proc /proc
+  rw tmpfs /dev
+  ro sysfs /sys
+  rw ext4 /etc/resolv.conf
+  …
+writable directories: <span class="hl">133</span>, first few: / /srv /etc /etc/systemd
+
+== 3 owns: privilege, and answers within reach
+CapEff=00000000a80425fb CapBnd=00000000a80425fb NoNewPrivs=0 Seccomp=0
+setuid: /usr/bin/chfn /usr/bin/newgrp /usr/bin/umount /usr/bin/passwd /usr/bin/chsh /usr/bin/mount /usr/bin/su /usr/bin/gpasswd
+<span class="hl">readable, answer-like: /opt/grader/expected.json
+readable, answer-like: /opt/grader/test_hidden.py
+readable, answer-like: /opt/grader/run-tests.sh
+git repo /app: 2 commits on all refs</span>
+
+== 4 reach: routes, DNS, three TCP connects (2 s each)
+interface eth0: up
+interface lo: unknown
+IPv4 routes: 2
+resolver: nameserver 192.168.65.7
+DNS: external names resolve
+<span class="hl">tcp example.com:443: OPEN
+tcp 1.1.1.1:443: OPEN</span>
+tcp 169.254.169.254:80: closed
+
+== 5 logs and limits
+memory.max=<span class="hl">max</span> cpu.max=max/100000 pids.max=<span class="hl">max</span>
+memory.events: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0
+/var/log: lastlog alternatives.log bootstrap.log faillog wtmp apt btmp dpkg.log
+init: not systemd; the main process's output is in 'docker logs' (outside)</span></code></pre>
+<pre class="term"><code><span class="p">$</span> ./run-hardened.sh lt-28-hard
+<span class="p">$</span> docker exec -i lt-28-hard bash -s &lt; audit.sh
+<span class="o">
+== 0 orient: who am I, on what?
+id:      uid=1001(agent) gid=1001(agent) groups=1001(agent)
+os:      Ubuntu 24.04.5 LTS, kernel 6.10.14-linuxkit aarch64
+box:     /.dockerenv present; /proc/1/cgroup 0::/
+pid 1:   /sbin/docker-init -- sleep infinity
+
+== 1 running: processes (read from /proc) and listening TCP ports
+     1 agent    /sbin/docker-init -- sleep infinity
+   177 agent    bash -s
+     7 agent    sleep infinity
+
+== 2 mounted: filesystems, and where this user can write
+  <span class="hl">ro overlay /</span>
+  rw proc /proc
+  rw tmpfs /dev
+  ro sysfs /sys
+  ro overlay /usr/sbin/docker-init
+  rw tmpfs /tmp
+  rw ext4 /app
+  ro ext4 /etc/resolv.conf
+  …
+writable directories: <span class="hl">4</span>, first few: /tmp /app /app/tests /app/data
+
+== 3 owns: privilege, and answers within reach
+CapEff=<span class="hl">0000000000000000</span> CapBnd=0000000000000000 NoNewPrivs=<span class="hl">1</span> Seccomp=0
+setuid: /usr/bin/chfn /usr/bin/newgrp /usr/bin/umount /usr/bin/passwd /usr/bin/chsh /usr/bin/mount /usr/bin/su /usr/bin/gpasswd
+
+== 4 reach: routes, DNS, three TCP connects (2 s each)
+interface lo: unknown
+IPv4 routes: <span class="hl">0</span>
+resolver: nameserver 192.168.65.7
+DNS: no
+tcp example.com:443: closed
+tcp 1.1.1.1:443: closed
+tcp 169.254.169.254:80: closed
+
+== 5 logs and limits
+memory.max=<span class="hl">536870912</span> cpu.max=100000/100000 pids.max=<span class="hl">128</span>
+memory.events: low 0 high 0 max 0 oom 0 oom_kill 0 oom_group_kill 0
+/var/log: lastlog alternatives.log bootstrap.log faillog wtmp apt btmp dpkg.log
+init: not systemd; the main process's output is in 'docker logs' (outside)</span></code></pre>
+    <p>
+      Read them side by side and each difference is a page of this course. Root with a full
+      <span class="term" data-g="capability">capability</span> set against uid 1001 with none and
+      <code>NoNewPrivs=1</code>, which makes the eight
+      <span class="term" data-g="setuid">setuid</span> binaries still present in both inert
+      (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>). A writable root with 133
+      writable directories against a <span class="term" data-g="read-only-mount">read-only</span>
+      root with four, all of them places the task expects writes. A grader and a git history in
+      reach against none. An open route to the internet against an empty routing table. No
+      budgets against 512 MiB, one CPU and 128 processes.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — read your own report critically</span>
+      <p><code>Seccomp=0</code> in <em>both</em> reports is a property of this authoring machine,
+      whose Docker Desktop daemon runs containers unconfined; a stock Linux Docker Engine applies
+      its default profile and shows 2 (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>).
+      On a real audit that line would be a finding. Likewise <code>resolver: nameserver
+      192.168.65.7</code> in the network-less box is just a file; with zero routes nothing can reach
+      it. An audit report is evidence, and evidence still needs interpreting.</p>
+    </div>
+
+    <h2 id="outside">The outside half</h2>
+    <p>
+      Some questions cannot be answered from inside. The container's configuration — the policy
+      you were promised — lives in the <span class="term" data-g="docker-daemon">daemon</span>, and
+      a solution deleted in a later <span class="term" data-g="layer">layer</span> is invisible to
+      <code>find</code> but not to <code>docker history</code>
+      (<a href="22-docker-for-evals.html">page 22</a>):
+    </p>
+<pre class="term"><code><span class="p">$</span> docker inspect lt-28-sloppy --format 'User={{.Config.User}} Privileged={{.HostConfig.Privileged}} CapDrop={{.HostConfig.CapDrop}} SecurityOpt={{.HostConfig.SecurityOpt}}
+ReadonlyRootfs={{.HostConfig.ReadonlyRootfs}} NetworkMode={{.HostConfig.NetworkMode}} Memory={{.HostConfig.Memory}} NanoCpus={{.HostConfig.NanoCpus}} PidsLimit={{.HostConfig.PidsLimit}}
+Mounts=[{{range .Mounts}}{{.Type}}:{{.Destination}}:rw={{.RW}} {{end}}] Env={{.Config.Env}}'
+<span class="o">User= Privileged=false CapDrop=&lt;no value&gt; SecurityOpt=&lt;no value&gt;
+ReadonlyRootfs=false NetworkMode=bridge Memory=0 NanoCpus=0 PidsLimit=&lt;no value&gt;
+Mounts=[] Env=[PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin]</span>
+<span class="p">$</span> docker inspect lt-28-hard --format '…same template…'
+<span class="o">User=agent Privileged=false CapDrop=[ALL] SecurityOpt=[no-new-privileges]
+ReadonlyRootfs=true NetworkMode=none Memory=536870912 NanoCpus=1000000000 PidsLimit=128
+Mounts=[volume:/app:rw=true ] Env=[PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin]</span>
+<span class="p">$</span> docker history --no-trunc --format '{{.Size}}\t{{.CreatedBy}}' wordfreq-bench:sloppy
+<span class="o">0B      CMD ["sleep" "infinity"]
+4.1kB   WORKDIR /app
+8.19kB  RUN /bin/sh -c rm -rf /tmp/solution # buildkit
+<span class="hl">16.4kB  COPY solution /tmp/solution # buildkit</span>
+24.6kB  COPY grader /opt/grader # buildkit
+283kB   COPY build/repo-with-history /app # buildkit
+…</span></code></pre>
+    <p>
+      Also check from outside: <code>Env</code> for <span class="term" data-g="secret">secrets</span>
+      (<a href="11-environment-and-secrets.html">page 11</a>); the image ID or digest the runs
+      used, so the audit is tied to a specific build (<a href="15-packages-reproducibility.html">page
+      15</a>); and — the question no command answers — <em>where grading runs</em>: in this
+      container after the agent, or in a fresh one on copied-out files
+      (<a href="25-how-harnesses-use-linux.html">page 25</a>). Ask, and read the harness config.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — navigate</span>
+      <p><strong>The inside and outside views check each other.</strong> <code>docker inspect</code>
+      shows what was requested; the inside report shows what the process actually got. They should
+      agree — <code>CapDrop=[ALL]</code> and <code>CapEff=0000000000000000</code>,
+      <code>NetworkMode=none</code> and zero routes. When they don't, the harness is not launching
+      containers the way its config says, and that is the most important finding of the audit,
+      because every other number rests on it. Run the inside half from the harness's own exec path
+      too, as the agent's user, not only from your terminal as root.</p>
+    </div>
+
+    <h2 id="write-up">The write-up</h2>
+    <p>
+      An audit is only useful once someone who wasn't there can act on it. One row per finding:
+      the finding (evidence, quoted), its effect on the validity of scores, the fix, and the
+      residual risk after the fix. Filled for the sloppy build:
+    </p>
+    <table>
+      <tr><th>Finding (evidence)</th><th>Validity impact</th><th>Fix</th><th>Residual risk</th></tr>
+      <tr><td>Hidden tests and <code>expected.json</code> readable at <code>/opt/grader</code> (block 3)</td><td>A pass may come from reading the key: pass rate is an upper bound on skill; integrity rate unknown</td><td>Grader never enters the image; grade outside with <code>grade.sh</code></td><td>Task-specific leaks through the task text itself</td></tr>
+      <tr><td><code>/app</code> history holds the fix on another ref: <code>2 commits on all refs</code></td><td>Same, via <code>git show</code> — reproduced in <a href="27-reading-terminal-transcripts.html#practice">page 27, transcript C</a></td><td>Export the tree without <code>.git</code></td><td>None known for this surface</td></tr>
+      <tr><td>Oracle solution in a layer: <code>COPY solution</code> in <code>docker history</code></td><td>Anyone with the image has the answer; an agent can't reach it from inside, but a published image leaks the benchmark</td><td>Never COPY solutions into task images</td><td>Old image tags already pushed</td></tr>
+      <tr><td>Agent is root, full capabilities, writable root (blocks 0, 2, 3)</td><td>If grading runs in this container, the agent can alter the grader or its inputs</td><td>Non-root user, <code>--cap-drop ALL</code>, <code>--read-only</code>, <code>no-new-privileges</code></td><td>Kernel bugs: container isolation is a shared kernel (<a href="24-isolation-ladder.html">page 24</a>)</td></tr>
+      <tr><td>Internet reachable (block 4)</td><td>Solutions can be fetched; results depend on the outside world on the day of the run</td><td><code>--network none</code>, or an allowlist if the task needs packages</td><td>Allowlisted hosts are still reachable</td></tr>
+      <tr><td>No memory, CPU or pids limits (block 5)</td><td>Runs on different hosts are different tests; a runaway rollout can starve its neighbours</td><td>Set and <em>publish</em> the limits</td><td>Limits too tight turn into infrastructure failures (<a href="12-resources-and-limits.html">page 12</a>)</td></tr>
+    </table>
+    <p>
+      Close with what you did not check: kernel version against known vulnerabilities, the image's
+      supply chain, anything behind the harness. Saying where your evidence ends is part of the
+      result, not a weakness in it.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — auditing the image instead of the rollout</span>
+      <p>Auditing <code>docker run IMAGE</code> from your terminal audits the defaults you typed,
+      not the harness's. The sloppy and hardened reports above come from the <em>same kind of
+      image</em> launched two ways; half of what differs is flags, not Dockerfile. Audit a
+      container the harness itself started, mid-rollout if you can (Inspect's
+      <code>--no-sandbox-cleanup</code> leaves them running for this,
+      <a href="25-how-harnesses-use-linux.html">page 25</a>).</p>
+    </div>
+
+    <h2 id="design-and-defend">Design and defend</h2>
+    <p>
+      The audit is the <em>navigate</em> skill. The job also asks you to <em>design</em> an
+      environment policy and <em>defend</em> it in review. This section is modelled on the
+      networking course's <a href="../../../networking/networking-tut/pages/23-readiness-review.html">readiness
+      review</a>; do it with a colleague or out loud.
+    </p>
+    <h3 id="design-brief">The design brief</h3>
+    <div class="card">
+      <p>A team runs a 150-task agentic coding benchmark, 5 epochs per model. Each task image is
+      built <code>FROM ubuntu:24.04</code> with <code>apt-get install</code> at build time; the
+      agent runs as root with open internet "so it can pip install"; the harness grades by running
+      <code>/tests/run.sh</code> inside the agent's container after the agent stops; all rollouts
+      run on one 64-core host with no per-container limits. Current problems: 7% of rollouts end
+      in 137 with no pattern anyone has found; a new model's score jumped 11 points and nobody can
+      say whether it cheated; last month's re-run of an old model scored 4 points lower with no
+      code change; and a quarter of one model's failures begin with <code>command not found</code>.
+      Propose and defend a revised environment.</p>
+    </div>
+    <h3 id="artifacts">Bring five artifacts</h3>
+    <table>
+      <tr><th>Artifact</th><th>What it must include</th></tr>
+      <tr><td>Environment diagram</td><td>Host, runtime, sandbox, grader, harness; every mount, network path and credential; the <span class="term" data-g="trust-boundary">trust boundaries</span> — what the agent controls, what it can read, what it can reach (<a href="24-isolation-ladder.html">page 24</a>)</td></tr>
+      <tr><td>Sandbox policy</td><td>The exact <code>docker run</code> or compose; user, capabilities, read-only paths, network policy, limits with the reason for each value; the inside-out check that proves it (<a href="23-hardening-containers.html#verify-script">page 23</a>)</td></tr>
+      <tr><td>Rollout record schema</td><td>IDs, image digest, model, epoch, exit code, <code>timed_out</code>, <code>oom_killed</code> (from <code>memory.events</code> or <code>State.OOMKilled</code>), duration, limits applied, outcome category and failure code (<a href="27-reading-terminal-transcripts.html#coding-scheme">page 27</a>), integrity flag</td></tr>
+      <tr><td>Incident report</td><td>One failure from the brief reproduced in your lab: evidence → hypothesis → the next <em>discriminating</em> test → result. The 137s are the obvious candidate (<a href="10-signals-exit-codes.html#one-thirty-seven">page 10</a>)</td></tr>
+      <tr><td>Measurement policy</td><td>How timeouts, kills and environment defects enter the denominator; <code>correct/scheduled</code>, <code>correct/completed</code>, <code>completed/scheduled</code>; how integrity violations are detected and reported beside the pass rate; which is the headline, decided before the run</td></tr>
+    </table>
+    <h3 id="questions-aloud">Questions to answer aloud</h3>
+    <ul>
+      <li>Why does the 11-point jump need an integrity check before a capability claim, and which two surfaces in this design make it most urgent?</li>
+      <li>What evidence would separate "7% OOM kills" from "7% harness timeouts" — and what if it is both?</li>
+      <li>The 4-point drop on re-run: list three environment differences that could cause it without a model change, and how the new design pins each.</li>
+      <li>The <code>command not found</code> failures: model fluency or environment defect? What rule decides, and who writes it?</li>
+      <li>What does removing internet access cost this benchmark, and what do you offer instead?</li>
+    </ul>
+    <h3 id="rubric">An observable readiness rubric</h3>
+    <table>
+      <tr><th>Skill</th><th>Ready enough to build on</th><th>Practice more if…</th></tr>
+      <tr><td><strong>Explain</strong></td><td>You can say, in plain words, how a mount, a uid, a capability or a route changes what a score means</td><td>Your explanations stop at "it's more secure"</td></tr>
+      <tr><td><strong>Diagnose</strong></td><td>You reproduce a failure with the same argv and user, name the last thing that worked, and choose a test that tells causes apart</td><td>Your only move is raising the timeout or re-running</td></tr>
+      <tr><td><strong>Design</strong></td><td>Your policy names each knob, the threat it answers, its cost to the task, and how it's verified from inside</td><td>The policy is a list of flags copied from somewhere, with no check that they took effect</td></tr>
+      <tr><td><strong>Measure</strong></td><td>Every scheduled rollout has one recorded outcome; infrastructure and integrity outcomes are reported, not dropped</td><td>Errors vanish from the denominator without a sentence explaining it</td></tr>
+      <tr><td><strong>Communicate</strong></td><td>You separate observation from hypothesis, state what you didn't check, and name who owns the fix</td><td>You present a plausible cause as proven</td></tr>
+    </table>
+    <p>
+      This rubric is the course's own self-assessment, not an industry certification or a hiring
+      standard. A good answer in review can be "I don't know yet; this observation would
+      distinguish the two possibilities."
+    </p>
+
+    <h2 id="finish-line">The finish line</h2>
+    <p>
+      If you can do this page's audit on a box you have never seen, you can demonstrate — not just
+      claim — concrete things: that you can say what is running, what is mounted and whether it is
+      read-only, who owns what, what the box can reach and where its logs are, from inside, with
+      no tools installed, in ten minutes; that you can decode an exit status into a cause and name
+      the counter that confirms it; that you can turn a default <code>docker run</code> into a
+      sandbox and prove each setting from inside; and that you can read a transcript and say
+      whether the model or the environment failed, with the evidence. Those are observable. Show
+      them with artifacts: an audit write-up of a public benchmark's task image, your
+      <code>audit.sh</code> and its two reports, a coded sample of transcripts. None of this
+      guarantees a job; it gives an interviewer something real to look at.
+    </p>
+    <p>
+      Where to go next: the per-module self-tests and portfolio labs in
+      <a href="../appendices/g-skills-checklist.html">Appendix G</a>; the eval side of the same
+      problems in <a href="../../../evals/evals-tut/pages/11-evaluating-agents.html">Understanding
+      LLM Evals</a> (agents, <a href="../../../evals/evals-tut/pages/19-reproducibility.html">reproducibility</a>,
+      <a href="../../../evals/evals-tut/pages/20-validity.html">validity</a>); the network side in
+      <a href="../../../networking/networking-tut/pages/22-boundaries-and-validity.html">Networking for
+      LLM Evals</a>; the <a href="https://inspect.aisi.org.uk/sandboxing.html">Inspect sandboxing
+      docs</a> to build the harness side; and, for more shell practice,
+      <a href="https://labex.io/linuxjourney">Linux Journey</a>, now maintained by
+      LabEx.<a class="cite" href="https://labex.io/linuxjourney" title="Linux Journey, now at labex.io/linuxjourney (linuxjourney.com redirects)">[Linux Journey]</a>
+    </p>
+
+    <div class="check"><span class="label">Check your understanding</span>
+      <p>
+        You run <code>audit.sh</code> through the harness's own exec path mid-rollout and get
+        <code>uid=1001</code>, <code>CapEff=0000000000000000</code>, a read-only root and
+        <code>IPv4 routes: 0</code>. The benchmark's owner says: "So the environment is clean and
+        the scores are trustworthy." What do you agree with, and what do you still need before you
+        say that?
+      </p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>
+          <strong>Established:</strong> during the agent phase, this rollout's agent was
+          unprivileged, couldn't write outside its allowed paths, and had no network — so the
+          privilege, tampering and fetch-the-answer surfaces are closed <em>for this rollout</em>.
+          <strong>Not established:</strong> (1) where and how grading runs — if it runs later in
+          this container as root with tests copied in, anything the agent left in <code>/app</code>
+          or <code>/tmp</code> (a shadowing module, a background process) is inside the grader's
+          reach; (2) what the <em>image</em> contains that the agent couldn't see but others can
+          (<code>docker history</code>); (3) whether every rollout is launched this way — one
+          audited container is a sample of one; (4) whether the limits cause infrastructure
+          failures, which needs the outcome table, not the audit; (5) what the task text itself
+          leaks. "Clean" is a claim about isolation; "trustworthy scores" also needs grading
+          design, failure accounting and an integrity rate. Agree with the first, ask for the
+          rest.
+        </p>
+      </details>
+    </div>
+
+    <div class="lab"><span class="label">Lab</span>
+      <p>Container lab. Setup: copy <code>audit.sh</code> from this page into a file on your Mac and build the two wordfreq-bench images (<code>research/wordfreq-bench/README.md</code>). Remove every container you start with <code>docker rm -f</code>.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Run <code>audit.sh</code> against <code>wordfreq-bench:sloppy</code> and against a container started with <code>run-hardened.sh</code>. Your reports should match this page's apart from PIDs, kernel version and architecture.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-28-sloppy wordfreq-bench:sloppy
+<span class="p">$</span> ./run-hardened.sh lt-28-hard
+<span class="p">$</span> for c in lt-28-sloppy lt-28-hard; do docker exec -i "$c" bash -s &lt; audit.sh; done</code></pre>
+          <p>Compare line by line with the two reports above. On an Intel Mac or a Linux host, <code>uname -m</code> prints <code>x86_64</code>; on stock Docker Engine, <code>Seccomp</code> reads 2.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Start the <em>hardened image</em> with a plain <code>docker run -d --name lt-28-plain wordfreq-bench:hardened</code>. Before running the audit, write down which lines will differ from the <code>run-hardened.sh</code> report.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec -i lt-28-plain bash -s &lt; audit.sh | grep -E '^id|overlay /$|writable dir|CapEff|routes|tcp ex|memory.max'
+<span class="o">id:      uid=1001(agent) gid=1001(agent) groups=1001(agent)
+  rw overlay /
+writable directories: 7, first few: /var/tmp /tmp /run/lock /home/agent
+CapEff=0000000000000000 CapBnd=00000000a80425fb NoNewPrivs=0 Seccomp=0
+== 4 reach: routes, DNS, three TCP connects (2 s each)
+IPv4 routes: 2
+tcp example.com:443: OPEN
+memory.max=max cpu.max=max/100000 pids.max=max</span></code></pre>
+          <p>The image's <code>USER agent</code> still applies, so uid and <code>CapEff</code> look fine — but the bounding set is full, <code>no_new_privs</code> is off, the root is writable, the network is open and there are no limits. The Dockerfile alone does not make a sandbox; the launch flags do.</p>
+          </details></li>
+        <li><strong>Outside half.</strong> Use <code>docker inspect</code> to show that <code>lt-28-plain</code> and <code>lt-28-hard</code> differ, and find the layer that still carries the oracle in the sloppy image.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> for c in lt-28-plain lt-28-hard; do docker inspect "$c" --format '{{.Name}} RO={{.HostConfig.ReadonlyRootfs}} Net={{.HostConfig.NetworkMode}} CapDrop={{.HostConfig.CapDrop}} Mem={{.HostConfig.Memory}}'; done
+<span class="o">/lt-28-plain RO=false Net=bridge CapDrop=[] Mem=0
+/lt-28-hard RO=true Net=none CapDrop=[ALL] Mem=536870912</span>
+<span class="p">$</span> docker history --no-trunc --format '{{.Size}}\t{{.CreatedBy}}' wordfreq-bench:sloppy | grep solution
+<span class="o">8.19kB  RUN /bin/sh -c rm -rf /tmp/solution # buildkit
+16.4kB  COPY solution /tmp/solution # buildkit</span></code></pre>
+          </details></li>
+        <li><strong>Eval task.</strong> Write the four-column write-up (finding, validity impact, fix, residual risk) for <code>lt-28-plain</code>, with evidence quoted from your two outputs. Then answer: would scores from it be comparable with scores from <code>run-hardened.sh</code>?
+          <details class="solution"><summary>Solution</summary>
+          <p>Findings: open egress (<code>tcp example.com:443: OPEN</code>, <code>NetworkMode=bridge</code>) → results depend on the outside world and answers could be fetched → <code>--network none</code>; writable root (<code>rw overlay /</code>) → if grading runs in-box the agent can plant files the grader imports → <code>--read-only</code> plus tmpfs and a volume for <code>/app</code>; no limits (<code>memory.max=max</code>) → a different test on every host → set and publish limits; full bounding set and <code>NoNewPrivs=0</code> → a setuid binary could restore privileges → <code>--cap-drop ALL</code>, <code>no-new-privileges</code>. Not comparable: the two launches differ in network, resources and writability, each of which can move scores, so they are different environments even though the image is identical.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Linux Journey, now maintained by LabEx. <a href="https://labex.io/linuxjourney">labex.io/linuxjourney</a></li>
+        <li>Inspect AI docs, Sandboxing. <a href="https://inspect.aisi.org.uk/sandboxing.html">inspect.aisi.org.uk/sandboxing.html</a></li>
+        <li>Networking for LLM Evals, lesson 23, "Capstone: explain, diagnose, and defend" (structure of the design-and-defend section). <a href="../../../networking/networking-tut/pages/23-readiness-review.html">networking-tut/pages/23-readiness-review.html</a></li>
+        <li>Facts restated from earlier pages carry those pages' citations: Docker seccomp default (page 21), Inspect sandbox cleanup (page 25), image layers (pages 22, 26).</li>
+        <li>Executed material: <code>research/verify/28-ten-minute-audit.txt</code> and <code>research/verify/28-audit.sh</code> (images <code>wordfreq-bench:sloppy</code> and <code>:hardened</code>, Docker Engine 28.1.1, Docker Desktop on Apple Silicon).</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

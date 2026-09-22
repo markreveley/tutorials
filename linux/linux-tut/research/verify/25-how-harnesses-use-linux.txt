@@ -1,0 +1,217 @@
+# Verification log, page 25. Host: Docker Desktop macOS arm64, Engine 28.1.1. 2026-09-21
+## A. The harness loop by hand (docker CLI on host; image wordfreq-bench:hardened)
+$ docker run -d --name lt-25-box --network none --init wordfreq-bench:hardened
+db55aeef739207128959a8507c8d67d18a60dcfb4bdf8426645dd1dae2bc7c69
+[exit=0]
+$ docker exec lt-25-box id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+[exit=0]
+$ docker exec lt-25-box pwd
+/app
+[exit=0]
+$ docker exec lt-25-box bash -c 'cd /tmp && export FOO=1 && pwd'
+/tmp
+[exit=0]
+$ docker exec lt-25-box bash -c 'pwd; echo FOO=${FOO:-unset}'
+/app
+FOO=unset
+[exit=0]
+$ docker exec --user root --workdir /tmp --env GREETING=hi lt-25-box bash -c 'id -un; pwd; echo $GREETING'
+root
+/tmp
+hi
+[exit=0]
+$ docker exec lt-25-box python3 -m unittest discover -s tests >/tmp/lt25.out 2>/tmp/lt25.err
+[exit=0]
+$ wc -c /tmp/lt25.out /tmp/lt25.err
+       0 /tmp/lt25.out
+      98 /tmp/lt25.err
+      98 total
+[exit=0]
+$ cat /tmp/lt25.err
+.
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+[exit=0]
+$ docker exec lt-25-box python3 wordfreq.py data/sample.txt 3
+3 The
+3 the
+2 on
+[exit=0]
+$ docker exec lt-25-box bash -c 'python3 nosuch.py'
+python3: can't open file '/app/nosuch.py': [Errno 2] No such file or directory
+[exit=2]
+$ docker exec lt-25-box nosuchcmd
+OCI runtime exec failed: exec failed: unable to start container process: exec: "nosuchcmd": executable file not found in $PATH: unknown
+[exit=127]
+$ docker exec lt-25-box timeout 2 sleep 30
+[exit=124]
+$ docker exec lt-25-box timeout -s KILL 2 sleep 30
+[exit=137]
+$ docker exec -i lt-25-box bash -c 'cat > /app/notes.txt' <<< 'written over stdin'
+[exit=0]
+$ docker exec lt-25-box cat /app/notes.txt
+written over stdin
+[exit=0]
+$ docker exec lt-25-box bash -c 'nohup sleep 300 >/dev/null 2>&1 & echo started'
+started
+[exit=0]
+$ docker exec lt-25-box ps -eo pid,ppid,user,args
+  PID  PPID USER     COMMAND
+    1     0 agent    /sbin/docker-init -- sleep infinity
+    7     1 agent    sleep infinity
+   96     1 agent    sleep 300
+   97     0 agent    ps -eo pid,ppid,user,args
+[exit=0]
+$ docker diff lt-25-box
+C /app
+A /app/__pycache__
+A /app/__pycache__/wordfreq.cpython-312.pyc
+A /app/notes.txt
+C /app/tests
+A /app/tests/__pycache__
+A /app/tests/__pycache__/test_basic.cpython-312.pyc
+C /usr
+C /usr/sbin
+A /usr/sbin/docker-init
+[exit=0]
+
+## B. Inspect task. inspect_ai 0.3.266 pip-installed in a Python 3.12 venv (scratch dir). Run with --model mockllm/model (Inspect's built-in mock; NO real model was called).
+### compose.yaml
+services:
+  default:                      # the agent's box: sandbox() with no name
+    image: wordfreq-bench:hardened
+    x-local: true               # built locally; do not try to pull it
+    init: true
+    command: tail -f /dev/null
+    network_mode: none          # a custom compose file must say this itself
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+  grader:                       # a second box the agent never touches
+    image: wordfreq-bench:hardened
+    x-local: true
+    init: true
+    command: tail -f /dev/null
+    network_mode: none
+### wordfreq_task.py (final)
+from pathlib import Path
+
+from inspect_ai import Task, task
+from inspect_ai.agent import react
+from inspect_ai.dataset import Sample
+from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, scorer
+from inspect_ai.solver import TaskState
+from inspect_ai.tool import bash
+from inspect_ai.util import sandbox
+
+GRADER = Path(__file__).parent / "grader"   # hidden tests live on the host
+
+
+@scorer(metrics=[accuracy()])
+def hidden_tests():
+    async def score(state: TaskState, target: Target) -> Score:
+        # copy the one file the task is about OUT of the agent's box ...
+        submission = await sandbox().read_file("/app/wordfreq.py")
+        # ... and INTO a box the agent never had a shell in
+        box = sandbox("grader")
+        await box.write_file("/tmp/sub/wordfreq.py", submission)
+        for name in ("test_hidden.py", "expected.json"):
+            await box.write_file(f"/tmp/grader/{name}", (GRADER / name).read_text())
+        result = await box.exec(
+            ["python3", "-m", "unittest", "discover", "-s", "/tmp/grader", "-p", "test_hidden.py"],
+            cwd="/tmp/sub",          # python -m puts the cwd first on sys.path
+            env={"APP_DIR": "/app"},  # pristine data file from the image
+            timeout=60,
+        )
+        return Score(
+            value=CORRECT if result.success else INCORRECT,
+            explanation=f"exit {result.returncode}\n{result.stderr[-800:]}",
+        )
+
+    return score
+
+
+@task
+def wordfreq():
+    return Task(
+        dataset=[Sample(input="Fix the bug in /app/wordfreq.py so that words are counted "
+                              "case-insensitively and punctuation is ignored.")],
+        solver=react(tools=[bash(timeout=120)]),
+        scorer=hidden_tests(),
+        sandbox=("docker", "compose.yaml"),
+        message_limit=30,
+        time_limit=900,
+    )
+### oracle.py
+from inspect_ai.solver import Generate, TaskState, solver
+from inspect_ai.util import sandbox
+
+FIX = r'''import re, pathlib
+p = pathlib.Path("/app/wordfreq.py"); s = p.read_text()
+s = s.replace("import sys\n", "import re\nimport sys\n")
+s = s.replace("return Counter(text.split())", "return Counter(re.findall(r\"[a-z]+(?:'[a-z]+)*\", text.lower()))")
+p.write_text(s)'''
+
+
+@solver
+def oracle():
+    async def solve(state: TaskState, generate: Generate) -> TaskState:
+        result = await sandbox().exec(["python3", "-c", FIX])
+        assert result.success, result.stderr
+        return state
+    return solve
+### Runs
+1. mockllm, --message-limit 4 (agent does nothing)           -> accuracy 0.000
+2. oracle solver, FIRST scorer version (env PYTHONPATH=/tmp/sub, no cwd) -> accuracy 0.000  (HARNESS BUG:
+   exec ran in WORKDIR /app of the grader box; `python3 -m unittest` puts cwd first on sys.path, so the
+   pristine buggy /app/wordfreq.py shadowed /tmp/sub/wordfreq.py. Found via --no-sandbox-cleanup + docker exec:
+   /tmp/sub/wordfreq.py was fixed, score explanation showed buggy output [('The', 3), ('the', 3), ('on', 2)].)
+3. oracle solver, fixed scorer (cwd="/tmp/sub")               -> accuracy 1.000
+4. mockllm no-op again with fixed scorer                       -> accuracy 0.000
+### --no-sandbox-cleanup output
+│ 1         │ 1     │ inspect-wordfreq-igyde7q-default-1 │
+│           │       │ inspect-wordfreq-igyde7q-grader-1  │
+Cleanup all containers  : inspect sandbox cleanup docker
+$ docker inspect --format '{{.HostConfig.NetworkMode}} mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}} init={{.HostConfig.Init}}' inspect-wordfreq-igyde7q-default-1
+none mem=536870912 pids=128 init=true
+$ docker compose ls | grep inspect
+inspect-wordfreq-igyde7q   running(2)   …/task/compose.yaml
+$ docker exec inspect-wordfreq-igyde7q-default-1 ls /sys/class/net   -> lo + fallback tunnel devices only (authoring-machine quirk)
+$ inspect sandbox cleanup docker  -> both containers Removed
+
+## C. Custom compose without network_mode has egress
+$ docker compose -p lt-25-net up -d 2>&1 | tail -2
+ Container lt-25-net-default-1  Starting
+ Container lt-25-net-default-1  Started
+[exit=0]
+$ docker compose -p lt-25-net exec default getent hosts example.com
+2606:4700:10::ac42:93f3 example.com
+2606:4700:10::6814:179a example.com
+[exit=0]
+$ docker compose -p lt-25-net exec default python3 -c 'import urllib.request as u; print(u.urlopen("http://example.com", timeout=5).status)'
+200
+[exit=0]
+$ docker inspect --format '{{.HostConfig.NetworkMode}}' lt-25-net-default-1
+lt-25-net_default
+[exit=0]
+$ docker compose -p lt-25-net down 2>&1 | tail -2
+ Network lt-25-net_default  Removing
+ Network lt-25-net_default  Removed
+[exit=0]
+$ docker compose -p lt-25-net up -d 2>&1 | tail -1
+ Container lt-25-net-default-1  Started
+[exit=0]
+$ docker compose -p lt-25-net exec default getent hosts example.com
+
+[exit=2]
+$ docker compose -p lt-25-net exec default python3 -c 'import urllib.request as u; print(u.urlopen("http://example.com", timeout=5).status)' 2>&1 | tail -1
+
+[exit=0]
+$ docker compose -p lt-25-net down 2>&1 | tail -1
+ Container lt-25-net-default-1  Removed
+[exit=0]
+$ (network_mode: none) docker compose exec -T default python3 -c ...urlopen...
+

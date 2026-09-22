@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Validating the Grader · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 2 · The Eval Process</p>
+    <h1>Validating the grader</h1>
+    <p class="lede">
+      You built automated graders so you could stop hand-reviewing everything. But a grader is itself a
+      system that can be wrong — so who grades it? This page covers the research that made that question
+      precise: the EvalGen study, its "criteria drift" finding, and what both imply about how eval
+      criteria can ever be trusted.
+    </p>
+
+    <h2 id="the-regress">The validator's regress</h2>
+    <p>
+      The promise of automated evaluation has a circularity at its center. The EvalGen paper — Shankar
+      and colleagues, published at UIST 2024 — states it in one line: "LLM-generated evaluators simply
+      inherit all the problems of the LLMs they evaluate, requiring further human
+      validation."<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, Who Validates the Validators? (UIST '24)">[EvalGen]</a>
+      An unvalidated judge isn't a measurement instrument; it's a second opinion from a colleague of the
+      defendant. The regress has to stop somewhere, and it stops at human judgment — the question is how
+      to spend scarce human judgment so it transfers to the automated layer.
+    </p>
+
+    <h2 id="evalgen">EvalGen: aligning assertions with human grades</h2>
+    <p>
+      EvalGen is the paper's prototype interface for doing exactly that. The workflow: an LLM suggests
+      evaluation <em>criteria</em> for your pipeline; for each criterion it generates several candidate
+      implementations — Python <span class="term" data-g="assertion">assertions</span> or LLM judge
+      prompts; meanwhile the human grades a small sample of real outputs (binary good/bad). The system
+      then selects, per criterion, the candidate implementation whose verdicts best match the human's
+      grades, and shows a report card of how aligned the chosen graders
+      are.<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, Abstract">[EvalGen]</a>
+    </p>
+    <p>
+      "Best match" is defined with care worth learning from. For an assertion set <i>F</i>, the paper
+      defines <span class="term" data-g="judge-alignment">alignment</span> from two components, both
+      measured against the human's grades:
+    </p>
+    <div class="math">Alignment(F) = 2 · Coverage · (1 − FFR) / (Coverage + (1 − FFR))</div>
+    <p>
+      where <strong>coverage</strong> is the fraction of human-graded-<em>bad</em> outputs that at least
+      one assertion catches, and the <strong>false failure rate (FFR)</strong> is the fraction of
+      human-graded-<em>good</em> outputs that some assertion wrongly fails. The formula is the harmonic
+      mean of the two — "very similar to F1 score; however, we are concerned with the precision and
+      recall of failures."<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, §4.1">[EvalGen]</a>
+      (Harmonic means and precision/recall are taught from zero in
+      <a href="../appendices/e-agreement-metrics.html">Appendix E</a>.) Two different mistakes — missing
+      real failures, and crying wolf on good outputs — are kept separate and both punished. Any grader
+      validation scheme you build should preserve that two-sidedness.
+    </p>
+    <p>
+      Does human-in-the-loop selection actually beat full automation? The paper's quantitative
+      comparison says yes: against SPADE, a fully automated assertion-generation baseline, EvalGen
+      "achieved equal or better alignment … with fewer assertions," raising coverage from 49% to 73% on
+      one pipeline with an assertion set less than half the size — using only 16 human-graded outputs
+      per pipeline.<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, Table 1">[EvalGen]</a>
+      Sixteen careful grades is a lunch break. The leverage of small amounts of expert judgment, spent
+      at the right point in the pipeline, is the recurring economic fact of this whole module.
+    </p>
+
+    <h2 id="criteria-drift">Criteria drift: the finding that reframes everything</h2>
+    <p>
+      The paper's most influential result, though, came from watching nine industry practitioners use
+      EvalGen in a think-aloud study. The expectation baked into most eval tooling is a waterfall:
+      decide your criteria, then grade outputs against them. What the study observed instead is now
+      called <span class="term" data-g="criteria-drift">criteria drift</span>: "Grading outputs spurred
+      changes or refinements in participants' criteria," in two distinct
+      ways.<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, §7.3.1">[EvalGen]</a>
+    </p>
+    <ul>
+      <li><strong>New criteria appeared</strong> when participants saw new <em>kinds</em> of bad output
+        they hadn't anticipated.</li>
+      <li><strong>Existing criteria got reinterpreted</strong> as grading continued — one participant's
+        "all entities are proper nouns" relaxed to "most entities are proper nouns" once real outputs
+        made the strict version untenable. Some participants went back and changed their own earlier
+        grades.<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, §7.3.1">[EvalGen]</a></li>
+    </ul>
+    <p>
+      Underneath both is what the authors dub a catch-22: "to grade outputs, people need to externalize
+      and define their evaluation criteria; however, the process of grading outputs helps them to define
+      that very criteria." Their conclusion is stated strongly and is worth quoting exactly, because it
+      is the theoretical justification for this module's entire data-first ordering: criteria drift
+      "implies that it is impossible to completely determine evaluation criteria prior to human judging
+      of LLM outputs."<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, §1">[EvalGen]</a>
+      Or as participant P7 put it: "I think it's hard to know until you see it."
+    </p>
+    <div class="callout">
+      <span class="label">Why this explains earlier advice</span>
+      <p>Criteria drift is the load-bearing fact behind three positions you've already met: error
+      analysis before metrics (<a href="04-error-analysis.html">page 4</a>), "generally no" to
+      eval-driven development (<a href="05-from-failures-to-evals.html">page 5</a>), and open-coding
+      30–50 traces yourself before delegating to an LLM. All three are the same derived rule: criteria
+      are an <em>output</em> of contact with real data, so any process that fixes them in advance is
+      building on guesses.</p>
+    </div>
+
+    <h2 id="subjectivity">Alignment is alignment <em>with someone</em></h2>
+    <p>
+      A quieter finding deserves more attention than it gets. Two participants ended up with the
+      <em>identical</em> code assertion for the same criterion — a check for hashtag characters — and it
+      aligned with one participant's grades but not the other's. The cause: "tacit criteria that
+      participants held which was not explicitly explained in natural
+      language."<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, §7.3.3">[EvalGen]</a>
+      The same words meant different things to different experts. There is no grader that is "aligned"
+      in the abstract — only aligned <em>with a particular person's judgment</em>. This is the
+      empirical case for the <span class="term" data-g="principal-domain-expert">principal domain
+      expert</span> pattern from <a href="03-types-of-evaluators.html">page 3</a>: one designated
+      judgment to align to, rather than an average of several that quietly disagree.
+    </p>
+    <p>
+      Participants also wanted different strictness for different criteria — "there are criteria where
+      you can be okay with failing, and then there are other criteria where you are like, 'this must
+      absolutely pass'"<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, §7.3 (P3)">[EvalGen]</a>
+      — a reminder that a single global threshold over all your graders flattens real differences in
+      stakes. A formatting check and a safety check should not share a tolerance.
+    </p>
+
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>Know the shape of this evidence: the criteria-drift study is qualitative — nine practitioners,
+      one session each, one task (entity extraction over 100 tweets), with each drift type observed in
+      five of the nine participants.<a class="cite" href="https://arxiv.org/abs/2404.12272" title="Shankar et al. 2024, §7">[EvalGen]</a>
+      That's the right method for discovering a phenomenon, not for estimating its prevalence. The
+      finding has spread widely because it names something practitioners recognize instantly — but
+      treat "criteria always drift" as a strong working hypothesis confirmed by experience, not a
+      measured universal.</p>
+    </div>
+
+    <h2 id="practice">What validating-the-grader looks like in practice</h2>
+    <div class="card">
+      <ol>
+        <li><strong>Grade a sample yourself first</strong> (binary + critique) — your grades are the
+          standard the grader must hit, and grading is also how your criteria finish forming.</li>
+        <li><strong>Measure the grader against your grades both ways</strong> — its catch rate on real
+          failures and its false-alarm rate on good outputs, on a held-out set it never saw during
+          development (<a href="10-aligning-judges.html">page 10</a> gives the full workflow).</li>
+        <li><strong>Expect drift, schedule re-validation</strong> — when your criteria shift, yesterday's
+          aligned grader is silently grading the old rules. Re-grade a fresh sample at every error-analysis
+          cycle and re-check agreement.</li>
+        <li><strong>Set per-criterion thresholds</strong> — strict for must-never-fail properties,
+          tolerant where failures are cheap.</li>
+      </ol>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>"Who validates the validators?" has a real answer: a specific human's judgment, captured in a
+      modest number of binary grades with critiques, measured against the grader two-sidedly, and
+      refreshed as the criteria themselves evolve. Validation isn't a one-time certification — it's a
+      standing subscription, because the thing being validated against (your own understanding of
+      quality) is a moving target.</p>
+    </div>
+
+    <p>
+      Next: with graders validated, <a href="07-evals-in-the-lifecycle.html">page 7</a> wires them into
+      the development lifecycle — CI, guardrails, production monitoring, and the flywheel that makes the
+      whole investment compound.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Shreya Shankar, J.D. Zamfirescu-Pereira, Björn Hartmann, Aditya G. Parameswaran, Ian Arawjo, "Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences," UIST '24, DOI 10.1145/3654777.3676450. <a href="https://arxiv.org/abs/2404.12272">arxiv.org/abs/2404.12272</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

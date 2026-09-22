@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shell Scripts Under Thirty Lines · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · The Shell</p>
+    <h1>Shell scripts under thirty lines</h1>
+    <p class="lede">
+      Eval environments are held together by small bash scripts: entrypoints, setup scripts, and the
+      <code>run-tests.sh</code> whose exit status <em>is</em> the score. This page teaches you to read
+      them critically and write them safely — and to recognise the point where you should stop and
+      open Python instead.
+    </p>
+
+    <h2 id="what-a-script-is">A script is a file of commands plus two facts</h2>
+    <p>
+      A <span class="term" data-g="script">script</span> is a text file containing the commands you
+      would otherwise type. Two facts turn that file into something you can run like a program: its
+      first line, and one permission bit. Create a two-line script as the <code>learner</code> user in
+      your <a href="01-lab-setup.html#container-lab">container lab</a> and try to run it:
+    </p>
+<pre class="term"><code><span class="p">$</span> mkdir -p ~/scripts &amp;&amp; cd ~/scripts
+<span class="p">$</span> printf '%s\n' '#!/usr/bin/env bash' 'echo "hello from $0, running as $(whoami)"' &gt; hello.sh
+<span class="p">$</span> ls -l hello.sh
+<span class="o">-rw-r--r-- 1 learner learner 63 Sep 21 16:31 hello.sh</span>
+<span class="p">$</span> ./hello.sh
+<span class="o">bash: ./hello.sh: <span class="hl">Permission denied</span></span>
+<span class="p">$</span> echo $?
+<span class="o"><span class="hl">126</span></span>
+<span class="p">$</span> bash hello.sh
+<span class="o">hello from hello.sh, running as learner</span>
+<span class="p">$</span> chmod +x hello.sh
+<span class="p">$</span> ./hello.sh
+<span class="o">hello from ./hello.sh, running as learner</span></code></pre>
+    <p>
+      Exit status 126 is the shell's code for "found, but not executable"; 127 is "not
+      found".<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a>
+      (Both were introduced on <a href="02-shell-and-commands.html#a-path-walkthrough">page 2</a>.)
+      The file had no <code>x</code> in its mode string, so the kernel refused to execute it.
+      <code>bash hello.sh</code> worked anyway because there the program being executed is
+      <code>bash</code>, and the script is merely a file it <em>reads</em>. <code>chmod +x</code> adds
+      the execute bit; <a href="08-permissions.html">page 8</a> explains the bits properly.
+    </p>
+    <p>
+      The first line, <code>#!/usr/bin/env bash</code>, is the
+      <span class="term" data-g="shebang">shebang</span>. When the kernel is asked to execute a file
+      that starts with the two bytes <code>#!</code>, it runs the named interpreter instead and hands
+      it the script's path. <code>/usr/bin/env bash</code> means "whichever <code>bash</code> is first
+      on <code>PATH</code>". The shebang is a promise about which language the file is written in,
+      and it matters more than it looks:
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — <code>sh</code> is not <code>bash</code></span>
+      <p>On Ubuntu and Debian, <code>/bin/sh</code> is a smaller, faster shell called dash. A script
+      that says <code>#!/bin/sh</code> but uses bash features fails there:</p>
+<pre class="term"><code><span class="p">$</span> ls -l /bin/sh
+<span class="o">lrwxrwxrwx 1 root root 4 Mar 31  2024 /bin/sh -&gt; dash</span>
+<span class="p">$</span> sh -c 'set -o pipefail; echo ok'; echo "exit status: $?"
+<span class="o">sh: 1: set: Illegal option -o pipefail
+exit status: 2</span></code></pre>
+      <p><code>pipefail</code> (below) was added to the
+      <span class="term" data-g="posix">POSIX</span> standard in its 2024 edition, but dash on Ubuntu
+      24.04 still rejects it, as do arrays and
+      <code>[[ ]]</code>.<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#set" title="POSIX.1-2024, XCU 2.15 set, CHANGE HISTORY Issue 8; dash behaviour executed on ubuntu:24.04">[POSIX]</a>
+      The opposite failure happens on <span class="term" data-g="alpine">Alpine</span> images, which
+      ship no bash at all: running this course's grader script there prints
+      <code>env: can't execute 'bash': No such file or directory</code> and exits 127. If a script
+      uses bash features, say <code>bash</code> in the shebang, and make sure the image has it.</p>
+    </div>
+
+    <h2 id="quoting">Variables and the one quoting rule</h2>
+    <p>
+      Assign with <code>name=value</code> (no spaces around <code>=</code>), read with
+      <code>$name</code>. The trap is what bash does <em>after</em> substituting the value. An
+      unquoted <span class="term" data-g="variable-expansion">expansion</span> is split into separate
+      words at spaces, tabs and newlines, and each word is then treated as a
+      <span class="term" data-g="glob">glob</span> pattern; inside double quotes neither
+      happens.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Double-Quotes" title="Bash Reference Manual, 3.1.2.3 Double Quotes; 3.5.7 Word Splitting; 3.5.8 Filename Expansion">[Bash Manual]</a>
+      A filename with a space in it shows the damage:
+    </p>
+<pre class="term"><code><span class="p">$</span> mkdir q &amp;&amp; cd q
+<span class="p">$</span> touch "run 1.log" run.log 1.log
+<span class="p">$</span> f="run 1.log"
+<span class="p">$</span> rm $f
+<span class="o">rm: cannot remove 'run': No such file or directory</span>
+<span class="p">$</span> ls -1
+<span class="o">run 1.log
+run.log</span></code></pre>
+    <p>
+      <code>rm</code> received two arguments, <code>run</code> and <code>1.log</code>. One did not
+      exist; the other did, and it is gone: the wrong file was deleted, and the one you meant
+      survived. With <span class="term" data-g="quoting">quoting</span>, <code>rm "$f"</code> passes
+      one argument and removes <code>run 1.log</code>. The same applies to a script's own arguments.
+      <code>$1</code>, <code>$2</code>… are the positional parameters, <code>$#</code> their count,
+      and <code>"$@"</code> means "all of them, each as its own word, exactly as received":
+    </p>
+<pre><code>#!/usr/bin/env bash
+echo "got $# arguments"
+printf '  unquoted: &lt;%s&gt;\n' $@
+printf '  quoted:   &lt;%s&gt;\n' "$@"</code></pre>
+<pre class="term"><code><span class="p">$</span> ./args.sh "run 1.log" other.log
+<span class="o">got 2 arguments
+  unquoted: &lt;run&gt;
+  unquoted: &lt;1.log&gt;
+  unquoted: &lt;other.log&gt;
+  quoted:   &lt;run 1.log&gt;
+  quoted:   &lt;other.log&gt;</span></code></pre>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      Put double quotes around every <code>"$var"</code>, every <code>"$(command)"</code>, and always
+      write <code>"$@"</code>. You do not need to remember when it is safe to omit them; it is never
+      wrong to include them. Single quotes are for text that must not be expanded at all.
+    </div>
+    <p>
+      <code>$(…)</code> is <span class="term" data-g="command-substitution">command
+      substitution</span> from <a href="04-streams-pipes-redirection.html#here-docs">page 4</a>: run
+      the command, substitute its output. <code>n=$(wc -l &lt; results.jsonl)</code> is how a script
+      gets a value out of a program.
+    </p>
+
+    <h2 id="control-flow">Exit codes are the control flow</h2>
+    <p>
+      In most languages <code>if</code> tests a boolean. In the shell, <code>if</code> runs a
+      <em>command</em> and branches on its <span class="term" data-g="exit-status">exit status</span>:
+      0 is true, anything else is false.
+    </p>
+<pre class="term"><code><span class="p">$</span> if grep -q learner /etc/passwd; then echo "found"; else echo "missing"; fi
+<span class="o">found</span>
+<span class="p">$</span> if grep -q nosuchuser /etc/passwd; then echo "found"; else echo "missing"; fi
+<span class="o">missing</span>
+<span class="p">$</span> type [ [[
+<span class="o">[ is a shell builtin
+[[ is a shell keyword</span></code></pre>
+    <p>
+      That is why the square brackets look odd: <code>[</code> is a command (a
+      <span class="term" data-g="builtin">builtin</span>) whose job is to evaluate a test and exit 0
+      or 1, and <code>]</code> is just its last argument. <code>[[ … ]]</code> is bash's improved
+      version, built into the grammar, so it does not word-split its contents. The tests you will meet
+      in eval scripts are few: <code>-f path</code> (is a regular file), <code>-d path</code> (is a
+      directory), <code>-z "$s"</code> (string is empty), <code>-n "$s"</code> (non-empty),
+      <code>==</code> for strings, and <code>-eq -ne -lt -gt</code> for integers. The difference
+      between the two bracket forms is again quoting:
+    </p>
+<pre class="term"><code><span class="p">$</span> w="two words"
+<span class="p">$</span> [ -n $w ] &amp;&amp; echo non-empty
+<span class="o">bash: [: two: binary operator expected</span>
+<span class="p">$</span> [[ -n $w ]] &amp;&amp; echo non-empty
+<span class="o">non-empty</span></code></pre>
+    <p>
+      In a bash script use <code>[[ ]]</code>; in a <code>#!/bin/sh</code> script you only have
+      <code>[ ]</code>, so quote everything. <code>a &amp;&amp; b</code> runs <code>b</code> only if
+      <code>a</code> succeeded, <code>a || b</code> only if it failed — hence the idiom
+      <code>cd "$dir" || exit 1</code>.
+    </p>
+
+    <h3 id="loops-and-functions">Loops and functions</h3>
+    <p>
+      Two loops cover nearly everything: <code>for</code> over a glob, and
+      <code>while read -r</code> over the lines of a file (<code>-r</code> stops <code>read</code>
+      from interpreting backslashes). A function is a named group of commands with its own
+      <code>$1</code>, <code>$2</code>; its "return value" is the exit status of its last command,
+      and its output is captured with <code>$(…)</code> like any program's.
+    </p>
+<pre class="term"><code><span class="p">$</span> printf 'task-a 0\ntask-b 137\ntask-c 1\n' &gt; codes.txt
+<span class="p">$</span> while read -r task code; do
+&gt;   if [[ $code -ne 0 ]]; then echo "$task failed with $code"; fi
+&gt; done &lt; codes.txt
+<span class="o">task-b failed with 137
+task-c failed with 1</span>
+<span class="p">$</span> fail_count() { grep -cv ' 0$' "$1"; }
+<span class="p">$</span> echo "failures: $(fail_count codes.txt)"
+<span class="o">failures: 2</span></code></pre>
+    <p>
+      Loop over <code>./*.log</code>, never over <code>$(ls *.log)</code>: the glob hands you each
+      filename intact, while the output of <code>ls</code> gets word-split.
+    </p>
+
+    <h2 id="strict-mode">Strict mode, and how far to trust it</h2>
+    <p>
+      By default bash treats a script like a person typing: when a command fails, it shrugs and runs
+      the next line. For automation that default is dangerous.
+    </p>
+<pre><code>#!/usr/bin/env bash
+cd /nonexistent/build
+echo "cleaning $(pwd)"
+grep -c PASS "$RESULTS" | tee count.txt
+echo "done"</code></pre>
+<pre class="term"><code><span class="p">$</span> ./nostrict.sh; echo "exit status: $?"
+<span class="o">./nostrict.sh: line 2: cd: /nonexistent/build: No such file or directory
+cleaning <span class="hl">/home/learner/scripts</span>
+grep: : No such file or directory
+done
+exit status: <span class="hl">0</span></span></code></pre>
+    <p>
+      Three things went wrong and the script reported success. The <code>cd</code> failed, so the
+      "cleaning" step ran in the wrong directory (imagine that line were <code>rm -rf ./*</code>).
+      <code>$RESULTS</code> was never set, so it silently became an empty string. <code>grep</code>
+      failed, but it was on the left of a <span class="term" data-g="pipe">pipe</span>, and a
+      pipeline's status is its last command's (<a href="04-streams-pipes-redirection.html#pipefail">page
+      4</a>). And a script's own exit status is simply that of the last command it
+      ran<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="Bash Reference Manual, 3.7.5 Exit Status: 'Bash itself returns the exit status of the last command executed'">[Bash Manual]</a> —
+      here, a successful <code>echo</code>. <span class="term" data-g="strict-mode">Strict mode</span>
+      is one line that changes all three defaults:
+    </p>
+<pre><code>set -euo pipefail</code></pre>
+    <table>
+      <thead><tr><th>Option</th><th>Effect</th><th>Observed</th></tr></thead>
+      <tbody>
+        <tr><td><code>-e</code> (errexit)</td><td>Exit immediately when a command fails.</td>
+            <td>The script above stops at the <code>cd</code> with exit status 1.</td></tr>
+        <tr><td><code>-u</code> (nounset)</td><td>Expanding an unset variable is an error, not an empty string.</td>
+            <td><code>RESULTS: unbound variable</code>; the script exits (bash 5.2 used status 127).</td></tr>
+        <tr><td><code>-o pipefail</code></td><td>A pipeline fails if any command in it fails; the status is that of the rightmost failing command.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Pipelines" title="Bash Reference Manual, 3.2.3 Pipelines">[Bash Manual]</a></td>
+            <td><code>false | true</code> gives 0 without it, 1 with it.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Strict mode is necessary, and it is not sufficient. <code>set -e</code> has documented
+      exceptions: the shell does <em>not</em> exit when the failing command is the condition of an
+      <code>if</code>, <code>while</code> or <code>until</code>; is anywhere in an
+      <code>&amp;&amp;</code>/<code>||</code> list except after the last operator; is in a pipeline
+      but not last (without pipefail); or is negated with <code>!</code>. The one that surprises
+      people: when a <em>function</em> is called from one of those contexts, <code>-e</code> is
+      switched off for everything inside the
+      function.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin" title="Bash Reference Manual, 4.3.1 The Set Builtin, option -e">[Bash Manual]</a>
+      Every line of the following script runs, under full strict mode:
+    </p>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+
+check() {
+  false
+  echo "check: still running after false"
+}
+
+if check; then echo "1. check 'succeeded'"; fi
+
+load() {
+  local v=$(false)
+  echo "2. load: still running after a failed \$(...)"
+}
+load
+
+false || echo "3. left side of || may fail"
+echo "4. reached the end"</code></pre>
+<pre class="term"><code><span class="p">$</span> ./e-exceptions.sh; echo "exit status: $?"
+<span class="o">check: still running after false
+1. check 'succeeded'
+2. load: still running after a failed $(...)
+3. left side of || may fail
+4. reached the end
+exit status: 0</span></code></pre>
+    <p>
+      Case 1: <code>check</code> was called as an <code>if</code> condition, so the
+      <code>false</code> inside it was ignored, the function's status became that of its final
+      <code>echo</code>, and a check that failed reported success. Case 2:
+      <code>local v=$(false)</code> is one command, <code>local</code>, which succeeds at declaring a
+      variable; the substitution's failure is
+      discarded.<a class="cite" href="https://www.shellcheck.net/wiki/SC2155" title="ShellCheck wiki, SC2155: Declare and assign separately to avoid masking return values">[ShellCheck]</a>
+      (Write <code>local v</code> and <code>v=$(…)</code> on separate lines.) Case 3 is the exception
+      working <em>for</em> you, and the real grader below relies on it.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — discuss</span>
+      <p>When you review a task's test script, "it has <code>set -e</code>" is not the end of the
+      review. Ask what the script's exit status <em>is</em> on each path: tests fail, tests crash on
+      import, tests time out, a setup step fails. A verification function called as
+      <code>if verify_output; then</code> runs with errexit off; if its last line is a log message,
+      it always "passes". The exit status is the measurement, so trace it as carefully as you would
+      trace a metric computation in Python.</p>
+    </div>
+
+    <h3 id="trap-and-mktemp">Cleaning up: <code>mktemp</code> and <code>trap … EXIT</code></h3>
+    <p>
+      Scripts need scratch space. <code>mktemp -d</code> creates a fresh directory with an
+      unpredictable name under <code>/tmp</code>, readable only by you (mode 700), and prints its
+      path. The coreutils manual explains why not to invent a name like <code>/tmp/grade.$$</code>: a
+      predictable name lets another user pre-create a symbolic link there, so your script writes
+      through it into a file of their
+      choosing.<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html" title="GNU Coreutils manual, 18.4 mktemp: Create temporary file or directory">[Coreutils]</a>
+      In a <span class="term" data-g="sandbox">sandbox</span> the "other user" may be the agent.
+      <code>trap 'commands' EXIT</code> registers commands to run when the script exits, for any
+      reason, including a <code>set -e</code> abort:
+    </p>
+<pre><code>#!/usr/bin/env bash
+set -euo pipefail
+work=$(mktemp -d)
+trap 'rm -rf "$work"; echo "cleaned up $work"' EXIT
+echo "working in $work"
+ls -ld "$work"
+false
+echo "never printed"</code></pre>
+<pre class="term"><code><span class="p">$</span> ./cleanup.sh; echo "exit status: $?"
+<span class="o">working in /tmp/tmp.QKEsTntb3f
+drwx------ 2 learner learner 4096 Sep 21 16:31 /tmp/tmp.QKEsTntb3f
+cleaned up /tmp/tmp.QKEsTntb3f
+exit status: 1</span></code></pre>
+
+    <h2 id="shellcheck">ShellCheck: the linter that knows all of this</h2>
+    <p>
+      <span class="term" data-g="shellcheck">ShellCheck</span> is a static analysis tool for sh/bash
+      scripts; it reads the shebang to decide which dialect to
+      check.<a class="cite" href="https://github.com/koalaman/shellcheck/blob/master/shellcheck.1.md" title="shellcheck(1) manual: DESCRIPTION, RETURN VALUES">[ShellCheck]</a>
+      Install it in the lab as root with <code>apt-get install -y shellcheck</code> (on your Mac:
+      <code>brew install shellcheck</code>). Here is a script of the kind that accumulates in eval
+      repos, and what the tool says about it:
+    </p>
+<pre><code>#!/bin/bash
+# Copy every rollout log into one directory and count failures.
+dir=$1
+cd $dir
+for f in $(ls *.log); do
+  cp $f /tmp/collected/
+done
+local_count=$(grep -l FAIL *.log | wc -l)
+echo "failures: $local_count"</code></pre>
+<pre class="term"><code><span class="p">$</span> shellcheck collect.sh; echo "exit status: $?"
+<span class="o">
+In collect.sh line 4:
+cd $dir
+^-----^ SC2164 (warning): Use 'cd ... || exit' or 'cd ... || return' in case cd fails.
+   ^--^ SC2086 (info): Double quote to prevent globbing and word splitting.
+…
+In collect.sh line 5:
+for f in $(ls *.log); do
+         ^---------^ SC2045 (error): Iterating over ls output is fragile. Use globs.
+…
+In collect.sh line 6:
+  cp $f /tmp/collected/
+     ^-- SC2086 (info): Double quote to prevent globbing and word splitting.
+…
+exit status: 1</span></code></pre>
+    <p>
+      Every finding is a mechanism from this page, and each code has a wiki page explaining it. The
+      warnings are not pedantry. Run the script on a directory whose name contains a space:
+    </p>
+<pre class="term"><code><span class="p">$</span> ./collect.sh "/tmp/logs run 1"; echo "exit status: $?"
+<span class="o">./collect.sh: line 4: cd: too many arguments
+ls: cannot access '*.log': No such file or directory
+grep: *.log: No such file or directory
+<span class="hl">failures: 0</span>
+exit status: <span class="hl">0</span></span></code></pre>
+    <p>
+      That directory holds a log containing <code>FAIL</code>. The script looked in the wrong place,
+      found nothing, and printed a clean, plausible, wrong number with a success status. The fixed
+      version (strict mode, <code>${1:?usage…}</code> to demand the argument, quotes, a glob instead
+      of <code>ls</code>) passes ShellCheck with exit status 0 and prints <code>failures: 1</code>.
+      ShellCheck exits 1 when it has findings, so it drops straight into
+      CI.<a class="cite" href="https://github.com/koalaman/shellcheck/blob/master/shellcheck.1.md" title="shellcheck(1) manual: RETURN VALUES">[ShellCheck]</a>
+    </p>
+
+    <h2 id="run-tests-dissected">Worked example: the grader script, line by line</h2>
+    <p>
+      The course's running example, wordfreq-bench, asks an <span class="term" data-g="agent">agent</span>
+      to fix a bug in <code>/app/wordfreq.py</code>. After the agent finishes, the
+      <span class="term" data-g="harness">harness</span> runs this script, the benchmark's
+      <span class="term" data-g="verifier">verifier</span>. It is 22 lines and passes ShellCheck. Read
+      it the way you would read any task's <code>run-tests.sh</code>: asking, at each line, <em>what
+      is the exit status now?</em>
+    </p>
+<pre><code> 1  #!/usr/bin/env bash
+ 2  # Grade one rollout. Usage: run-tests.sh APP_DIR RESULT_FILE
+ 3  # Exit status = the hidden tests' exit status (0 pass, non-zero fail, 124 timeout).
+ 4  set -euo pipefail
+ 5
+ 6  app_dir=${1:?usage: run-tests.sh APP_DIR RESULT_FILE}
+ 7  result_file=${2:?usage: run-tests.sh APP_DIR RESULT_FILE}
+ 8  grader_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &amp;&amp; pwd)
+ 9  work=$(mktemp -d)
+10  trap 'rm -rf "$work"' EXIT
+11
+12  status=0
+13  APP_DIR="$app_dir" PYTHONPATH="$app_dir" PYTHONDONTWRITEBYTECODE=1 \
+14    timeout -k 5 60 python3 -m unittest discover -s "$grader_dir" -p 'test_hidden.py' \
+15    &gt;"$work/stdout" 2&gt;"$work/stderr" || status=$?
+16
+17  passed=false
+18  if [[ $status -eq 0 ]]; then passed=true; fi
+19  tail_text=$(tail -n 3 "$work/stderr" | tr '\n' ' ' | tr -d '"\134')
+20  printf '{"exit_code": %d, "passed": %s, "stderr_tail": "%s"}\n' \
+21    "$status" "$passed" "$tail_text" &gt;&gt;"$result_file"
+22  exit "$status"</code></pre>
+    <ul>
+      <li><strong>Lines 1–4.</strong> A bash shebang, a comment that states the exit-status contract
+      (the most useful comment a test script can have), and strict mode.</li>
+      <li><strong>Lines 6–7.</strong> <code>${1:?message}</code> expands to <code>$1</code>, or, if
+      it is missing, prints the message and exits. Run with no arguments, the script prints
+      <code>1: usage: run-tests.sh APP_DIR RESULT_FILE</code> and exits 1.</li>
+      <li><strong>Line 8.</strong> The directory the script itself lives in, as an absolute path. The
+      hidden tests sit beside it, so the grader works wherever it is mounted.</li>
+      <li><strong>Lines 9–10.</strong> Private scratch space, removed on every exit path.</li>
+      <li><strong>Lines 13–15</strong> are the measurement. <code>NAME=value command</code> sets
+      <span class="term" data-g="environment-variable">environment variables</span> for that one
+      command. <code>timeout -k 5 60</code> sends SIGTERM after 60 seconds and SIGKILL 5 seconds
+      after that if the process is still there; when the time limit is hit, GNU
+      <code>timeout</code> exits
+      124.<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation" title="GNU Coreutils manual, 23.6 timeout: exit status; -k duration starts when the first signal is sent">[Coreutils]</a>
+      Both streams go to <em>separate files</em> (<a href="04-streams-pipes-redirection.html#redirection">page
+      4</a>), so nothing is lost and nothing is interleaved. Then <code>|| status=$?</code>: failing
+      tests are an expected outcome, not a script error, so the command sits on the left of
+      <code>||</code> — the documented <code>set -e</code> exception — and its status is captured
+      instead of killing the script.</li>
+      <li><strong>Lines 17–21.</strong> One <span class="term" data-g="jsonl">JSONL</span> line is
+      appended to the result file: the raw exit code, a boolean, and the last three lines of stderr
+      (<code>unittest</code> writes its report to stderr). Line 19 flattens newlines and deletes
+      double quotes and backslashes (<code>\134</code> is the backslash in octal) so the hand-built
+      JSON stays valid.</li>
+      <li><strong>Line 22.</strong> The script exits with the tests' status. This line is the score.</li>
+    </ul>
+<pre class="term"><code><span class="p">$</span> cd ~/wordfreq-bench
+<span class="p">$</span> grader/run-tests.sh app /tmp/result.jsonl; echo "exit status: $?"    <span class="c"># the unfixed repo</span>
+<span class="o">exit status: 1</span>
+<span class="p">$</span> grader/run-tests.sh /tmp/fixed /tmp/result.jsonl; echo "exit status: $?"    <span class="c"># oracle fix applied</span>
+<span class="o">exit status: 0</span>
+<span class="p">$</span> time grader/run-tests.sh /tmp/hang /tmp/result.jsonl; echo "exit status: $?"    <span class="c"># wordfreq.py sleeps forever</span>
+<span class="o">
+real	1m0.040s
+…
+exit status: 124</span>
+<span class="p">$</span> cat /tmp/result.jsonl
+<span class="o">{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}
+{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.001s  OK "}
+{"exit_code": 124, "passed": false, "stderr_tail": ""}</span>
+<span class="p">$</span> ls -d /tmp/tmp.*
+<span class="o">ls: cannot access '/tmp/tmp.*': No such file or directory</span></code></pre>
+    <p>
+      Three outcomes, three distinct records, no scratch directories left behind. Note what the script
+      does <em>not</em> do: it does not collapse 124 into 1.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — failure accounting</span>
+      <p>The third record says <code>passed: false</code>, but it is not the same observation as the
+      first. Exit 1 means the tests ran and the code was wrong. Exit 124 means the grader gave up
+      after 60 seconds: perhaps the agent's code loops forever (a model failure), perhaps 64 graders
+      were sharing four cores (an <span class="term" data-g="infrastructure-failure">infrastructure
+      failure</span>). The record is evidence of a timeout; the cause is a hypothesis until you
+      re-grade that rollout on an idle machine and see whether it still takes 60 seconds. Keep the
+      raw code in the log so the analysis can report <em>passed / scheduled</em>,
+      <em>passed / completed</em> and <em>completed / scheduled</em> separately
+      (<a href="10-signals-exit-codes.html">page 10</a> decodes the codes;
+      <a href="12-resources-and-limits.html">page 12</a> covers the starved box). And if the task
+      image is Alpine, <span class="term" data-g="busybox">BusyBox</span>'s <code>timeout</code>
+      returned 143 on expiry when tested, not
+      124<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation" title="Coreutils source note: BusyBox v1.36.1 timeout executed on alpine:3.20 returned 143 on expiry">[Coreutils]</a> —
+      a harness that counts timeouts with <code>== 124</code> will find none.</p>
+    </div>
+
+    <h3 id="broken-variant">The variant that passes everything</h3>
+    <p>
+      Now the script someone writes in a hurry. It is shorter and its output is friendlier:
+    </p>
+<pre><code>#!/usr/bin/env bash
+# Grade one rollout. Usage: run-tests-broken.sh APP_DIR
+app_dir=$1
+grader_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" &amp;&amp; pwd)
+
+echo "running hidden tests..."
+APP_DIR="$app_dir" PYTHONPATH="$app_dir" python3 -m unittest discover -s "$grader_dir" -p 'test_hidden.py' 2&gt;&amp;1 | tail -n 3
+echo "tests finished"</code></pre>
+<pre class="term"><code><span class="p">$</span> grader/run-tests-broken.sh app; echo "exit status: $?"
+<span class="o">running hidden tests...
+Ran 2 tests in 0.001s
+
+<span class="hl">FAILED (failures=2)</span>
+tests finished
+exit status: <span class="hl">0</span></span>
+<span class="p">$</span> grader/run-tests-broken.sh /nonexistent; echo "exit status: $?"
+<span class="o">running hidden tests...
+Ran 1 test in 0.000s
+
+FAILED (errors=1)
+tests finished
+exit status: 0</span>
+<span class="p">$</span> shellcheck grader/run-tests-broken.sh; echo "exit status: $?"
+<span class="o">exit status: 0</span></code></pre>
+    <p>
+      The unfixed repo passes. A directory that does not exist passes. There are two independent
+      bugs, and either alone is enough: the test command's status is thrown away by the pipe into
+      <code>tail</code> (no pipefail), and the script's last command is an <code>echo</code>, which
+      always succeeds. A human watching the terminal sees <code>FAILED</code>; a harness reads only
+      the exit status and records a pass. Note the last command too: ShellCheck is silent. It checks
+      shell hazards, not whether your script means what you intended.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — navigate</span>
+      <p>This bug inflates every model's score equally, so no leaderboard comparison will reveal it.
+      The discriminating test is cheap: run the grader against the <em>unsolved</em> task and demand
+      a failure, then against the <span class="term" data-g="oracle-solution">oracle solution</span>
+      and demand a pass. Terminal-Bench's task review requires exactly this pair (the oracle must
+      pass; a no-op agent must
+      fail),<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Merrill et al. 2026, Terminal-Bench, §2.3 Verification and App. B">[Terminal-Bench]</a>
+      and in its current harness a task's <code>tests/test.sh</code> reports by writing a number to
+      <code>/logs/verifier/reward.txt</code>.<a class="cite" href="https://docs.harborframework.com/core-concepts/tasks/verifier" title="Harbor docs, Tasks: Verifier">[Terminal-Bench]</a>
+      Whatever the channel — exit status or reward file — a grader should key off something the
+      script cannot produce by accident, and you should read every task's test script for the path
+      where it does.</p>
+    </div>
+
+    <h2 id="thirty-lines">The thirty-line rule</h2>
+    <p>
+      Line 19 of the grader is where bash starts to strain: it builds JSON by deleting the characters
+      that would break it. That works for three lines of unittest output and would not survive
+      arbitrary text. The course's rule of thumb: <strong>when a script passes about thirty lines, or
+      needs real data structures, JSON, arithmetic beyond counting, or error handling with more than
+      one path, write it in Python.</strong> The same grader:
+    </p>
+<pre><code>#!/usr/bin/env python3
+"""The same job as run-tests.sh, in Python. Usage: grade.py APP_DIR"""
+import json
+import os
+import subprocess
+import sys
+
+app_dir = sys.argv[1]
+grader_dir = os.path.dirname(os.path.abspath(__file__))
+env = {**os.environ, "APP_DIR": app_dir, "PYTHONPATH": app_dir, "PYTHONDONTWRITEBYTECODE": "1"}
+try:
+    proc = subprocess.run(
+        ["python3", "-m", "unittest", "discover", "-s", grader_dir, "-p", "test_hidden.py"],
+        capture_output=True, text=True, timeout=60, check=False, env=env,
+    )
+    status, stderr = proc.returncode, proc.stderr
+except subprocess.TimeoutExpired:
+    status, stderr = 124, "timed out after 60 s"
+print(json.dumps({"exit_code": status, "passed": status == 0,
+                  "stderr_tail": " ".join(stderr.splitlines()[-3:])}))
+sys.exit(status)</code></pre>
+<pre class="term"><code><span class="p">$</span> python3 grader/grade.py app; echo "exit status: $?"
+<span class="o">{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2)"}
+exit status: 1</span>
+<span class="p">$</span> python3 grader/grade.py /tmp/hang; echo "exit status: $?"
+<span class="o">{"exit_code": 124, "passed": false, "stderr_tail": "timed out after 60 s"}
+exit status: 124</span></code></pre>
+    <p>
+      Each argument maps to a mechanism you already know: <code>capture_output=True</code> collects
+      <span class="term" data-g="stdout">stdout</span> and stderr separately, <code>timeout=</code>
+      replaces the <code>timeout</code> command, <code>check=False</code> says "a non-zero status is
+      data, don't raise", and <code>json.dumps</code> does the escaping correctly. The most important
+      detail is that the command is a <em>list</em>. Each element reaches the program as exactly one
+      argument; no shell is involved, so there is no word splitting and no quoting to get wrong.
+      Compare passing a string with <code>shell=True</code>:
+    </p>
+<pre><code>import subprocess
+name = "x; echo INJECTED"
+subprocess.run("echo grading " + name, shell=True, check=False)
+subprocess.run(["echo", "grading", name], check=False)</code></pre>
+<pre class="term"><code><span class="p">$</span> python3 inject.py
+<span class="o">grading x
+INJECTED
+grading x; echo INJECTED</span></code></pre>
+    <p>
+      With <code>shell=True</code> the string is parsed by a shell, so a value containing
+      <code>;</code> became a second command. In a harness, values like filenames, branch names and
+      task IDs can be chosen by the agent. Use list arguments.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — what a script inherits</span>
+      <p>A script started by a harness runs in a non-interactive shell: it reads no
+      <code>~/.bashrc</code>, so aliases, <code>PATH</code> additions and virtualenv activation from
+      your interactive session are absent (<a href="02-shell-and-commands.html#startup-files">page
+      2</a>; its <a href="02-shell-and-commands.html#remedies">remedies section</a> shows why even
+      <code>bash -lc</code> does not pick up a <code>PATH</code> line in Ubuntu's
+      <code>.bashrc</code>). A setup script that "works on my machine" and exits 127 in the harness
+      is usually this. Set what the script needs inside the script.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>You inherit a benchmark of 120 terminal tasks. Pass rates for every model you try sit between
+      88% and 94%, far above what the authors reported a year ago with weaker models, and the ranking
+      between models is noisy. A teammate says the tasks are saturated and proposes retiring the
+      benchmark. Each task has its own <code>run-tests.sh</code>, written by different contributors.
+      What do you establish before agreeing?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Observed:</strong> high, compressed scores. <strong>Hypotheses:</strong> (a) the
+        models really solve the tasks; (b) some graders cannot fail, which adds the same constant to
+        every model and compresses differences exactly like this.</p>
+        <p><strong>Discriminating test:</strong> run every task's grader against the untouched
+        starting state, with no agent at all. Under (a) every task fails; under (b) some pass. Any
+        task that passes with no work done has a broken verifier, typically a script whose last
+        command is an <code>echo</code>, a test command piped into <code>tee</code> or
+        <code>tail</code> without pipefail, or a check function called inside <code>if</code>. Then
+        run the oracle solutions and confirm they pass, which catches graders that cannot succeed.
+        Also <code>grep -L 'pipefail' */run-tests.sh</code> and read the shebangs, but treat that as
+        a way to prioritise reading, not as proof.</p>
+        <p><strong>Effect on the score:</strong> if 30 of 120 graders always pass, a model that
+        solves 60% of the remaining 90 reports (30 + 54) / 120 = 70%, and one that solves 70% reports
+        77.5%: a ten-point gap shrinks to 7.5 and every number is inflated. Fix the graders,
+        re-grade stored final states if you have them (a verifier change, not a rerun), and report
+        which tasks changed. Only then is "saturated" a claim about the models.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong>, as <code>learner</code> (<code>su - learner</code>). As root
+      first: <code>apt-get install -y --no-install-recommends python3 shellcheck</code>. For exercises
+      4–5, copy the course's <code>research/wordfreq-bench</code> directory into the container from
+      your Mac: <code>docker cp wordfreq-bench lt-lab:/home/learner/</code>, then as root
+      <code>chown -R learner: /home/learner/wordfreq-bench</code>.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Create <code>hello.sh</code> as shown at the top of the page.
+        Get the 126, then fix it. What does <code>$0</code> print when you run it as
+        <code>bash hello.sh</code> versus <code>./hello.sh</code>?
+          <details class="solution"><summary>Solution</summary>
+          <p><code>./hello.sh</code> → <code>Permission denied</code>, <code>echo $?</code> → 126;
+          <code>chmod +x hello.sh</code> fixes it. <code>$0</code> is the name the script was invoked
+          by: <code>hello.sh</code> in the first case, <code>./hello.sh</code> in the second.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Type in <code>e-exceptions.sh</code> from the
+        strict-mode section. Before running it, write down which of the four numbered lines will
+        print and what the exit status will be. Then change <code>if check; then …; fi</code> to a
+        bare <code>check</code> on its own line and predict again.
+          <details class="solution"><summary>Solution</summary>
+          <p>As written: all four lines print and the status is 0 (output shown above). With a bare
+          <code>check</code>, errexit applies inside the function: the script prints nothing and
+          exits 1 at the <code>false</code>. Same function, different behaviour, depending only on
+          <em>how it was called</em>. <code>shellcheck e-exceptions.sh</code> flags the
+          <code>local v=$(false)</code> line as SC2155 (and SC2034, unused variable) but says nothing
+          about the <code>if check</code> problem.</p>
+          </details></li>
+        <li><strong>Lint and fix.</strong> Type in <code>collect.sh</code>, run
+        <code>shellcheck</code> on it, and fix it until ShellCheck exits 0 and the script reports
+        <code>failures: 1</code> for a directory named <code>"/tmp/logs run 1"</code> containing
+        <code>task a.log</code> (contents <code>FAIL</code>) and <code>b.log</code> (contents
+        <code>ok</code>).
+          <details class="solution"><summary>Solution</summary>
+<pre><code>#!/usr/bin/env bash
+# Copy every rollout log into one directory and count failures.
+set -euo pipefail
+dir=${1:?usage: collect.sh DIR}
+cd "$dir"
+mkdir -p /tmp/collected
+for f in ./*.log; do
+  cp "$f" /tmp/collected/
+done
+count=$(grep -l FAIL ./*.log | wc -l) || true
+echo "failures: $count"</code></pre>
+<pre class="term"><code><span class="p">$</span> shellcheck collect-fixed.sh; echo "exit status: $?"
+<span class="o">exit status: 0</span>
+<span class="p">$</span> ./collect-fixed.sh "/tmp/logs run 1"; echo "exit status: $?"
+<span class="o">failures: 1
+exit status: 0</span></code></pre>
+          <p>The <code>|| true</code> is deliberate: <code>grep -l</code> exits 1 when nothing
+          matches, and "zero failures" is a valid answer, not an error. Under pipefail you must
+          decide, for each pipeline, which non-zero statuses are data.</p>
+          </details></li>
+        <li><strong>Eval task: the grader that cannot fail.</strong> Save
+        <code>run-tests-broken.sh</code> (above) into <code>~/wordfreq-bench/grader/</code>,
+        <code>chmod +x</code> it, and run it against <code>app</code> (the unfixed repo). Confirm it
+        exits 0. Make the smallest change that makes it exit non-zero when tests fail, and verify
+        both directions. To build a fixed repo for the passing case: <code>cp -r app /tmp/fixed</code>
+        and replace the body of <code>count_words</code> in <code>/tmp/fixed/wordfreq.py</code> with
+        the one in <code>solution/wordfreq.patch.py</code> (add <code>import re</code>).
+          <details class="solution"><summary>Solution</summary>
+          <p>Add <code>set -euo pipefail</code> after the shebang (and, since <code>-u</code> is now
+          on, <code>app_dir=${1:?usage…}</code>). With pipefail the pipeline into <code>tail</code>
+          takes unittest's status; with <code>-e</code> the script stops there, before the final
+          <code>echo</code> can overwrite it.</p>
+<pre class="term"><code><span class="p">$</span> grader/run-tests-patched.sh app; echo "exit status: $?"
+<span class="o">running hidden tests...
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)
+exit status: 1</span>
+<span class="p">$</span> grader/run-tests-patched.sh /tmp/fixed; echo "exit status: $?"
+<span class="o">running hidden tests...
+Ran 2 tests in 0.000s
+
+OK
+tests finished
+exit status: 0</span></code></pre>
+          <p>Either fix alone is fragile: pipefail without <code>-e</code> still ends on
+          <code>echo</code>. The real <code>run-tests.sh</code> is more robust again, because it
+          captures the status in a variable and ends with an explicit <code>exit "$status"</code>.</p>
+          </details></li>
+        <li><strong>Eval task: a two-line grader audit.</strong> Write a loop that runs both
+        <code>run-tests-broken.sh</code> and <code>run-tests.sh</code> against the unsolved and the
+        solved repo and prints each exit status. Which row of the output proves a grader is broken?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> for d in app /tmp/fixed; do grader/run-tests-broken.sh "$d" &gt;/dev/null; echo "broken  $d -&gt; $?"; grader/run-tests.sh "$d" /tmp/r2.jsonl; echo "real    $d -&gt; $?"; done
+<span class="o"><span class="hl">broken  app -&gt; 0</span>
+real    app -&gt; 1
+broken  /tmp/fixed -&gt; 0
+real    /tmp/fixed -&gt; 0</span></code></pre>
+          <p>The first row: a grader that returns 0 for the unsolved task. On the solved repo the two
+          graders agree, which is why this bug survives casual testing: people check that their
+          solution passes and never check that the absence of a solution fails.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Chet Ramey, Brian Fox. <em>GNU Bash Reference Manual</em> (Edition 5.3), §3.1.2 Quoting, §3.2.3 Pipelines, §3.5.7 Word Splitting, §3.7.5 Exit Status, §4.3.1 The Set Builtin. <a href="https://www.gnu.org/software/bash/manual/bash.html">gnu.org/software/bash/manual/bash.html</a></li>
+        <li>The Open Group / IEEE. <em>Base Specifications Issue 8 (POSIX.1-2024)</em>, Shell Command Language, §2.15 <code>set</code> (pipefail added in Issue 8). <a href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html">pubs.opengroup.org/…/V3_chap02.html</a></li>
+        <li>Free Software Foundation. <em>GNU Coreutils manual</em>, §23.6 <code>timeout</code>, §18.4 <code>mktemp</code>. <a href="https://www.gnu.org/software/coreutils/manual/coreutils.html">gnu.org/software/coreutils/manual/coreutils.html</a> (BusyBox <code>timeout</code> behaviour: executed on alpine:3.20.)</li>
+        <li>Vidar Holen and contributors. <em>ShellCheck</em>: shellcheck(1) manual and wiki (SC2086, SC2155, SC2164). <a href="https://www.shellcheck.net/wiki/">shellcheck.net/wiki</a> · <a href="https://github.com/koalaman/shellcheck/blob/master/shellcheck.1.md">shellcheck.1.md</a></li>
+        <li>Mike A. Merrill, Alexander G. Shaw, Nicholas Carlini, et al. "Terminal-Bench: Benchmarking Agents on Hard, Realistic Tasks in Command Line Interfaces." arXiv:2601.11868, 2026; and Harbor framework docs, "Verifier". <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a> · <a href="https://docs.harborframework.com/core-concepts/tasks/verifier">docs.harborframework.com/…/verifier</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

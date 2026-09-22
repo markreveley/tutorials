@@ -1,0 +1,123 @@
+{
+  "id": "deepeval-ragas",
+  "citation": {
+    "authors": "Confident AI; Exploding Gradients",
+    "title": "DeepEval and Ragas documentation",
+    "venue": "deepeval.com / docs.ragas.io",
+    "year": "accessed 2026-06-10",
+    "url": "https://deepeval.com/docs/getting-started | https://docs.ragas.io/en/stable/concepts/metrics/"
+  },
+  "fetched_urls": [
+    "https://deepeval.com/docs/getting-started",
+    "https://deepeval.com/docs/metrics-introduction",
+    "https://deepeval.com/docs/metrics-faithfulness",
+    "https://deepeval.com/docs/metrics-hallucination",
+    "https://deepeval.com/docs/metrics-answer-relevancy",
+    "https://deepeval.com/docs/metrics-llm-evals",
+    "https://docs.ragas.io/en/stable/concepts/metrics/",
+    "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/",
+    "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/faithfulness/",
+    "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/answer_relevance/",
+    "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/context_precision/",
+    "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/context_recall/"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "DeepEval: pytest-style unit testing for LLM outputs",
+      "verdict": "confirmed",
+      "finding": "DeepEval integrates natively with pytest via `deepeval test run`, framing LLM evaluation as unit tests in CI/CD pipelines.",
+      "quote": "native Pytest integration, which allows you to run evals in CI/CD pipelines",
+      "location": "https://deepeval.com/docs/metrics-introduction"
+    },
+    {
+      "planned": "DeepEval: metric library including G-Eval, faithfulness, answer relevancy, hallucination",
+      "verdict": "confirmed",
+      "finding": "All four named metrics exist. DeepEval advertises '50+ SOTA, ready-to-use metrics'. G-Eval, Faithfulness, AnswerRelevancy, and Hallucination are each documented individually. Note: Hallucination and Faithfulness are distinct — Hallucination compares output against ground-truth context chunks (ratio of contradicted contexts), while Faithfulness compares claims in output against retrieval context (ratio of truthful claims). They use inverse formulas: higher Faithfulness = better; higher Hallucination score = worse.",
+      "quote": "almost all predefined metrics on `deepeval` uses LLM-as-a-judge, with various techniques such as QAG (question-answer-generation), DAG (deep acyclic graphs), and G-Eval",
+      "location": "https://deepeval.com/docs/metrics-introduction"
+    },
+    {
+      "planned": "Ragas: RAG-specific metric suite — faithfulness, answer relevancy, context precision, context recall",
+      "verdict": "confirmed with one naming note",
+      "finding": "All four metrics exist and are RAG-focused. However, in the stable Ragas docs the metric is labelled 'Response Relevancy' in the navigation (URL: answer_relevance/), though the metric page itself uses 'Answer Relevancy' as the heading. Authors should use 'Response Relevancy' to match current Ragas class names to avoid confusion.",
+      "quote": "The Answer Relevancy metric measures how relevant a response is to the user input. It ranges from 0 to 1, with higher scores indicating better alignment with the user input.",
+      "location": "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/answer_relevance/"
+    },
+    {
+      "planned": "Ragas — Faithfulness: documented definition (how computed, what question it answers)",
+      "verdict": "confirmed",
+      "finding": "Faithfulness measures whether every claim in the response is grounded in the retrieved context. Score = (claims supported by context) / (total claims). Question answered: 'Does the generated response contain only information that can be supported by the provided context documents, or does it introduce unsupported claims?' Uses LLM for claim extraction and verification; an alternative non-LLM path uses Vectara's HHEM-2.1-Open classifier.",
+      "quote": "Faithfulness Score = Number of claims in the response supported by the retrieved context / Total number of claims in the response",
+      "location": "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/faithfulness/"
+    },
+    {
+      "planned": "Ragas — Answer Relevancy: documented definition (how computed, what question it answers)",
+      "verdict": "confirmed",
+      "finding": "Measures whether the response addresses the user's question, without evaluating factual accuracy. Computation is embedding-based, not claim-counting: an LLM generates N synthetic questions from the response (default N=3), then cosine similarity between each synthetic question's embedding and the original user-input embedding is averaged. Formula: (1/N) * Σ cosine_similarity(E_gi, E_o). This is notably different from DeepEval's answer relevancy which counts relevant statements.",
+      "quote": "Answer Relevancy = (1/N) Σ cosine_similarity(E_gi, E_o) … without evaluating factual accuracy",
+      "location": "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/answer_relevance/"
+    },
+    {
+      "planned": "Ragas — Context Precision: documented definition (how computed, what question it answers)",
+      "verdict": "confirmed",
+      "finding": "Context Precision evaluates the retriever's ability to rank relevant chunks above irrelevant ones. It is a mean precision@k calculation: Context Precision@K = (Σ Precision@k × v_k) / total relevant items in top K. Answers: 'Is the retriever putting the most useful context first?' Two LLM variants exist (with and without a reference answer), plus non-LLM alternatives using Levenshtein distance or document IDs.",
+      "quote": "Context Precision is a metric that evaluates the retriever's ability to rank relevant chunks higher than irrelevant ones for a given query in the retrieved context.",
+      "location": "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/context_precision/"
+    },
+    {
+      "planned": "Ragas — Context Recall: documented definition (how computed, what question it answers)",
+      "verdict": "confirmed",
+      "finding": "Context Recall measures retrieval completeness — whether all the information needed to answer the question was actually retrieved. Computed claim-by-claim against a reference answer: Score = (claims in reference supported by retrieved context) / (total claims in reference). Answers: 'Were all the relevant documents/facts found?' An LLM breaks the reference into claims and checks each against the retrieved context.",
+      "quote": "Context Recall = Number of claims in the reference supported by the retrieved context / Total number of claims in the reference",
+      "location": "https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/context_recall/"
+    },
+    {
+      "planned": "Both DeepEval and Ragas rely heavily on LLM-as-judge under the hood",
+      "verdict": "confirmed",
+      "finding": "Both frameworks explicitly confirm LLM-as-judge as their primary evaluation mechanism. DeepEval: 'almost all predefined metrics on deepeval uses LLM-as-a-judge.' Ragas: 'LLM Based metrics might use one or more LLM calls to arrive at the score or result.' Both also provide non-LLM fallback options for specific metrics (e.g., embedding cosine similarity for Ragas answer relevancy; HHEM classifier for faithfulness; ID-based and Levenshtein variants for context metrics).",
+      "quote": "almost all predefined metrics on `deepeval` uses LLM-as-a-judge … LLM Based metrics might use one or more LLM calls to arrive at the score or result",
+      "location": "https://deepeval.com/docs/metrics-introduction | https://docs.ragas.io/en/stable/concepts/metrics/available_metrics/"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "DeepEval G-Eval uses chain-of-thought (CoT) reasoning and token probability weighting to reduce scoring bias — it does not just ask an LLM for a 1–5 score directly.",
+      "quote": "G-Eval takes the probabilities of the output tokens from the LLM to normalize the score and take their weighted summation as the final result.",
+      "numbers": "Score normalized to 0–1 from a 1–5 LLM output; uses token log-probs for weighted average"
+    },
+    {
+      "point": "DeepEval Hallucination and Faithfulness are NOT the same metric and use inverse scoring logic: Hallucination = (contradicted contexts) / (total contexts) — a higher score is worse; Faithfulness = (supported claims) / (total claims) — a higher score is better.",
+      "quote": "Hallucination = Number of Contradicted Contexts / Total Number of Contexts … Faithfulness = Number of Truthful Claims / Total Number of Claims",
+      "numbers": "Both on 0–1 scale; direction of 'good' is opposite"
+    },
+    {
+      "point": "Ragas Answer/Response Relevancy is computed via embedding cosine similarity, not LLM scoring — an LLM generates reverse questions from the response, then embeddings of those synthetic questions are compared to the original query.",
+      "quote": "Answer Relevancy = (1/N) Σ cosine_similarity(E_gi, E_o)",
+      "numbers": "Default N=3 synthetic questions generated per response"
+    },
+    {
+      "point": "Ragas Context Precision is a ranking metric (mean precision@k), not a binary hit/miss — it rewards retrievers that surface relevant chunks near the top of the ranked list, not merely those that include them somewhere.",
+      "quote": "Context Precision is a metric that evaluates the retriever's ability to rank relevant chunks higher than irrelevant ones",
+      "numbers": "Precision@K = true_positives@k / (true_positives@k + false_positives@k)"
+    },
+    {
+      "point": "Ragas Context Recall requires a reference answer (ground truth) as a proxy for 'all relevant facts' — it cannot be computed on live traffic without a reference. Context Precision has a reference-free LLM variant.",
+      "quote": "leverages an LLM to perform claim extraction and attribution analysis, making it practical by using reference text as a proxy instead of requiring manually annotated reference contexts",
+      "numbers": "N/A"
+    },
+    {
+      "point": "DeepEval Answer Relevancy is 'referenceless' — it requires only the input and actual output, making it suitable for production traffic evaluation without needing ground-truth labels.",
+      "quote": "Answer Relevancy is 'referenceless' — it requires only `input` and `actual_output`, not ground truth or expected outputs, making it deployable on live production traffic.",
+      "numbers": "N/A"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not conflate DeepEval 'Hallucination' (contradictions vs. context chunks) with DeepEval 'Faithfulness' (claim support vs. retrieval context) — they are separate metrics with opposite scoring polarity.",
+    "Do not describe Ragas 'Answer Relevancy' / 'Response Relevancy' as an LLM-scoring metric — its final score is derived from embedding cosine similarity, not an LLM judge score.",
+    "Do not assume Context Recall can be run without ground-truth reference answers — it requires a reference to extract claims against.",
+    "Do not call the Ragas metric 'Answer Relevancy' in course materials without noting it is labelled 'Response Relevancy' in current stable Ragas docs (class: ResponseRelevancy); both names appear in docs but the class name is ResponseRelevancy.",
+    "Do not suggest LLM-as-judge is unavoidable in these frameworks — both provide non-LLM metric variants (embedding-based, ID-based, string-similarity-based) for latency-sensitive or cost-sensitive deployments."
+  ],
+  "notes_for_authors": "All three planned claims are confirmed by primary source fetches. One naming nuance: Ragas uses 'Response Relevancy' (class name) for what the course calls 'answer relevancy' — recommend acknowledging both names in course materials. The Ragas answer relevancy computation (embedding cosine sim via synthetic question generation) is a strong teachable contrast to DeepEval's statement-counting approach for nominally the same metric concept — worth highlighting to show that 'answer relevancy' is not a single canonical algorithm. G-Eval's token-probability weighting is an under-appreciated implementation detail that distinguishes it from naive LLM scoring and is worth a brief mention. Consider adding a table contrasting DeepEval vs. Ragas implementations of the overlapping metrics (faithfulness, answer relevancy) since they use meaningfully different computation strategies despite sharing the same metric names."
+}

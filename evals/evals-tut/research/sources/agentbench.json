@@ -1,0 +1,78 @@
+{
+  "id": "agentbench",
+  "citation": {
+    "authors": "Xiao Liu, Hao Yu, Hanchen Zhang, Yifan Xu, Xuanyu Lei, Hanyu Lai, Yu Gu, Hangliang Ding, Kaiwen Men, Kejuan Yang, Shudan Zhang, Xiang Deng, Aohan Zeng, Zhengxiao Du, Chenhui Zhang, Sheng Shen, Tianjun Zhang, Yu Su, Huan Sun, Minlie Huang, Yuxiao Dong, Jie Tang",
+    "title": "AgentBench: Evaluating LLMs as Agents",
+    "venue": "ICLR 2024",
+    "year": "2024 (arXiv v1 Aug 2023; v3 Oct 2025)",
+    "url": "https://arxiv.org/abs/2308.03688"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2308.03688",
+    "https://arxiv.org/html/2308.03688v3",
+    "https://arxiv.org/abs/2308.03688v3"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "8 environments spanning code, game, web (OS, DB, KG, card game, puzzles, household, web shopping/browsing) — confirm list",
+      "verdict": "confirmed",
+      "finding": "AgentBench has exactly 8 environments in 3 grounding categories: Code (Operating System, Database, Knowledge Graph), Game (Digital Card Game, Lateral Thinking Puzzles, House-Holding), Web (Web Shopping, Web Browsing). Five of the eight are newly created; House-Holding (ALFWorld), Web Shopping (WebShop), and Web Browsing (Mind2Web) are adapted from prior work.",
+      "quote": "AgentBench encompasses eight distinct environments...which could be categorized into three types of groundings: Code: Operating System, Database, Knowledge Graph...Game: Digital Card Game, Lateral Thinking Puzzles, House-Holding...Web: Web Shopping, Web Browsing ... five out of eight are created for the first time",
+      "location": "Introduction"
+    },
+    {
+      "planned": "Large gap between API/commercial models and open-source models at the time — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed and quantifiable: OSS LLMs (no larger than 70B) averaged 0.51 overall vs 2.32 for API-based commercial LLMs — roughly a 4.5x gap. gpt-4 was best on 6 of 8 datasets. The v3 paper body reports 29 models evaluated (the original ICLR 2024 / v2 abstract said 27).",
+      "quote": "most OSS LLMs perform far poorer than API-based LLMs in AgentBench (Avg. 0.51 v.s. 2.32) ... while top commercial LLMs present a strong ability of acting as agents in complex environments, there is a significant disparity in performance between them and many OSS competitors that are no larger than 70B",
+      "location": "Abstract; Section 4.2 Main Results"
+    },
+    {
+      "planned": "Identified failure modes: poor long-term reasoning, instruction following, decision-making — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed verbatim in the abstract; the analysis section adds that the predominant concrete failure cause is exceeding the task turn limit (Task Limit Exceeded), plus Invalid Format and Invalid Action errors.",
+      "quote": "poor long-term reasoning, decision-making, and instruction following abilities are the main obstacles for developing usable LLM agents ... The predominant failure cause in AgentBench tasks is Task Limit Exceeded, revealing weak reasoning and decision-making abilities in LLMs",
+      "location": "Abstract; Section 4.3 Analysis"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Most of the benchmark was purpose-built, not recycled: 5 of 8 environments were created for the first time (OS, Database, Knowledge Graph, Digital Card Game, Lateral Thinking Puzzles); only House-Holding, Web Shopping, and Web Browsing were adapted from prior work (ALFWorld, WebShop, Mind2Web).",
+      "quote": "five out of eight are created for the first time",
+      "numbers": "5/8 new environments"
+    },
+    {
+      "point": "Agentic evaluation is inherently multi-turn: problems require long interaction horizons, which distinguishes it from single-shot QA benchmarks.",
+      "quote": "estimated solving rounds for each individual problem range from 5 to 50",
+      "numbers": "5-50 interaction rounds; Dev set 269 problems, Test set 1,014 problems"
+    },
+    {
+      "point": "Failure taxonomy is a teachable artifact: the dominant failure was running out of turns (Task Limit Exceeded), not crashing — agents flounder rather than fail loudly. Format compliance (Invalid Format) and acting outside the defined action space (Invalid Action) are the other major buckets.",
+      "quote": "Invalid Format errors frequently occur due to stringent formatting requirements...Invalid Action errors [occur] due to LLMs generating actions beyond predefined action spaces",
+      "numbers": "Task Limit Exceeded = predominant failure cause"
+    },
+    {
+      "point": "Code pretraining/tuning is a double-edged sword for agents: it helps on tasks with static procedures but may hurt general reasoning.",
+      "quote": "code tuning might deeply influence a model's way of inferential generation...gives models an edge in tasks following relatively static procedure...might also affect general thinking ability",
+      "numbers": "codellama-34b still showed a clear gap to gpt-3.5-turbo despite code specialization"
+    },
+    {
+      "point": "High-quality alignment/instruction data matters independently of base-model scale: an aligned 13B model beat its same-size, newer base-family peer.",
+      "quote": "vicuna-13b outperforms llama-2-13b...indicating that high-quality alignment is still a key to develop better LLM agents",
+      "numbers": "vicuna-13b > llama-2-13b at equal 13B scale"
+    },
+    {
+      "point": "Headline quantification of the commercial-vs-OSS gap useful for the course: average overall AgentBench score 2.32 (API/commercial) vs 0.51 (OSS <=70B); gpt-4 best on 6 of 8 datasets.",
+      "quote": "most OSS LLMs perform far poorer than API-based LLMs in AgentBench (Avg. 0.51 v.s. 2.32)",
+      "numbers": "2.32 vs 0.51 average score; gpt-4 best on 6/8 datasets; 29 models evaluated (v3); 27 in the ICLR 2024 version"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not cite a single fixed model count without versioning: the ICLR 2024 (v2) abstract says 27 LLMs; the updated arXiv v3 (Oct 2025) paper body says 29 models. The current arXiv abstract page even shows an unrendered '\\num' macro where the count should be.",
+    "The commercial-vs-OSS gap is a 2023-era snapshot, explicitly scoped to OSS models 'no larger than 70B' at the time — do not present it as a permanent property of open-source models.",
+    "The three categories are 'groundings' (Code, Game, Web) containing 8 environments — don't conflate 3 categories with 3 environments, and don't call Lateral Thinking Puzzles or House-Holding 'web' tasks.",
+    "The dominant failure mode was Task Limit Exceeded (silent floundering until turns run out), not refusals or crashes — avoid implying agents mostly fail by producing malformed output; format errors were a secondary bucket."
+  ],
+  "notes_for_authors": "All three planned claims check out against the v3 full text (arXiv HTML). Use the exact score pair 0.51 vs 2.32 for the commercial/OSS gap and the verbatim abstract phrase 'poor long-term reasoning, decision-making, and instruction following abilities are the main obstacles'. When citing model count, prefer '27 LLMs (ICLR 2024 version; 29 in the updated arXiv v3)'. The environment list and the 5/8-newly-created detail make a good example of benchmark construction; the Task-Limit-Exceeded failure taxonomy is the strongest teachable hook for a measurement-validity course (what counts as failure, and how turn limits shape scores)."
+}

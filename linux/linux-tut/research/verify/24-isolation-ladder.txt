@@ -1,0 +1,34 @@
+=== page 24 verification, 2026-09-21 — Docker Desktop (Mac, arm64)
+$ for i in ubuntu:24.04 debian:bookworm-slim alpine:3.20; do docker run --rm $i uname -r; done
+6.10.14-linuxkit
+6.10.14-linuxkit
+6.10.14-linuxkit
+[exit=0]
+$ docker run --rm ubuntu:24.04 cat /etc/os-release | head -1; docker run --rm alpine:3.20 head -1 /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Alpine Linux"
+[exit=0]
+$ docker run --rm ubuntu:24.04 cat /proc/sys/kernel/random/boot_id; docker run --rm alpine:3.20 cat /proc/sys/kernel/random/boot_id
+adc18ab8-3212-40c0-bd43-47fba20d4842
+adc18ab8-3212-40c0-bd43-47fba20d4842
+[exit=0]
+$ docker run --rm ubuntu:24.04 ls -l /dev/kvm
+ls: cannot access '/dev/kvm': No such file or directory
+[exit=2]
+$ docker run --rm ubuntu:24.04 bash -c 'grep -c -E "(vmx|svm)" /proc/cpuinfo'
+0
+[exit=1]
+$ docker run --rm ubuntu:24.04 bash -c 'dmesg 2>&1 | grep -i gvisor; echo grep-exit=$?'
+grep-exit=1
+[exit=0]
+$ docker run --rm --runtime=runsc ubuntu:24.04 true
+docker: Error response from daemon: unknown or invalid runtime name: runsc
+
+Run 'docker run --help' for more information
+[exit=125]
+$ docker info --format '{{range $k, $v := .Runtimes}}{{$k}} {{end}}default={{.DefaultRuntime}}'
+io.containerd.runc.v2 runc default=runc
+[exit=0]
+$ docker run --rm ubuntu:24.04 bash -c 'dmesg | head -2'
+dmesg: read kernel buffer failed: Operation not permitted
+[exit=0]

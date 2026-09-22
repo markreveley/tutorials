@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pass@k Done Right · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 5 · Statistics for Evals</p>
+    <h1>pass@k done right</h1>
+    <p class="lede">
+      pass@k — the probability that at least one of k attempts succeeds — is the workhorse metric of
+      code and agent evaluation, and it harbors a famous statistical subtlety: the obvious way to
+      compute it is biased. This page tells the story as the HumanEval authors documented it, with
+      every number verified against the paper.
+    </p>
+
+    <h2 id="why-pass-k">Why the metric exists</h2>
+    <p>
+      When candidate outputs can be checked mechanically — code against tests — generating several and
+      keeping a winner is a legitimate deployment strategy, so the eval should measure it:
+      <span class="term" data-g="pass-at-k">pass@k</span>, the probability that at least one of k
+      samples solves the problem. The metric predates the estimator drama: Chen et al. attribute it to
+      Kulal et al. (2019), whose procedure was literal — generate exactly k samples, count the problem
+      solved if any passes.<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Evaluating LLMs Trained on Code, §2.1">[HumanEval]</a>
+      Two warnings before the math. First, pass@k is an <em>oracle</em> metric: it assumes something
+      can pick the winning sample, with "prior knowledge of the unit tests." Without that oracle, the
+      deployable alternative — reranking by mean log-probability — recovers much less: for the
+      Codex-S model, 77.5% (oracle pass@100) versus 44.5% (reranking) versus 37.7%
+      (pass@1).<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Figure 1">[HumanEval]</a>
+      Second, if every attempt faces a user rather than a test suite, the metric you want is
+      <a href="14-reliability-pass-hat-k.html">pass^k</a>, its reliability-measuring mirror.
+    </p>
+
+    <h2 id="the-bias">The naive estimator, and which way it lies</h2>
+    <p>
+      The literal run-k-and-check procedure is an unbiased estimate but has high variance — with one
+      batch of k samples per problem, luck dominates. The tempting fix: estimate the per-sample success
+      rate p̂ = c/n from n samples, then plug into the formula for "at least one success in k
+      independent tries":
+    </p>
+    <div class="math">naive pass@k = 1 − (1 − p̂)<sup>k</sup></div>
+    <p>
+      This is biased, and the direction is the opposite of what most people guess: it is "a consistent
+      <em>underestimate</em>" of the true pass@k. The gap "doesn't fully close even when n &gt; 5k, and
+      results can seem better with more samples" — meaning two papers using different n aren't even
+      wrong by the same amount.<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Appendix A, Figure 13">[HumanEval]</a>
+      The intuition (full derivation in <a href="../appendices/d-combinatorics-pass-at-k.html">Appendix
+      D</a>): plugging an estimate into a curved formula doesn't average out, because the formula
+      amplifies one side of the estimate's wobble more than the other.
+    </p>
+
+    <h2 id="the-fix">The unbiased estimator</h2>
+    <p>
+      Chen et al.'s contribution is the estimator everyone now uses: generate n ≥ k samples per problem,
+      count the c that pass, and compute the probability that a random <em>subset</em> of k of your n
+      samples contains no passing sample — drawing <em>without</em> replacement, which is the move that
+      kills the bias:<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, §2.1, Eq. 1">[HumanEval]</a>
+    </p>
+    <div class="math">pass@k = E<sub>problems</sub>[ 1 − C(n−c, k) / C(n, k) ]</div>
+    <p>
+      Worked instance (recomputable by pencil; more in Appendix D): n = 10 samples, c = 3 passing,
+      k = 5 → C(7,5)/C(10,5) = 21/252 = 1/12, so pass@5 ≈ 0.917 — where the naive formula with
+      p̂ = 0.3 says 0.832. Computing the binomial coefficients directly overflows for real n, so the
+      paper ships a numerically stable product form — reproduced here as published, since this snippet
+      <em>is</em> the field's reference implementation:<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Figure 3">[HumanEval]</a>
+    </p>
+    <pre><code>def pass_at_k(n, c, k):
+    """
+    :param n: total number of samples
+    :param c: number of correct samples
+    :param k: k in pass@$k$
+    """
+    if n - c &lt; k: return 1.0
+    return 1.0 - np.prod(1.0 - k / np.arange(n - c + 1, n + 1))</code></pre>
+
+    <h2 id="temperature">The metric reaches back into the experiment</h2>
+    <p>
+      A subtlety that catches even careful readers: pass@1 and pass@100 from the same paper are usually
+      <em>not the same run summarized two ways</em>. Because pass@k "rewards only whether the model
+      generates any correct solution," diversity helps at large k and hurts at small k — so the optimal
+      <span class="term" data-g="temperature">temperature</span> depends on k. Verified from the paper:
+      T* = 0.2 for pass@1 but T* = 0.8 for pass@100 (for a 679M-parameter
+      model).<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, §3.2, Figures 5–6">[HumanEval]</a>
+      Each headline number gets its own decoding configuration. That's legitimate — each k models a
+      different deployment — but it means "pass@1" comparisons across papers are also comparing
+      sampling strategies, one more entry for the <a href="19-reproducibility.html">reproducibility</a>
+      ledger.
+    </p>
+    <div class="callout">
+      <span class="label">Keeping the headline numbers straight</span>
+      <p>The HumanEval paper's own results are a worked example in careful attribution, and they're
+      routinely misquoted. Verified: <strong>28.8%</strong> pass@1 is Codex-12B — GPT-3 proper scored
+      ~0%. <strong>70.2%</strong> with 100 samples is Codex; <strong>77.5%</strong> within 100 samples
+      is Codex-S, the fine-tuned variant, whose pass@1 is 37.7%. Different models, different k,
+      different temperatures — five numbers that blur into "Codex solved 70% of HumanEval" in casual
+      retellings.<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Abstract, §1, Figure 1">[HumanEval]</a></p>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Treating pass@k as exempt from <a href="16-error-bars.html">error bars</a>. The estimator is
+      unbiased per problem, but the reported number is still a mean over a finite problem set — and
+      HumanEval has only 164 problems, a size at which EleutherAI showed touted improvements can wash
+      out under resampling.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Biderman, Schoelkopf, Sutawika et al., §4.1">[Eleuther]</a>
+      Small-n caveats stack with small-problem-set caveats: an unbiased estimator of a noisy quantity
+      is still noisy.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>pass@k is three lessons in one metric: estimators can be biased even when the data is clean
+      (the with/without-replacement distinction); the metric's definition reaches back into experiment
+      design (temperature per k); and an oracle assumption (someone picks the winner) can sit silently
+      inside a headline number. When you meet any derived metric, ask the same three questions —
+      estimator, experimental coupling, hidden oracle.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Mark Chen et al., "Evaluating Large Language Models Trained on Code," arXiv:2107.03374, 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+        <li>Stella Biderman, Hailey Schoelkopf, Lintang Sutawika et al. (EleutherAI), "Lessons from the Trenches on Reproducible Evaluation of Language Models," arXiv:2405.14782. <a href="https://arxiv.org/abs/2405.14782">arxiv.org/abs/2405.14782</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+### page 17 verification 2026-09-21; Docker 28.1.1; image lt-16-tools:local = ubuntu:24.04 + iproute2 iputils-ping curl netcat-openbsd python3 procps; user learner (uid 1001)
+
+### 1. ss with listeners (inside lt-17-srv as learner)
++ ss -tulpn
+Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess                        
+udp   UNCONN 0      0         127.0.0.11:44963      0.0.0.0:*                                  
+udp   UNCONN 0      0            0.0.0.0:5005       0.0.0.0:*    users:(("nc",pid=19,fd=3))    
+tcp   LISTEN 0      4096      127.0.0.11:43993      0.0.0.0:*                                  
+tcp   LISTEN 0      5            0.0.0.0:8000       0.0.0.0:*    users:(("python3",pid=7,fd=3))
+tcp   LISTEN 0      5          127.0.0.1:8001       0.0.0.0:*    users:(("python3",pid=13,fd=3))
++ ss -tlpn 'sport = :8000'
+State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+LISTEN 0      5            0.0.0.0:8000      0.0.0.0:*    users:(("python3",pid=7,fd=3))
+# same, as root and as another uid (nobody)
+Netid State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+udp   UNCONN 0      0         127.0.0.11:44963      0.0.0.0:*          
+udp   UNCONN 0      0            0.0.0.0:5005       0.0.0.0:*          
+tcp   LISTEN 0      4096      127.0.0.11:43993      0.0.0.0:*          
+tcp   LISTEN 0      5            0.0.0.0:8000       0.0.0.0:*          
+tcp   LISTEN 0      5          127.0.0.1:8001       0.0.0.0:*          
+State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+LISTEN 0      4096      127.0.0.11:43993      0.0.0.0:*          
+LISTEN 0      5            0.0.0.0:8000       0.0.0.0:*          
+LISTEN 0      5          127.0.0.1:8001       0.0.0.0:*          
+
+### 2. sysctls
++ cat /proc/sys/net/ipv4/ip_local_port_range
+32768	60999
++ cat /proc/sys/net/ipv4/ip_unprivileged_port_start
+0
++ id -u
+1001
++ grep CapEff /proc/self/status
+CapEff:	0000000000000000
+State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+LISTEN 0      5            0.0.0.0:80        0.0.0.0:*    users:(("python3",pid=53,fd=3))
+
+### 3. client on same network
++ curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://lt-17-srv:8000/
+200
++ echo exit=0
++ curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://lt-17-srv:8001/
+exit=0
+curl: (7) Failed to connect to lt-17-srv port 8001 after 0 ms: Couldn't connect to server
+000
++ echo exit=7
++ curl -sS -m 5 -o /dev/null -w '%{http_code}\n' http://localhost:8000/
+exit=7
+curl: (7) Failed to connect to localhost port 8000 after 0 ms: Couldn't connect to server
+000
++ echo exit=7
++ nc -zv -w 3 lt-17-srv 8000
+exit=7
+Connection to lt-17-srv (172.20.0.2) 8000 port [tcp/*] succeeded!
++ echo exit=0
++ nc -zv -w 3 lt-17-srv 8001
+exit=0
+nc: connect to lt-17-srv (172.20.0.2) port 8001 (tcp) failed: Connection refused
+exit=1
++ echo exit=1
++ nc -zv -w 3 lt-17-srv 9999
+nc: connect to lt-17-srv (172.20.0.2) port 9999 (tcp) failed: Connection refused
+exit=1
++ echo exit=1
+
+### 4. symptoms (from lt-17-cli, learner). each command separately, stderr merged
+$ curl -sS -m 5 http://lt-17-srv:9999/
+curl: (7) Failed to connect to lt-17-srv port 9999 after 1 ms: Couldn't connect to server
+real 0.01
+exit=7
+$ curl -sS -m 5 http://192.0.2.1/
+curl: (28) Connection timed out after 5006 milliseconds
+real 5.01
+exit=28
+$ curl -sS -m 8 http://172.20.0.99:8000/
+curl: (7) Failed to connect to 172.20.0.99 port 8000 after 3111 ms: Couldn't connect to server
+exit=7
+real 3.12
+$ curl -sS -m 5 http://no-such-host.invalid/
+curl: (6) Could not resolve host: no-such-host.invalid
+exit=6
+real 0.01
+$ nc -zv -w 3 192.0.2.1 80
+nc: connect to 192.0.2.1 port 80 (tcp) timed out: Operation now in progress
+real 3.01
+exit=1
+$ nc -zv -w 5 172.20.0.99 8000
+nc: connect to 172.20.0.99 port 8000 (tcp) failed: No route to host
+real 3.08
+exit=1
+$ getent hosts no-such-host.invalid
+real 0.01
+exit=2
+$ (network none) curl -sS -m 5 http://1.1.1.1/ ; nc -zv -w 3 1.1.1.1 80
+curl: (7) Failed to connect to 1.1.1.1 port 80 after 0 ms: Couldn't connect to server
+exit=7
+nc: connect to 1.1.1.1 port 80 (tcp) failed: Network is unreachable
+exit=1
+
+### 5. /dev/tcp
++ ls -l /dev/tcp
+ls: cannot access '/dev/tcp': No such file or directory
++ echo
++ echo open
+open
++ echo
+bash: connect: Connection refused
+bash: line 1: /dev/tcp/lt-17-srv/9999: Connection refused
++ echo closed
++ timeout 3 bash -c 'echo > /dev/tcp/192.0.2.1/80'
+closed
++ echo exit=124
+exit=124
+# http by hand
+HTTP/1.0 200 OK
+Server: SimpleHTTP/0.6 Python/3.12.3
+Date: Mon, 21 Sep 2026 21:20:49 GMT
+# alpine / busybox ash
+sh: can't create /dev/tcp/lt-17-srv/8000: nonexistent directory
+exit=1
+lt-17-srv (172.20.0.2:8000) open
+exit=0
+wget exit=0
+# ubuntu stock: sh is dash
+exit=2
+sh: 1: cannot create /dev/tcp/lt-17-srv/8000: Directory nonexistent
+
+### 6. established connection + ephemeral port
+$ (client) ss -tn
+State Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess
+ESTAB 0      0         172.20.0.3:47856   172.20.0.2:8000       
+$ (server) ss -tnp
+State Recv-Q Send-Q Local Address:Port Peer Address:Port Process
+ESTAB 0      0         172.20.0.2:8000   172.20.0.3:47856 users:(("python3",pid=7,fd=4))
+
+### 7. published ports
+$ docker port lt-17-pub
+8000/tcp -> 0.0.0.0:18081
+8000/tcp -> 127.0.0.1:18080
+$ docker ps --filter name=lt-17-pub --format "{{.Names}}  {{.Ports}}"
+lt-17-pub  0.0.0.0:18081->8000/tcp, 127.0.0.1:18080->8000/tcp
+$ (on the Mac) curl -sS -m 5 -o /dev/null -w "%{http_code}
+" http://127.0.0.1:18080/
+200
+$ (on the Mac) curl to lt-17-lo (server bound to 127.0.0.1 INSIDE the container), published on 18082
+curl: (52) Empty reply from server
+000
+exit=52
+$ docker exec lt-17-lo ss -tln
+State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+LISTEN 0      5          127.0.0.1:8000      0.0.0.0:*          
+$ inside lt-17-pub: ss -tln  (publishing does not change the listener)
+State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+LISTEN 0      5            0.0.0.0:8000      0.0.0.0:*          
+
+### 8. wait-for-port.sh (shellcheck clean)
+#!/usr/bin/env bash
+# wait-for-port.sh HOST PORT [DEADLINE_SECONDS] -- exit 0 when HOST:PORT accepts a TCP connection
+set -u
+host=$1 port=$2 deadline=${3:-30}
+start=$SECONDS
+while (( SECONDS - start < deadline )); do
+  if timeout 2 bash -c "echo > /dev/tcp/$host/$port" 2>/dev/null; then
+    echo "open after $(( SECONDS - start ))s"
+    exit 0
+  fi
+  sleep 1
+done
+echo "still not accepting connections on $host:$port after ${deadline}s" >&2
+exit 1
+$ server starts 4 s late on port 8080
+open after 4s
+exit=0
+$ never-listening port, deadline 5
+still not accepting connections on lt-17-srv:8001 after 5s
+exit=1
+
+### 9. what the gateway (host) offers, from inside a default-bridge container
+gw=172.17.0.1
+nc: connect to 172.17.0.1 port 22 (tcp) failed: Connection refused
+nc: connect to 172.17.0.1 port 80 (tcp) failed: Connection refused
+nc: connect to 172.17.0.1 port 443 (tcp) failed: Connection refused
+nc: connect to 172.17.0.1 port 2375 (tcp) failed: Connection refused
+nc: connect to 172.17.0.1 port 2376 (tcp) failed: Connection refused
+nc: connect to 172.17.0.1 port 5432 (tcp) failed: Connection refused
+nc: connect to 172.17.0.1 port 8080 (tcp) failed: Connection refused
+
+### 10. extras
+$ inside lt-17-srv: curl 127.0.0.1:8001
+200
+$ from a default-bridge container: published 0.0.0.0:18081 via gateway and host.docker.internal
+Connection to 172.17.0.1 18081 port [tcp/*] succeeded!
+nc: connect to 172.17.0.1 port 18080 (tcp) failed: Connection refused
+fdc4:f303:9324::254 host.docker.internal
+Connection to host.docker.internal (192.168.65.254) 18081 port [tcp/*] succeeded!
+Connection to host.docker.internal (192.168.65.254) 18080 port [tcp/*] succeeded!
+$ stock ubuntu:24.04, bash only
+exit=1
+8000 open
+8001 closed-or-filtered
+$ python log line for the bind
+Serving HTTP on 127.0.0.1 port 8000 (http://127.0.0.1:8000/) ...
+exit=124
+Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...
+exit=124
+$ EADDRINUSE
+OSError: [Errno 98] Address already in use
+1024
+PermissionError: [Errno 13] Permission denied

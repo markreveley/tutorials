@@ -1,0 +1,202 @@
+{
+ "id": "docker-security",
+ "tag": "[Docker: security]",
+ "citation": {
+  "authors": "Docker Inc.",
+  "title": "Docker Engine security; Rootless mode; Isolate containers with a user namespace; Protect the Docker daemon socket",
+  "venue": "Docker Docs",
+  "year": "2026 (living document)",
+  "url": "https://docs.docker.com/engine/security/"
+ },
+ "fetched_urls": [
+  "https://docs.docker.com/engine/security/ (as .md)",
+  "https://docs.docker.com/engine/security/rootless/ (as .md)",
+  "https://docs.docker.com/engine/security/rootless/troubleshoot/ (as .md)",
+  "https://docs.docker.com/engine/security/rootless/tips/ (as .md)",
+  "https://docs.docker.com/engine/security/userns-remap/ (as .md)",
+  "https://docs.docker.com/engine/security/protect-access/ (as .md)",
+  "https://docs.docker.com/engine/install/linux-postinstall/ (as .md)",
+  "https://docs.docker.com/engine/security/seccomp/ (as .md)",
+  "https://docs.docker.com/engine/containers/run/ (as .md)",
+  "https://raw.githubusercontent.com/moby/moby/master/daemon/pkg/oci/caps/defaults.go"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Four major security areas Docker docs list: intrinsic kernel security (namespaces, cgroups), daemon attack surface, container config loopholes, kernel hardening features",
+   "verdict": "confirmed",
+   "finding": "Exactly four, in this order and wording.",
+   "quote": "There are four major areas to consider when reviewing Docker security: - The intrinsic security of the kernel and its support for namespaces and cgroups - The attack surface of the Docker daemon itself - Loopholes in the container configuration profile, either by default, or when customized by users. - The \"hardening\" security features of the kernel [...]",
+   "location": "Docker Engine security (opening list)",
+   "cite_url": "https://docs.docker.com/engine/security/"
+  },
+  {
+   "planned": "Daemon requires root (unless rootless) -> 'only trusted users should be allowed to control your Docker daemon'; access to the socket/docker group is root-equivalent on the host (exact wording; the bind-mount-/ example in the docs)",
+   "verdict": "confirmed",
+   "finding": "All three pieces are present, but in two different pages. (a) Security page: daemon 'requires `root` privileges unless you opt-in to Rootless mode'; 'only trusted users should be allowed to control your Docker daemon'; the /host = host / example where 'the container can alter your host filesystem without any restriction'. (b) The explicit root-equivalence sentence is on the Linux post-install page: 'The `docker` group grants root-level privileges to the user.' (c) Protect-access page says of TLS client keys: 'giving them root access to the machine hosting the daemon'. The phrase 'root-equivalent' itself is NOT Docker's wording - quote 'root-level privileges'.",
+   "quote": "First of all, only trusted users should be allowed to control your Docker daemon. [...] This means that you can start a container where the `/host` directory is the `/` directory on your host; and the container can alter your host filesystem without any restriction.",
+   "location": "Docker Engine security > Docker daemon attack surface",
+   "cite_url": "https://docs.docker.com/engine/security/#docker-daemon-attack-surface"
+  },
+  {
+   "planned": "Default capability set: Docker starts containers with a restricted set - list exactly which capabilities are retained by default (CHOWN, DAC_OVERRIDE, FSETID, FOWNER, MKNOD, NET_RAW, SETGID, SETUID, SETFCAP, SETPCAP, NET_BIND_SERVICE, SYS_CHROOT, KILL, AUDIT_WRITE) - verify list and count against current docs",
+   "verdict": "confirmed",
+   "finding": "Exactly these 14, confirmed three ways: (1) 'Running containers' doc table of capabilities 'allowed by default and can be dropped' has 14 rows: AUDIT_WRITE, CHOWN, DAC_OVERRIDE, FOWNER, FSETID, KILL, MKNOD, NET_BIND_SERVICE, NET_RAW, SETFCAP, SETGID, SETPCAP, SETUID, SYS_CHROOT; (2) moby source DefaultCapabilities() returns the same 14 (file has MOVED: now daemon/pkg/oci/caps/defaults.go, which is what the security page links to; the old oci/caps/defaults.go path is stale); (3) live CapEff mask 0xa80425fb in a default ubuntu:24.04 container decodes to the same 14 (see docker-run note). The security page itself does not enumerate them; it says Docker 'drops all capabilities except those needed, an allowlist instead of a denylist approach'.",
+   "quote": "return []string{ \"CAP_CHOWN\", \"CAP_DAC_OVERRIDE\", \"CAP_FSETID\", \"CAP_FOWNER\", \"CAP_MKNOD\", \"CAP_NET_RAW\", \"CAP_SETGID\", \"CAP_SETUID\", \"CAP_SETFCAP\", \"CAP_SETPCAP\", \"CAP_NET_BIND_SERVICE\", \"CAP_SYS_CHROOT\", \"CAP_KILL\", \"CAP_AUDIT_WRITE\", }",
+   "location": "moby/moby daemon/pkg/oci/caps/defaults.go, func DefaultCapabilities(); doc table at Running containers > Runtime privilege and Linux capabilities",
+   "cite_url": "https://github.com/moby/moby/blob/master/daemon/pkg/oci/caps/defaults.go"
+  },
+  {
+   "planned": "By default, root in a container is the SAME uid 0 as root on the host unless userns-remap/rootless is used",
+   "verdict": "confirmed",
+   "finding": "The docs state it by implication rather than in one sentence: user-namespace remapping 'allows for the root user in a container to be mapped to a non uid-0 user outside the container' and 'This facility is available but not enabled by default.' The run doc adds 'The default user within a container is root (uid = 0)'. So by default container uid 0 IS host uid 0 (restricted by capabilities/seccomp/LSM, not by uid). Do not quote a sentence saying 'same uid' - there isn't one; cite these two.",
+   "quote": "As of Docker 1.10 User Namespaces are supported directly by the docker daemon. This feature allows for the root user in a container to be mapped to a non uid-0 user outside the container, which can help to mitigate the risks of container breakout. This facility is available but not enabled by default.",
+   "location": "Docker Engine security > Other kernel security features",
+   "cite_url": "https://docs.docker.com/engine/security/#other-kernel-security-features"
+  },
+  {
+   "planned": "Rootless mode runs daemon and containers inside a user namespace as a non-root user; limitations list",
+   "verdict": "corrected",
+   "finding": "Definition confirmed. CORRECTION on location: the 'Known limitations' list is no longer on the main rootless page; it now lives on the Rootless > Troubleshooting page. Current list: only overlay2 (kernel 5.11+), fuse-overlayfs (4.18+), btrfs, vfs storage drivers; cgroup (resource limits) supported only with cgroup v2 AND systemd; not supported: AppArmor, Checkpoint, Overlay network, exposing SCTP ports; ping and privileged ports (<1024) need extra setup; IPAddress from docker inspect is inside RootlessKit's netns and unreachable from the host; docker run -p does not propagate source IPs by default; NFS data-root unsupported; --cap-add capabilities apply only within the container's user namespace.",
+   "quote": "Rootless mode executes the Docker daemon and containers inside a user namespace. This is similar to `userns-remap` mode, except that with `userns-remap` mode, the daemon itself is running with root privileges, whereas in rootless mode, both the daemon and the container are running without root privileges.",
+   "location": "Rootless mode > How it works; limitations at Rootless mode > Troubleshooting > Known limitations",
+   "cite_url": "https://docs.docker.com/engine/security/rootless/#how-it-works"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Root-level wording for the docker group (the sentence to quote for 'socket access = root').",
+   "quote": "The `docker` group grants root-level privileges to the user. For details on how this impacts security in your system, see Docker Daemon Attack Surface.",
+   "location": "Linux post-installation steps > Manage Docker as a non-root user (WARNING)",
+   "cite_url": "https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user"
+  },
+  {
+   "finding": "Socket ownership and daemon user.",
+   "quote": "The Docker daemon binds to a Unix socket, not a TCP port. By default it's the `root` user that owns the Unix socket, and other users can only access it using `sudo`. The Docker daemon always runs as the `root` user.",
+   "location": "Linux post-installation steps > Manage Docker as a non-root user",
+   "cite_url": "https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user"
+  },
+  {
+   "finding": "Daemon needs root unless rootless.",
+   "quote": "This daemon requires `root` privileges unless you opt-in to Rootless mode, and you should therefore be aware of some important details.",
+   "location": "Docker Engine security > Docker daemon attack surface",
+   "cite_url": "https://docs.docker.com/engine/security/#docker-daemon-attack-surface"
+  },
+  {
+   "finding": "API reachable from containers -> privilege escalation; plain-HTTP TCP is now refused outright.",
+   "quote": "Note that even if you have a firewall to limit accesses to the REST API endpoint from other hosts in the network, the endpoint can be still accessible from containers, and it can easily result in the privilege escalation. [...] Exposing the daemon API over HTTP without TLS is not permitted, and such a configuration causes the daemon to fail early on startup",
+   "location": "Docker Engine security > Docker daemon attack surface",
+   "cite_url": "https://docs.docker.com/engine/security/#docker-daemon-attack-surface"
+  },
+  {
+   "finding": "TLS client keys = root on the daemon host.",
+   "quote": "That means anyone with the keys can give any instructions to your Docker daemon, giving them root access to the machine hosting the daemon. Guard these keys as you would a root password!",
+   "location": "Protect the Docker daemon socket > Use TLS (HTTPS) (WARNING)",
+   "cite_url": "https://docs.docker.com/engine/security/protect-access/"
+  },
+  {
+   "finding": "Default transport.",
+   "quote": "By default, Docker runs through a non-networked UNIX socket. It can also optionally communicate using SSH or a TLS (HTTPS) socket.",
+   "location": "Protect the Docker daemon socket (intro)",
+   "cite_url": "https://docs.docker.com/engine/security/protect-access/"
+  },
+  {
+   "finding": "Namespaces = first form of isolation.",
+   "quote": "Namespaces provide the first and most straightforward form of isolation. Processes running within a container cannot see, and even less affect, processes running in another container, or in the host system.",
+   "location": "Docker Engine security > Kernel namespaces",
+   "cite_url": "https://docs.docker.com/engine/security/#kernel-namespaces"
+  },
+  {
+   "finding": "cgroups = resource accounting/limiting, anti-DoS, not data isolation.",
+   "quote": "So while they do not play a role in preventing one container from accessing or affecting the data and processes of another container, they are essential to fend off some denial-of-service attacks.",
+   "location": "Docker Engine security > Control groups",
+   "cite_url": "https://docs.docker.com/engine/security/#control-groups"
+  },
+  {
+   "finding": "Capabilities framing + what reduced caps deny.",
+   "quote": "By default, Docker starts containers with a restricted set of capabilities. [...] containers can run with a reduced capability set; meaning that \"root\" within a container has much less privileges than the real \"root\". For instance, it is possible to: - Deny all \"mount\" operations - Deny access to raw sockets (to prevent packet spoofing) [...] - Deny module loading",
+   "location": "Docker Engine security > Linux kernel capabilities",
+   "cite_url": "https://docs.docker.com/engine/security/#linux-kernel-capabilities"
+  },
+  {
+   "finding": "Allowlist wording.",
+   "quote": "By default Docker drops all capabilities except those needed, an allowlist instead of a denylist approach.",
+   "location": "Docker Engine security > Linux kernel capabilities",
+   "cite_url": "https://docs.docker.com/engine/security/#linux-kernel-capabilities"
+  },
+  {
+   "finding": "Docs' own caveat + best practice.",
+   "quote": "One primary risk with running Docker containers is that the default set of capabilities and mounts given to a container may provide incomplete isolation, either independently, or when used in combination with kernel vulnerabilities. [...] The best practice for users would be to remove all capabilities except those explicitly required for their processes.",
+   "location": "Docker Engine security > Linux kernel capabilities",
+   "cite_url": "https://docs.docker.com/engine/security/#linux-kernel-capabilities"
+  },
+  {
+   "finding": "Conclusion sentence.",
+   "quote": "Docker containers are, by default, quite secure; especially if you run your processes as non-privileged users inside the container.",
+   "location": "Docker Engine security > Conclusions",
+   "cite_url": "https://docs.docker.com/engine/security/#conclusions"
+  },
+  {
+   "finding": "Default seccomp profile: allowlist, blocks ~44 of 300+ syscalls, SCMP_ACT_ERRNO default.",
+   "quote": "The default `seccomp` profile provides a sane default for running containers with seccomp and disables around 44 system calls out of 300+. It is moderately protective while providing wide application compatibility.",
+   "location": "Seccomp security profiles for Docker > Pass a profile for a container",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/#pass-a-profile-for-a-container"
+  },
+  {
+   "finding": "userns-remap: mechanism and the /etc/subuid mapping example.",
+   "quote": "`testuser:231072:65536` This means that `testuser` is assigned a subordinate user ID range of `231072` and the next 65536 integers in sequence. UID `231072` is mapped within the namespace (within the container, in this case) as UID `0` (`root`). UID `231073` is mapped as UID `1`, and so forth.",
+   "location": "Isolate containers with a user namespace > About remapping and subordinate user and group IDs",
+   "cite_url": "https://docs.docker.com/engine/security/userns-remap/#about-remapping-and-subordinate-user-and-group-ids"
+  },
+  {
+   "finding": "userns-remap: best defence is non-root; remap is for must-be-root containers; daemon still root.",
+   "quote": "The best way to prevent privilege-escalation attacks from within a container is to configure your container's applications to run as unprivileged users. For containers whose processes must run as the `root` user within the container, you can re-map this user to a less-privileged user on the Docker host.",
+   "location": "Isolate containers with a user namespace (intro)",
+   "cite_url": "https://docs.docker.com/engine/security/userns-remap/"
+  },
+  {
+   "finding": "userns-remap NOTE.",
+   "quote": "With `userns-remap`, the Docker daemon still runs as root. To run both the daemon and containers without root privileges, see Rootless mode instead.",
+   "location": "Isolate containers with a user namespace (NOTE)",
+   "cite_url": "https://docs.docker.com/engine/security/userns-remap/"
+  },
+  {
+   "finding": "userns-remap: 'default' creates user dockremap; incompatible features.",
+   "quote": "The following standard Docker features are incompatible with running a Docker daemon with user namespaces enabled: - Sharing PID or NET namespaces with the host (`--pid=host` or `--network=host`). - External (volume or storage) drivers which are unaware or incapable of using daemon user mappings. - Using the `--privileged` mode flag on `docker run` without also specifying `--userns=host`.",
+   "location": "Isolate containers with a user namespace > User namespace known limitations",
+   "cite_url": "https://docs.docker.com/engine/security/userns-remap/#user-namespace-known-limitations"
+  },
+  {
+   "finding": "Rootless purpose + prerequisites (newuidmap/newgidmap from uidmap; >= 65,536 subordinate IDs).",
+   "quote": "Rootless mode lets you run the Docker daemon and containers as a non-root user to mitigate potential vulnerabilities in the daemon and the container runtime.",
+   "location": "Rootless mode (intro)",
+   "cite_url": "https://docs.docker.com/engine/security/rootless/"
+  },
+  {
+   "finding": "Rootless socket path and how docker info shows it.",
+   "quote": "export DOCKER_HOST=unix:///run/user/1000/docker.sock [...] Security Options: seccomp Profile: builtin rootless cgroupns",
+   "location": "Rootless mode > Install",
+   "cite_url": "https://docs.docker.com/engine/security/rootless/#install"
+  },
+  {
+   "finding": "Rootless limitations - exact list items.",
+   "quote": "- cgroup is supported only when running with cgroup v2 and systemd. [...] - Following features are not supported: - AppArmor - Checkpoint - Overlay network - Exposing SCTP ports",
+   "location": "Rootless mode > Troubleshooting > Known limitations",
+   "cite_url": "https://docs.docker.com/engine/security/rootless/troubleshoot/#known-limitations"
+  },
+  {
+   "finding": "Rootless + --cap-add caveat.",
+   "quote": "Capabilities added with `--cap-add` apply only to resources governed by the container's user namespace. They don't grant privileges over host or other global resources.",
+   "location": "Rootless mode > Troubleshooting > Known limitations",
+   "cite_url": "https://docs.docker.com/engine/security/rootless/troubleshoot/#known-limitations"
+  },
+  {
+   "finding": "Historical maturity facts: namespaces 2.6.15-2.6.26 (July 2008); cgroups started 2006, merged 2.6.24; Unix socket replaced TCP in Docker 0.5.2; user namespaces supported since Docker 1.10.",
+   "quote": "Kernel namespaces were introduced between kernel version 2.6.15 and 2.6.26. This means that since July 2008 (date of the 2.6.26 release ), namespace code has been exercised and scrutinized on a large number of production systems.",
+   "location": "Docker Engine security > Kernel namespaces",
+   "cite_url": "https://docs.docker.com/engine/security/#kernel-namespaces"
+  }
+ ],
+ "teaching_notes": "Best single page for the 'daemon = root' argument. Key wording authors should use: 'only trusted users should be allowed to control your Docker daemon' (security page) and 'The docker group grants root-level privileges to the user' (post-install page) - 'root-equivalent' is folklore phrasing, not Docker's. Default capabilities: confirmed 14 (docs table + moby source + live mask); note the moby source file moved to daemon/pkg/oci/caps/defaults.go. Correction: the rootless 'Known limitations' list moved to the Troubleshooting sub-page, and the old limitation that --net=host is namespaced is now listed as historical ('Until Docker Engine v29.5'). The security page never says in one sentence that container root is host uid 0; it says userns remapping exists and 'is available but not enabled by default' - build the claim from that plus 'default user ... is root (uid = 0)'. The page has dated prose (LXC, GRSEC, 'Docker currently only enables capabilities') - do not repeat 'only enables capabilities' as current fact: seccomp and AppArmor defaults are documented elsewhere."
+}

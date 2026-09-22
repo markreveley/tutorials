@@ -1,0 +1,137 @@
+{
+ "id": "tcpdump-ping",
+ "tag": "[tcpdump(1)]",
+ "citation": {
+  "authors": "The Tcpdump Group; iputils project; Dmitry Butskoy (traceroute); Linux man-pages project",
+  "title": "tcpdump(1), pcap-filter(7), pcap(3PCAP); ping(8) (iputils); traceroute(8); icmp(7); Linux kernel IP sysctl documentation",
+  "venue": "tcpdump.org / man7.org / docs.kernel.org",
+  "year": "2026",
+  "url": "https://www.tcpdump.org/manpages/tcpdump.1.html"
+ },
+ "fetched_urls": [
+  "https://www.tcpdump.org/manpages/tcpdump.1.html",
+  "https://www.tcpdump.org/manpages/pcap-filter.7.html",
+  "https://www.tcpdump.org/manpages/pcap.3pcap.html",
+  "https://man7.org/linux/man-pages/man8/ping.8.html",
+  "https://man7.org/linux/man-pages/man8/traceroute.8.html",
+  "https://man7.org/linux/man-pages/man7/icmp.7.html",
+  "https://man7.org/linux/man-pages/man7/capabilities.7.html",
+  "https://docs.kernel.org/networking/ip-sysctl.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "tcpdump -i IF -n, filter expressions (host, port, tcp/udp); needs CAP_NET_RAW/root",
+   "verdict": "confirmed",
+   "finding": "-i selects the interface (default: lowest-numbered configured-up non-loopback interface; \"any\" captures on all); -n \"Don't convert addresses (i.e., host addresses, port numbers, etc.) to names\"; -c N exits after N packets; -w writes raw packets to a file, -r reads them back (reading needs no privilege); -A prints payload ASCII. Filter primitives per pcap-filter(7): `host H`, `port P` (TCP/UDP/SCTP source or destination), `tcp`, `udp`, `icmp` (= `ip proto 1`), combinable with and/or/not. Privilege: pcap(3PCAP) says on Linux you must be root or have CAP_NET_RAW. Executed: works as root in a default Docker container (NET_RAW is in Docker's default set); fails with --cap-drop NET_RAW and as uid 65534: \"You don't have permission to perform this capture on that device (socket: Operation not permitted)\".",
+   "quote": "Reading packets from a network interface may require that you have special privileges; see the pcap(3PCAP) man page for details. Reading a saved packet file doesn't require special privileges.",
+   "location": "tcpdump(1) DESCRIPTION",
+   "cite_url": "https://www.tcpdump.org/manpages/tcpdump.1.html"
+  },
+  {
+   "planned": "ping uses ICMP ECHO_REQUEST; ICMP blocked != host down; ping needing CAP_NET_RAW or ping_group_range (unprivileged ICMP sockets)",
+   "verdict": "corrected",
+   "finding": "ECHO_REQUEST/ECHO_RESPONSE confirmed. Privilege, precisely: ping(8) SECURITY says CAP_NET_RAW is needed only (1) for non-echo queries, (2) if the kernel lacks ICMP datagram sockets, or (3) \"if the user is not allowed to create an ICMP echo socket\" - i.e. if the user's group is outside net.ipv4.ping_group_range. Kernel default for ping_group_range is \"1 0\" (nobody); Docker sets it to \"0 2147483647\" inside containers (executed), so ping works there even as uid 65534 with no capabilities. Ubuntu 24.04 ships /usr/bin/ping with the file capability cap_net_raw=ep (executed getcap), which produces a surprising failure mode: under `--cap-drop NET_RAW` the binary cannot even be exec'd (\"bash: /usr/bin/ping: Operation not permitted\", exit 126) although a copy of ping without the file capability works via the datagram socket. \"ICMP blocked != host down\" is NOT stated in ping(8) (its EXIT STATUS even says the code shows \"if a host is alive or not\"); the supporting primary text is traceroute(8): firewalls \"filter the 'unlikely' UDP ports, or even ICMP echoes\". Treat it as course reasoning backed by that sentence.",
+   "quote": "ping requires CAP_NET_RAW capability to be executed 1) if the program is used for non-echo queries (see -N option) or when the identification field set to 0 for ECHO_REQUEST (see -e), or 2) if kernel does not support ICMP datagram sockets, or 3) if the user is not allowed to create an ICMP echo socket.",
+   "location": "ping(8) SECURITY",
+   "cite_url": "https://man7.org/linux/man-pages/man8/ping.8.html"
+  },
+  {
+   "planned": "traceroute uses increasing TTL and ICMP time exceeded",
+   "verdict": "confirmed",
+   "finding": "Confirmed: probes start at TTL 1 and increase by one until the destination answers or max hops (default 30); three probes per TTL; \"*\" when no reply within the timeout. Nuance: the DEFAULT probe is a UDP datagram to an \"unlikely\" port starting at 33434 (destination answers ICMP port unreachable); -I uses ICMP echo, -T uses TCP SYN to port 80. Only the hop replies are ICMP TIME_EXCEEDED. Executed from a Docker Desktop container: hop 1 = 172.17.0.1 (bridge gateway), every later hop \"* * *\".",
+   "quote": "This program attempts to trace the route an IP packet would follow to some internet host by launching probe packets with a small ttl (time to live) then listening for an ICMP \"time exceeded\" reply from a gateway. We start our probes with a ttl of one and increase by one until we get an ICMP \"port unreachable\" (or TCP reset)",
+   "location": "traceroute(8) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man8/traceroute.8.html"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "ping description.",
+   "quote": "ping uses the ICMP protocol's mandatory ECHO_REQUEST datagram to elicit an ICMP ECHO_RESPONSE from a host or gateway.",
+   "location": "ping(8) DESCRIPTION"
+  },
+  {
+   "finding": "ping exit codes: 0 replies received; 1 no reply at all (or fewer than count by deadline); 2 other error. Executed: reachable -> 0; blackhole 192.0.2.1 -> \"100% packet loss\", exit 1; --network none -> \"ping: connect: Network is unreachable\", exit 2.",
+   "quote": "If ping does not receive any reply packets at all it will exit with code 1. If a packet count and deadline are both specified, and fewer than count packets are received by the time the deadline has arrived, it will also exit with code 1. On other error it exits with code 2. Otherwise it exits with code 0.",
+   "location": "ping(8) EXIT STATUS"
+  },
+  {
+   "finding": "ping -c / -W / -w.",
+   "quote": "-c count: Stop after sending count ECHO_REQUEST packets. ... -W timeout: Time to wait for a response, in seconds. ... -w deadline: Specify a timeout, in seconds, before ping exits regardless of how many packets have been sent or received.",
+   "location": "ping(8) OPTIONS"
+  },
+  {
+   "finding": "Kernel default for unprivileged ICMP sockets.",
+   "quote": "Restrict ICMP_PROTO datagram sockets to users in the group range. The default is \"1 0\", meaning, that nobody (not even root) may create ping sockets. Setting it to \"100 100\" would grant permissions to the single group. \"0 4294967294\" would enable it for the world",
+   "location": "Kernel docs: IP Sysctl, ping_group_range",
+   "cite_url": "https://docs.kernel.org/networking/ip-sysctl.html"
+  },
+  {
+   "finding": "icmp(7) on the same sysctl.",
+   "quote": "Range of the group IDs (minimum and maximum group IDs, inclusive) that are allowed to create ICMP Echo sockets. The default is \"1 0\", which means no group is allowed to create ICMP Echo sockets.",
+   "location": "icmp(7) /proc interfaces, ping_group_range",
+   "cite_url": "https://man7.org/linux/man-pages/man7/icmp.7.html"
+  },
+  {
+   "finding": "CAP_NET_RAW definition.",
+   "quote": "CAP_NET_RAW: Use RAW and PACKET sockets; bind to any address for transparent proxying.",
+   "location": "capabilities(7)",
+   "cite_url": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
+  },
+  {
+   "finding": "pcap privilege text for Linux.",
+   "quote": "You must be root or the application capturing packets must be installed setuid to root, unless your distribution has a kernel that supports capability bits such as CAP_NET_RAW ... in which case you must have CAP_NET_RAW in order to capture.",
+   "location": "pcap(3PCAP), \"Under Linux\"",
+   "cite_url": "https://www.tcpdump.org/manpages/pcap.3pcap.html"
+  },
+  {
+   "finding": "Executed: ping and the file-capability trap.",
+   "quote": "$ docker run --rm lt-r4-tools:local getcap /usr/bin/ping\n/usr/bin/ping cap_net_raw=ep\n$ docker run --rm --cap-drop NET_RAW lt-r4-tools:local ping -c1 1.1.1.1\nbash: line 1: /usr/bin/ping: Operation not permitted            (exit=126)\n$ ... cp /usr/bin/ping /tmp/ping; /tmp/ping -c1 -W2 1.1.1.1\n64 bytes from 1.1.1.1: icmp_seq=1 ttl=63 time=897 ms           (exit=0)\n$ docker run --rm --user 65534 lt-r4-tools:local ping -c1 1.1.1.1\n64 bytes from 1.1.1.1: icmp_seq=1 ttl=63 time=406 ms           (exit=0)\n$ cat /proc/sys/net/ipv4/ping_group_range  ->  0\t2147483647",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; ubuntu:24.04 with tcpdump, iputils-ping, traceroute installed)"
+  },
+  {
+   "finding": "Executed: tcpdump capture of one HTTP request (full lines in the tcp-udp note).",
+   "quote": "# tcpdump -i eth0 -n -c 6 \"tcp port 80 and host 1.1.1.1\"\ntcpdump: verbose output suppressed, use -v[v]... for full protocol decode\nlistening on eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes\n10:45:18.571311 IP 172.17.0.3.42196 > 1.1.1.1.80: Flags [S], seq 2698517202, win 65495, options [...], length 0\n...\n6 packets captured\n9 packets received by filter\n0 packets dropped by kernel",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; ubuntu:24.04 with tcpdump, iputils-ping, traceroute installed)"
+  },
+  {
+   "finding": "Executed: tcpdump without privilege.",
+   "quote": "tcpdump: eth0: You don't have permission to perform this capture on that device\n(socket: Operation not permitted)",
+   "location": "executed lt-r4-tools:local with --cap-drop NET_RAW, and separately with --user 65534 (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; ubuntu:24.04 with tcpdump, iputils-ping, traceroute installed)"
+  },
+  {
+   "finding": "Executed: traceroute from a container.",
+   "quote": "# traceroute -n -m 5 -w 1 1.1.1.1\ntraceroute to 1.1.1.1 (1.1.1.1), 5 hops max, 60 byte packets\n 1  172.17.0.1  0.118 ms  0.036 ms  0.025 ms\n 2  * * *\n 3  * * *\n 4  * * *\n 5  * * *",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; ubuntu:24.04 with tcpdump, iputils-ping, traceroute installed; hops beyond the bridge gateway showed only stars on Docker Desktop - probably an artefact of its VM networking; cause not investigated and native-Linux behaviour not verified)"
+  },
+  {
+   "finding": "traceroute defaults: 30 hops, 3 probes, 60-byte packets, UDP ports from 33434.",
+   "quote": "Probe packets are udp datagrams with so-called \"unlikely\" destination ports. The \"unlikely\" port of the first probe is 33434, then for each next probe it is incremented by one.",
+   "location": "traceroute(8) LIST OF AVAILABLE METHODS, default"
+  },
+  {
+   "finding": "Firewalls break classic traceroute/ping (support for \"no reply != down\").",
+   "quote": "In the modern network environment the traditional traceroute methods can not be always applicable, because of widespread use of firewalls. Such firewalls filter the \"unlikely\" UDP ports, or even ICMP echoes.",
+   "location": "traceroute(8) DESCRIPTION"
+  },
+  {
+   "finding": "traceroute annotations: !H host, !N network, !P protocol unreachable, !X administratively prohibited.",
+   "quote": "!H, !N, or !P (host, network or protocol unreachable), !S (source route failed), !F (fragmentation needed), !X (communication administratively prohibited)",
+   "location": "traceroute(8) DESCRIPTION"
+  },
+  {
+   "finding": "tcpdump -i any.",
+   "quote": "On all supported Linux systems, as well as on recent versions of macOS and Solaris, an interface argument of ``any'' means a special pseudo-interface, which captures packets from all regular network interfaces of the OS.",
+   "location": "tcpdump(1) OPTIONS, -i"
+  },
+  {
+   "finding": "Filter primitive definitions.",
+   "quote": "host hostnameaddr: True if the source or the destination ARP/IPv4/IPv6/RARP address of the packet is hostnameaddr. ... port portnamenum: True if the source or the destination TCP/UDP/SCTP port of an IPv4/IPv6 packet is portnamenum.",
+   "location": "pcap-filter(7)",
+   "cite_url": "https://www.tcpdump.org/manpages/pcap-filter.7.html"
+  }
+ ],
+ "teaching_notes": "None of ping, tcpdump, traceroute (or ip/ss/curl/dig) is in the stock ubuntu:24.04 image - packages: iputils-ping, tcpdump, traceroute. Folklore corrected: \"ping needs root/CAP_NET_RAW\" is false in Docker containers because Docker widens ping_group_range (kernel default \"1 0\" = nobody); conversely dropping NET_RAW makes Ubuntu's ping un-executable because of its cap_net_raw=ep file capability - an error an agent transcript may show and misread as \"ping missing\". The title in sources.json mentions nc/netcat but lists no URL; no nc man page was verified - only executed use (`nc -l -p PORT` from netcat-openbsd works as a listener). ping(8) itself claims its exit code tells \"if a host is alive or not\"; the course's caveat (ICMP may be filtered) rests on traceroute(8)'s firewall sentence."
+}

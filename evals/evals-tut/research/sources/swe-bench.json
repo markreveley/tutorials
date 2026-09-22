@@ -1,0 +1,84 @@
+{
+  "id": "swe-bench",
+  "citation": {
+    "authors": "Carlos E. Jimenez, John Yang, Alexander Wettig, Shunyu Yao, Kexin Pei, Ofir Press, Karthik Narasimhan",
+    "title": "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?",
+    "venue": "ICLR 2024 (published as a conference paper)",
+    "year": "2024 (arXiv v1 Oct 10, 2023; v3 Nov 11, 2024)",
+    "url": "https://arxiv.org/abs/2310.06770"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2310.06770",
+    "https://arxiv.org/pdf/2310.06770 (v3 PDF, pages 1-10 read directly)"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "2,294 task instances from 12 Python repos; resolution judged by held-out FAIL_TO_PASS and PASS_TO_PASS tests — confirm construction details",
+      "verdict": "confirmed",
+      "finding": "Confirmed with terminology nuance. 2,294 task instances across 12 popular Python repositories, filtered from ~90,000 PRs via a 3-stage pipeline: (I) scrape PRs from 12 repos; (II) keep merged PRs that resolve a GitHub issue AND make changes to test files; (III) execution filter requiring at least one test that flips fail->pass when the PR's other content is applied, discarding instances with install/runtime errors. The paper's prose says 'fail-to-pass test' and 'additional tests' that 'check whether prior functionality is properly maintained' — the literal FAIL_TO_PASS/PASS_TO_PASS field names come from the released dataset/harness, not the paper text. Every instance has >=1 fail-to-pass test, 40% have >=2, and a median of 51 additional (pass-to-pass) tests guard against regressions.",
+      "quote": "Stage III: Execution-based filtering. For each candidate task, we apply the PR's test content, and log the associated test results before and after the PR's other content is applied. We filter out task instances without at least one test where its status changes from a fail to pass (henceforth referred to as fail-to-pass test). We also filter out instances that result in installation or runtime errors. Through these stages of filtering, the original 90,000 PRs are filtered down to the 2,294 task instances which comprise SWE-bench. ... For each task instance, there is at least one fail-to-pass test which was used to test the reference solution, and 40% of instances have at least two fail-to-pass tests. These tests evaluate whether the model addressed the problem in the issue. In addition, a median of 51 additional tests run to check whether prior functionality is properly maintained.",
+      "location": "Sections 2.1 (Benchmark Construction) and 2.3 (Features of SWE-bench), pp. 2-3"
+    },
+    {
+      "planned": "Original headline: best model resolved only ~1.96% (Claude 2) — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Abstract: 'The best-performing model, Claude 2, is able to solve a mere 1.96% of the issues.' This is the BM25-retrieval setting with 13k max context (Table 2: Claude 2 scores 1.96 at 13k, 1.87 at 27k, 1.22 at 50k). Caveats: with 'oracle' retrieval (gold-patch files given), Claude 2 resolves 4.8%; and the v3 revision's Table 5 lists Claude 2 at 1.97% resolved with Claude 3 Opus added at 3.79% (the updated best). The 1.96% figure is the original headline and remains in the abstract.",
+      "quote": "We evaluate multiple state-of-the-art LMs on SWE-bench and find that they fail to solve all except the simplest issues. Using a BM25 retriever, Claude 2 is only able to resolve 1.96% of the issues. ... To analyze the importance of the retriever to the overall system results, we present the 'oracle' retrieval results in Appendix Table 18. There, Claude 2 is able to resolve 4.8% of issues using the 'oracle' retriever.",
+      "location": "Abstract, Section 1 (Introduction), Table 2 (p. 5), Section 5 (Results, p. 6)"
+    },
+    {
+      "planned": "Scoring harness details: patch application, test execution — what counts as resolved",
+      "verdict": "confirmed",
+      "finding": "Confirmed. The model outputs a patch file; the harness applies it with unix's `patch` program to the codebase at the task's base commit, then executes the task instance's unit and system tests. An instance counts as resolved only if the patch applies successfully AND all associated tests pass. The benchmark metric is % of task instances resolved. Patch application alone is far easier than resolving: Table 5 shows Claude 2 at 43.07% apply vs 1.97% resolved.",
+      "quote": "Evaluation metrics. To evaluate a proposed solution, we apply the generated patch, using unix's patch program, to the codebase and then execute the unit and system tests associated with the task instance. If the patch applies successfully and all of these tests pass we consider the proposed solution to have successfully resolved the issue. The metric for our benchmark is the percentage of task instances that are resolved.",
+      "location": "Section 2.2 (Task Formulation), p. 3"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Construct validity by design: the 3-stage filter only keeps issues whose human fix shipped with tests, giving an execution-based ground truth instead of text similarity or human judgment.",
+      "quote": "We create candidate tasks by selecting the merged PRs that (1) resolve a GitHub issue and (2) make changes to the test files of the repository, which indicates that the user likely contributed tests to check whether the issue has been resolved.",
+      "numbers": "~90,000 PRs filtered down to 2,294 instances; per instance mean 9.1 fail-to-pass tests and 120.8 total tests (max 1,633 / 9,459) per Table 1"
+    },
+    {
+      "point": "Task scale dwarfs prior code benchmarks: long inputs and codebase-wide edits, not function completion.",
+      "quote": "Issue descriptions are typically long and detailed (195 words on average), and codebases regularly contain many thousands of files. ... SWE-bench's reference solutions average editing 1.7 files, 3.0 functions, and 32.8 lines (added or removed).",
+      "numbers": "Codebase: mean 3,010 non-test files / 438K non-test lines (max 5,890 files / 886K lines); issue text mean 195.1 words (max 4,477) — Table 1"
+    },
+    {
+      "point": "Retrieval/context is a huge confound: the same model's score varies ~2.5x by retrieval setting, and more context hurts. The 1.96% headline is a BM25 number, not a model ceiling.",
+      "quote": "We see that as total context length increases, Claude 2's performance drops considerably; behavior that is also observed in other models. ... models are simply ineffective at localizing problematic code.",
+      "numbers": "Claude 2: 1.96% (BM25 13k) vs 1.87% (27k) vs 1.22% (50k) vs 4.8% ('oracle') vs 5.93% ('oracle-collapsed'); GPT-4 jumps 1.3% -> 3.4% oracle-collapsed"
+    },
+    {
+      "point": "'% Apply' vs '% Resolved' gap: most failures in 2023 were formatting/localization, not reasoning about the fix — models couldn't even produce a well-formed applicable patch most of the time.",
+      "quote": "we observe that models still struggle with generating well-formatted patch files.",
+      "numbers": "Table 5 (BM25): Claude 2 43.07% apply vs 1.97% resolved; SWE-llama 13b 53.62% apply vs 0.70% resolved; Claude 3 Opus 46.56% apply vs 3.79% resolved"
+    },
+    {
+      "point": "Contamination check via temporal split: performance on issues created before vs after 2023 was similar for most models, evidence the benchmark wasn't simply memorized.",
+      "quote": "We find that for most models there's little difference in performance before or after this date, with the exception of GPT-4. ... despite models having been exposed to some version of an repository's codebase, they are unlikely to 'cheat' to address issues simply by generating a more recent version of the repository.",
+      "numbers": "Table 7 ('oracle'): Claude 2 4.87% before vs 4.23% after 2023; SWE-Llama 13b 3.98% vs 3.85%"
+    },
+    {
+      "point": "SWE-bench Lite exists for cheaper evaluation: a 300-instance subset focused on self-contained functional bug fixes, covering 11 of the 12 repos.",
+      "quote": "we create a Lite subset of 300 instances from SWE-bench that have been sampled to be more self-contained, with a focus on evaluating functional bug fixes. ... SWE-bench Lite covers 11 of the original 12 repositories.",
+      "numbers": "300 instances; 11/12 repos; repo distribution of full set: django 850, sympy 386, scikit-learn 229, sphinx 187, matplotlib 184, pytest 119, xarray 110, astropy 95, pylint 57, requests 44, seaborn 22, flask 11 (Figure 3)"
+    },
+    {
+      "point": "Execution-based testing is necessary but the authors flag it is not sufficient: passing tests does not guarantee quality (efficiency, readability, comprehensiveness).",
+      "quote": "while this work evaluates models using execution-based code testing, relying solely on this method is insufficient to guarantee reliable performance of model generations, as we find automated code generations from LMs can frequently be less comprehensive, efficient, or readable compared to human-written solutions.",
+      "numbers": "Model patches that applied were less than half gold-patch length: 30.1 vs 74.5 total lines (Table 8 / Section 5)"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not present FAIL_TO_PASS / PASS_TO_PASS as the paper's wording — those are field names from the released dataset/harness. The paper says 'fail-to-pass test' and 'a median of 51 additional tests ... to check whether prior functionality is properly maintained.'",
+    "1.96% is specifically Claude 2 with BM25 retrieval at 13k context. With 'oracle' retrieval the same model resolves 4.8%; the v3 revision adds Claude 3 Opus at 3.79% (BM25). Do not present 1.96% as a setting-independent model capability.",
+    "The tests are written by the human who fixed the issue (contributed in the same PR), then hidden from the model — they are not independently authored test suites. 'Held-out' means hidden from the model input, not third-party.",
+    "Resolution requires the patch to apply with unix `patch` AND all tests (fail-to-pass plus existing) to pass — many summaries omit the regression-test half.",
+    "SWE-bench Lite (300 instances) is in this paper; SWE-bench Verified (the 500-instance human-validated subset) is a later OpenAI effort and is NOT part of this paper.",
+    "The arXiv v3 Table 5 reports Claude 2 at 1.97% (BM25) while the abstract keeps 1.96% (the 13k-context Table 2 number) — cite 1.96% as the original headline but don't treat the hundredths digit as load-bearing."
+  ],
+  "notes_for_authors": "Strong primary source for the 'agentic' tier and for teaching outcome-based grading. The cleanest pedagogical thread: (1) ground truth from real human fixes + their tests (construct validity), (2) resolved = patch applies + ALL tests pass (strict binary outcome metric), (3) the apply/resolve gap and the retrieval-setting sensitivity show how harness choices, not just model quality, drive scores — a core measurement-validity lesson. Note the fetched PDF is v3 (Nov 2024), which post-dates the ICLR camera-ready and adds Claude 3 Opus and GPT-4-turbo rows to Table 5; if quoting tables, say 'v3 revision' for those. The original headline claim (Claude 2, 1.96%, BM25) is stable across versions. Leaderboard/data live at swebench.com per the paper's footnote."
+}

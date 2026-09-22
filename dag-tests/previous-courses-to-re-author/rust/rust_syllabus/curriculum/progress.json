@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "note": "M1-01 is at explain in attempt-02.md. Guided recovery answer correctly states that switching to code 0 changes the emitted status but does not make this arbitrary report reflect real work. Learner then asks about bugs/races causing incorrect status reporting; agent explains possible causes versus documented meaning and wrong-status capture, without diagnosing an actual failure. Next resolve any clarification or assign a fresh independent case other than 0, 7 or 23, with prediction before execution. No new case is assigned yet; preserve case 23 as assisted. Attempt-01.md remains protected. Record/progress edits are uncommitted; inventory edits, .nvimlog and main remain separate. Account prompt details are excluded and no lab cleanup is needed.",
+  "lessons": {
+    "M1-01": {
+      "status": "in_progress",
+      "attempts": [
+        {
+          "session": "sessions/M1-01/attempt-01.md",
+          "date": "2026-09-08",
+          "assistance": "not_recorded",
+          "independent_check": "not_attempted",
+          "evidence": [
+            "labs/m1-01/preflight.json",
+            "labs/m1-01/baseline.md"
+          ]
+        },
+        {
+          "session": "sessions/M1-01/attempt-02.md",
+          "date": "2026-09-10",
+          "assistance": "not_recorded",
+          "independent_check": "assisted",
+          "evidence": [
+            "sessions/M1-01/attempt-01.md",
+            "labs/m1-01/preflight.json"
+          ],
+          "step": "explain"
+        }
+      ]
+    },
+    "M1-02": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-03": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-04": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-05": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-06": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-07": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-08": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-09": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-10": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-11": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-12": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-13": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-14": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-15": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-16": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-17": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-18": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-19": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-20": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-21": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-22": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-23": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-24": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-25": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-26": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-27": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-28": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-29": {
+      "status": "not_started",
+      "attempts": []
+    },
+    "M1-30": {
+      "status": "not_started",
+      "attempts": []
+    }
+  },
+  "capabilities": {
+    "lab_reproduction": {
+      "description": "Reproduce a bounded experiment and preserve honest evidence.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "threat_boundaries": {
+      "description": "Distinguish claimed guarantees, trusted components, and untested authority.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "shell_processes": {
+      "description": "Explain paths, streams, status, parent/child lifetimes, and signals.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "rust_ownership": {
+      "description": "Review moves, borrows, lifetimes, and ownership at interfaces.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "rust_errors": {
+      "description": "Trace typed failures without confusing them with successful execution.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "execution_contract": {
+      "description": "Specify and review explicit finite execution requests and outcomes.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "behavioral_tests": {
+      "description": "Write checks that catch meaningful violations and know their limits.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "rust_concurrency": {
+      "description": "Explain ownership and completion of threads, channels, and pipe readers.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "bounded_io": {
+      "description": "Drain output while bounding retained memory and preserving accounting.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "deadlines_cleanup": {
+      "description": "Distinguish deadlines, direct-child reaping, descendant cleanup, and effects.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "execution_evidence": {
+      "description": "Separate authoritative event producers and preserve incomplete outcomes.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "linux_namespaces": {
+      "description": "Observe changed process/network views and their enforcement limits.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "linux_cgroups": {
+      "description": "Attribute processes and resource behavior to configured cgroups.",
+      "status": "not_assessed",
+      "evidence": []
+    },
+    "integrated_boundary": {
+      "description": "Compose and defend the observed limits of the single-host demonstration.",
+      "status": "not_assessed",
+      "evidence": []
+    }
+  }
+}

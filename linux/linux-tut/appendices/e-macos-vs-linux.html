@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>macOS vs Linux · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix E</p>
+    <h1>macOS vs Linux</h1>
+    <p class="lede">
+      Your Mac's terminal looks like Linux and is not. The shell is different, the everyday commands
+      are a different family with different flags, and the kernel features this course is about do
+      not exist there. This appendix lists the differences that actually bite, each one run for real
+      on both sides, so you know why a command from this course (or from an agent's transcript)
+      fails on your laptop — and why scripts you test on your laptop fail in the box.
+    </p>
+
+    <div class="keyidea">
+      <span class="label">The one rule</span>
+      <p>Run the course's commands <strong>in the container lab</strong>
+      (<a href="../pages/01-lab-setup.html">page 1</a>), not in the Mac's own terminal. And test
+      anything that will run inside an eval environment — setup scripts, graders, reset hooks —
+      inside the image it will run in. The Mac is where you type <code>docker</code>; it is not a
+      model of the sandbox.</p>
+    </div>
+
+    <h2 id="how-this-was-made">How this page was made</h2>
+    <p>
+      The macOS side: macOS 15.4.1 on Apple Silicon (<code>uname -sm</code> prints <code>Darwin
+      arm64</code>), default zsh, stock Apple tools, no GNU tools installed. The Linux side:
+      <code>docker run --rm ubuntu:24.04</code> on the same machine (<code>Linux aarch64</code>).
+      Output is pasted from those runs, trimmed with <code>…</code>. Apple changes its tools between
+      releases: several differences that older guides list have disappeared (see
+      <a href="#not-different-any-more">below</a>), so when in doubt, run it.
+    </p>
+
+    <h2 id="shell">The shell: zsh vs bash</h2>
+    <table>
+      <tr><th></th><th>macOS 15.4</th><th>Ubuntu 24.04</th></tr>
+      <tr><td><code>echo $SHELL</code></td><td><code>/bin/zsh</code> (zsh 5.9)</td><td><code>/bin/bash</code></td></tr>
+      <tr><td><code>/bin/bash --version</code></td><td>GNU bash, version <strong>3.2.57</strong></td><td>GNU bash, version <strong>5.2.21</strong></td></tr>
+    </table>
+    <p>
+      Two consequences. Interactive habits mostly transfer, because zsh and bash share the basics
+      taught on <a href="../pages/02-shell-and-commands.html">page 2</a>; their startup files do not
+      (zsh reads <code>~/.zshrc</code>, not <code>~/.bashrc</code>). And a script with
+      <code>#!/bin/bash</code> runs under a very old bash on a Mac, so a script that works in the
+      container can fail on the laptop: <code>declare -A m</code> (an associative array) works in
+      Ubuntu's bash and gets <code>declare: -A: invalid option</code> from the Mac's. (This Mac also has a
+      newer Homebrew bash at <code>/opt/homebrew/bin/bash</code> — earlier on <code>PATH</code>, but
+      not what <code>#!/bin/bash</code> names. <a href="../pages/02-shell-and-commands.html#finding-programs">Page 2</a>
+      explains why those differ.)
+    </p>
+
+    <h2 id="userland">BSD userland vs GNU userland</h2>
+    <p>
+      "Userland" means the ordinary commands: <code>ls</code>, <code>sed</code>, <code>date</code>,
+      <code>stat</code>. Ubuntu's come from the GNU project
+      (<span class="term" data-g="gnu-coreutils">GNU coreutils</span> and friends); Apple's descend
+      from BSD. Same names, same core behaviour as far as
+      <span class="term" data-g="posix">POSIX</span> specifies it, different everything else — and
+      agents, trained mostly on Linux transcripts, write the GNU dialect. The first tell is that BSD
+      tools don't know long options:
+    </p>
+    <pre class="term"><code><span class="p">mac$</span> sed --version
+<span class="o">sed: illegal option -- -
+usage: sed script [-EHalnru] [-i extension] [file ...]</span></code></pre>
+    <p>The differences you will actually hit, each executed on both systems:</p>
+    <table>
+      <tr><th>Task</th><th>Linux (GNU) form</th><th>What the Mac says to it</th><th>macOS form</th></tr>
+      <tr>
+        <td>Edit a file in place</td>
+        <td><code>sed -i 's/fail/pass/' r.txt</code></td>
+        <td><code>sed: -I or -i may not be used with stdin</code> (exit 1)</td>
+        <td><code>sed -i '' 's/fail/pass/' r.txt</code></td>
+      </tr>
+      <tr>
+        <td>Date string → epoch seconds</td>
+        <td><code>date -u -d '2026-01-01' +%s</code> → <code>1767225600</code></td>
+        <td><code>date: illegal option -- d</code></td>
+        <td><code>date -j -u -f '%Y-%m-%d %H:%M:%S' '2026-01-01 00:00:00' +%s</code> → <code>1767225600</code></td>
+      </tr>
+      <tr>
+        <td>Epoch seconds → date</td>
+        <td><code>date -u -d @1767225600</code></td>
+        <td><code>date: illegal option -- d</code></td>
+        <td><code>date -u -r 1767225600</code> → <code>Thu Jan  1 00:00:00 UTC 2026</code></td>
+      </tr>
+      <tr>
+        <td>Mode, owner, size of a file</td>
+        <td><code>stat -c '%a %U %s' r.txt</code> → <code>644 root 13</code></td>
+        <td><code>stat: illegal option -- c</code></td>
+        <td><code>stat -f '%Lp %Su %z' r.txt</code> → <code>644 mark 13</code></td>
+      </tr>
+      <tr>
+        <td>Perl-style regex in grep</td>
+        <td><code>grep -oP '\d+'</code> → <code>137</code></td>
+        <td><code>grep: invalid option -- P</code> (exit 2)</td>
+        <td><code>grep -oE '[0-9]+'</code> (works on both — <a href="d-regex.html">Appendix D</a>)</td>
+      </tr>
+      <tr>
+        <td><code>find</code> with no starting directory</td>
+        <td><code>find -name '*.txt'</code> (defaults to <code>.</code>)</td>
+        <td><code>find: illegal option -- n</code></td>
+        <td><code>find . -name '*.txt'</code> (works on both)</td>
+      </tr>
+      <tr>
+        <td><code>xargs</code> with empty input</td>
+        <td><code>printf '' | xargs echo ran</code> prints <code>ran</code>: the command runs once anyway. <code>xargs -r</code> prevents it.</td>
+        <td>prints nothing: BSD <code>xargs</code> doesn't run the command</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Count lines</td>
+        <td><code>printf 'a\nb\n' | wc -l</code> → <code>2</code></td>
+        <td><code>       2</code> — padded with spaces, so a string comparison with <code>"2"</code> fails</td>
+        <td>compare numerically (<code>-eq</code>), not as strings</td>
+      </tr>
+      <tr>
+        <td>Size in bytes</td>
+        <td><code>du -b r.txt</code> → <code>13	r.txt</code></td>
+        <td><code>du: invalid option -- b</code> (exit 64)</td>
+        <td><code>stat -f %z Notes.txt</code> → <code>4</code></td>
+      </tr>
+      <tr>
+        <td>Run with a time limit</td>
+        <td><code>timeout 1 sleep 5</code> → exit 124</td>
+        <td><code>command not found: timeout</code> (exit 127)</td>
+        <td>none built in; see <a href="#homebrew">Homebrew</a></td>
+      </tr>
+    </table>
+    <p>
+      The errors run in both directions. The macOS spellings fail on Linux just as confusingly:
+    </p>
+    <pre class="term"><code><span class="p">#</span> sed -i '' 's/pass/fail/' r.txt          <span class="c"># GNU sed: '' is the script, the rest are files</span>
+<span class="o">sed: can't read s/pass/fail/: No such file or directory</span>
+<span class="p">#</span> date -j -f '%Y-%m-%d' '2026-01-01' +%s
+<span class="o">date: invalid option -- 'j'</span>
+<span class="p">#</span> stat -f '%Lp %Su %z' r.txt               <span class="c"># GNU -f means "filesystem status"</span>
+<span class="o">stat: cannot read file system information for '%Lp %Su %z': No such file or directory
+  File: "r.txt"
+    ID: 751bcca3977947e3 Namelen: 255     Type: overlayfs
+…</span>
+<span class="p">#</span> echo aGVsbG8K | base64 -D
+<span class="o">base64: invalid option -- 'D'</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall — the <code>sed -i</code> error doesn't mention <code>-i</code></span>
+      <p>BSD <code>sed -i</code> <em>requires</em> an argument (a backup suffix, <code>''</code> for
+      none). Given the GNU form, it swallows your <code>s/fail/pass/</code> as the suffix, takes the
+      file name as the script, and complains about stdin. Given the BSD form, GNU sed takes
+      <code>''</code>… as an empty script and your script as a file name. Neither message points at
+      the cause. There is no spelling of in-place <code>sed</code> that works on both; in anything
+      that must run in both places, write to a new file and <code>mv</code> it, or use Python.</p>
+    </div>
+
+    <h3 id="not-different-any-more">Not different any more (on macOS 15.4)</h3>
+    <p>
+      Older cheat-sheets — and this course's own plan — list these as macOS gaps. On this Mac they
+      all worked: <code>readlink -f link.txt</code> and <code>realpath</code> print the resolved
+      absolute path; <code>base64 -d</code> decodes (as does the BSD <code>-D</code>);
+      <code>ls --color=auto</code> is accepted; <code>md5sum</code> exists alongside
+      <code>shasum</code>. Don't assume they work on a colleague's older macOS.
+    </p>
+
+    <h3 id="homebrew">Homebrew's g-prefixed GNU tools</h3>
+    <p>
+      If you want GNU behaviour on the Mac itself, Homebrew's <code>coreutils</code> formula installs
+      it under new names. Its own install notes say: "Commands also provided by macOS … have been
+      installed with the prefix 'g'", with an optional <code>gnubin</code> directory you can put on
+      your <code>PATH</code> to get the normal
+      names.<a class="cite" href="https://formulae.brew.sh/formula/coreutils" title="Homebrew formula coreutils, Caveats (as printed by `brew info coreutils`, 2026-09-21)">[Homebrew: coreutils]</a>
+      So GNU <code>date</code> is <code>gdate</code>, GNU <code>timeout</code> is
+      <code>gtimeout</code>. (That formula covers coreutils only; GNU sed, grep, and find are separate
+      formulae. This Mac has none of them installed, so those are not executed here.) Useful for your
+      own convenience — but a script that calls <code>gdate</code> now runs <em>only</em> on Macs
+      with Homebrew.
+    </p>
+
+    <h2 id="no-kernel-features">What macOS doesn't have at all</h2>
+    <pre class="term"><code><span class="p">mac$</span> ls /proc
+<span class="o">ls: /proc: No such file or directory</span>
+<span class="p">mac$</span> which ip ss
+<span class="o">ip not found
+ss not found</span>
+<span class="p">mac$</span> which ps top lsof netstat ifconfig
+<span class="o">/bin/ps
+/usr/bin/top
+/usr/sbin/lsof
+/usr/sbin/netstat
+/sbin/ifconfig</span></code></pre>
+    <p>
+      No <span class="term" data-g="proc-filesystem"><code>/proc</code></span>, so nothing from
+      pages <a href="../pages/09-processes.html">9</a>–<a href="../pages/12-resources-and-limits.html">12</a>
+      that reads it; no <code>ip</code> or <code>ss</code> (Module 5), only the older
+      <code>ifconfig</code>/<code>netstat</code> family. More fundamentally, macOS is not Linux
+      underneath: <span class="term" data-g="namespace">namespaces</span>,
+      <span class="term" data-g="cgroup">cgroups</span>, seccomp, and the other mechanisms of
+      Module 6 are Linux kernel features. That is why Docker Desktop on a Mac runs a small Linux
+      <span class="term" data-g="virtual-machine">virtual machine</span> and puts your containers
+      inside it: the kernel a container reports is that VM's
+      (<code>cat /proc/version</code> in the lab says <code>linuxkit</code>), and "the Docker host"
+      in later pages means that VM, not your Mac.
+    </p>
+
+    <h2 id="case">A case-insensitive filesystem</h2>
+    <pre class="term"><code><span class="p">mac$</span> touch Readme.md; ls readme.md README.MD
+<span class="o">readme.md
+README.MD</span>
+<span class="p">mac$</span> echo one &gt; Notes.txt; echo two &gt; notes.txt; ls; cat Notes.txt   <span class="c"># in an empty directory</span>
+<span class="o">Notes.txt
+two</span>                                    <span class="c"># one file; the second write went into the first</span></code></pre>
+    <pre class="term"><code><span class="p">#</span> touch Readme.md; ls readme.md README.MD
+<span class="o">ls: cannot access 'readme.md': No such file or directory
+ls: cannot access 'README.MD': No such file or directory</span>
+<span class="p">#</span> echo one &gt; Notes.txt; echo two &gt; notes.txt; ls; cat Notes.txt
+<span class="o">Notes.txt
+notes.txt
+one</span>                                    <span class="c"># two different files</span></code></pre>
+    <p>
+      The Mac's default filesystem preserves case but ignores it when matching names; Linux
+      filesystems treat names as plain bytes. Code with <code>import Utils</code> against
+      <code>utils.py</code> passes on the Mac and fails in the container; two files whose names differ
+      only in case — legal in a Linux image or a git repository — collapse into one on the Mac, as
+      <code>Notes.txt</code> just did.
+    </p>
+
+    <h2 id="line-endings">Line endings</h2>
+    <p>
+      Not a macOS difference as such (macOS and Linux both end lines with a single newline), but it
+      arrives by the same road: a file edited on someone's laptop, copied into an image. Windows
+      editors end lines with carriage-return + newline (CRLF), and Linux treats the carriage return
+      as part of the line:
+    </p>
+    <pre class="term"><code><span class="p">#</span> printf '#!/bin/bash\r\necho hi\r\n' &gt; crlf.sh; chmod +x crlf.sh
+<span class="p">#</span> ./crlf.sh
+<span class="o">bash: ./crlf.sh: cannot execute: required file not found</span>
+<span class="p">#</span> echo $?
+<span class="o">127</span>
+<span class="p">#</span> cat -A crlf.sh                          <span class="c"># -A: show invisibles; ^M is the carriage return</span>
+<span class="o">#!/bin/bash<span class="hl">^M</span>$
+echo hi<span class="hl">^M</span>$</span>
+<span class="p">#</span> sed -i 's/\r$//' crlf.sh
+<span class="p">#</span> ./crlf.sh
+<span class="o">hi</span></code></pre>
+    <p>
+      The kernel looked for an interpreter literally named <code>/bin/bash\r</code>. The file that is
+      "not found" is not the script you can plainly see — which is what makes this one expensive.
+      <code>cat -A</code> is the discriminating test.
+    </p>
+
+    <h2 id="architecture">Architecture: arm64 laptops, amd64 images</h2>
+    <p>
+      Apple Silicon Macs are 64-bit ARM. Most cloud eval infrastructure, and many published task
+      <span class="term" data-g="image">images</span>, are x86-64 (<code>amd64</code>). Docker picks
+      the variant matching your machine when an image offers one, and can run the other under
+      emulation if you ask with <code>--platform</code>:
+    </p>
+    <pre class="term"><code><span class="p">mac$</span> uname -m
+<span class="o">arm64</span>
+<span class="p">mac$</span> docker run --rm busybox:1.36 uname -m
+<span class="o">aarch64</span>                                <span class="c"># Linux's name for the same architecture</span>
+<span class="p">mac$</span> docker run --rm --platform linux/amd64 busybox:1.36 uname -m
+<span class="o">x86_64</span>
+<span class="p">mac$</span> time docker run --rm busybox:1.36 sh -c 'i=0; while [ $i -lt 2000000 ]; do i=$((i+1)); done'
+<span class="o">  0.02s user 0.01s system 0% cpu <span class="hl">4.247 total</span></span>
+<span class="p">mac$</span> time docker run --rm --platform linux/amd64 busybox:1.36 sh -c 'i=0; while [ $i -lt 2000000 ]; do i=$((i+1)); done'
+<span class="o">  0.02s user 0.02s system 0% cpu <span class="hl">32.367 total</span></span></code></pre>
+    <p>
+      Same image tag, same loop, about eight times slower under emulation — one run each on this
+      machine, so treat the ratio as an observation, not a constant. Check what you actually have with
+      <code>docker image inspect --format '{{.Os}}/{{.Architecture}}' ubuntu:24.04</code> (here:
+      <code>linux/arm64</code>).
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — where these differences reach a score</span>
+      <p><strong>Timeouts.</strong> A task tuned to finish inside a 60-second limit on amd64 servers
+      can blow through it when you reproduce the benchmark under emulation on a laptop. The failures
+      you then see (exit 124 or 137 — <a href="../pages/10-signals-exit-codes.html">page 10</a>) are
+      observations about your run, not the model: record them as infrastructure outcomes, keep them
+      out of neither the numerator nor the denominator silently, and don't compare a laptop pass rate
+      with a published one until the platform matches. <strong>Glue scripts.</strong> A grader or
+      setup script developed at the Mac prompt and first executed inside the image at eval time fails
+      on <code>sed -i ''</code>, <code>date -j</code>, or <code>stat -f</code> — for every sample,
+      identically, which at least makes it easy to spot: a failure rate of exactly 100% on one task
+      is a property of the environment until proven otherwise. <strong>Reading transcripts.</strong>
+      An agent's <code>grep -P</code> or <code>date -d</code> failing on your Mac when you replay it
+      tells you nothing about what happened in the sandbox. Replay in the task image.</p>
+    </div>
+
+    <h2 id="summary">Summary: symptom → cause</h2>
+    <table>
+      <tr><th>What you see on the Mac</th><th>Cause</th><th>Do instead</th></tr>
+      <tr><td><code>illegal option -- …</code> with a terse <code>usage:</code> line</td><td>BSD tool given a GNU flag</td><td>run it in the container lab</td></tr>
+      <tr><td><code>command not found: timeout</code> / <code>ip</code> / <code>ss</code></td><td>tool doesn't exist on macOS</td><td>container lab</td></tr>
+      <tr><td><code>/proc/…: No such file or directory</code></td><td>no procfs on macOS</td><td>container lab</td></tr>
+      <tr><td>Works on the Mac, <code>ImportError</code> or missing file in the container</td><td>case-insensitive Mac filesystem hid a wrong-case name</td><td>fix the name; test in the image</td></tr>
+      <tr><td><code>cannot execute: required file not found</code> for a script that exists</td><td>CRLF line endings in the shebang line</td><td><code>cat -A</code>; strip <code>\r</code></td></tr>
+      <tr><td>Everything in a container is several times slower than expected</td><td>amd64 image emulated on arm64</td><td>check <code>docker image inspect</code>; use a native image or a native host</td></tr>
+    </table>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Every command on this page was executed on 2026-09-21: the macOS side on macOS 15.4.1 (Darwin 24, Apple Silicon, zsh 5.9, stock Apple userland), the Linux side in <code>ubuntu:24.04</code> (bash 5.2.21, GNU sed 4.9, GNU coreutils) under Docker Desktop on the same machine. The record is in the course's <code>research/verify/e-macos-vs-linux.txt</code>.</li>
+        <li>Homebrew, <em>coreutils</em> formula — caveats text as printed by <code>brew info coreutils</code>. <a href="https://formulae.brew.sh/formula/coreutils">formulae.brew.sh/formula/coreutils</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

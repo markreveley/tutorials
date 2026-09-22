@@ -1,0 +1,43 @@
+{
+  "id": "humaneval-sandbox",
+  "tag": "[HumanEval]",
+  "citation": {
+    "authors": "Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, et al. (OpenAI)",
+    "title": "Evaluating Large Language Models Trained on Code",
+    "venue": "arXiv:2107.03374v2 [cs.LG], 14 Jul 2021",
+    "year": "2021",
+    "url": "https://arxiv.org/abs/2107.03374"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/pdf/2107.03374 (v2; text extracted with pdftotext)",
+    "https://raw.githubusercontent.com/openai/human-eval/master/README.md",
+    "https://raw.githubusercontent.com/openai/human-eval/master/human_eval/execution.py"
+  ],
+  "fetched_on": "2026-09-21",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "OpenAI ran untrusted generated code in a gVisor-based sandbox, with network access disabled except what was needed (eBPF firewall rules) — exact wording of §2.3 incl. the stated goal ('prevent these programs from modifying, gaining persistence on, accessing sensitive resources on, or exfiltrating data from a host or network')",
+      "verdict": "confirmed",
+      "finding": "§2.3 'Sandbox for Executing Generated Programs' confirms every element. Motivation: public programs have unknown intent and generated programs are often incorrect; 'GitHub is known to contain malicious programs that alter or change their environments'. Goals quoted exactly as planned. Host protection: gVisor container runtime, chosen because 'container runtimes like Docker can share host resources with containers, a malicious container could potentially compromise a host'; gVisor 'protects the host by emulating its resources to introduce a security boundary between the host and its containers'. Network: 'eBPF-based firewall rules that prevent inbound and outbound connections except for those required for experiment control'. Context: OpenAI's training infrastructure 'is built on Kubernetes and cloud services'. Precise nuance: the text says connections are blocked 'except for those required for experiment control' — not 'network disabled'.",
+      "quote": "Our goals were to prevent these programs from modifying, gaining persistence on, accessing sensitive resources on, or exfiltrating data from a host or network.",
+      "location": "§2.3 Sandbox for Executing Generated Programs (p. 3)",
+      "cite_url": "https://arxiv.org/abs/2107.03374"
+    },
+    {
+      "planned": "(same claim, second half) gVisor + eBPF wording",
+      "verdict": "confirmed",
+      "finding": "Verbatim sentences for the two mechanisms.",
+      "quote": "We selected the gVisor container runtime (Lacasse, 2018) as the main host protection component. [...] Network-adjacent hosts and services are protected by eBPF-based firewall rules that prevent inbound and outbound connections except for those required for experiment control.",
+      "location": "§2.3, third paragraph",
+      "cite_url": "https://arxiv.org/abs/2107.03374"
+    }
+  ],
+  "extra_findings": [
+    "The released harness ships with execution DISABLED. README: 'This program exists to run untrusted model-generated code. Users are strongly encouraged not to do so outside of a robust security sandbox. The execution call in execution.py is deliberately commented out to ensure users read this disclaimer before running code in a potentially unsafe manner.' (openai/human-eval README > Usage)",
+    "The in-process guard is explicitly not a sandbox. execution.py, reliability_guard() docstring: 'This disables various destructive functions and prevents the generated code from interfering with the test (e.g. fork bomb, killing other processes, removing filesystem files, etc.) WARNING This function is NOT a security sandbox.' It works by setting things like os.kill = None, os.killpg = None, shutil.rmtree = None and optionally a memory limit (maximum_memory_bytes). (openai/human-eval human_eval/execution.py)",
+    "execution.py comment: 'Although it is highly unlikely that model-generated code will do something overtly malicious in response to this test suite, model-generated code may act destructively due to a lack of model capability or alignment. Users are strongly encouraged to sandbox this evaluation suite so that it does not perform destructive actions on their host or network.'",
+    "Design constraint stated: 'we designed our sandbox to address the limitations of these environments [Kubernetes and cloud services] while remaining idiomatic with their patterns of use.' (§2.3)"
+  ],
+  "teaching_notes": "The earliest widely cited statement (2021) that an eval harness needs a real sandbox, with a four-part threat list that maps neatly onto course pages: modifying (filesystem/permissions), gaining persistence (processes/init), accessing sensitive resources (mounts, metadata endpoints, credentials), exfiltrating (network egress). It also gives the canonical reason plain Docker is not considered enough for untrusted code — shared host kernel/resources — leading to gVisor. Wording care: say 'blocked inbound and outbound connections except those required for experiment control', not 'no network'. The human-eval repo's 'NOT a security sandbox' warning is a good contrast between language-level guards and OS-level isolation."
+}

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Structural vs Semantic</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .strrow { display:flex; align-items:center; gap:10px; margin:10px 0; flex-wrap:wrap; }
+  .strrow .lab { font-family:var(--mono); font-size:13px; color:var(--ink-soft); min-width:78px; }
+  .bytes { display:flex; gap:4px; flex-wrap:wrap; }
+  .byte { min-width:40px; padding:5px 4px; border:1px solid var(--line); border-radius:6px; background:var(--bg-2);
+          font-family:var(--mono); font-size:12px; text-align:center; line-height:1.3; transition:all .2s; }
+  .byte .ch { color:var(--ink); font-size:13px; }
+  .byte .dec { color:var(--ink-faint); font-size:11px; }
+  .byte.same { opacity:.5; }
+  .byte.diff { border-color:var(--accent); background:rgba(201,138,75,.15); box-shadow:0 0 0 2px var(--accent); }
+  .byte.diff .dec { color:#e6c79a; }
+  .byte.multi { border-color:var(--cons); }
+  .verdict { font-family:var(--mono); font-size:15px; margin-top:8px; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 7 · applied — the payoff</p>
+    <h1>Structural vs Semantic</h1>
+    <p class="lede">
+      Here's where the whole descent pays off. Everything below the Elixir surface — bytes, words,
+      representation — usually stays invisible. But sometimes it <em>leaks</em> into observable behavior, and
+      if you don't have the lower model, the behavior looks like a bug. The classic case: sorting strings.
+    </p>
+
+    <h2>The puzzle</h2>
+    <p>
+      In Elixir, <code>"alien" &lt; "office"</code> is <code>true</code> — fine, alphabetical. But
+      <code>"álien" &lt; "office"</code> is <code>false</code>: the accented word sorts <em>after</em>
+      "office", past o, p, … z. One accent flung the whole word to the back. Why?
+    </p>
+
+    <h2>Because <code>&lt;</code> compares bytes, not letters</h2>
+    <p>
+      Elixir strings are <strong>UTF-8 encoded binaries</strong> (a string really is a sequence of bytes — the
+      same boxed-binary representation from the earlier rungs). The <code>&lt;</code> operator does a
+      <strong>structural comparison</strong>: it walks the two byte sequences and compares numeric values; the
+      first differing byte decides. It is fast and predictable — exactly why it powers ordered sets and
+      <code>Enum.sort/1</code> — and completely blind to what the bytes <em>mean</em>.
+    </p>
+    <p>
+      ASCII letters are one byte each (0–127): <code>a</code> = 97, <code>o</code> = 111. But <code>á</code> is
+      <em>not</em> ASCII — in UTF-8 it's <strong>two</strong> bytes, <code>0xC3 0xA1</code> = 195, 161. So the
+      first byte of "álien" is <strong>195</strong>, versus 111 for "office". 195 &gt; 111 → the entire string
+      sorts later. Compare them byte-for-byte:
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">byte-by-byte structural comparison</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <div class="seg" id="presetSeg">
+            <button data-a="alien" data-b="office" class="on">"alien" vs "office"</button>
+            <button data-a="álien" data-b="office">"álien" vs "office"</button>
+          </div>
+          <label class="fld">A <input type="text" id="inA" value="alien" style="width:110px"></label>
+          <label class="fld">B <input type="text" id="inB" value="office" style="width:110px"></label>
+          <button class="btn primary" id="cmpBtn">compare</button>
+        </div>
+        <div class="strrow"><span class="lab">A bytes</span><div class="bytes" id="bytesA"></div></div>
+        <div class="strrow"><span class="lab">B bytes</span><div class="bytes" id="bytesB"></div></div>
+        <div class="readout"><div class="verdict" id="verdict"></div><div id="explain" style="margin-top:6px"></div></div>
+        <div class="legend">
+          <span class="key"><span class="swatch" style="background:var(--ink-faint)"></span> equal byte (kept walking)</span>
+          <span class="key"><span class="swatch" style="background:var(--accent)"></span> first differing byte — decides it</span>
+          <span class="key"><span class="swatch" style="background:var(--cons)"></span> non-ASCII char (multi-byte)</span>
+        </div>
+      </div>
+      <div class="viz-foot">Bytes computed live via UTF-8 encoding in your browser. This is precisely what <code>&lt;</code> / <code>Enum.sort/1</code> do on binaries.</div>
+    </div>
+
+    <h2>Structural vs semantic, restated</h2>
+    <table class="cmp">
+      <tr><th>Structural comparison</th><th>Semantic comparison</th></tr>
+      <tr>
+        <td>"How is this laid out as bytes?" — what <code>&lt;</code>, <code>&gt;</code>, <code>Enum.sort/1</code> do. Cheap, total, the basis for collections &amp; algorithms. Blind to meaning.</td>
+        <td>"What do these <em>mean</em>, and how should they be ordered for this purpose?" For text that's <strong>collation</strong> order, where <code>á</code> files next to <code>a</code>, before <code>o</code>.</td>
+      </tr>
+    </table>
+    <p>
+      The same split shows up beyond strings. You <em>can</em> structurally compare a <code>Time</code> with a
+      <code>Date</code> — they're just terms in the type lattice <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.1</a>
+      — but it's semantically meaningless, which is why those modules provide their own
+      <code>compare/2</code> returning <code>:lt</code>/<code>:eq</code>/<code>:gt</code> and refuse nonsense
+      comparisons.
+    </p>
+
+    <div class="callout">
+      <span class="label">The practical takeaway</span>
+      For user-facing text — names, titles, anything alphabetical — don't rely on raw <code>&lt;</code>/<code>&gt;</code>
+      or plain <code>Enum.sort/1</code>; accented and non-Latin characters will scatter to the wrong places.
+      Use a <strong>collation-aware</strong> approach (the Unicode Collation Algorithm), via a sort key that
+      normalises/transliterates accents, or a dedicated Unicode collation dependency, so "álien" lands beside
+      "alien" the way a human alphabetising a list would expect.
+    </div>
+
+    <div class="callout aha">
+      <span class="label">Why this is the right place to end</span>
+      The behavior only makes sense <em>because</em> you now hold the lower model: a string is a binary, a
+      binary is bytes, and <code>&lt;</code> compares the representation. The surface anomaly dissolves into an
+      implementation fact you can see. That's the whole point of the descent — the model isn't trivia, it's
+      what turns "weird bug" into "obviously, of course."
+    </div>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.4.1 (type lattice &amp; term order), Ch.4.4 (Strings).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('structural-vs-semantic');
+
+const enc = new TextEncoder();
+function renderBytes(str, container, diffIdx){
+  container.innerHTML='';
+  // build per-character byte groups so multi-byte chars are visible
+  let bytePos=0;
+  for(const ch of str){
+    const b = enc.encode(ch);
+    const multi = b.length>1;
+    b.forEach((val,k)=>{
+      const cell=document.createElement('div');
+      cell.className='byte'+(multi?' multi':'');
+      cell.dataset.pos=bytePos;
+      cell.innerHTML=`<div class="ch">${k===0?escapeHtml(ch):'·'}</div><div class="dec">${val}</div>`;
+      container.appendChild(cell);
+      bytePos++;
+    });
+  }
+}
+function escapeHtml(s){ return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function compare(){
+  const a=document.getElementById('inA').value, b=document.getElementById('inB').value;
+  const ba=enc.encode(a), bb=enc.encode(b);
+  renderBytes(a, document.getElementById('bytesA'));
+  renderBytes(b, document.getElementById('bytesB'));
+  // find first differing byte
+  let i=0, diff=-1;
+  const n=Math.min(ba.length,bb.length);
+  while(i<n){ if(ba[i]!==bb[i]){ diff=i; break; } i++; }
+  // mark
+  const cellsA=[...document.querySelectorAll('#bytesA .byte')];
+  const cellsB=[...document.querySelectorAll('#bytesB .byte')];
+  const mark=(cells,idx)=>cells.forEach((c,k)=>{ if(k<idx)c.classList.add('same'); if(k===idx)c.classList.add('diff'); });
+  let result, why;
+  if(diff>=0){
+    mark(cellsA,diff); mark(cellsB,diff);
+    const less = ba[diff]<bb[diff];
+    result = less ? `"${a}" &lt; "${b}"  →  true` : `"${a}" &lt; "${b}"  →  false  ( "${a}" &gt; "${b}" )`;
+    why = `First ${diff} byte${diff===1?'':'s'} match. At byte ${diff}: <b>${ba[diff]}</b> vs <b>${bb[diff]}</b>. `+
+          `Since ${ba[diff]} ${less?'&lt;':'&gt;'} ${bb[diff]}, that single byte decides the whole comparison — the rest is never read.`;
+  } else {
+    const less = ba.length<bb.length;
+    result = ba.length===bb.length ? `"${a}" == "${b}"` : (less?`"${a}" &lt; "${b}"  →  true`:`"${a}" &lt; "${b}"  →  false`);
+    why = ba.length===bb.length ? 'Every byte matched and the lengths are equal.' :
+          `Every shared byte matched; the shorter sequence sorts first (prefix rule).`;
+  }
+  document.getElementById('verdict').innerHTML = result;
+  document.getElementById('explain').innerHTML = why;
+}
+
+document.getElementById('cmpBtn').onclick=compare;
+document.getElementById('presetSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#presetSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('inA').value=b.dataset.a;
+  document.getElementById('inB').value=b.dataset.b;
+  compare();
+});
+compare();
+</script>
+</body>
+</html>

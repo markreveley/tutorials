@@ -1,0 +1,88 @@
+{
+  "id": "inspect",
+  "citation": {
+    "authors": "UK AI Security Institute (UK AISI)",
+    "title": "Inspect: An open-source framework for large language model evaluations",
+    "venue": "inspect.aisi.org.uk (official documentation site)",
+    "year": "2024 (launched May 2024; docs current as of 2026)",
+    "url": "https://inspect.aisi.org.uk/"
+  },
+  "fetched_urls": [
+    "https://inspect.aisi.org.uk/",
+    "https://inspect.aisi.org.uk/scorers.html",
+    "https://inspect.aisi.org.uk/eval-logs.html",
+    "https://inspect.aisi.org.uk/tasks.html",
+    "https://inspect.aisi.org.uk/human-agent.html",
+    "https://inspect.aisi.org.uk/approval.html"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Core architecture: dataset (samples) -> solvers (incl. agents/tools) -> scorers; Task as the unit — confirm exact terminology",
+      "verdict": "confirmed",
+      "finding": "Exact terminology confirmed. A Task is the unit of evaluation that combines three components: Dataset (labelled samples with input/target columns), Solver (produces an answer for each sample), and Scorer (evaluates the output). The tasks docs call Task 'the fundamental unit of integration for datasets, solvers, and scorers.' Agents (e.g. react()) and tools plug in as/within solvers.",
+      "quote": "An Inspect evaluation is a Task that brings together three things: Dataset that provides labelled samples—typically a table with input and target columns, where input is the prompt and target is the ideal answer or grading guidance. Solver that produces an answer for each sample. Scorer that evaluates the output—using text comparisons, model grading, or other custom schemes.",
+      "location": "Homepage (inspect.aisi.org.uk); 'fundamental unit of integration' from tasks.html"
+    },
+    {
+      "planned": "Built-in support for sandboxing (docker), tool use, agent scaffolds, model-graded scorers, human agreement workflows",
+      "verdict": "corrected",
+      "finding": "Sandboxing, tools, agents, and model-graded scorers are all confirmed: sandbox='docker' runs tool calls in an isolated container (Dockerfile or compose.yaml alongside the task), with extension support for Kubernetes, Modal, Proxmox; built-in tools include bash, python, text editing, web search, web browsing, and computer tools plus custom and MCP tools; react() is a built-in reason-act-observe agent; model_graded_qa()/model_graded_fact() are built-in scorers. HOWEVER, 'human agreement workflows' is not the docs' terminology. What Inspect actually provides is (a) human BASELINING via the human_cli solver (humans complete the same sandboxed task; terminal sessions recorded by default), and (b) human APPROVAL of tool calls (--approval human, fine-grained approval policies). No documented built-in inter-rater-agreement workflow between model graders and human labels was found.",
+      "quote": "sandbox='docker' runs all tool calls inside an isolated Docker container (configured by a Dockerfile or compose.yaml alongside the task). ... react() is a built-in agent that runs a reason-act-observe loop, giving the model the supplied tools until it submits an answer. ... Human agent terminal sessions are recorded by default so that you can later view which actions the user took to complete the task. ... Inspect's approval mode enables you to create fine-grained policies for approving tool calls made by models.",
+      "location": "Homepage; human-agent.html; approval.html"
+    },
+    {
+      "planned": "Eval logs as first-class artifacts (viewer, .eval format) — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Two log formats: binary .eval (the default since v0.3.46; typically 1/8 the size of .json, incremental sample access) and .json text format (slow in the viewer above ~50MB). Interactive viewer launched with 'inspect view' updates automatically as new evaluations run. Full Log File API: EvalLog object from eval(); read_eval_log() (with header_only option), read_eval_log_samples() generator streaming, read_eval_log_sample_summaries(), write_eval_log(); plus provenance-tracked post-hoc score editing via edit_score() with automatic metric recomputation.",
+      "quote": "Binary file format optimised for size and speed. Typically 1/8 the size of .json files and accesses samples incrementally, yielding fast loading in Inspect View no matter the file size.",
+      "location": "eval-logs.html"
+    },
+    {
+      "planned": "Confirm scorer list (exact match, model-graded QA/fact, etc.) and reducer/epochs support for repeated trials",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Built-in scorers: includes(), match(), pattern(), answer(), model_graded_qa(), model_graded_fact(), exact(), f1(), choice() (pairs with the multiple_choice() solver), math(), perplexity(), target_perplexity(). Custom scorers use Score, Value, and Target types; model grading supports multiple grader models. Epochs: the 'epochs' Task option means 'Epochs to run for each dataset sample' (settable via --epochs CLI flag, eval() parameter, or Task definition); epoch reducers aggregate scores across repeated trials with strategies including mean (default), mode, and pass_at_k.",
+      "quote": "exact() — Normalize the answer and target(s) and require the whole output to match one or more targets exactly. ... model_graded_qa() — Have another model assess whether the output is a correct answer, based on grading guidance in target. ... model_graded_fact() — Have another model assess whether the output contains the fact set out in target. ... [Task option] Epochs to run for each dataset sample.",
+      "location": "scorers.html; tasks.html"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The .eval binary log format exists specifically because eval logs are treated as durable, queryable artifacts: it is ~1/8 the size of JSON and supports incremental sample access, so the viewer stays fast regardless of file size. It became the default in v0.3.46.",
+      "quote": "Typically 1/8 the size of .json files and accesses samples incrementally, yielding fast loading in Inspect View no matter the file size.",
+      "numbers": "1/8 size vs .json; .json slow above ~50MB; default since v0.3.46"
+    },
+    {
+      "point": "Scores can be edited after the fact with provenance: edit_score() modifies individual sample scores while preserving edit history and automatically recomputing aggregate metrics — directly relevant to teaching human review/correction of model-graded results.",
+      "quote": "Use the edit_score() function to modify scores for individual samples",
+      "numbers": ""
+    },
+    {
+      "point": "Human baselining is a first-class workflow: the human_cli solver puts a human in the exact same sandbox and scoring pipeline as the model agent, with task submit/quit/score/instructions commands, recorded terminal sessions, and a headless mode for distributed baselining.",
+      "quote": "Human agent terminal sessions are recorded by default so that you can later view which actions the user took to complete the task.",
+      "numbers": ""
+    },
+    {
+      "point": "Sandboxing is pluggable beyond Docker: an extension API supports Kubernetes, Modal, Proxmox, and other backends for running untrusted model-generated code.",
+      "quote": "running untrusted model code in Docker, Kubernetes, Modal, Proxmox, and other systems via an extension API",
+      "numbers": ""
+    },
+    {
+      "point": "Tool-call approval policies allow fine-grained human-in-the-loop control during agentic evals: approve all calls, approve only selected calls, or write custom approvers that approve/reject/escalate. Enabled via --approval human.",
+      "quote": "Inspect's approval mode enables you to create fine-grained policies for approving tool calls made by models.",
+      "numbers": ""
+    },
+    {
+      "point": "The scorer set spans the whole grading spectrum a course should cover: string-based (includes, match, exact, pattern, answer), statistical (f1, perplexity, target_perplexity), domain (math, choice), and model-graded (model_graded_qa, model_graded_fact) — plus custom scorers via Score/Value/Target types and custom metrics passed to the Task.",
+      "quote": "f1() — Compute the F1 score (the harmonic mean of precision and recall) over token overlap.",
+      "numbers": "12 built-in scorers documented"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say Inspect has built-in 'human agreement workflows' — the docs do not use that term. The actual features are human baselining (human_cli solver) and human approval of tool calls (approval policies). Inter-rater agreement between model graders and humans is not a documented built-in.",
+    "Do not describe agents as a fourth top-level component of a Task — the Task triad is Dataset/Solver/Scorer; agents (e.g. react()) and tools operate within the solver layer.",
+    "Do not call .eval a JSON format — it is a binary format; JSON is the alternative text format, and the two are intermixable under the same Log File API.",
+    "Do not attribute Inspect to the 'UK AI Safety Institute' in current materials — the site is published by the UK AI Security Institute (AISI was renamed in Feb 2025)."
+  ],
+  "notes_for_authors": "All four planned claims hold except the phrase 'human agreement workflows', which should be rewritten as 'human baselining (human_cli) and human approval of tool calls'. Exact terminology to use: Task is 'the fundamental unit of integration for datasets, solvers, and scorers'; homepage tagline component framing is Dataset / Solver / Scorer. For epochs, cite the Task option 'Epochs to run for each dataset sample' and reducers mean (default), mode, pass_at_k. The eval-log section is a strong teaching hook for 'logs as first-class artifacts': binary .eval format (1/8 size, incremental access, default since 0.3.46), inspect view live viewer, and provenance-tracked edit_score(). Scorer names are all lowercase function calls — quote them verbatim (model_graded_qa(), not ModelGradedQA)."
+}

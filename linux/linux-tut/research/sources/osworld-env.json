@@ -1,0 +1,47 @@
+{
+  "id": "osworld-env",
+  "tag": "[OSWorld]",
+  "citation": {
+    "authors": "Tianbao Xie, Danyang Zhang, Jixuan Chen, Xiaochuan Li, Siheng Zhao, Ruisheng Cao, et al.",
+    "title": "OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments",
+    "venue": "arXiv:2404.07972v2 [cs.AI], 30 May 2024 (NeurIPS 2024 Datasets & Benchmarks); plus github.com/xlang-ai/OSWorld README",
+    "year": "2024",
+    "url": "https://arxiv.org/abs/2404.07972"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/html/2404.07972",
+    "https://raw.githubusercontent.com/xlang-ai/OSWorld/main/README.md"
+  ],
+  "fetched_on": "2026-09-21",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "OSWorld runs tasks in full virtual machines (Ubuntu primary; VMware/VirtualBox/Docker-with-KVM/AWS providers) and resets via VM snapshots; grading via execution-based scripts that inspect final VM state (134 evaluation functions) — verify numbers",
+      "verdict": "confirmed",
+      "finding": "Paper: 369 tasks defined and executed on Ubuntu (+43 supplementary Windows tasks needing user activation 'due to copyright issues'); '134 unique evaluation functions'; human success 72.36% vs best model 12.24% at publication. Environment uses 'virtual machine techniques'; the config file 'specifies the snapshot of the virtual machine to be used (which stores the complete state of a computer at a certain moment and can be restored to this state at any time)'. Nuance on reset: they use a HYBRID — a base snapshot plus per-task setup steps (download files, open apps) — rather than one snapshot per task, because per-example snapshots 'would store much unnecessary hardware state information, resulting in each example requiring gigabytes of space'. Grading: after the task the Task Manager does post-processing, 'retrieves data to the host machine (fetching images or configuration files from the virtual machine or cloud, etc.), and then runs evaluation scripts' — i.e. evaluation scripts run on the HOST over state fetched from the VM. Providers per repo README today: vmware, virtualbox, docker (a VM hosted inside a container, KVM recommended; added 2024-10-22), aws, azure mentioned in the 2024-06-15 refactor note, plus newer modal (VM sandboxes) and daytona providers. 'macOS hosts generally do not support KVM. You are advised to use VMware if you would like to run OSWorld on macOS.'",
+      "quote": "Virtual machine offers a safe isolated environment and prevents the agent resulting in irreversible damaging effect on the real host machine. The snapshot feature also enables efficient reset of the virtual environment.",
+      "location": "arXiv 2404.07972 §2.2 (OSWorld environment overview), §2.2.2 Initial Task Environment Setup, §3 / Table 3 (369 tasks, 134 eval scripts); OSWorld README > Installation (VMware/VirtualBox, Docker, Modal, Daytona, AWS)",
+      "cite_url": "https://arxiv.org/html/2404.07972"
+    },
+    {
+      "planned": "Why VMs rather than containers: needs a full desktop OS / GUI",
+      "verdict": "corrected",
+      "finding": "The paper never frames the choice as 'VMs rather than containers' and gives no anti-container argument. Its stated reasons for VMs are (1) supporting real operating systems — Ubuntu, Windows, macOS — with real GUI apps, and (2) safety/isolation of the host plus (3) efficient reset via snapshots. The 'needs a full desktop OS/GUI, and Windows/macOS cannot run as Linux containers' reasoning is a fair inference but must be presented as the course's explanation, not OSWorld's. The repo's Docker provider does not replace the VM: it runs the VM inside a container ('We supported Docker for hosting virtual machines on virtualized platforms'), and needs KVM for performance.",
+      "quote": "OSWorld is an executable and controllable environment that supports task initialization, execution-based evaluation, and interactive agent learning in a range of real operating systems (e.g., Ubuntu, Windows, macOS) using virtual machine techniques",
+      "location": "arXiv 2404.07972 §2.2; OSWorld README news 2024-10-22 and 'Docker (Server with KVM Support for Better Performance)'",
+      "cite_url": "https://arxiv.org/html/2404.07972"
+    }
+  ],
+  "extra_findings": [
+    "Architecture sentence: 'OSWorld environment runs on the host machine. Its Coordinator accepts a configuration file at the initialization of a computer task, runs commands to automatically create a virtual machine instance, and initializes the required state for the task through the Task Manager.' Agent actions are code strings (e.g. pyautogui-style `.click(300, 540)`) executed in the VM by the environment's Simulator; observations are screenshots, the accessibility (a11y) tree (ATSPI on Ubuntu, PyWinAuto on Windows) and 'customized streams such as terminal outputs'. (§2.2, §2.3)",
+    "Parallelism: 'Multiple virtual machines can run simultaneously on a single host machine, thereby parallelizing training and evaluation.' (§2.2)",
+    "KVM check the README teaches (verified verbatim): `egrep -c '(vmx|svm)' /proc/cpuinfo` — 'on Linux. If the return value is greater than zero, the processor should be able to support KVM.' (README > Docker > Prerequisite: Check if your machine supports KVM)",
+    "Leftover-state warning in README: 'If the experiment is interrupted abnormally (e.g., by interrupting signals), there may be residual docker containers which could affect system performance over time. Please run `docker stop $(docker ps -q) && docker rm $(docker ps -a -q)` to clean up.' (NB: that command stops and removes ALL containers on the host — do not recommend it in the course.)",
+    "Credentials are known and weak by design: 'we set the account credentials for Ubuntu as user / password. For cloud service providers like aws, to prevent attacks due to weak passwords, we default to osworld-public-evaluation.' And: 'for some OSWorld tasks, the agent needs the password to obtain sudo privileges to complete them.' (README FAQ)",
+    "Live-internet dependence: 'Some tasks may require proxy settings to function properly (this depends on the strength of website defenses against your network location)' — tasks touch real websites, so results vary by network location. (README)",
+    "OSWorld-Verified (2025-07-28): 'major updates, fixed several issues reported by the community, with more support for AWS (can reduce evaluation time to within 1 hour through parallelization!)'. Verified-leaderboard entries are run by the maintainers on their side. (README news / FAQ)",
+    "Safety limitation the authors state: 'we adopt virtual machines to make it difficult for developing digital agents to cause irreversible damage to our host machines. However, there still lacks a reliable metric to assess the safety of an agent developed in an isolated environment. The current evaluation functions... pay little attention to potential unnecessary damaging actions of agents.' (Limitations/Broader impact)",
+    "Annotation cost: 'Overall, it takes 9 computer science students (all student authors) over 3 months, consuming approximately 1800 man-hours (650 hours on single-app tasks, 750 hours on workflow tasks and 400 hours for double-checking).' (§3.1/3.2 benchmark construction)"
+  ],
+  "teaching_notes": "Use OSWorld as the course's example of the VM end of the isolation spectrum: real OS + GUI, snapshot reset, grading by scripts over state pulled out of the VM to the host (a cleaner integrity boundary than grading inside the agent's box). Numbers verified: 369 Ubuntu tasks, 43 Windows, 134 evaluation functions, 72.36% human vs 12.24% best model (2024 — do not present as current). Correction: the paper does not argue 'VMs rather than containers'; it argues VMs for real-OS support, host safety and snapshot reset. Its Docker provider is a VM inside a container requiring KVM — a nice illustration that 'docker' in a README does not always mean container-level isolation."
+}

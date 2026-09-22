@@ -1,0 +1,83 @@
+{
+  "id": "gaia",
+  "citation": {
+    "authors": "Grégoire Mialon, Clémentine Fourrier, Craig Swift, Thomas Wolf, Yann LeCun, Thomas Scialom",
+    "title": "GAIA: a benchmark for General AI Assistants",
+    "venue": "arXiv preprint arXiv:2311.12983 [cs.CL]",
+    "year": "2023",
+    "url": "https://arxiv.org/abs/2311.12983"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2311.12983",
+    "https://ar5iv.labs.arxiv.org/html/2311.12983"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "466 questions requiring reasoning, multi-modality, web browsing, tool use; answers are unambiguous strings enabling exact-match scoring — confirm",
+      "verdict": "confirmed",
+      "finding": "466 questions total. Required abilities are exactly as claimed. Nuance: answers are not only strings — each answer is 'a string (one or a few words), a number, or a comma separated list of strings or floats' — and scoring is 'quasi exact match' (exact match up to some normalization), not raw exact match.",
+      "quote": "GAIA proposes real-world questions that require a set of fundamental abilities such as reasoning, multi-modality handling, web browsing, and generally tool-use proficiency. ... Using GAIA's methodology, we devise 466 questions and their answer. ... the answers to our questions are factoid, concise and unambiguous. ... evaluation is done via quasi exact match between a model's answer and the ground truth (up to some normalization)",
+      "location": "Abstract; Section 3.1 (design choices); Section 3.2 (evaluation)"
+    },
+    {
+      "planned": "Conceptually easy for humans (92% human success) yet hard for advanced AI (GPT-4 with plugins ~15%) — confirm numbers",
+      "verdict": "confirmed",
+      "finding": "Human respondents score 92% overall vs 15% for GPT-4 equipped with plugins. Per level: humans 93.9% / 91.8% / 87.3%; GPT-4 + plugins 30.3% / 9.7% / 0% (Levels 1/2/3). The 'conceptually simple' framing is the paper's stated first design principle.",
+      "quote": "GAIA questions are conceptually simple for humans yet challenging for most advanced AIs: we show that human respondents obtain 92% vs. 15% for GPT-4 equipped with plugins. ... Even equipped with tools, GPT4 does not exceed a 30% success rate for the easiest of our tasks, and 0% for the hardest.",
+      "location": "Abstract; Section 4 (results)"
+    },
+    {
+      "planned": "Three difficulty levels by required steps/tools; private test set design",
+      "verdict": "confirmed",
+      "finding": "Three levels defined by number of steps and tools: Level 1 needs no tools or at most one tool and no more than ~5 steps; Level 2 roughly 5-10 steps combining different tools; Level 3 is for 'a near perfect general assistant' requiring arbitrarily long action sequences. Test-set privacy: all 466 questions released, but answers to 300 of them are retained to power a leaderboard; a developer set of 166 annotated questions is released with answers.",
+      "quote": "Level 1 questions generally require no tools, or at most one tool but no more than 5 steps. Level 2 question generally involve more steps, roughly between 5 and 10 ... Level 3 are questions for a near perfect general assistant, requiring ... arbitrarily long sequences of actions. ... We release our questions while retaining answers to 300 of them to power a leader-board ... We release a developer set of 166 annotated questions",
+      "location": "Section 3.3 (difficulty levels); Abstract; Section 1"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "GAIA inverts the usual benchmark trend: instead of tasks ever harder for humans (e.g., PhD-level exams), it uses tasks conceptually simple for humans but hard for AI — a different notion of what 'difficulty' should measure for assistants.",
+      "quote": "Our first principle is to target questions that are conceptually simple although potentially tedious for humans, yet varied, rooted in the real world and challenging for current AI systems.",
+      "numbers": "Humans 92% vs GPT-4 + plugins 15%"
+    },
+    {
+      "point": "Non-gameability as an explicit design principle: correct answers require successfully completing a diverse multi-step plan, so the benchmark resists brute-force or shortcut exploitation.",
+      "quote": "Non-gameability. Answering the questions requires successful completion of some number of steps, which cannot easily be brute forced due to their diversity.",
+      "numbers": ""
+    },
+    {
+      "point": "Constraining answers to short factoid forms is a deliberate trade: it buys cheap, objective automated scoring ('quasi exact match' with normalization) at the cost of not evaluating open-ended generation quality.",
+      "quote": "the answers to our questions are factoid, concise and unambiguous. These properties allow simple, fast and factual evaluation. ... there is a single correct answer. Hence, evaluation is done via quasi exact match between a model's answer and the ground truth",
+      "numbers": "Answer types: a string (one or a few words), a number, or a comma-separated list of strings or floats"
+    },
+    {
+      "point": "Acknowledged validity limitation: GAIA scores only the final answer, not the reasoning/action trace, because many distinct paths can reach the unique ground truth and grading traces is not straightforward.",
+      "quote": "GAIA does not evaluate the trace leading to the answer. Indeed, as opposed to the ground truth which is unique, different paths could lead to the correct answer and there is no obvious and simple ways to grade those",
+      "numbers": ""
+    },
+    {
+      "point": "Few, highly curated questions over scale: annotation is expensive — each question is validated by two supplementary annotators — favoring interpretability and quality over dataset size (466 total).",
+      "quote": "We estimate the creation of a question, including its validation by two supplementary annotators and potential repairs, to require two hours of annotator time.",
+      "numbers": "~2 annotator-hours per question; 466 questions; 166 dev (annotated) + 300 test (answers retained)"
+    },
+    {
+      "point": "Performance collapses with required steps/tools: GPT-4 with plugins degrades from 30.3% (Level 1) to 9.7% (Level 2) to 0% (Level 3), while humans stay roughly flat (93.9% / 91.8% / 87.3%) — a clean demonstration that level structure captures real capability gradients.",
+      "quote": "Even equipped with tools, GPT4 does not exceed a 30% success rate for the easiest of our tasks, and 0% for the hardest.",
+      "numbers": "GPT-4+plugins: L1 30.3%, L2 9.7%, L3 0%; Humans: L1 93.9%, L2 91.8%, L3 87.3%"
+    },
+    {
+      "point": "Methodological caveat in the headline baseline: GPT-4 with plugins had no API at the time, so results came from manual ChatGPT queries with manually chosen plugins — a reproducibility weakness worth teaching alongside the 15% number.",
+      "quote": "As opposed to GPT4, there is currently no API for GPT4 with plugins, and we resort to manual ChatGPT queries. ... the user has to manually choose between an Advanced Data Analysis mode ... and a set of at most three third party plugins.",
+      "numbers": ""
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Answers are not exclusively strings: they can be a string, a number, or a comma-separated list of strings/floats. Scoring is 'quasi exact match' (with normalization), not strict raw exact match.",
+    "The test set questions are public; only the ANSWERS to the 300 test questions are private (retained to power the leaderboard). Don't describe the test questions themselves as hidden.",
+    "92% human / 15% GPT-4 are overall averages — per-level numbers differ substantially (GPT-4+plugins hits 0% at Level 3).",
+    "Level definitions are about steps AND tools jointly (Level 1: <=1 tool, <=5 steps; Level 2: ~5-10 steps, tool combinations; Level 3: arbitrarily long sequences), not steps alone.",
+    "The GPT-4-with-plugins baseline was run via manual ChatGPT queries (no API existed), so the 15% is not an automated, fully reproducible run."
+  ],
+  "notes_for_authors": "All three planned claims check out; use the exact split (166 dev annotated / 300 test with retained answers) when describing the 'private test set' — the privacy applies to answers, not questions. The paper is a strong vehicle for teaching benchmark design trade-offs: factoid-answer constraint enabling cheap valid scoring, non-gameability, conceptual simplicity for humans as a deliberate inversion of difficulty trends, and the acknowledged limitation that final-answer scoring ignores the trace. Per-level numbers (GPT-4+plugins 30.3/9.7/0 vs humans 93.9/91.8/87.3) make the capability-gradient point more vivid than the headline 92-vs-15. Cite as Mialon et al., arXiv:2311.12983, Nov 21 2023."
+}

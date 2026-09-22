@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linux for Evals Engineers · A Course in Environments</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">A wiki-course</p>
+    <h1>Linux for Evals Engineers</h1>
+    <p class="lede">
+      When you evaluate an AI agent, the thing being tested is a model typing commands into a Linux
+      box, and the thing doing the testing is more Linux: containers, mounts, users, timeouts,
+      firewalls, scripts that check the wreckage afterwards. This course teaches Linux from zero,
+      with one question deciding what gets taught: <em>does an evals engineer need this to build,
+      debug, audit, or harden an evaluation environment?</em>
+    </p>
+
+    <div class="keyidea">
+      <span class="label">The premise of this course</span>
+      <p>In an agentic eval, <strong>the environment is part of the measuring instrument</strong>.
+      If the sandbox runs out of memory, the score drops and the model gets the blame. If the answer
+      key is readable, the score rises and the model gets the credit. If the box can reach the
+      internet, you may be measuring the agent's ability to download the fix. Every one of those is a
+      plain Linux fact — a limit, a permission bit, a route — and you cannot vouch for a number
+      produced by a machine you cannot read.</p>
+    </div>
+
+    <h2 id="the-target">The target: the ten-minute audit</h2>
+    <p>
+      The course aims at one concrete, testable competence. Dropped into an unfamiliar Linux box as
+      root, within ten minutes you can answer five questions — and say why each answer matters for
+      whether a score from this box can be trusted:
+    </p>
+    <table>
+      <tr><th>#</th><th>Question</th><th>Why an eval depends on it</th><th>Taught in</th></tr>
+      <tr><td>1</td><td>What is running?</td><td>Leftover processes are shared state between rollouts; a grader in the agent's process tree is attackable.</td><td>Modules 3, 5</td></tr>
+      <tr><td>2</td><td>What is mounted, and is it read-only?</td><td>Writable tests get rewritten; a host bind mount is a hole in the sandbox wall.</td><td>Module 4</td></tr>
+      <tr><td>3</td><td>Who owns what?</td><td>An agent running as root voids every permission-based protection in the box.</td><td>Module 2</td></tr>
+      <tr><td>4</td><td>What can it reach?</td><td>Open egress turns "solve the task" into "find the solution online".</td><td>Module 5</td></tr>
+      <tr><td>5</td><td>Where are the logs?</td><td>Separating a model failure from an infrastructure failure needs evidence from outside the transcript.</td><td>Modules 3, 7</td></tr>
+    </table>
+    <p>
+      The <a href="pages/28-ten-minute-audit.html">capstone</a> assembles them into a timed procedure, an
+      audit script, and a write-up template — a portfolio-grade artifact.
+    </p>
+
+    <h2 id="what-you-will-learn">What you'll be able to do</h2>
+    <p>The abilities are framed the way a job uses them.</p>
+    <table>
+      <tr><th>Ability</th><th>A useful demonstration</th></tr>
+      <tr><td><strong>Discuss</strong></td><td>Explain, in plain language, why "exit code 137" is not evidence that a model failed a task; what a container is made of; why a read-only mount protects tests from tampering but not from being read.</td></tr>
+      <tr><td><strong>Navigate</strong></td><td>From a shell inside a task environment, establish what is running, mounted, owned, reachable, and logged; read an agent's terminal transcript and separate what was observed from what is supposed; name the next test that would discriminate between causes.</td></tr>
+      <tr><td><strong>Design</strong></td><td>Choose and defend a sandbox policy — user, mounts, limits, capabilities, network, isolation technology, where grading runs — knowing what each choice costs the task and what it does to the score's meaning.</td></tr>
+    </table>
+    <p>Concretely, you will:</p>
+    <ul>
+      <li>Work fluently in a shell: files, pipes, redirection, and the text tools that let you interrogate ten thousand rollout logs from the terminal.</li>
+      <li>Decode how a process ended — exit 127, 137, 143, a timeout, an OOM kill — and account for it honestly: an infrastructure failure is an observation about the <em>run</em>, and it belongs in the report, not silently out of the denominator.</li>
+      <li>Read and set permissions, mounts, and resource limits, and use them to protect a grader and an answer key.</li>
+      <li>Prove from inside a sandbox what it can reach on the network, and understand how default-deny egress is enforced from outside.</li>
+      <li>Explain what a container actually is — namespaces, cgroups, capabilities, seccomp — and lock one down knob by knob.</li>
+      <li>Choose between containers, gVisor, and microVMs from a threat model rather than from habit.</li>
+      <li>Read how real harnesses (Inspect, Terminal-Bench, SWE-bench) drive a Linux sandbox, and find where a benchmark's environment can leak its answers.</li>
+    </ul>
+
+    <h2 id="depth">Where to go deep, and where to recognize the idea</h2>
+    <table>
+      <tr><th>Learn to use</th><th>Learn to recognize</th><th>Save for a specialized role</th></tr>
+      <tr>
+        <td>The shell, pipes and redirection, <code>grep</code>/<code>jq</code>/<code>sort | uniq -c</code>, exit codes and signals, users and permission bits, <code>ps</code>, <code>findmnt</code>, <code>ss</code>, <code>ip</code>, <code>curl -v</code>, Docker's run/exec/inspect/logs, cgroup limit files, the reachability probe, the audit</td>
+        <td>systemd units and the journal, overlayfs internals, capabilities beyond the common dozen, seccomp profiles, nftables rules, user namespaces, IPv6, gVisor and microVM architecture, Kubernetes sandboxes</td>
+        <td>Kernel internals, writing seccomp/AppArmor policy, hypervisor and VMM engineering, fleet orchestration, storage administration, distro packaging</td>
+      </tr>
+    </table>
+
+    <h2 id="modules">The modules</h2>
+    <div class="modgrid">
+      <a class="modcard" href="pages/00-orientation.html">
+        <h3><span class="n">0</span>Start</h3>
+        <p>Why Linux is part of the instrument, with the published incidents that prove it — then a lab you can break: a disposable container and a real VM, from a Mac.</p>
+        <div class="pages">2 pages</div>
+      </a>
+      <a class="modcard" href="pages/02-shell-and-commands.html">
+        <h3><span class="n">1</span>The shell</h3>
+        <p>What happens between Enter and output. The filesystem tree, file descriptors and pipes, text-fu for JSONL logs, and shell scripts that stay under thirty lines.</p>
+        <div class="pages">5 pages</div>
+      </a>
+      <a class="modcard" href="pages/07-users-groups-root.html">
+        <h3><span class="n">2</span>Identity &amp; permissions</h3>
+        <p>Who a process is, what root bypasses, how the kernel decides access — and a worked case: hiding an answer key from an agent, and the three ways that silently fails.</p>
+        <div class="pages">2 pages</div>
+      </a>
+      <a class="modcard" href="pages/09-processes.html">
+        <h3><span class="n">3</span>Processes</h3>
+        <p>The process tree, signals and exit codes, timeouts, environment variables and every place secrets leak, resource limits and the OOM killer, services and logs.</p>
+        <div class="pages">5 pages</div>
+      </a>
+      <a class="modcard" href="pages/14-mounts-and-filesystems.html">
+        <h3><span class="n">4</span>Storage &amp; software</h3>
+        <p>The mount table, read-only and tmpfs and overlay mounts; packages, pinning, and why the same Dockerfile does not give the same environment next month.</p>
+        <div class="pages">2 pages</div>
+      </a>
+      <a class="modcard" href="pages/16-addresses-and-routes.html">
+        <h3><span class="n">5</span>Networking for sandboxes</h3>
+        <p>Addresses and routes, ports and sockets, DNS/HTTP/TLS as a layer-by-layer decoder of failures, and egress control — ending in a five-command reachability probe.</p>
+        <div class="pages">4 pages</div>
+      </a>
+      <a class="modcard" href="pages/20-namespaces.html">
+        <h3><span class="n">6</span>Containers &amp; isolation</h3>
+        <p>A container dissolved into kernel features you can inspect; Docker organised around the life of a task environment; hardening; and the ladder from containers to gVisor to microVMs.</p>
+        <div class="pages">5 pages</div>
+      </a>
+      <a class="modcard" href="pages/25-how-harnesses-use-linux.html">
+        <h3><span class="n">7</span>Linux in eval harnesses</h3>
+        <p>How Inspect, Terminal-Bench, and SWE-bench drive a sandbox; environment integrity and where cheating lives; reading terminal transcripts; the ten-minute audit.</p>
+        <div class="pages">4 pages</div>
+      </a>
+    </div>
+
+    <h2 id="reference">Reference material</h2>
+    <ul>
+      <li><a href="glossary.html"><strong>Glossary</strong></a> — every term used in the course, defined for a first-time reader. Terms with a dashed underline anywhere in the course show a hover tooltip and link here.</li>
+      <li><a href="bibliography.html"><strong>Annotated bibliography</strong></a> — the citation universe: man pages, kernel and Docker documentation, RFCs, harness documentation, and the papers and incident reports the eval-specific pages rest on.</li>
+      <li><strong>Appendices A–G</strong> — <a href="appendices/a-command-reference.html">the working set of commands</a>, <a href="appendices/b-exit-codes-signals.html">exit codes &amp; signals</a>, <a href="appendices/c-binary-octal-cidr.html">binary, octal &amp; CIDR math</a>, <a href="appendices/d-regex.html">regular expressions</a>, <a href="appendices/e-macos-vs-linux.html">macOS vs Linux</a>, <a href="appendices/f-getting-help.html">man pages &amp; getting help</a>, and a <a href="appendices/g-skills-checklist.html">skills checklist with portfolio labs</a>.</li>
+    </ul>
+
+    <h2 id="how-to-use">How to use this course</h2>
+    <p>
+      Read in order if you are new to Linux; every page ends with a <strong>lab</strong>, and the labs are
+      the course — Linux is learned with fingers. Set up the lab on
+      <a href="pages/01-lab-setup.html">page 1</a> first (it takes ten minutes and everything in it is
+      disposable). Plum boxes labelled <em>In eval work</em> tie each mechanism to evaluation practice;
+      if you already know Linux, reading only those and Modules 6–7 is a legitimate fast path.
+    </p>
+    <p>
+      The course is deliberately narrow. It teaches about seventy commands, deeply, and how to find the
+      rest. It stops shell scripting at thirty lines and tells you to switch to Python. It skips
+      everything a sysadmin certification would cover that an evals engineer will not touch.
+      Eval concepts themselves — graders, error analysis, error bars, contamination — belong to the
+      sibling course <a href="../../evals/evals-tut/index.html">Understanding LLM Evals</a>; networking
+      concepts — the request journey, DNS, TLS, HTTP, deadlines and retries — belong to
+      <a href="../../networking/networking-tut/index.html">Networking for LLM Evals</a>. This course links to
+      both wherever they meet, and its own networking module stays on the Linux side: the commands, namespaces,
+      Docker networks, and firewalls that decide what a sandbox can reach.
+    </p>
+
+    <div class="callout">
+      <span class="label">A note on provenance</span>
+      <p>Two standards, stated up front. <strong>Anything you can run, we ran:</strong> every command and
+      every line of terminal output in the course was executed in a real Linux container (Ubuntu 24.04
+      unless the page says otherwise), not written from memory. <strong>Anything about the world, we
+      checked:</strong> every default, guarantee, number, and incident was verified against its primary
+      source — the man page, the kernel or Docker documentation, the RFC, the paper — and carries an
+      inline citation like
+      <a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7), Linux man-pages">[signal(7)]</a>.
+      Each page ends with a source box. A course about trustworthy measurement should be able to show
+      its own work.</p>
+      <p>This is the Linux component of professional preparation, not a promise of employment. The
+      <a href="appendices/g-skills-checklist.html">skills checklist</a> states the finish line as things you can
+      demonstrate.</p>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="assets/nav-data.js"></script>
+<script src="assets/glossary-data.js"></script>
+<script src="assets/wiki.js"></script>
+</body>
+</html>

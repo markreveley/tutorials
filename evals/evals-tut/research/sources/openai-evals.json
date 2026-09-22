@@ -1,0 +1,75 @@
+{
+  "id": "openai-evals",
+  "citation": {
+    "authors": "OpenAI",
+    "title": "Evals: a framework for evaluating LLMs and LLM systems, and an open-source registry of benchmarks",
+    "venue": "GitHub (openai/evals) / OpenAI Cookbook",
+    "year": "2023 (cookbook entry dated 2024-03-21; last repo commit 2026-04-14)",
+    "url": "https://github.com/openai/evals"
+  },
+  "fetched_urls": [
+    "https://github.com/openai/evals",
+    "https://raw.githubusercontent.com/openai/evals/main/README.md",
+    "https://raw.githubusercontent.com/openai/evals/main/docs/eval-templates.md",
+    "https://raw.githubusercontent.com/openai/evals/main/docs/build-eval.md",
+    "https://developers.openai.com/cookbook/examples/evaluation/getting_started_with_openai_evals",
+    "https://api.github.com/repos/openai/evals",
+    "https://api.github.com/repos/openai/evals/commits"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Registry of evals in YAML; eval templates (basic match/includes, model-graded) — confirm architecture",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Evals are registered as YAML files in evals/registry/evals/<eval_name>.yaml (fields: id, description, metrics, class, args.samples_jsonl); sample data lives in evals/registry/data (stored via Git-LFS). Basic deterministic templates are Match, Includes, FuzzyMatch, and JsonMatch; model-graded templates include fact.yaml, closedqa.yaml, and battle.yaml. The cookbook states basic templates use deterministic functions and model-graded templates use an LLM to compare output to ideal answers.",
+      "quote": "Register the eval by adding a file to `evals/registry/evals/<eval_name>.yaml` ... Upon running the eval, the data will be searched for in `evals/registry/data`. [build-eval.md] | basic/match.py:Match ... basic/includes.py:Includes ... basic/fuzzy_match.py:FuzzyMatch ... fact.yaml ... closedqa.yaml ... battle.yaml [eval-templates.md] | Basic eval templates ... deterministic functions to compare the output to the ideal_answers ... Model-graded templates ... an LLM compares the output to the ideal_answers [cookbook]",
+      "location": "docs/build-eval.md, docs/eval-templates.md, cookbook 'Getting started with OpenAI Evals'"
+    },
+    {
+      "planned": "Confirm current maintenance status of the repo",
+      "verdict": "confirmed",
+      "finding": "Not archived (GitHub API: archived=false, disabled=false) but effectively in maintenance mode. As of 2026-06-10: 18,647 stars, 208 open issues, last push 2026-04-14. The three most recent commits are housekeeping only: 'Pin pre-commit hook revisions to immutable commits' (2026-04-14), 'Pin GitHub Actions workflow references' (2026-04-06), 'Remove incontext_rl suite with defunct dependencies' (2025-11-03) — a 5-month gap between substantive activity. README says contributions of evals with custom code are not accepted, and OpenAI now steers users to the hosted Evals product: the cookbook entry opens with a recommendation to use the hosted evals API instead, and the repo banner points to the OpenAI Dashboard.",
+      "quote": "Please note that we are currently not accepting evals with custom code! [README] | You can now configure and run Evals directly in the OpenAI Dashboard. [README/repo banner] | OpenAI now has a hosted evals product with an API! We recommend you use this instead. [cookbook deprecation note]",
+      "location": "README.md, GitHub API metadata, cookbook header"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Basic templates are one-line deterministic predicates over the completion 'a' and ideal answers set 'B' — useful for teaching that string-match evals are trivially cheap but only valid for closed-form answers.",
+      "quote": "basic/match.py:Match: any([a.startswith(b) for b in B]) | basic/includes.py:Includes: any([(b in a) for b in B]) | basic/fuzzy_match.py:FuzzyMatch: any([(a in b or b in a) for b in B])",
+      "numbers": "4 basic templates: Match, Includes, FuzzyMatch, JsonMatch"
+    },
+    {
+      "point": "The cookbook explicitly maps template choice to question type: deterministic templates for closed questions, model-graded for open-ended — an early canonical statement of the LLM-as-judge pattern.",
+      "quote": "Basic eval templates [use] deterministic functions to compare the output to the ideal_answers ... best suited for multiple choice questions or simple questions with a straightforward answer. Model-graded templates [use] functions where an LLM compares the output to the ideal_answers ... ideal for open-ended questions.",
+      "numbers": ""
+    },
+    {
+      "point": "The model-graded fact template returns a 5-way classification (A-E: subset / superset / equal / disagreement / equivalent-modulo-style) rather than a binary score — a teachable example of structured judge rubrics.",
+      "quote": "fact.yaml ... given a completion a and reference answer b, returns one of five classifications (A-E) assessing whether answers are subsets, supersets, equal, different, or approximately equivalent.",
+      "numbers": "5 grade classes (A-E); other model-graded templates: closedqa.yaml (relevant/concise/correct), battle.yaml (pairwise comparison)"
+    },
+    {
+      "point": "Declarative no-code eval authoring: data in JSONL plus parameters in YAML is sufficient — no Python required for basic or model-graded evals following existing templates.",
+      "quote": "If you follow an existing eval template to build a basic or model-graded eval, you don't need to write any evaluation code at all! Just provide your data in JSON format and specify your eval parameters in YAML.",
+      "numbers": ""
+    },
+    {
+      "point": "The registry separates eval definitions (YAML in evals/registry/evals) from data (JSONL in evals/registry/data, stored via Git-LFS), and YAML uses id-version aliasing (e.g. <eval_name> -> <eval_name>.dev.v0) to version evals.",
+      "quote": "id: <eval_name>.dev.v0 ... class: evals.elsuite.basic.match:Match ... args: samples_jsonl: <eval_name>/samples.jsonl ... Upon running the eval, the data will be searched for in evals/registry/data.",
+      "numbers": ""
+    },
+    {
+      "point": "Running an eval is a one-line CLI invocation pairing a model with a registered eval name; the cookbook also demonstrates generating synthetic eval data with GPT-4.",
+      "quote": "oaieval gpt-3.5-turbo spider-sql",
+      "numbers": "Cookbook entry dated 2024-03-21; repo: 18,647 stars, 208 open issues, 691 commits as of 2026-06-10"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not describe the repo as 'archived' or 'dead' — GitHub API shows archived=false and there were commits as recently as 2026-04-14. But also do not describe it as actively developed: recent commits are CI/security housekeeping, custom-code eval contributions are closed, and OpenAI's own cookbook says to use the hosted evals product instead.",
+    "The YAML registry holds eval definitions; the datasets themselves are JSONL files under evals/registry/data managed with Git-LFS — saying 'evals are stored in YAML' without this distinction conflates definition and data.",
+    "There are 4 basic templates, not 2 — Match, Includes, FuzzyMatch, and JsonMatch (course draft mentioned only match/includes).",
+    "The cookbook URL has moved: cookbook.openai.com 308-redirects to developers.openai.com/cookbook/... — cite the new URL."
+  ],
+  "notes_for_authors": "Strong source for teaching the architecture of first-generation eval harnesses: declarative YAML registry, JSONL datasets, deterministic vs model-graded template split. Frame it historically: it codified the basic-match vs LLM-judge dichotomy, but OpenAI itself has superseded it with the hosted Evals API/Dashboard (cookbook header: 'We recommend you use this instead'), and the repo is in maintenance mode (housekeeping-only commits since Nov 2025, custom-code contributions closed). The one-line predicate definitions of Match/Includes/FuzzyMatch are excellent for a slide on what string-match metrics actually compute. Use https://developers.openai.com/cookbook/examples/evaluation/getting_started_with_openai_evals as the canonical cookbook URL."
+}

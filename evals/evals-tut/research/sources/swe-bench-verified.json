@@ -1,0 +1,81 @@
+{
+  "id": "swe-bench-verified",
+  "citation": {
+    "authors": "OpenAI (Preparedness team), in collaboration with the SWE-bench authors",
+    "title": "Introducing SWE-bench Verified",
+    "venue": "openai.com (OpenAI blog)",
+    "year": "2024 (August 13)",
+    "url": "https://openai.com/index/introducing-swe-bench-verified/"
+  },
+  "fetched_urls": [
+    "https://openai.com/index/introducing-swe-bench-verified/ (HTTP 403 — blocked direct fetch)",
+    "https://github.com/irthomasthomas/undecidability/issues/933 (full-text mirror of the post; primary source for quotes)",
+    "https://github.com/OpenAgentsInc/swe-bench-verified/blob/main/README.md (secondary corroboration)"
+  ],
+  "access": "partial",
+  "claims": [
+    {
+      "planned": "Human annotators found a large fraction of original SWE-bench tasks had issues (underspecified issues, unfair tests) — confirm the reported percentages",
+      "verdict": "confirmed",
+      "finding": "38.3% of sampled SWE-bench tasks were flagged for underspecified problem statements and 61.1% were flagged for unit tests that may unfairly reject valid solutions. Overall, 68.3% of SWE-bench samples were filtered out (the flag categories overlap). Severity used a [0,1,2,3] scale; labels 2 and 3 marked a sample as inadequate.",
+      "quote": "38.3% of samples were flagged for underspecified problem statements, and 61.1% were flagged for unit tests that may unfairly mark valid solutions as incorrect. ... Overall, our annotation process resulted in 68.3% of SWE-bench samples being filtered out due to underspecification, unfair unit tests, or other issues.",
+      "location": "Annotation results section of the blog post (verified via full-text mirror)"
+    },
+    {
+      "planned": "500-instance human-validated subset — confirm size and screening criteria",
+      "verdict": "confirmed",
+      "finding": "SWE-bench Verified is a 500-sample subset of the original SWE-bench test set. OpenAI worked with 93 software developers experienced in Python who annotated 1,699 random samples from the test set. Screening criteria: (a) whether the issue description is underspecified and hence unfair to test on; (b) whether the FAIL_TO_PASS unit tests filter out valid solutions. Each criterion was labeled [0,1,2,3] in increasing severity; samples with severe labels (2 or 3) were excluded.",
+      "quote": "We worked with 93 software developers experienced in Python to manually screen SWE-bench samples for quality. We annotated 1,699 random samples from the SWE-bench test set to produce SWE-bench Verified ... consisting of 500 samples verified to be non-problematic by our human annotators. ... Each annotation criterion has a label ranging [0, 1, 2, 3] in increasing severity. Labels 0 and 1 are minor; labels 2 and 3 are severe and indicate that the sample is inadequate.",
+      "location": "Methodology / dataset construction section (verified via full-text mirror)"
+    },
+    {
+      "planned": "Performance jumped substantially on Verified vs original — confirm numbers",
+      "verdict": "confirmed",
+      "finding": "GPT-4o on the best-performing scaffold scores 33.2% on SWE-bench Verified vs 16% on original SWE-bench — more than double, with no change to the model. The best-performing open-source scaffold referenced is Agentless.",
+      "quote": "GPT-4o's performance on the best-performing scaffold reaches 33.2% on SWE-bench Verified, more than doubling its score of 16% on the original SWE-bench.",
+      "location": "Results section (verified via full-text mirror)"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Cleaning a benchmark changed the headline score by 2x with the model held constant — a vivid demonstration that scores measure the benchmark as much as the model.",
+      "quote": "GPT-4o's performance on the best-performing scaffold reaches 33.2% on SWE-bench Verified, more than doubling its score of 16% on the original SWE-bench.",
+      "numbers": "16% -> 33.2%, same model (GPT-4o)"
+    },
+    {
+      "point": "Over two-thirds of a widely cited benchmark failed human quality screening — task validity problems exist at scale, not as edge cases.",
+      "quote": "Overall, our annotation process resulted in 68.3% of SWE-bench samples being filtered out due to underspecification, unfair unit tests, or other issues.",
+      "numbers": "68.3% filtered; 38.3% underspecified problem statements; 61.1% unfair unit tests (categories overlap)"
+    },
+    {
+      "point": "Two distinct failure modes were rubric-coded: underspecified inputs (the task itself is ambiguous) and unfair grading (FAIL_TO_PASS tests that are overly specific or even unrelated to the issue, so correct solutions fail).",
+      "quote": "The unit tests used to evaluate the correctness of a solution are often overly specific, and in some cases are even unrelated to the issue. ... Many samples have an issue description that is underspecified.",
+      "numbers": "Rubric criteria each labeled [0,1,2,3] in increasing severity; 2/3 = inadequate sample"
+    },
+    {
+      "point": "Human validation was structured and ensembled, not vibes: 93 Python-experienced developers annotated 1,699 randomly sampled tasks against an explicit severity rubric, and OpenAI released the raw annotations for all SWE-bench test samples.",
+      "quote": "We worked with 93 software developers experienced in Python to manually screen SWE-bench samples for quality. We annotated 1,699 random samples from the SWE-bench test set ... Additionally, we are releasing our human annotations for all SWE-bench test samples.",
+      "numbers": "93 annotators; 1,699 samples annotated; 500 retained"
+    },
+    {
+      "point": "Infrastructure is part of measurement validity: a third source of error was unreliable environment setup, fixed with a new containerized Docker evaluation harness.",
+      "quote": "a new evaluation harness for SWE-bench which uses containerized Docker environments",
+      "numbers": ""
+    },
+    {
+      "point": "The motivation was safety measurement, not leaderboards: a benchmark that systematically underestimates capability is a problem for OpenAI's Preparedness Framework, which needs accurate readings of autonomous software-engineering ability.",
+      "quote": "Given the potential relevance of SWE-bench for the Preparedness Framework, we aimed to find ways in which we could improve the robustness and reliability of the benchmark.",
+      "numbers": ""
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not round/misquote the percentages: it is 38.3% (underspecified) and 61.1% (unfair tests), not 38.8%/61.7% or similar.",
+    "The 38.3% and 61.1% flag rates overlap; they do not sum to the 68.3% overall filter rate — a sample can be flagged for both.",
+    "The 16% -> 33.2% jump reflects benchmark cleaning, not model improvement: same GPT-4o, same scaffold family.",
+    "33.2% is GPT-4o on the best-performing scaffold (Agentless); scaffold choice materially affects agentic benchmark scores and should be reported alongside the model.",
+    "SWE-bench Verified is a filtered subset of the original test set (500 of the originals), not a new set of tasks.",
+    "Credit is joint: released by OpenAI together with the SWE-bench (Princeton) authors, not OpenAI alone.",
+    "The mirror text does not state how many annotators reviewed each individual sample — do not claim 'each sample was annotated 3 times' from this source without separate verification."
+  ],
+  "notes_for_authors": "openai.com returns HTTP 403 to fetchers; all quotes here were verified against a full-text mirror of the post (github.com/irthomasthomas/undecidability/issues/933) and corroborated by independent secondary sources, so spot-check against the live page if possible. The post is an ideal case study tying together construct validity (underspecified tasks), grader validity (unfair FAIL_TO_PASS tests), and infrastructure validity (Docker harness) in one real benchmark repair. Strong narrative hook: the 'same model, double the score' result. Caveat for currency: OpenAI later published 'Why SWE-bench Verified no longer measures frontier coding capabilities' (openai.com/index/why-we-no-longer-evaluate-swe-bench-verified/) — Verified has since saturated at the frontier, which itself is a teachable point about benchmark lifecycles; verify that follow-up separately before citing it. Publication date August 13, 2024 comes from secondary sources (the mirror shows only the issue creation date)."
+}

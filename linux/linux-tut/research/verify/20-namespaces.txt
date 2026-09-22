@@ -1,0 +1,418 @@
+### docker exec lt-20-lab bash -c echo $$; hostname; ls -l /proc/self/ns
+263
+lab
+total 0
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 cgroup -> cgroup:[4026532963]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 ipc -> ipc:[4026532961]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 mnt -> mnt:[4026532959]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 net -> net:[4026532964]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 pid -> pid:[4026532962]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 pid_for_children -> pid:[4026532962]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 time -> time:[4026531834]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 time_for_children -> time:[4026531834]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 user -> user:[4026531837]
+lrwxrwxrwx 1 root root 0 Sep 21 16:27 uts -> uts:[4026532960]
+[exit=0]
+
+### docker exec lt-20-lab bash -c unshare --pid --fork --mount-proc bash -c "echo \$\$; ps aux"
+1
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   7628  3276 ?        R    16:27   0:00 ps aux
+[exit=0]
+
+### docker exec lt-20-lab bash -c unshare --pid --fork bash -c "echo \$\$; ps aux | head -5"
+fatal library error, lookup self
+1
+[exit=0]
+
+### docker exec lt-20-lab bash -c unshare --uts bash -c "hostname sandbox-7; hostname; readlink /proc/self/ns/uts"; hostname; readlink /proc/self/ns/uts
+sandbox-7
+uts:[4026534037]
+lab
+uts:[4026532960]
+[exit=0]
+
+### docker exec lt-20-lab bash -c ip -br addr; ip route; echo ---; unshare --net bash -c "ip -br addr; echo routes:; ip route; ping -c1 -W1 127.0.0.1; echo ping-exit=\$?; ip link set lo up; ping -c1 -W1 127.0.0.1 | tail -2"
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+tunl0@NONE       DOWN           
+gre0@NONE        DOWN           
+gretap0@NONE     DOWN           
+erspan0@NONE     DOWN           
+ip_vti0@NONE     DOWN           
+ip6_vti0@NONE    DOWN           
+sit0@NONE        DOWN           
+ip6tnl0@NONE     DOWN           
+ip6gre0@NONE     DOWN           
+eth0@if73        UP             172.17.0.5/16 
+default via 172.17.0.1 dev eth0 
+172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.5 
+---
+lo               DOWN           
+tunl0@NONE       DOWN           
+gre0@NONE        DOWN           
+gretap0@NONE     DOWN           
+erspan0@NONE     DOWN           
+ip_vti0@NONE     DOWN           
+ip6_vti0@NONE    DOWN           
+sit0@NONE        DOWN           
+ip6tnl0@NONE     DOWN           
+ip6gre0@NONE     DOWN           
+routes:
+ping: connect: Network is unreachable
+ping-exit=2
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.268/0.268/0.268/0.000 ms
+[exit=0]
+
+### docker exec lt-20-lab bash -c unshare --net ip addr
+1: lo: <LOOPBACK> mtu 65536 qdisc noop state DOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+2: tunl0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+3: gre0@NONE: <NOARP> mtu 1476 qdisc noop state DOWN group default qlen 1000
+    link/gre 0.0.0.0 brd 0.0.0.0
+4: gretap0@NONE: <BROADCAST,MULTICAST> mtu 1462 qdisc noop state DOWN group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+5: erspan0@NONE: <BROADCAST,MULTICAST> mtu 1450 qdisc noop state DOWN group default qlen 1000
+    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff
+6: ip_vti0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/ipip 0.0.0.0 brd 0.0.0.0
+7: ip6_vti0@NONE: <NOARP> mtu 1428 qdisc noop state DOWN group default qlen 1000
+    link/tunnel6 :: brd :: permaddr b6dd:39:4c43::
+8: sit0@NONE: <NOARP> mtu 1480 qdisc noop state DOWN group default qlen 1000
+    link/sit 0.0.0.0 brd 0.0.0.0
+9: ip6tnl0@NONE: <NOARP> mtu 1452 qdisc noop state DOWN group default qlen 1000
+    link/tunnel6 :: brd :: permaddr aed2:a428:8d75::
+10: ip6gre0@NONE: <NOARP> mtu 1448 qdisc noop state DOWN group default qlen 1000
+    link/gre6 :: brd :: permaddr 62f9:feab:cce::
+[exit=0]
+
+### docker exec lt-20-lab bash -c unshare --mount bash -c "mount -t tmpfs tmpfs /mnt; echo secret > /mnt/note; ls /mnt; findmnt /mnt; readlink /proc/self/ns/mnt"; echo "--- outside:"; ls /mnt; findmnt /mnt; echo findmnt-exit=$?; readlink /proc/self/ns/mnt
+note
+TARGET SOURCE FSTYPE OPTIONS
+/mnt   tmpfs  tmpfs  rw,relatime
+mnt:[4026534156]
+--- outside:
+findmnt-exit=1
+mnt:[4026532959]
+[exit=0]
+
+### docker exec lt-20-lab bash -c unshare --pid --fork bash -c "echo \$\$; ps aux"
+1
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   2268  1064 ?        Ss   11:47   0:00 sleep infinity
+root       328  0.0  0.0   2280  1152 ?        Ss   16:27   0:00 unshare --pid --fork bash -c echo $$; ps aux
+root       334  0.0  0.0   7628  3532 ?        R    16:27   0:00 ps aux
+[exit=0]
+
+### docker exec lt-20-lab bash -c ps -eo pid,ppid,args --forest
+  PID  PPID COMMAND
+  345     0 ps -eo pid,ppid,args --forest
+  335     0 unshare --pid --fork --mount-proc --uts --net --ipc bash -c hostname box; sleep 600 & sleep 600 & exec sleep 900
+  341   335  \_ sleep 900
+  343   341      \_ sleep 600
+  344   341      \_ sleep 600
+    1     0 sleep infinity
+[exit=0]
+
+### docker exec lt-20-lab bash -c lsns
+        NS TYPE   NPROCS   PID USER COMMAND
+4026531834 time        6     1 root sleep infinity
+4026531837 user        6     1 root sleep infinity
+4026532689 mnt         4   335 root unshare --pid --fork --mount-proc --uts --net --ipc bash -c hostname box; sleep 600 & sleep 600 & exec sleep 900
+4026532690 uts         4   335 root unshare --pid --fork --mount-proc --uts --net --ipc bash -c hostname box; sleep 600 & sleep 600 & exec sleep 900
+4026532691 ipc         4   335 root unshare --pid --fork --mount-proc --uts --net --ipc bash -c hostname box; sleep 600 & sleep 600 & exec sleep 900
+4026532692 pid         3   341 root `-sleep 900
+4026532693 net         4   335 root unshare --pid --fork --mount-proc --uts --net --ipc bash -c hostname box; sleep 600 & sleep 600 & exec sleep 900
+4026532959 mnt         2     1 root sleep infinity
+4026532960 uts         2     1 root sleep infinity
+4026532961 ipc         2     1 root sleep infinity
+4026532962 pid         3     1 root sleep infinity
+4026532963 cgroup      6     1 root sleep infinity
+4026532964 net         2     1 root sleep infinity
+[exit=0]
+
+### docker exec lt-20-lab bash -c P=$(pgrep -f "^sleep 900"); echo target=$P; readlink /proc/$P/ns/pid /proc/$P/ns/net /proc/$P/ns/uts /proc/$P/ns/user; echo mine:; readlink /proc/self/ns/pid /proc/self/ns/net /proc/self/ns/uts /proc/self/ns/user; grep NSpid /proc/$P/status; echo "--- nsenter:"; nsenter -t $P -a bash -c "hostname; ps -eo pid,ppid,args; ip -br addr | head -1"
+target=341
+pid:[4026532692]
+net:[4026532693]
+uts:[4026532690]
+user:[4026531837]
+mine:
+pid:[4026532962]
+net:[4026532964]
+uts:[4026532960]
+user:[4026531837]
+NSpid:	341	1
+--- nsenter:
+box
+  PID  PPID COMMAND
+    1     0 sleep 900
+    3     1 sleep 600
+    4     1 sleep 600
+    5     0 bash -c hostname; ps -eo pid,ppid,args; ip -br addr | head -1
+    7     5 ps -eo pid,ppid,args
+lo               DOWN           
+[exit=0]
+
+### docker exec lt-20-lab bash -c P=$(pgrep -f "^sleep 900"); echo killing $P; kill -9 $P; sleep 1; pgrep -a sleep
+killing 341
+1 sleep infinity
+[exit=0]
+
+### no namespace: orphans leak
+### docker exec lt-20-lab bash -c bash -c "sleep 601 & sleep 601 & sleep 1"; sleep 2; pgrep -a sleep; pkill -f "sleep 601"
+1 sleep infinity
+387 sleep 601
+388 sleep 601
+[exit=0]
+
+### docker exec lt-20-lab bash -c mkdir -p /jail/bin && cp /usr/bin/busybox /jail/bin/ && echo "hello from the jail" > /jail/README; chroot /jail /bin/busybox sh -c "/bin/busybox ls -l /; /bin/busybox cat /README; /bin/busybox ls /etc"; echo "--- still same namespaces:"; chroot /jail /bin/busybox sh -c "/bin/busybox hostname; /bin/busybox readlink /proc/self/ns/pid"; echo "chroot-exit=$?"
+total 8
+-rw-r--r--    1 0        0               20 Sep 21 16:27 README
+drwxr-xr-x    2 0        0             4096 Sep 21 16:27 bin
+hello from the jail
+ls: /etc: No such file or directory
+--- still same namespaces:
+lab
+chroot-exit=1
+[exit=0]
+
+### docker exec -u learner lt-20-lab bash -c id; unshare --user --map-root-user bash -c "id; cat /proc/self/uid_map; grep CapEff /proc/self/status; readlink /proc/self/ns/user; hostname x; touch /etc/x"
+uid=1001(learner) gid=1001(learner) groups=1001(learner)
+uid=0(root) gid=0(root) groups=0(root)
+         0       1001          1
+CapEff:	000001ffffffffff
+user:[4026533632]
+hostname: you must be root to change the host name
+touch: cannot touch '/etc/x': Permission denied
+[exit=1]
+
+### docker exec -u learner lt-20-lab bash -c unshare --user bash -c "id; cat /proc/self/uid_map"
+uid=65534(nobody) gid=65534(nogroup) groups=65534(nogroup)
+[exit=0]
+
+### docker exec -u learner lt-20-lab bash -c unshare --uts true
+unshare: unshare failed: Operation not permitted
+[exit=1]
+
+### docker exec -u learner lt-20-lab bash -c unshare --user --map-root-user --uts bash -c "hostname mine; hostname"; hostname
+mine
+lab
+[exit=0]
+
+### docker run --rm --security-opt seccomp=builtin ubuntu:24.04 unshare --user --map-root-user id
+unshare: unshare failed: Operation not permitted
+[exit=1]
+
+### docker run --rm ubuntu:24.04 unshare --uts true
+unshare: unshare failed: Operation not permitted
+[exit=1]
+
+### docker run --rm ubuntu:24.04 uname -r
+6.10.14-linuxkit
+[exit=0]
+
+### docker run --rm debian:bookworm-slim uname -r
+6.10.14-linuxkit
+[exit=0]
+
+### docker run --rm alpine:3.20 uname -r
+6.10.14-linuxkit
+[exit=0]
+
+### docker run --rm ubuntu:24.04 bash -c cat /proc/uptime; nproc; grep MemTotal /proc/meminfo; date -u
+17487.79 173670.87
+10
+MemTotal:        8025424 kB
+Mon Sep 21 16:27:56 UTC 2026
+[exit=0]
+
+### docker run --rm --memory 256m --cpus 1 ubuntu:24.04 bash -c nproc; grep MemTotal /proc/meminfo; cat /sys/fs/cgroup/memory.max
+10
+MemTotal:        8025424 kB
+268435456
+[exit=0]
+
+### docker run --rm ubuntu:24.04 date -s 2030-01-01
+Tue Jan  1 00:00:00 UTC 2030
+date: cannot set date: Operation not permitted
+[exit=1]
+
+### docker exec lt-20-a bash -c for n in pid net mnt uts ipc cgroup user time; do readlink /proc/1/ns/$n; done | paste -sd" "
+pid:[4026533772] net:[4026533774] mnt:[4026533769] uts:[4026533770] ipc:[4026533771] cgroup:[4026533773] user:[4026531837] time:[4026531834]
+[exit=0]
+
+### docker exec lt-20-b bash -c for n in pid net mnt uts ipc cgroup user time; do readlink /proc/1/ns/$n; done | paste -sd" "
+pid:[4026533907] net:[4026533909] mnt:[4026533904] uts:[4026533905] ipc:[4026533906] cgroup:[4026533908] user:[4026531837] time:[4026531834]
+[exit=0]
+
+### docker exec lt-20-a bash -c readlink /proc/1/ns/pid /proc/self/ns/pid /proc/1/ns/mnt /proc/self/ns/mnt; ps -eo pid,ppid,args
+pid:[4026533772]
+pid:[4026533772]
+mnt:[4026533769]
+mnt:[4026533769]
+  PID  PPID COMMAND
+    1     0 sleep 300
+   23     0 ps -eo pid,ppid,args
+[exit=0]
+
+### auditor view: --pid=host
+### docker run --rm --pid=host ubuntu:24.04 bash -c ls -d /proc/[0-9]* | wc -l; readlink /proc/self/ns/pid /proc/1/ns/pid
+264
+pid:[4026531836]
+[exit=1]
+
+### docker run --rm ubuntu:24.04 bash -c ls -d /proc/[0-9]* | wc -l
+3
+[exit=0]
+
+### docker run --rm --pid=host --cap-add SYS_PTRACE ubuntu:24.04 bash -c lsns -t pid -o NS,TYPE,NPROCS,PID,COMMAND | cut -c1-90
+        NS TYPE NPROCS   PID COMMAND
+4026531836 pid     246     1 /init
+4026532557 pid       1  5722 sleep infinity
+4026532692 pid       3 56231 sh -c apk add --no-cache python3 2>&1 | tail -3; ls /var/cach
+4026532827 pid       3  6037 sleep infinity
+4026532962 pid       3  6274 sleep infinity
+4026533097 pid       1 48001 bash
+4026533232 pid       2 37701 sleep infinity
+4026533367 pid       1  7625 sleep infinity
+4026533500 pid       1 53605 bash
+4026533637 pid       1 48822 sleep infinity
+4026533772 pid       1 56278 sleep 300
+4026533907 pid       1 56321 sleep 300
+[exit=0]
+
+### docker run --rm --pid=host --cap-add SYS_PTRACE ubuntu:24.04 bash -c for p in $(pgrep -x sleep); do echo "$p $(readlink /proc/$p/ns/pid) $(readlink /proc/$p/ns/net) $(tr " " " " < /proc/$p/cmdline)"; done
+5722 pid:[4026532557] net:[4026532559] sleep infinity 
+6037 pid:[4026532827] net:[4026532829] sleep infinity 
+6274 pid:[4026532962] net:[4026532964] sleep infinity 
+7625 pid:[4026533367] net:[4026533369] sleep infinity 
+37701 pid:[4026533232] net:[4026533234] sleep infinity 
+48822 pid:[4026533637] net:[4026533639] sleep infinity 
+54505 pid:[4026532962]  
+54506 pid:[4026532962]  
+56278 pid:[4026533772] net:[4026533774] sleep 300 
+56321 pid:[4026533907] net:[4026533909] sleep 300 
+[exit=0]
+
+### docker run --rm --network=host ubuntu:24.04 bash -c readlink /proc/self/ns/net; cat /proc/net/dev | wc -l; hostname
+net:[4026531840]
+29
+docker-desktop
+[exit=0]
+
+### docker run --rm ubuntu:24.04 bash -c readlink /proc/self/ns/net; cat /proc/net/dev | wc -l; hostname
+net:[4026534044]
+13
+4dc01296fbee
+[exit=0]
+
+### docker run --rm --pid=host ubuntu:24.04 bash -c readlink /proc/1/ns/net
+[exit=1]
+
+### docker run --rm --pid=host --cap-add SYS_PTRACE ubuntu:24.04 bash -c readlink /proc/1/ns/net /proc/1/ns/pid /proc/1/ns/user /proc/1/ns/time
+net:[4026531840]
+pid:[4026531836]
+user:[4026531837]
+time:[4026531834]
+[exit=0]
+
+### docker inspect lt-20-a --format pid={{.HostConfig.PidMode}} net={{.HostConfig.NetworkMode}} ipc={{.HostConfig.IpcMode}} uts={{.HostConfig.UTSMode}} userns={{.HostConfig.UsernsMode}} privileged={{.HostConfig.Privileged}}
+pid= net=bridge ipc=private uts= userns= privileged=false
+[exit=0]
+
+### docker inspect lt-20-lab --format pid={{.HostConfig.PidMode}} net={{.HostConfig.NetworkMode}} ipc={{.HostConfig.IpcMode}} uts={{.HostConfig.UTSMode}} userns={{.HostConfig.UsernsMode}} privileged={{.HostConfig.Privileged}}
+pid= net=bridge ipc=private uts= userns= privileged=true
+[exit=0]
+
+### docker exec lt-20-a bash -c for n in pid net mnt uts; do readlink /proc/self/ns/$n; done | paste -sd" "
+pid:[4026533772] net:[4026533774] mnt:[4026533769] uts:[4026533770]
+[exit=0]
+
+### docker exec lt-20-c bash -c for n in pid net mnt uts; do readlink /proc/self/ns/$n; done | paste -sd" "
+pid:[4026533772] net:[4026533774] mnt:[4026532689] uts:[4026532690]
+[exit=0]
+
+### docker exec lt-20-a bash -c ps -eo pid,ppid,user,args; kill -9 $(pgrep -f "sleep 300" | tail -1); sleep 1; ps -eo pid,args
+  PID  PPID USER     COMMAND
+    1     0 root     sleep 300
+   30     0 root     sleep 300
+   60     0 root     bash -c ps -eo pid,ppid,user,args; kill -9 $(pgrep -f "sleep 300" | tail -1); sleep 1; ps -eo pid,args
+   65    60 root     ps -eo pid,ppid,user,args
+bash: line 1: kill: (66) - No such process
+  PID COMMAND
+    1 sleep 300
+   30 sleep 300
+   60 ps -eo pid,args
+[exit=0]
+
+### docker ps -a --filter name=lt-20-c --format {{.Names}} {{.Status}}
+lt-20-c Up 2 seconds
+[exit=0]
+
+### docker exec lt-20-a bash -c kill -9 30; sleep 1; ps -eo pid,args
+  PID COMMAND
+    1 sleep 300
+   70 ps -eo pid,args
+[exit=0]
+
+### docker ps -a --filter name=lt-20-c --format {{.Names}} {{.Status}}
+lt-20-c Exited (137) 2 seconds ago
+[exit=0]
+
+### compose.yaml
+services:
+  default:
+    image: task-netdebug:1.4
+    command: sleep infinity
+    network_mode: host
+    pid: host
+    mem_limit: 2g
+  grader:
+    image: task-netdebug-grader:1.4
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+### docker run --rm -v /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/l20:/w:ro -w /w ubuntu:24.04 grep -nE privileged|(pid|ipc|network_mode|userns_mode): *"?host|docker\.sock compose.yaml
+5:    network_mode: host
+6:    pid: host
+10:    privileged: true
+12:      - /var/run/docker.sock:/var/run/docker.sock
+[exit=0]
+
+### interactive-style reruns (commands fed on stdin so bash stays PID 1)
+## pid
+1
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   4032  2896 ?        S    16:30   0:00 bash
+root         2  100  0.0   7628  3532 ?        R    16:30   0:00 ps aux
+3
+## pid without mount-proc
+1
+fatal library error, lookup self
+7
+## default container refuses
+unshare: unshare failed: Operation not permitted
+## nsenter interactive
+465
+box
+  PID  PPID COMMAND
+    1     0 sleep 900
+    3     1 sleep 600
+    4     1 sleep 600
+    5     0 ps -eo pid,ppid,args
+1 sleep infinity
+387 [sleep] <defunct>
+388 [sleep] <defunct>
+### lab 4 rerun
+494
+387 [sleep] <defunct>
+388 [sleep] <defunct>
+[grep exit=0]
+### lab 4 rerun b
+508
+514
+516
+517
+exit=1

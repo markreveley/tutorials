@@ -1,0 +1,125 @@
+{
+  "id": "rlimits",
+  "tag": "[getrlimit(2)]",
+  "citation": {
+    "authors": "Linux man-pages project; GNU bash",
+    "title": "getrlimit(2), setrlimit(2), prlimit(2) — get/set resource limits; bash(1) ulimit builtin",
+    "venue": "Linux man-pages 6.19 (man7.org)",
+    "year": "2026",
+    "url": "https://man7.org/linux/man-pages/man2/getrlimit.2.html"
+  },
+  "fetched_urls": [
+    "https://man7.org/linux/man-pages/man2/getrlimit.2.html",
+    "https://man7.org/linux/man-pages/man1/bash.1.html",
+    "https://man7.org/linux/man-pages/man2/fork.2.html",
+    "https://docs.docker.com/reference/cli/docker/container/run/"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Resource limits have soft and hard values; unprivileged process can lower hard limit irreversibly and raise soft up to hard; inherited across fork, preserved across exec",
+      "verdict": "confirmed",
+      "finding": "Verbatim. The soft limit is the one the kernel enforces; the hard limit is the ceiling for the soft limit. Unprivileged: soft anywhere in 0..hard; hard may only be lowered, irreversibly. Privileged = CAP_SYS_RESOURCE in the initial user namespace. Inheritance is in NOTES. Executed: as user nobody, lowering -Hn to 100 then trying 200 fails with 'Operation not permitted'.",
+      "quote": "The soft limit is the value that the kernel enforces for the corresponding resource. The hard limit acts as a ceiling for the soft limit: an unprivileged process may set only its soft limit to a value in the range from 0 up to the hard limit, and (irreversibly) lower its hard limit.",
+      "location": "getrlimit(2), DESCRIPTION; inheritance in NOTES ('A child process created via fork(2) inherits its parent's resource limits. Resource limits are preserved across execve(2).')",
+      "cite_url": "https://man7.org/linux/man-pages/man2/getrlimit.2.html"
+    },
+    {
+      "planned": "RLIMIT_NOFILE, RLIMIT_NPROC (per real UID, not per process tree), RLIMIT_AS, RLIMIT_CPU (SIGXCPU then SIGKILL), RLIMIT_FSIZE (SIGXFSZ), RLIMIT_CORE",
+      "verdict": "confirmed",
+      "finding": "NOFILE: one greater than the max fd number; exceeding -> EMFILE. NPROC: counts processes (on Linux, threads) of the caller's REAL UID system-wide; fork fails EAGAIN; NOT enforced for CAP_SYS_ADMIN/CAP_SYS_RESOURCE holders or real UID 0. AS: max virtual address space in bytes; brk/mmap/mremap fail ENOMEM. CPU: seconds of CPU time; SIGXCPU at the soft limit, then once per second, SIGKILL at the hard limit. FSIZE: max file size; SIGXFSZ, or EFBIG if the signal is caught. CORE: max core file size; 0 = no core dumps. Executed: soft-only CPU limit -> exit 152 (SIGXCPU); `ulimit -t 1` (which sets BOTH soft and hard) -> exit 137 (SIGKILL); `ulimit -f 1` -> exit 153 (SIGXFSZ) with the file truncated at 1024 bytes.",
+      "quote": "When the process reaches the soft limit, it is sent a SIGXCPU signal. The default action for this signal is to terminate the process. ... If the process continues to consume CPU time, it will be sent SIGXCPU once per second until the hard limit is reached, at which time it is sent SIGKILL.",
+      "location": "getrlimit(2), DESCRIPTION > RLIMIT_CPU (other limits under their own headings)",
+      "cite_url": "https://man7.org/linux/man-pages/man2/getrlimit.2.html"
+    },
+    {
+      "planned": "rlimits are per-process, unlike cgroup limits which apply to a group — contrast for page 12/21",
+      "verdict": "confirmed",
+      "finding": "getrlimit(2): 'Resource limits are per-process attributes that are shared by all of the threads in a process.' The notable exception is RLIMIT_NPROC, which is accounted per real UID across the whole system (and across containers sharing a UID, per Docker's docs). The cgroup side of the contrast (limits apply to the cgroup and its descendants as a unit) is in the 'oom' note. fork(2) lists RLIMIT_NPROC and cgroup pids.max as separate causes of EAGAIN.",
+      "quote": "Resource limits are per-process attributes that are shared by all of the threads in a process.",
+      "location": "getrlimit(2), NOTES",
+      "cite_url": "https://man7.org/linux/man-pages/man2/getrlimit.2.html"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "RLIMIT_NPROC exact text — per real UID, threads counted, root exempt.",
+      "quote": "This is a limit on the number of extant process (or, more precisely on Linux, threads) for the real user ID of the calling process. ... The RLIMIT_NPROC limit is not enforced for processes that have either the CAP_SYS_ADMIN or the CAP_SYS_RESOURCE capability, or run with real user ID 0.",
+      "location": "getrlimit(2), DESCRIPTION > RLIMIT_NPROC"
+    },
+    {
+      "finding": "Docker's own warning that nproc is per user, not per container.",
+      "quote": "Be careful setting nproc with the ulimit flag as Linux uses nproc to set the maximum number of processes available to a user, not to a container.",
+      "location": "docker container run reference, 'Set ulimits in container (--ulimit)' > For nproc usage",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/"
+    },
+    {
+      "finding": "docker run --ulimit syntax: <type>=<soft>[:<hard>]; hard defaults to soft; unspecified limits are inherited from the daemon's default ulimits. Docs say setting ulimits from inside needs privileges 'not available in the default container' (true for RAISING hard limits; lowering always works).",
+      "quote": "If you don't provide a hard limit value, Docker uses the soft limit value for both values. If you don't provide any values, they are inherited from the default ulimits set on the daemon.",
+      "location": "docker container run reference, 'Set ulimits in container (--ulimit)'"
+    },
+    {
+      "finding": "RLIMIT_NOFILE exact text.",
+      "quote": "This specifies a value one greater than the maximum file descriptor number that can be opened by this process. Attempts (open(2), pipe(2), dup(2), etc.) to exceed this limit yield the error EMFILE.",
+      "location": "getrlimit(2), DESCRIPTION > RLIMIT_NOFILE"
+    },
+    {
+      "finding": "RLIMIT_AS exact text — limits VIRTUAL address space, so it is a poor proxy for real memory use (and breaks runtimes that reserve large virtual ranges).",
+      "quote": "This is the maximum size of the process's virtual memory (address space). The limit is specified in bytes, and is rounded down to the system page size. This limit affects calls to brk(2), mmap(2), and mremap(2), which fail with the error ENOMEM upon exceeding this limit.",
+      "location": "getrlimit(2), DESCRIPTION > RLIMIT_AS"
+    },
+    {
+      "finding": "RLIMIT_RSS is a dead letter: there is no working per-process limit on resident memory via rlimits — memory capping needs cgroups.",
+      "quote": "This limit has effect only in Linux 2.4.x, x < 30, and there affects only calls to madvise(2) specifying MADV_WILLNEED.",
+      "location": "getrlimit(2), DESCRIPTION > RLIMIT_RSS"
+    },
+    {
+      "finding": "RLIMIT_FSIZE and RLIMIT_CORE exact text.",
+      "quote": "Attempts to extend a file beyond this limit result in delivery of a SIGXFSZ signal. By default, this signal terminates a process, but a process can catch this signal instead, in which case the relevant system call (e.g., write(2), truncate(2)) fails with the error EFBIG.",
+      "location": "getrlimit(2), DESCRIPTION > RLIMIT_FSIZE; RLIMIT_CORE: 'When 0 no core dump files are created.'"
+    },
+    {
+      "finding": "Inspecting limits: /proc/PID/limits (since 2.6.24); shell builtin ulimit; RLIM_INFINITY = unlimited. Lowering a soft limit below current usage succeeds.",
+      "quote": "Since Linux 2.6.24, the resource limits of any process can be inspected via /proc/pid/limits; see proc(5).",
+      "location": "getrlimit(2), NOTES"
+    },
+    {
+      "finding": "bash ulimit: -H/-S select hard/soft; with NEITHER, setting changes BOTH; printing shows the soft limit. Units: 1024-byte blocks for most sizes, seconds for -t, unscaled for -n and -u, 512-byte blocks for -p (and for -c/-f in posix mode). With no option, -f is assumed.",
+      "quote": "A hard limit cannot be increased by a non-root user once it is set; a soft limit may be increased up to the value of the hard limit. If neither -H nor -S is specified, ulimit sets both the soft and hard limits.",
+      "location": "bash(1), SHELL BUILTIN COMMANDS > ulimit",
+      "cite_url": "https://man7.org/linux/man-pages/man1/bash.1.html"
+    },
+    {
+      "finding": "ulimit option letters: -c core, -d data seg, -f file size, -n open fds, -s stack, -t cpu seconds, -u user processes, -v virtual memory, -a all.",
+      "quote": "-n The maximum number of open file descriptors (most systems do not allow this value to be set). ... -t The maximum amount of cpu time in seconds. -u The maximum number of processes available to a single user. -v The maximum amount of virtual memory available to the shell and, on some systems, to its children.",
+      "location": "bash(1), SHELL BUILTIN COMMANDS > ulimit"
+    },
+    {
+      "finding": "EXECUTED: default limits of a root process in an ubuntu:24.04 container on this host (daemon defaults; differs per host): nofile 1048576/1048576, nproc unlimited, core 0 soft / unlimited hard, stack 8 MiB soft, cpu/fsize/as unlimited.",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c 'cat /proc/self/limits'\nLimit                     Soft Limit           Hard Limit           Units     \nMax cpu time              unlimited            unlimited            seconds   \nMax file size             unlimited            unlimited            bytes     \nMax stack size            8388608              unlimited            bytes     \nMax core file size        0                    unlimited            bytes     \nMax processes             unlimited            unlimited            processes \nMax open files            1048576              1048576              files     \nMax address space         unlimited            unlimited            bytes     \nMax pending signals       31324                31324                signals   \n…",
+      "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1, kernel 6.10.14-linuxkit)"
+    },
+    {
+      "finding": "EXECUTED: RLIMIT_FSIZE.",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c '(ulimit -f 1; head -c 100000 /dev/zero > /tmp/big); echo \"exit=$?\"; ls -l /tmp/big'\nbash: line 1:     8 File size limit exceededhead -c 100000 /dev/zero > /tmp/big\nexit=153\n-rw-r--r-- 1 root root 1024 Sep 21 06:08 /tmp/big",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: RLIMIT_CPU. `ulimit -t 1` sets soft AND hard to 1 s, so the process gets SIGKILL (137); soft-only gives SIGXCPU (152 = 128+24).",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c '(ulimit -t 1; while :; do :; done); echo \"exit=$?\"'\nexit=137\nbash: line 1:     7 Killed                  ( ulimit -t 1; while :; do :; done )\n$ docker run --rm ubuntu:24.04 bash -c '(ulimit -St 1; while :; do :; done); echo \"soft-only exit=$?\"'\nsoft-only exit=152\nbash: line 1:     7 CPU time limit exceeded ( ulimit -St 1; while :; do :; done )",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: hard limit is a one-way ratchet for an unprivileged user.",
+      "quote": "$ docker run --rm -u nobody ubuntu:24.04 bash -c 'ulimit -Sn 50; ulimit -Hn 100; ulimit -Sn 100; echo \"soft=$(ulimit -Sn) hard=$(ulimit -Hn)\"; ulimit -Hn 200; echo \"raise hard rc=$?\"'\nsoft=100 hard=100\nraise hard rc=1\nbash: line 1: ulimit: open files: cannot modify limit: Operation not permitted",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: RLIMIT_NOFILE — with `ulimit -n 5`, fd 7 cannot be opened.",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c 'ulimit -n 5; cat /etc/hostname; exec 7</etc/hostname'\nb6f0d3a4f266\nbash: line 1: 7: Bad file descriptor",
+      "location": "executed ubuntu:24.04"
+    }
+  ],
+  "teaching_notes": "Offers the exact soft/hard mechanics and a per-limit behaviour table (error vs signal). Folklore it corrects: (1) `ulimit -t N` does not give you a catchable SIGXCPU — bash sets soft and hard together, so the process is SIGKILLed (137, indistinguishable by exit code from OOM or docker stop); use -S for the soft-only behaviour; (2) RLIMIT_NPROC is per real UID system-wide, counts threads, and is ignored for root — so it is not a fork-bomb defence for a root agent, and it leaks across containers sharing a UID (Docker documents this); use cgroup pids.max; (3) there is no usable RSS rlimit — RLIMIT_AS limits virtual address space only; real memory caps need cgroup memory.max; (4) signal(7) lists SIGXCPU/SIGXFSZ default action as Core, while getrlimit(2) says 'terminate' — both kill the process; exit statuses 152/153. rlimits vs cgroups contrast: rlimits are per-process attributes inherited by copy (each child gets its own full allowance), cgroup limits are a shared budget for the whole group."
+}

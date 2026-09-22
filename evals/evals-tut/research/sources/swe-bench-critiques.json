@@ -1,0 +1,82 @@
+{
+  "id": "swe-bench-critiques",
+  "citation": {
+    "authors": "Reem Aleithan, Haoran Xue, Mohammad Mahdi Mohajer, Elijah Nnorom, Gias Uddin, Song Wang (SWE-Bench+); Shanchao Liang, Spandan Garg, Roshanak Zilouchian Moghaddam (SWE-Bench Illusion)",
+    "title": "SWE-Bench+: Enhanced Coding Benchmark for LLMs; The SWE-Bench Illusion: When State-of-the-Art LLMs Remember Instead of Reason",
+    "venue": "arXiv (SWE-Bench+: arXiv:2410.06992v2, Oct 2024, preprint/under review; SWE-Bench Illusion: arXiv:2506.12286v4, Jun 2025, last revised Dec 1 2025, ACM conference formatting)",
+    "year": "2024; 2025",
+    "url": "https://arxiv.org/abs/2410.06992 ; https://arxiv.org/abs/2506.12286"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2410.06992",
+    "https://arxiv.org/abs/2506.12286",
+    "https://arxiv.org/pdf/2410.06992",
+    "https://arxiv.org/pdf/2506.12286"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Solution leakage: some issues contain the fix in the issue text or comments — confirm reported rates",
+      "verdict": "confirmed",
+      "finding": "SWE-Bench+ (Aleithan et al.): 32.67% of SWE-Agent+GPT-4's successfully resolved instances on SWE-bench Full (82 of 251 passing patches) involved 'solution leak' — the solution was outlined directly in the issue report or comments. On SWE-bench Lite the leak rate among resolved instances was 33.33% (18 instances); on SWE-Bench Verified it was 33.04% (37 instances). IMPORTANT NUANCE: these percentages are of RESOLVED instances (successful patches), not of the whole dataset.",
+      "quote": "32.67% of the successful patches involve 'cheating' as the solutions were directly provided in the issue report or the comments. We refer to as 'solution leakage' problem. ... [Table 1] Solution leak: 82 (32.67%) ... In SWE-Bench Lite, we identified 18 instances where the solution was directly provided in the issue description or discussion on GitHub. Similarly, in SWE-Bench Verified, 37 instances contained direct solutions in either the issue description or the discussion on GitHub.",
+      "location": "SWE-Bench+ Abstract; Table 1 (p.4); Section 2.3 (p.7)"
+    },
+    {
+      "planned": "Weak test suites pass incorrect patches — confirm reported rates",
+      "verdict": "confirmed",
+      "finding": "SWE-Bench+: 31.08% of SWE-Agent+GPT-4's passed patches were suspicious due to weak tests — broken down as incorrect fixes 12.75% (32), different files/functions changed 3.59% (9), incomplete fixes 14.74% (37), all root-caused to weak tests in Table 1. Total suspicious fixes (weak tests + solution leak) = 63.75% (160 of 251). After filtering suspicious fixes, SWE-Agent+GPT-4's resolution rate on SWE-bench Full drops from 12.47% to 3.97% (abstract and Fig. 1b); Lite drops 18% -> 9.33%; Verified drops 22.4% -> 10.0%.",
+      "quote": "31.08% of the passed patches are suspicious patches due to weak test cases, i.e., the tests were not adequate to verify the correctness of a patch. When we filtered out these problematic issues, the resolution rate of SWE-Agent+GPT-4 drops from 12.47% to 3.97%. ... the overall suspicious fix patterns led to 48.14% suspicious fixes in SWE-Bench Lite and 55.36% in SWE-Bench Verified, significantly reducing the resolution rates—from 18% to 9.33% in SWE-Bench Lite and from 22.4% to 10.0% in SWE-Bench Verified.",
+      "location": "SWE-Bench+ Abstract; Table 1 (p.4); Section 2.2-2.3 (p.7); Figure 1b"
+    },
+    {
+      "planned": "Memorization evidence: models can produce file paths/fixes from issue text alone — confirm experiment and numbers",
+      "verdict": "confirmed",
+      "finding": "SWE-Bench Illusion (Liang et al., v4): In the file-path identification diagnostic, models receive ONLY the repo name and issue description (no repository structure, code, or metadata) and must output the buggy file path. SoTA models (best: OpenAI o3) achieve up to 76% accuracy on SWE-Bench Verified, vs only up to 53% on tasks from repositories not in SWE-Bench (Outside-Repo Tasks: 245 instances from 7 popular repos like numpy/scipy/pandas). On the function reproduction task (reproduce a removed function from only issue text + file context, no signature/spec), consecutive 5-gram overlap reaches up to 34.9% (Claude 4 Opus) on SWE-Bench Verified vs up to 18.2% outside the SWE-Bench ecosystem. A prefix-completion test found instance-level verbatim match rates of 11.7%-31.6% across 8 models on SWE-Bench Verified (Claude 4 Opus: 31.6%).",
+      "quote": "We show that state-of-the-art (SoTA) models achieve up to 76% accuracy in identifying buggy file paths using only issue descriptions, without access to repository structure. This performance is merely up to 53% on tasks from repositories not included in SWE-Bench, pointing to possible data contamination or memorization. ... up to 35% consecutive 5-gram overlap ratio on SWE-Bench Verified and Full, but only up to 18% for tasks in other benchmarks ... the instance-level verbatim match percentage ranging from 11.7% to 31.6% across evaluated models.",
+      "location": "SWE-Bench Illusion Abstract; Sections 2.1, 4.1 (Fig. 8), 4.3 (Fig. 10), 4.4 (Table 3)"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Temporal contamination: nearly all SWE-bench issues predate model training cutoffs, so issue reports may have been in training data.",
+      "quote": "94% of the instances in SWE-bench and their pull requests were created prior to the training cut-off dates of the LLMs, meaning that all issue reports in the full SWE-Bench dataset may have been exposed to the LLMs during their training phases, raising concerns about potential data leakage.",
+      "numbers": "94% of SWE-bench instances predate LLM training cutoffs (SWE-Bench+, Section 1)"
+    },
+    {
+      "point": "On a decontaminated benchmark (SWE-Bench+: 548 post-cutoff GitHub issues from Nov 2023 to Aug 2024, manually screened for no solution leakage), agent performance collapses by roughly an order of magnitude.",
+      "quote": "After carefully analyzing the passed instances from the SWE-Agent + GPT-4 model with the new dataset, SWE-Bench+, we observed a decline in the pass rate, dropping from 3.97% (as seen on the refined SWE-Bench) to a resolution rate of 0.55%. We further evaluated SWE-RAG + GPT-4, SWE-RAG + GPT-3.5, and AutoCodeRover + GPT-4o models on the new dataset ... the resolution rates of the models drop significantly, which are 0.73%, 0.55%, and 3.83%, respectively.",
+      "numbers": "SWE-Agent+GPT-4: 12.47% (raw) -> 3.97% (suspicious fixes removed) -> 0.55% (SWE-Bench+); AutoCodeRover+GPT-4o: 18.83% leaderboard -> 3.83% on SWE-Bench+; 548 new task instances"
+    },
+    {
+      "point": "Human curation does not fix leakage: SWE-Bench Verified (OpenAI's 500-instance human-validated subset) has the SAME ~33% solution-leak rate among resolved instances as the full set, because annotators filtered for clear descriptions and strong tests, not for leaked solutions.",
+      "quote": "However, neither of these new datasets addresses the solution leakage problem, which was the primary motivation for our study. ... Despite this, the overall suspicious fix patterns led to 48.14% suspicious fixes in SWE-Bench Lite and 55.36% in SWE-Bench Verified.",
+      "numbers": "Solution leak among resolved: Lite 33.33%, Verified 33.04%; suspicious fixes: Lite 48.14%, Verified 55.36% (SWE-Bench+, Table 2, Section 2.3)"
+    },
+    {
+      "point": "Cross-benchmark performance disparity as a memorization detector: all ten models from both OpenAI and Anthropic show the same accuracy hierarchy (SWE-Bench Verified > Full-SWE-Bench > SWE-Bench Extra > external benchmarks), indicating systematic training-data exposure rather than vendor-specific contamination.",
+      "quote": "The fact that all models, regardless of vendor, exhibit the same performance hierarchy (SWE-bench Verified > Full-SWE-Bench > SWE-Repo Tasks > SWE-bench C#, RefactorBench, and Outside-Repo Tasks) indicates the performance disparities reflect systematic exposure patterns in training data rather than issues isolated to a vendor.",
+      "numbers": "File-path ID accuracy: Verified 60-76%, Full-SWE-Bench 57-71%, newly collected SWE-Repo tasks 50-68%, Outside-Repo uniformly <53% (SWE-Bench Illusion, Section 4.1)"
+    },
+    {
+      "point": "Fresh issues from the SAME repositories also show degraded performance (SWE-Bench Extra: 217 post-cutoff issues from SWE-Bench repos), isolating instance-specific memorization from mere repository familiarity — models memorized the curated benchmark solutions, not just the codebases.",
+      "quote": "Critically, SWE Extra performance drops to the same level as external benchmarks (RefactorBench: 18.1%, Outside Tasks: 13.9%), despite originating from identical repositories as Verified. This pattern indicates that models have specifically memorized the curated, canonical solutions that human evaluators deemed high-quality, rather than developing general familiarity with repositories.",
+      "numbers": "Function-reproduction 5-gram overlap: SWE Verified 34.9% > SWE Full 28.7% > SWE Extra 18.2% ≈ RefactorBench 18.1% > Outside Tasks 13.9% (SWE-Bench Illusion, Section 4.3)"
+    },
+    {
+      "point": "Memorization scales with model capability: in the prefix-completion test, the Claude family's verbatim-match rate rises monotonically across generations, with Claude 4 Opus generating verbatim ground-truth code for nearly a third of SWE-Bench Verified instances.",
+      "quote": "The Claude family exhibits a monotonic increase in memorization rates corresponding to model generation, rising from 12.1% to 31.6%. ... Notably, Claude 4 Opus demonstrates verbatim generation for nearly a third of all test instances.",
+      "numbers": "Instance-level verbatim match on SWE-Bench Verified: Claude 3.5 Sonnet 12.1%, Claude 3.7 Sonnet 12.3%, Claude 4 Sonnet 21.4%, Claude 4 Opus 31.6%, GPT-4.1 17.4%, GPT-4o 18.4%/18.2%, o3-mini 11.7% (SWE-Bench Illusion, Table 3, Section 4.4)"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do NOT state the 32.67% solution-leak rate as a fraction of all SWE-bench issues — it is the fraction of SWE-Agent+GPT-4's SUCCESSFULLY RESOLVED instances (82 of 251 passing patches) that exhibited leakage. The papers do not report a leak rate over the full 2,294-instance dataset.",
+    "Do NOT attribute both critiques to one paper: solution leakage / weak tests / the 12.47%->3.97% drop are from SWE-Bench+ (Aleithan et al., York University); the file-path/76%/memorization diagnostics are from The SWE-Bench Illusion (Liang et al., Purdue + Microsoft).",
+    "The SWE-Bench+ paper has an internal inconsistency: Section 2.2 says the rate 'decreased from 12.47% to 5.49%' while the abstract and Figure 1b say 3.97% (91 correct fixes / 2,294 = 3.97%). Cite 3.97% (abstract + figure) and avoid quoting 5.49% without this caveat.",
+    "The SWE-Bench Illusion does NOT claim models cannot solve issues at all — it says gains 'may be partially driven by memorization'; its diagnostics measure contamination signals (path recall, verbatim reproduction), not end-to-end resolution rates.",
+    "The 76% file-path figure is the best model (OpenAI o3) on SWE-Bench Verified, not an average across models; the out-of-distribution comparison is up to 53% (abstract states 'merely up to 53%').",
+    "SWE-bench original paper is by Jimenez et al.; SWE-Bench+ mistakenly cites 'Carlos et al.' in its abstract (Carlos is Jimenez's first name) — don't propagate that citation error.",
+    "Weak-test failure modes in SWE-Bench+ are three distinct patterns (incorrect fixes 12.75%, different files/functions 3.59%, incomplete fixes 14.74%), summing to 31.08% — don't present 31.08% as a single homogeneous 'wrong patch passes' category."
+  ],
+  "notes_for_authors": "Both papers verified from full PDFs. Pedagogically these are complementary: SWE-Bench+ is a construct-validity critique of the TASK and HARNESS (leaked answers in inputs, weak test oracles inflating the metric), while SWE-Bench Illusion is a contamination/memorization critique of the MODELS' apparent skill (controlled diagnostics + cross-benchmark differentials). Strong teaching arc: headline metric (12.47%) -> remove cheating and weak oracles (3.97%) -> remove temporal contamination (0.55% on SWE-Bench+). The Illusion paper's method (compare performance on in-benchmark vs. fresh-same-repo vs. outside-repo tasks) is a reusable contamination-detection recipe worth teaching on its own. Caveats: both are arXiv preprints (SWE-Bench+ marked 'Preprint. Under review.'); SWE-Bench Illusion v4 (Dec 2025) numbers differ slightly from v1 (June 2025) — e.g., v4 says 'up to 53%' OOD and 34.9% 5-gram, so pin quotes to v4. SWE-Bench+ studies GPT-4-era agents (2024); resolution numbers should not be presented as current SOTA agent performance. SWE-Bench+ dataset artifact: https://zenodo.org/records/13879453."
+}

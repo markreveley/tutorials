@@ -1,0 +1,19 @@
+# Local secrets and machine-specific files
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+local/
+.venv/
+__pycache__/
+*.pyc
+
+# Learner build products and unreviewed experiment output
+target/
+**/target/
+scratch/
+artifacts/raw/
+
+# Cargo.lock is intentionally tracked for reproducible application builds.

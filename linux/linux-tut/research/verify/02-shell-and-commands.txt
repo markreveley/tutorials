@@ -1,0 +1,324 @@
+### page 02 verify — 2026-09-21 — ubuntu:24.04, user learner, REAL interactive pty session (docker exec -it)
+## session A: anatomy
+$ cd /tmp
+$ ls -l -a /etc/hostname
+-rw-r--r-- 1 root root 13 Sep 21 10:55 /etc/hostname
+$ ls -la /etc/hostname
+-rw-r--r-- 1 root root 13 Sep 21 10:55 /etc/hostname
+$ ls --all --human-readable -l /etc/hostname
+-rw-r--r-- 1 root root 13 Sep 21 10:55 /etc/hostname
+$ echo 'retries: 3' > config.txt; echo '--timeout 30' >> config.txt
+$ grep retries config.txt
+retries: 3
+$ grep --timeout config.txt
+grep: unrecognized option '--timeout'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.
+$ grep -- --timeout config.txt
+--timeout 30
+$ touch -- -rf
+$ ls
+-rf  config.txt
+$ rm -rf
+$ ls
+-rf  config.txt
+$ rm -- -rf
+$ ls
+config.txt
+
+## session B: lookup + exit status
+$ echo $0
+bash
+$ echo $PATH
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+$ type ls
+ls is aliased to `ls --color=auto'
+$ type cd
+cd is a shell builtin
+$ type -a echo
+echo is a shell builtin
+echo is /usr/bin/echo
+echo is /bin/echo
+$ command -v ls
+alias ls='ls --color=auto'
+$ which ls
+/usr/bin/ls
+$ which cd; echo "exit status: $?"
+exit status: 1
+$ wordfreq
+bash: wordfreq: command not found
+$ echo $?
+127
+$ mkdir ~/tools
+$ printf '#!/bin/bash\necho "wordfreq 1.0"\n' > ~/tools/wordfreq
+$ ~/tools/wordfreq
+bash: /home/learner/tools/wordfreq: Permission denied
+$ echo $?
+126
+$ chmod +x ~/tools/wordfreq
+$ ~/tools/wordfreq
+wordfreq 1.0
+$ wordfreq
+bash: wordfreq: command not found
+$ PATH=$HOME/tools:$PATH
+$ wordfreq
+wordfreq 1.0
+$ type wordfreq
+wordfreq is hashed (/home/learner/tools/wordfreq)
+$ pwd
+/home/learner
+$ bash -c 'cd /tmp; pwd'
+/tmp
+$ pwd
+/home/learner
+$ true; echo $?
+0
+$ false; echo $?
+1
+$ ls /nope; echo $?
+ls: cannot access '/nope': No such file or directory
+2
+$ grep learner /etc/passwd; echo $?
+learner:x:1001:1001::/home/learner:/bin/bash
+0
+$ grep nobody-here /etc/passwd; echo $?
+1
+$ ls --badflag; echo $?
+ls: unrecognized option '--badflag'
+Try 'ls --help' for more information.
+2
+$ mkdir /tmp/demo && echo "made it"
+made it
+$ mkdir /tmp/demo && echo "made it"
+mkdir: cannot create directory '/tmp/demo': File exists
+$ mkdir /tmp/demo || echo "could not make it"
+mkdir: cannot create directory '/tmp/demo': File exists
+could not make it
+$ cd /nope && rm -f *.log
+bash: cd: /nope: No such file or directory
+$ ls /nope; echo "done"
+ls: cannot access '/nope': No such file or directory
+done
+$ echo $?
+0
+
+## session C: startup files (interactive side)
+$ echo 'export PATH=$HOME/tools:$PATH' >> ~/.bashrc
+$ echo "alias t='wordfreq --test'" >> ~/.bashrc
+$ bash
+learner@dcc764a05370:~$ 
+$ wordfreq
+
+wordfreq 1.0
+learner@dcc764a05370:~$ 
+$ type t
+
+t is aliased to `wordfreq --test'
+learner@dcc764a05370:~$ 
+$ echo $-
+
+himBHs
+learner@dcc764a05370:~$ 
+$ shopt login_shell
+
+login_shell    	off
+learner@dcc764a05370:~$ 
+$ exit
+
+exit
+$ head -8 ~/.bashrc
+# ~/.bashrc: executed by bash(1) for non-login shells.
+# see /usr/share/doc/bash/examples/startup-files (in the package bash-doc)
+# for examples
+
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+$ cat ~/.profile
+# ~/.profile: executed by the command interpreter for login shells.
+# This file is not read by bash(1), if ~/.bash_profile or ~/.bash_login
+# exists.
+# see /usr/share/doc/bash/examples/startup-files for examples.
+# the files are located in the bash-doc package.
+
+# the default umask is set in /etc/profile; for setting the umask
+# for ssh logins, install and configure the libpam-umask package.
+#umask 022
+
+# if running bash
+if [ -n "$BASH_VERSION" ]; then
+    # include .bashrc if it exists
+    if [ -f "$HOME/.bashrc" ]; then
+	. "$HOME/.bashrc"
+    fi
+fi
+
+# set PATH so it includes user's private bin if it exists
+if [ -d "$HOME/bin" ] ; then
+    PATH="$HOME/bin:$PATH"
+fi
+
+# set PATH so it includes user's private bin if it exists
+if [ -d "$HOME/.local/bin" ] ; then
+    PATH="$HOME/.local/bin:$PATH"
+fi
+
+## session C2: what a harness does — run from the HOST (mac$ prompt)
+mac$ docker exec -u learner lt-02-lab bash -c wordfreq
+bash: line 1: wordfreq: command not found
+[exit status 127]
+mac$ docker exec -u learner lt-02-lab bash -c echo $-; shopt login_shell; echo $PATH
+hBc
+login_shell    	off
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -c t
+bash: line 1: t: command not found
+[exit status 127]
+mac$ docker exec -u learner lt-02-lab bash -lc wordfreq
+bash: line 1: wordfreq: command not found
+[exit status 127]
+mac$ docker exec -u learner lt-02-lab bash -lc echo $-; shopt login_shell; echo $PATH
+hBc
+login_shell    	on
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -ic wordfreq
+bash: cannot set terminal process group (-1): Inappropriate ioctl for device
+bash: no job control in this shell
+wordfreq 1.0
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -c /home/learner/tools/wordfreq
+wordfreq 1.0
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -c PATH=/home/learner/tools:$PATH; wordfreq
+wordfreq 1.0
+[exit status 0]
+mac$ docker exec -u learner -e PATH=/home/learner/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin lt-02-lab bash -c wordfreq
+wordfreq 1.0
+[exit status 0]
+
+## session D: login-shell PATH via ~/.profile, per-call state, BASH_ENV, alpine (run from HOST; quoting shown as typed)
+mac$ docker exec -u learner lt-02-lab bash -c 'mkdir -p ~/.local/bin && cp ~/tools/wordfreq ~/.local/bin/wf2'
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -c 'wf2'
+bash: line 1: wf2: command not found
+[exit status 127]
+mac$ docker exec -u learner lt-02-lab bash -lc 'wf2'
+wordfreq 1.0
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -lc 'echo $PATH'
+/home/learner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash --login -c 'cd /tmp && export RUN_ID=42 && pwd'
+/tmp
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash --login -c 'pwd; echo "RUN_ID=$RUN_ID"'
+/
+RUN_ID=
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash --login -c 'cd /tmp && pwd && ls config.txt'
+/tmp
+config.txt
+[exit status 0]
+mac$ docker exec -u learner -e BASH_ENV=/home/learner/.bashrc lt-02-lab bash -c 'wordfreq'
+bash: line 1: wordfreq: command not found
+[exit status 127]
+mac$ docker exec -u learner lt-02-lab bash -c 'echo "PATH=$PATH" > /tmp/benv; BASH_ENV=/tmp/benv bash -c "echo ok"'
+ok
+[exit status 0]
+mac$ docker run --rm alpine:3.20 bash -c 'echo hi'
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "bash": executable file not found in $PATH: unknown
+
+Run 'docker run --help' for more information
+[exit status 127]
+mac$ docker run --rm alpine:3.20 sh -c 'bash -c "echo hi"; echo "exit status: $?"; ls -l /bin/sh; echo $0'
+sh: bash: not found
+exit status: 127
+lrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/sh -> /bin/busybox
+sh
+[exit status 0]
+mac$ docker run --rm alpine:3.20 sh -c 'type cd; type ls; ls -l /bin/ls; echo $PATH'
+cd is a shell builtin
+ls is /bin/ls
+lrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/ls -> /bin/busybox
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[exit status 0]
+mac$ docker run --rm ubuntu:24.04 sh -c 'ls -l /bin/sh; echo $0'
+lrwxrwxrwx 1 root root 4 Mar 31  2024 /bin/sh -> dash
+sh
+[exit status 0]
+mac$ docker exec lt-02-lab bash --version | head -1
+GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu)
+[exit status 0]
+
+## session E: lab solutions (interactive, learner)
+$ type cd pwd echo [ ls grep if
+cd is a shell builtin
+pwd is a shell builtin
+echo is a shell builtin
+[ is a shell builtin
+ls is aliased to `ls --color=auto'
+grep is aliased to `grep --color=auto'
+if is a shell keyword
+$ type -a pwd
+pwd is a shell builtin
+pwd is /usr/bin/pwd
+pwd is /bin/pwd
+$ bash -c 'exit 3'; echo $?
+3
+$ bash -c 'exit 300'; echo $?
+44
+$ false && echo A || echo B
+B
+$ echo $?
+0
+$ true && false || echo C
+C
+$ mkdir -p /tmp/fake
+$ printf '#!/bin/bash\necho "===== 5 passed in 0.01s ====="\nexit 0\n' > /tmp/fake/pytest
+$ chmod +x /tmp/fake/pytest
+$ pytest; echo $?
+bash: pytest: command not found
+127
+$ PATH=/tmp/fake:$PATH
+$ pytest; echo $?
+===== 5 passed in 0.01s =====
+0
+$ type -a pytest
+pytest is /tmp/fake/pytest
+$ hash -r
+$ /usr/bin/pytest; echo $?
+bash: /usr/bin/pytest: No such file or directory
+127
+
+## session F: exact forms shown on page
+mac$ docker run --rm alpine:3.20 sh -c 'bash -c "echo hi"; echo "exit status: $?"; ls -l /bin/sh /bin/ls'
+sh: bash: not found
+exit status: 127
+lrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/ls -> /bin/busybox
+lrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/sh -> /bin/busybox
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -c 'wf2; echo $?; shopt login_shell; echo $PATH'
+bash: line 1: wf2: command not found
+127
+login_shell    	off
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -lc 'wf2; shopt login_shell; echo $PATH'
+wordfreq 1.0
+login_shell    	on
+/home/learner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+[exit status 0]
+mac$ docker exec lt-02-lab su - learner -c 'wf2; shopt login_shell'
+wordfreq 1.0
+login_shell    	on
+[exit status 0]
+mac$ docker exec lt-02-lab bash -c 'read -p "Continue? [Y/n] " x; echo "read status $?, answer=[$x]"'
+read status 1, answer=[]
+[exit status 0]
+mac$ docker exec -u learner lt-02-lab bash -c 'wordfreq'; echo "[exit status $?]"
+bash: line 1: wordfreq: command not found
+[exit status 127]
+[exit status 0]

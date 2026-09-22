@@ -1,0 +1,109 @@
+{
+ "id": "shellcheck",
+ "tag": "[ShellCheck]",
+ "citation": {
+  "authors": "Vidar Holen (koalaman) and contributors",
+  "title": "ShellCheck: README, shellcheck(1) manual and wiki (SC2086, SC2164, SC2046, SC2155)",
+  "venue": "github.com/koalaman/shellcheck; shellcheck.net/wiki",
+  "year": "n.d. (master branch / live wiki, fetched 2026)",
+  "url": "https://www.shellcheck.net/wiki/"
+ },
+ "fetched_urls": [
+  "https://www.shellcheck.net/wiki/SC2086",
+  "https://www.shellcheck.net/wiki/SC2164",
+  "https://www.shellcheck.net/wiki/SC2046",
+  "https://www.shellcheck.net/wiki/SC2155",
+  "https://raw.githubusercontent.com/wiki/koalaman/shellcheck/SC2086.md",
+  "https://raw.githubusercontent.com/wiki/koalaman/shellcheck/SC2164.md",
+  "https://raw.githubusercontent.com/wiki/koalaman/shellcheck/SC2046.md",
+  "https://raw.githubusercontent.com/wiki/koalaman/shellcheck/SC2155.md",
+  "https://raw.githubusercontent.com/koalaman/shellcheck/master/README.md",
+  "https://raw.githubusercontent.com/koalaman/shellcheck/master/shellcheck.1.md"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "ShellCheck is a static analysis tool for sh/bash scripts",
+   "verdict": "confirmed",
+   "finding": "README title: 'ShellCheck - A shell script static analysis tool'; man page: 'a static analysis and linting tool for sh/bash scripts'. GPLv3, written in Haskell. Dialects selectable with -s: sh, bash, dash, ksh, busybox; default is deduced from a `# shellcheck shell=` directive, then the shebang, then the file extension. `sh` means POSIX sh, 'not the system's'.",
+   "quote": "ShellCheck is a static analysis and linting tool for sh/bash scripts. It's mainly focused on handling typical beginner and intermediate level syntax errors and pitfalls where the shell just gives a cryptic error message or strange behavior",
+   "location": "shellcheck(1) DESCRIPTION; README.md heading",
+   "cite_url": "https://github.com/koalaman/shellcheck/blob/master/shellcheck.1.md"
+  },
+  {
+   "planned": "SC2086 (double quote to prevent globbing and word splitting) wording; SC2164 (cd … || exit); SC2046; SC2155",
+   "verdict": "confirmed",
+   "finding": "Exact wiki titles: SC2086 'Double quote to prevent globbing and word splitting.' | SC2164 'Use `cd ... || exit` in case `cd` fails.' | SC2046 'Quote this to prevent word splitting.' | SC2155 'Declare and assign separately to avoid masking return values.' Severities as emitted by 0.9.0: SC2086 info (shown as 'note' in gcc format), the other three warning. The message text printed by the tool for SC2164 is slightly longer than the wiki title: \"Use 'cd ... || exit' or 'cd ... || return' in case cd fails.\"",
+   "quote": "Quoting variables prevents word splitting and glob expansion, and prevents the script from breaking when input contains spaces, line feeds, glob characters and such.",
+   "location": "wiki SC2086, Rationale",
+   "cite_url": "https://www.shellcheck.net/wiki/SC2086"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "SC2086 rationale: what `echo $1` really does.",
+   "quote": "It's actually \"Split the first argument by IFS (spaces, tabs and line feeds). Expand each of them as if it was a glob. Join all the resulting strings and filenames with spaces. Print the result.\"",
+   "location": "wiki SC2086, Rationale",
+   "cite_url": "https://www.shellcheck.net/wiki/SC2086"
+  },
+  {
+   "fact": "SC2164 rationale: a failed cd means the rest of the script runs in the wrong directory.",
+   "quote": "If/when it does, the script will keep going and do all its operations in the wrong directory. This can be messy, especially if the operations involve creating or deleting a lot of files.",
+   "location": "wiki SC2164, Rationale",
+   "cite_url": "https://www.shellcheck.net/wiki/SC2164"
+  },
+  {
+   "fact": "SC2164 is suppressed by any `set -e` in the script, 'even though it won't necessarily prevent the issue'.",
+   "quote": "Having a `set -e` command anywhere in the script will disable this message, even though it won't necessarily prevent the issue.",
+   "location": "wiki SC2164, Exceptions",
+   "cite_url": "https://www.shellcheck.net/wiki/SC2164"
+  },
+  {
+   "fact": "SC2046: fix by quoting the command substitution, not the data; legitimate exception is e.g. `gcc $(pkg-config --libs openssl)`.",
+   "quote": "When command expansions are unquoted, word splitting and globbing will occur. This often manifests itself by breaking when filenames contain spaces.",
+   "location": "wiki SC2046, Rationale",
+   "cite_url": "https://www.shellcheck.net/wiki/SC2046"
+  },
+  {
+   "fact": "SC2155: `export foo=\"$(mycmd)\"` / `local foo=$(mycmd)` discard mycmd's exit status, defeating conditionals, set -e and traps.",
+   "quote": "In the original code, the return value of `mycmd` is ignored, and `export` will instead always return true. This may prevent conditionals, `set -e` and traps from working correctly.",
+   "location": "wiki SC2155, Rationale",
+   "cite_url": "https://www.shellcheck.net/wiki/SC2155"
+  },
+  {
+   "fact": "SC2155's own demonstration.",
+   "quote": "$ f() { local foo=$(false) && echo \"error was hidden\"; }; f\nerror was hidden",
+   "location": "wiki SC2155",
+   "cite_url": "https://www.shellcheck.net/wiki/SC2155"
+  },
+  {
+   "fact": "Exit codes: 0 no issues, 1 some issues, 2 some files could not be processed, 3 bad syntax (unknown flag), 4 bad options (unknown formatter) — usable directly in CI.",
+   "quote": "0: All files successfully scanned with no issues. 1: All files successfully scanned with some issues. 2: Some files could not be processed (e.g. file not found). 3: ShellCheck was invoked with bad syntax (e.g. unknown flag). 4: ShellCheck was invoked with bad options (e.g. unknown formatter).",
+   "location": "shellcheck(1) RETURN VALUES",
+   "cite_url": "https://github.com/koalaman/shellcheck/blob/master/shellcheck.1.md"
+  },
+  {
+   "fact": "Suppress one finding with a directive comment on the line before.",
+   "quote": "# shellcheck disable=SC2035\necho \"Files: \" *.jpg",
+   "location": "shellcheck(1) DIRECTIVES",
+   "cite_url": "https://github.com/koalaman/shellcheck/blob/master/shellcheck.1.md"
+  },
+  {
+   "fact": "Install on Debian/Ubuntu: `sudo apt install shellcheck` (README). Ubuntu 24.04's package is version 0.9.0. Web version at shellcheck.net tracks the latest commit.",
+   "quote": "$ shellcheck --version | sed -n 2p -> version: 0.9.0",
+   "location": "README 'Installing'; executed ubuntu:24.04 (apt shellcheck 0.9.0)"
+  },
+  {
+   "fact": "Actual output on a five-line bad script (cd with no guard; rm -rf $1/*; ls -l $(find ...); local out=$(mycmd); export v=\"$(other)\").",
+   "quote": "/tmp/bad.sh:2:1: warning: Use 'cd ... || exit' or 'cd ... || return' in case cd fails. [SC2164]\n/tmp/bad.sh:3:8: warning: Use \"${var:?}\" to ensure this never expands to /* . [SC2115]\n/tmp/bad.sh:3:8: note: Double quote to prevent globbing and word splitting. [SC2086]\n/tmp/bad.sh:4:7: warning: Quote this to prevent word splitting. [SC2046]\n/tmp/bad.sh:5:13: warning: out appears unused. Verify use (or export if used externally). [SC2034]\n/tmp/bad.sh:5:13: warning: Declare and assign separately to avoid masking return values. [SC2155]\n/tmp/bad.sh:5:34: warning: Declare and assign separately to avoid masking return values. [SC2155]\n(exit status 1; a clean script exits 0)",
+   "location": "executed ubuntu:24.04 (apt shellcheck 0.9.0), `shellcheck -f gcc`"
+  },
+  {
+   "fact": "With a #!/bin/sh shebang ShellCheck flags bashisms (SC3xxx series).",
+   "quote": "/tmp/posix.sh:2:3: warning: In POSIX sh, arrays are undefined. [SC3030]\n/tmp/posix.sh:3:1: warning: In POSIX sh, [[ ]] is undefined. [SC3010]",
+   "location": "executed ubuntu:24.04 (apt shellcheck 0.9.0)"
+  }
+ ],
+ "teaching_notes": "The four SC codes map one-to-one onto bash-manual facts (word splitting, set -e's blind spots, masked exit status), so they make good 'a tool will tell you' callouts. Useful nuance: SC2086 is only 'info' severity, and SC2164 switches itself off when the script contains set -e even though the wiki admits set -e 'won't necessarily prevent the issue'. SC2115 (rm -rf \"$var\"/*) fires alongside SC2086 and is the better hook for the 'agent deleted the box' story."
+}

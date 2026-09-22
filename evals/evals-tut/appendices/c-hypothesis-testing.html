@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hypothesis Tests &amp; Power · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix C · Math &amp; Stats</p>
+    <h1>Hypothesis Tests &amp; Power</h1>
+    <p class="lede">Model B scored three points higher than model A on your eval. Is B actually better, or did it get lucky on this particular set of questions? Hypothesis testing is the machinery for answering that — and power analysis tells you whether your eval was ever capable of answering it.</p>
+
+    <p>This appendix assumes random variables and variance (<a href="a-probability.html">Appendix A</a>) and standard errors (<a href="b-sampling.html">Appendix B</a>). Everything here is framed around the situation you'll face constantly in eval work: <strong>two models, same eval, slightly different scores.</strong></p>
+
+    <h2 id="the-question">The question a hypothesis test answers</h2>
+
+    <p>Suppose you run models A and B on the same 200-question eval. A scores 72%, B scores 75%. Your product manager asks: "so B is better, right?"</p>
+
+    <p>Here's why you can't just say yes. Your 200 questions are a <em>sample</em> — one draw from the much larger universe of questions your users might ask. Run the same two models on a different 200 questions and the scores would wobble; <a href="b-sampling.html">Appendix B</a> quantified that wobble as the <span class="term" data-g="standard-error">standard error</span>. So a 3-point gap might reflect a real difference in ability — or it might be exactly the fluctuation you'd see between two <em>equally good</em> models, just because of which questions landed in the set.</p>
+
+    <p>A <span class="term" data-g="hypothesis-test">hypothesis test</span> formalizes the skeptic's question: <em>if the two models were actually equally good, how often would chance alone produce a gap this large?</em> If chance produces gaps like this all the time, your observed gap is not evidence of anything. If chance almost never does, you have a real finding.</p>
+
+    <h2 id="the-machinery">Null hypothesis, test statistic, p-value</h2>
+
+    <p>The machinery has three parts, and each has a plain-language reading:</p>
+
+    <ul>
+      <li><strong>The null hypothesis</strong> (written H<sub>0</sub>) is the boring explanation: "there is no real difference — A and B are equally good, and any gap in scores is sampling noise." The <span class="term" data-g="null-hypothesis">null hypothesis</span> is the thing you're trying to rule out, not the thing you believe. You assume it's true for the sake of argument, then check whether your data looks implausible under that assumption.</li>
+      <li><strong>The test statistic</strong> compresses your data into one number: how far is the observation from what the null predicts, in units of standard errors? For the tests here it's a <em>z</em>-score — observed difference divided by the standard error of the difference. A <em>z</em> near 0 means "exactly the kind of gap noise produces"; a <em>z</em> of 3 means "three standard errors wide — noise rarely does that."</li>
+      <li><strong>The p-value</strong> is the probability, <em>assuming the null is true</em>, of seeing a test statistic at least as extreme as the one you got. A <span class="term" data-g="p-value">p-value</span> of 0.50 means equally-good models would produce a gap this big about half the time — your result is unremarkable. A p-value of 0.001 means they'd do it one time in a thousand — at which point "they're equally good" starts to look like a bad explanation. The conventional (and arbitrary) threshold is p &lt; 0.05: "statistically significant."</li>
+    </ul>
+
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>Two standard misreadings to avoid. <strong>(1) The p-value is not the probability that the null hypothesis is true.</strong> It's computed <em>assuming</em> the null is true — it tells you P(data this extreme | no real difference), not P(no real difference | data). Those are different things, the same way "probability a person is wet given it's raining" differs from "probability it's raining given a person is wet." <strong>(2) Failing to reject the null does not prove the models are equal.</strong> p = 0.5 means "this eval couldn't tell them apart," which — as the power section below shows — is often the eval's fault, not evidence of equality.</p>
+    </div>
+
+    <h2 id="two-kinds-of-mistakes">Two kinds of mistakes</h2>
+
+    <p>Any yes/no decision made under noise can go wrong in exactly two ways, and they trade off against each other:</p>
+
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>Reality: no real difference</th>
+          <th>Reality: B really is better</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>You declare "B is better"</strong></td>
+          <td><strong>Type I error</strong> — false alarm. You ship a "win" that was noise.</td>
+          <td>Correct detection ✓</td>
+        </tr>
+        <tr>
+          <td><strong>You declare "can't tell them apart"</strong></td>
+          <td>Correct restraint ✓</td>
+          <td><strong>Type II error</strong> — missed improvement. A real win dies in review.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>A <span class="term" data-g="type-i-error">Type I error</span> is the false alarm: chance handed you an impressive-looking gap, you believed it, and the improvement won't replicate. The significance threshold caps this — testing at p &lt; 0.05 means that when there's truly no difference, you cry wolf at most 5% of the time. A <span class="term" data-g="type-ii-error">Type II error</span> is the quieter failure: B really is better, but your eval was too small or noisy to show it, so the improvement gets discarded. Nobody announces Type II errors. They show up only as a vague sense that "nothing we try moves the metric" — which, on an underpowered eval, is exactly what real progress looks like.</p>
+
+    <h2 id="unpaired-example">Worked example: the unpaired comparison</h2>
+
+    <p>Model A: 144/200 correct (p̂<sub>A</sub> = 0.72). Model B: 150/200 correct (p̂<sub>B</sub> = 0.75). Observed gap: 0.03. First, treat the two scores as independent measurements (we'll see in a moment why that's leaving money on the table) and compute each standard error as in <a href="b-sampling.html">Appendix B</a>:</p>
+
+    <div class="math">
+      SE<sub>A</sub> = √( 0.72 × 0.28 / 200 ) = √0.001008 ≈ 0.0317<br>
+      SE<sub>B</sub> = √( 0.75 × 0.25 / 200 ) = √0.0009375 ≈ 0.0306
+    </div>
+
+    <p>In words: each model's score, measured on 200 questions, is uncertain by about ±3 percentage points of standard error. Now, the variance of a difference of independent quantities is the <em>sum</em> of their variances (<a href="a-probability.html">Appendix A</a>), so:</p>
+
+    <div class="math">
+      SE<sub>diff</sub> = √( SE<sub>A</sub><sup>2</sup> + SE<sub>B</sub><sup>2</sup> ) = √( 0.001008 + 0.0009375 ) = √0.0019455 ≈ 0.0441
+    </div>
+
+    <p>The gap between the scores is uncertain by about ±4.4 points — wider than either score alone, because two noisy numbers are being subtracted. The test statistic:</p>
+
+    <div class="math">
+      z = ( 0.75 − 0.72 ) / 0.0441 ≈ 0.68
+    </div>
+
+    <p>The observed gap is 0.68 standard errors wide. Under the null hypothesis, z behaves like a standard normal draw, and a value at least this extreme (in either direction) happens about half the time: <strong>p ≈ 0.50</strong>. Two equally good models would produce a 3-point gap on a 200-question eval roughly every other run. This result is indistinguishable from luck.</p>
+
+    <h2 id="paired-comparisons">The paired comparison: evals' best trick</h2>
+
+    <p>But wait — the unpaired calculation threw away something valuable. Both models answered the <em>same 200 questions</em>. That means we don't have to compare two separate scores; we can go question by question and ask <em>who won where</em>. This is a <span class="term" data-g="paired-comparison">paired comparison</span>, and it's the single biggest free lunch in eval statistics.</p>
+
+    <p>Here's why it helps. A result on any question mixes two things: how hard the question is, and how good the model is. Question difficulty is a huge variance source — some questions nearly every model gets, some nearly every model misses — and in the unpaired calculation it inflates <em>both</em> standard errors. But when both models face the same question, difficulty hits them identically, so in the per-question difference it <strong>cancels</strong>. The 130 questions both models got right and the 36 both got wrong say nothing about which model is better, and the paired analysis correctly ignores them. All the signal lives in the disagreements.</p>
+
+    <p>Suppose the per-question breakdown behind our 144 and 150 is:</p>
+
+    <div class="card">
+      <p><strong>Per-question outcomes (200 questions)</strong></p>
+      <ul>
+        <li>Both correct: 130</li>
+        <li>Both wrong: 36</li>
+        <li>A correct, B wrong: 14</li>
+        <li>B correct, A wrong: 20</li>
+      </ul>
+      <p>Check the totals: A correct = 130 + 14 = 144 ✓ &nbsp; B correct = 130 + 20 = 150 ✓. The models <em>disagreed</em> on only 34 questions, and B won those disagreements 20 to 14 — a net of 6 questions, which is exactly the 3-point gap (6/200 = 0.03).</p>
+    </div>
+
+    <p>The paired test (this form is called McNemar's test) asks: if the models were equally good, each disagreement would be a fair coin flip — B should win about half of the 34. Is 20-vs-14 a suspicious split for 34 coin flips? The test statistic uses only the disagreement counts, <em>b</em> = 20 (B-only wins) and <em>a</em> = 14 (A-only wins):</p>
+
+    <div class="math">
+      z = ( b − a ) / √( b + a ) = ( 20 − 14 ) / √34 = 6 / 5.831 ≈ 1.03
+    </div>
+
+    <p>In words: the net win margin, divided by the noise you'd expect in that margin from coin-flip disagreements. A z of 1.03 corresponds to <strong>p ≈ 0.30</strong> — still not significant; 34 disagreements just isn't many coin flips. But look at the standard error. In score terms, the paired SE of the difference is √34 / 200 ≈ 0.029 — versus 0.044 unpaired. Same data, same 3-point gap, and the uncertainty dropped by a third, purely because we stopped letting question difficulty masquerade as model disagreement. The more two models agree (and good models agree a lot — 83% of questions here), the bigger pairing's advantage gets.</p>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>When two models answer the same questions, always analyze per-question wins and losses, never the two aggregate scores. Shared question difficulty cancels out of the difference, the standard error shrinks, and the same eval can detect differences the unpaired analysis would miss. You paid for this precision when you built the eval — the unpaired test refuses the receipt.</p>
+    </div>
+
+    <h2 id="power">Statistical power: can your eval even see the difference?</h2>
+
+    <p><span class="term" data-g="statistical-power">Statistical power</span> is the probability that your test detects a real difference when one exists — equivalently, 1 minus the Type II error rate. Three things drive it:</p>
+
+    <ul>
+      <li><strong>Effect size</strong> — how big the real difference is. The <span class="term" data-g="effect-size">effect size</span> you're hunting matters enormously: a 10-point gap is easy to see; a 1-point gap hides in noise. Power falls off fast as effects shrink, because the noise has to shrink proportionally.</li>
+      <li><strong>Sample size</strong> — more questions means smaller standard errors. But SE shrinks like 1/√n, so the required <span class="term" data-g="sample-size">sample size</span> grows with the <em>square</em> of the precision you need: halving the detectable effect quadruples the questions.</li>
+      <li><strong>Variance</strong> — anything that reduces per-question noise (pairing, more consistent grading, multiple trials per question) buys power without more questions.</li>
+    </ul>
+
+    <p>Here's the shape of the sample-size calculation, without the exhaustive tables. To detect a true gap <em>d</em> at significance 0.05 with 80% power, you need the gap to be about 2.8 standard errors wide (1.96 SEs to clear the significance bar, plus 0.84 more so you clear it 80% of the time rather than 50%). For the unpaired two-proportion test near our example's scores:</p>
+
+    <div class="math">
+      n <span class="plain">per model</span> ≈ ( 2.8 )<sup>2</sup> × ( p<sub>A</sub>(1−p<sub>A</sub>) + p<sub>B</sub>(1−p<sub>B</sub>) ) / d<sup>2</sup><br>
+      = 7.84 × ( 0.2016 + 0.1875 ) / ( 0.03 )<sup>2</sup> ≈ 7.84 × 0.389 / 0.0009 ≈ <span class="plain">3,400 questions per model</span>
+    </div>
+
+    <p>Read that again: to <em>reliably</em> detect a 3-point difference between two ~70%-accurate models with an unpaired comparison, you need on the order of 3,400 questions per model — 17× the 200 we had. Our example wasn't a near-miss; it was a test that never had a chance. The paired version is much kinder: its noise depends only on the disagreement rate, so with models disagreeing on ~17% of questions (as ours did), the same arithmetic gives n ≈ 7.84 × 0.17 / 0.0009 ≈ 1,500 questions — less than half as many, and fewer still as models agree more.</p>
+
+    <h2 id="practical-reading">How to use this in eval work</h2>
+
+    <p>Run this logic <em>forward, before</em> you evaluate, not backward after: decide the smallest difference you'd actually act on (ship a model, switch a vendor, accept a prompt change), then check whether your eval has enough questions to detect it. If you care about 3-point differences and you have a 200-question eval, the calculation above says you are not measuring — you are performing measurement. Either grow the eval, pair the comparison, or honestly widen the difference you claim to detect. An eval that can't detect the differences you care about is underpowered theater: it returns "no significant difference" regardless of the truth, and everyone treats that as information.</p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><strong>Running the eval repeatedly and reporting the best run.</strong> LLMs are stochastic: re-run the same model at temperature &gt; 0 and the score jiggles. If you run the A-vs-B comparison five times and report the run where B looked best — or keep adding questions until p dips under 0.05, or test ten prompt variants and announce the one significant winner — you've destroyed the p-value's meaning. The 5% false-alarm guarantee holds for <em>one</em> pre-planned test; give yourself ten tries and the chance of a spurious "significant" result is closer to 40%. This is p-hacking, and eval dashboards make it effortless. The fix: fix the comparison, question set, and number of runs before looking at results, then report every run — averaged, not cherry-picked.</p>
+    </div>
+
+    <p>The course applies all of this to real model comparisons — including what to do about graders that are themselves noisy — in <a href="../pages/17-comparing-models.html">Page 17: Comparing Two Models</a>. For where the standard errors themselves come from, see <a href="b-sampling.html">Appendix B</a>; for when per-question results aren't independent and the SE formulas need repair, see <a href="f-resampling.html">Appendix F</a>.</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

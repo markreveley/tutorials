@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Tooling Landscape · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 7 · Tooling</p>
+    <h1>The tooling landscape</h1>
+    <p class="lede">
+      Beyond Inspect sits an ecosystem of eval libraries, each encoding opinions about how evaluation
+      should work. This survey reads four of them the way Module 4 read benchmarks — as artifacts whose
+      design choices teach concepts — and ends with the trap the whole category invites.
+    </p>
+
+    <h2 id="openai-evals">OpenAI Evals: the first-generation blueprint</h2>
+    <p>
+      The 2023 OpenAI Evals framework deserves study as history: it codified the split every later tool
+      inherited. Evals are <em>declared</em>, not coded — a YAML registry entry pointing at a JSONL
+      dataset — and graded by one of two template families: <strong>basic</strong> templates,
+      deterministic one-line predicates (Match, Includes, FuzzyMatch, JsonMatch — e.g. Includes is
+      literally <code>any([(b in a) for b in B])</code>), and <strong>model-graded</strong> templates,
+      where an LLM compares output to ideal answers — including a fact-checking rubric that returns a
+      five-way classification (subset / superset / equal / disagreement / equivalent-modulo-style)
+      rather than a bare score.<a class="cite" href="https://github.com/openai/evals" title="OpenAI Evals repository docs (accessed 2026-06-10)">[OpenAI Evals]</a>
+      The cookbook's guidance maps templates to question types: deterministic for closed-form answers,
+      model-graded for open-ended<a class="cite" href="https://developers.openai.com/cookbook/examples/evaluation/getting_started_with_openai_evals" title="OpenAI Cookbook, Getting Started with OpenAI Evals">[OpenAI Evals]</a> —
+      the grader hierarchy of <a href="03-types-of-evaluators.html">page 3</a>, stated in 2023.
+      Status check (June 2026): the repo isn't archived but is in maintenance mode — housekeeping-only
+      commits, custom-code contributions closed — and OpenAI's own cookbook recommends its hosted evals
+      product instead.<a class="cite" href="https://github.com/openai/evals" title="OpenAI Evals README + GitHub metadata, accessed 2026-06-10">[OpenAI Evals]</a>
+    </p>
+
+    <h2 id="promptfoo">promptfoo: the comparison matrix</h2>
+    <p>
+      promptfoo, an open-source CLI/library, organizes evaluation around a cross-product: "The YAML
+      configuration format runs each prompt through a series of example inputs (aka 'test case') and
+      checks if they meet requirements (aka 'assertions')" — and running multiple prompts against
+      multiple providers yields "a <em>matrix view</em>" for side-by-side
+      comparison.<a class="cite" href="https://www.promptfoo.dev/docs/configuration/guide/" title="promptfoo configuration guide (accessed 2026-06-10)">[promptfoo]</a>
+      Its assertion taxonomy is the most complete public catalogue of grader types, split into
+      "Deterministic Eval Metrics" (string ops, JSON/SQL validation, custom code, latency and
+      <em>cost</em> checks — Module 4's cost axis as an assertion — all negatable with a
+      <code>not-</code> prefix) and "Model-Assisted Eval Metrics" (LLM rubrics, G-Eval, factuality,
+      embeddings similarity, and four RAG metrics).<a class="cite" href="https://www.promptfoo.dev/docs/configuration/expected-outputs/" title="promptfoo assertions reference">[promptfoo]</a>
+      Two signs of where tooling is heading: <strong>trajectory assertions</strong>
+      (<code>trajectory:tool-used</code>, <code>trajectory:tool-sequence</code>, trace-span checks) —
+      process-based agent grading (<a href="11-evaluating-agents.html">page 11</a>) as config — and
+      first-class <strong>red-teaming</strong>, generating adversarial inputs (prompt injection and
+      jailbreaking, treated as distinct attacks) and quantifying the
+      risk.<a class="cite" href="https://www.promptfoo.dev/docs/red-team/" title="promptfoo red-team docs">[promptfoo]</a>
+    </p>
+
+    <h2 id="deepeval">DeepEval: evals as unit tests</h2>
+    <p>
+      DeepEval frames LLM evaluation as software testing — native pytest integration, "run evals in
+      CI/CD pipelines" — with a library of 50+ ready metrics.<a class="cite" href="https://deepeval.com/docs/metrics-introduction" title="DeepEval metrics introduction (accessed 2026-06-10)">[DeepEval/Ragas]</a>
+      The load-bearing sentence in its docs: "almost all predefined metrics on deepeval uses
+      LLM-as-a-judge."<a class="cite" href="https://deepeval.com/docs/metrics-introduction" title="DeepEval metrics introduction">[DeepEval/Ragas]</a>
+      Those convenient metric names are judges, with everything Module 3 said about judges. The
+      implementation details reward attention: its <span class="term" data-g="g-eval">G-Eval</span>
+      doesn't just ask for a score — it uses chain-of-thought plus token-probability weighting,
+      normalizing a 1–5 output into a probability-weighted 0–1
+      score.<a class="cite" href="https://deepeval.com/docs/metrics-llm-evals" title="DeepEval G-Eval docs">[DeepEval/Ragas]</a>
+      And a gotcha worth a pitfall box of its own: DeepEval's <em>Hallucination</em> and
+      <em>Faithfulness</em> metrics are different computations with <em>opposite polarity</em> —
+      Hallucination = contradicted contexts / total contexts (higher is worse); Faithfulness =
+      truthful claims / total claims (higher is better).<a class="cite" href="https://deepeval.com/docs/metrics-hallucination" title="DeepEval hallucination/faithfulness docs">[DeepEval/Ragas]</a>
+    </p>
+
+    <h2 id="ragas">Ragas: the RAG metric suite</h2>
+    <p>
+      Ragas popularized the four-metric decomposition of <span class="term" data-g="rag">RAG</span>
+      quality, and the verified definitions show how much algorithm hides under each friendly
+      name:<a class="cite" href="https://docs.ragas.io/en/stable/concepts/metrics/" title="Ragas metrics documentation (accessed 2026-06-10)">[DeepEval/Ragas]</a>
+    </p>
+    <table>
+      <tr><th>Metric</th><th>Question it answers</th><th>How it's actually computed</th></tr>
+      <tr><td><span class="term" data-g="faithfulness">Faithfulness</span></td><td>Is every claim in the answer grounded in the retrieved context?</td><td>LLM extracts claims, verifies each against context; score = supported / total claims</td></tr>
+      <tr><td><span class="term" data-g="answer-relevancy">Response relevancy</span></td><td>Does the answer address the question (regardless of truth)?</td><td>LLM reverse-generates ~3 questions from the answer; score = mean embedding cosine similarity to the real question — <em>embeddings, not a judge score</em></td></tr>
+      <tr><td><span class="term" data-g="context-precision">Context precision</span></td><td>Did the retriever rank relevant chunks high?</td><td>Mean precision@k over the ranked retrieval list — a ranking metric, not hit/miss</td></tr>
+      <tr><td><span class="term" data-g="context-recall">Context recall</span></td><td>Was everything needed actually retrieved?</td><td>LLM splits a <em>reference answer</em> into claims; score = claims supported by retrieved context / total — requires ground truth, so not runnable on live traffic</td></tr>
+    </table>
+    <p>
+      (Naming note: current Ragas docs call the second metric "Response Relevancy" — class
+      <code>ResponseRelevancy</code> — though "answer relevancy" persists across the ecosystem.) The
+      deepest lesson in this table comes from comparing across tools: DeepEval's answer-relevancy
+      counts relevant statements via a judge; Ragas's scores embedding similarity of reverse-engineered
+      questions. <strong>Same metric name, different algorithm, different failure modes.</strong> A
+      "relevancy: 0.85" means nothing until you know which computation produced it.
+    </p>
+
+    <h2 id="trap">The category's trap</h2>
+    <div class="pitfall">
+      <span class="label">Pitfall: the metric menu</span>
+      <p>Fifty ready-made metrics invite a workflow this course spent Module 2 dismantling: pick
+      plausible-sounding metrics from a menu, wire them into CI, and trust the dashboard. Recall the
+      verified practitioner verdict on generic ready-to-use metrics — they "waste time and create false
+      confidence," useful at most as exploration signals for surfacing traces, never as quality
+      measures<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a> —
+      and that nearly every metric on these menus is an <em>unvalidated LLM judge</em> until you've
+      measured its agreement with your domain expert (<a href="10-aligning-judges.html">page 10</a>).
+      The tools are good engineering. The failure mode is using their menus as a substitute for error
+      analysis rather than as implementations of evaluators your own data told you to build.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Choose tools by reading their grader implementations, not their metric lists. The questions
+      that differentiate this category: Which assertions are deterministic and which secretly call a
+      judge? What does each named metric literally compute? Can it grade trajectories, or only final
+      text? Does it preserve raw outputs for re-grading? Every tool on this page answers those
+      differently — and the answers, not the feature matrices, determine what your scores will mean.</p>
+    </div>
+
+    <p>
+      Last page: the layer underneath all of these —
+      <a href="26-observability.html">tracing and online evaluation</a>.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>OpenAI, Evals framework — repository docs (README, eval-templates, build-eval) and Cookbook entry, accessed 2026-06-10. <a href="https://github.com/openai/evals">github.com/openai/evals</a></li>
+        <li>promptfoo documentation — intro, configuration guide, assertions reference, red-team docs, accessed 2026-06-10. <a href="https://www.promptfoo.dev/docs/intro/">promptfoo.dev/docs</a></li>
+        <li>DeepEval documentation (Confident AI) and Ragas documentation (Exploding Gradients), accessed 2026-06-10. <a href="https://deepeval.com/docs/getting-started">deepeval.com/docs</a>, <a href="https://docs.ragas.io/en/stable/concepts/metrics/">docs.ragas.io</a></li>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

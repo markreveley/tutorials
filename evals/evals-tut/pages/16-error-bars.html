@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Error Bars on Eval Scores · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 5 · Statistics for Evals</p>
+    <h1>Error bars on eval scores</h1>
+    <p class="lede">
+      An eval score without an error bar is a point pretending to be a fact. This page teaches the
+      statistical frame that makes scores honest — built on Evan Miller's "Adding Error Bars to Evals,"
+      the single most practical paper on eval statistics — and the clustering trap that makes even
+      teams who report error bars overconfident.
+    </p>
+
+    <h2 id="superpopulation">The reframe: your eval is a sample</h2>
+    <p>
+      The foundational move is conceptual, not mathematical. Miller's framing: "Suppose that the
+      questions in an eval do not represent all possible questions, but instead were drawn at random
+      from a (hypothetical, infinite, unseen) super-population of
+      questions."<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, Adding Error Bars to Evals, §2">[Error Bars]</a>
+      What you care about is the model's performance on that population — all the questions you
+      <em>could</em> have asked. What you have is its performance on the few hundred you happened to
+      ask. The gap between those two is <em>sampling error</em>, it is always present, and quantifying
+      it is what error bars do. (If "standard error" and "confidence interval" are new,
+      <a href="../appendices/b-sampling.html">Appendix B</a> builds them from zero.)
+    </p>
+    <p>
+      With that frame, the machinery is one line. For per-question scores s with mean s̄ over n
+      questions, the Central Limit Theorem gives the <span class="term" data-g="standard-error">standard
+      error</span>:
+    </p>
+    <div class="math">SE = √( Var(s) / n )&emsp;&emsp;<span class="plain">— for pass/fail scores:</span>&emsp;SE = √( s̄(1−s̄) / n )</div>
+    <p>
+      and a 95% <span class="term" data-g="confidence-interval">confidence interval</span> of
+      s̄ ± 1.96·SE.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §2.1, Eqs. 1–3">[Error Bars]</a>
+      Concretely: 140 of 200 questions correct gives 70% with SE ≈ 3.2 points — the honest claim is
+      "somewhere around 63.6% to 76.4%," a 13-point-wide band that most leaderboard gaps would vanish
+      inside. Miller's reporting recommendation is correspondingly plain: publish the question count and
+      the standard error in parentheses next to every
+      score.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, Table 2">[Error Bars]</a>
+    </p>
+    <div class="callout">
+      <span class="label">Does anyone actually get this wrong? Yes — in both directions</span>
+      <p>Miller audits the Llama 3 technical report in passing: it applied the Bernoulli (pass/fail) SE
+      formula to <em>fractional</em> scores like F1, making those intervals too wide — while its
+      reading-comprehension intervals ignored clustering (below) and were likely too
+      narrow.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §1, §2.2">[Error Bars]</a>
+      And EleutherAI's reproducibility work shows what omission costs: GPQA results for frontier models
+      presented as single-run point estimates "paint a very different picture" than the same results
+      with 95% CIs over ten runs — small benchmarks like HumanEval (164 questions) can reverse
+      conclusions under resampling.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Biderman, Schoelkopf, Sutawika et al., Lessons from the Trenches, §4.1">[Eleuther]</a></p>
+    </div>
+
+    <h2 id="clustering">The clustering trap</h2>
+    <p>
+      The CLT formula assumes questions are <span class="term" data-g="independence">independent</span>
+      draws. Real benchmarks routinely violate this: reading-comprehension evals ask several questions
+      about each passage; multilingual evals like MGSM translate the <em>same</em> question into many
+      languages. Questions within such a group succeed or fail together — if the model misreads the
+      passage, it misses all five questions about it. Your effective sample size is closer to the number
+      of <em>groups</em> than the number of questions, and the naive SE is too small.
+    </p>
+    <p>
+      The fix is <span class="term" data-g="clustered-standard-errors">clustered standard errors</span>,
+      borrowed from social science (mechanics in <a href="../appendices/f-resampling.html">Appendix F</a>).
+      The verified magnitudes, measured on real Anthropic model results:<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §2.2, Table 4">[Error Bars]</a>
+    </p>
+    <table>
+      <tr><th>Eval</th><th>Structure</th><th>Naive SE</th><th>Clustered SE</th><th>Ratio</th></tr>
+      <tr><td>DROP</td><td>9,622 questions in 588 passages</td><td>0.44</td><td>1.34</td><td><strong>3.05×</strong></td></tr>
+      <tr><td>MGSM</td><td>2,500 questions = 250 × 10 languages</td><td>0.86</td><td>1.62</td><td>1.88×</td></tr>
+      <tr><td>RACE-H</td><td>3,498 questions in 1,045 passages</td><td>0.46</td><td>0.51</td><td>1.10×</td></tr>
+    </table>
+    <p>
+      A 3× understatement of your uncertainty means intervals that claim 95% confidence while earning
+      far less. Miller: "Failure to adjust standard errors for clustered sampling may lead an
+      unsuspecting analyst to suppose that the measurement of the overall eval score is much more
+      precise than it actually is."<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §2.2">[Error Bars]</a>
+      The agentic parallel from <a href="13-agentic-benchmark-landscape.html">Module 4</a>: tasks
+      instantiated from shared templates (WebArena's 812 tasks from 241 templates) are clusters too.
+    </p>
+
+    <h2 id="variance-reduction">Shrinking the bars honestly: resample, don't cool</h2>
+    <p>
+      Error bars have two ingredients you can attack separately. Miller decomposes the variance into
+      <em>question difficulty spread</em> (some questions are just harder — a fixed property of the
+      population, irreducible) plus <em>per-question randomness</em> (the same model answering the same
+      question differently across samples —
+      reducible).<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §3">[Error Bars]</a>
+      The honest lever is <strong>resampling</strong>: answer each question K times and score the
+      question by its mean. In his worked example, K=2 cuts total variance by a third and K=4 by half,
+      with a hard ceiling of two-thirds — beyond which more samples buy nothing, because only the
+      reducible component shrinks.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §3.1">[Error Bars]</a>
+      (Compute the SE across question-level means; pooling all K·N answers as if independent is
+      inconsistent.) Where the task needs no chain-of-thought, scoring the model's next-token
+      <em>probabilities</em> directly achieves that entire ceiling in one
+      call.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §3.2">[Error Bars]</a>
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall: "don't touch the thermostat"</span>
+      <p>The tempting shortcut — set temperature to 0 so runs stop varying — gets a dedicated warning
+      section in the paper. Cooling the sampler doesn't remove uncertainty; it can <em>relocate</em> it
+      into the irreducible component and bias the score: in Miller's examples, zero temperature triples
+      the minimum achievable variance in one case and shifts the expected score while increasing
+      difficulty-spread variance roughly five-fold in
+      another.<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §3.3">[Error Bars]</a>
+      Evaluate at the temperature you deploy at, and buy precision with K, not with the thermostat.</p>
+    </div>
+
+    <h2 id="practice">The five recommendations</h2>
+    <p>
+      Miller's paper closes on exactly five practices — quoted verbatim, since they compress this page
+      and the next into a checklist:<a class="cite" href="https://arxiv.org/abs/2411.00640" title="Miller 2024, §1">[Error Bars]</a>
+    </p>
+    <div class="card">
+      <ol style="margin-bottom:0">
+        <li>"Computing standard errors of the mean using the Central Limit Theorem"</li>
+        <li>"When questions are drawn in related groups, computing clustered standard errors"</li>
+        <li>"Reducing variance by resampling answers and by analyzing next-token probabilities"</li>
+        <li>"When two models are being compared, conducting statistical inference on the question-level
+          paired differences, rather than the population-level summary statistics"</li>
+        <li>"Using power analysis to determine whether an eval (or a random subsample) is capable of
+          testing a hypothesis of interest"</li>
+      </ol>
+    </div>
+    <p>
+      Items 1–3 were this page. Items 4 and 5 — the comparison machinery, where proper statistics can
+      flip a leaderboard verdict outright — are <a href="17-comparing-models.html">the next page</a>.
+    </p>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>A score is an estimate; the error bar is the part of the measurement that tells you how much
+      the estimate is allowed to mean. Reporting one without the other isn't simplification — it's
+      omitting the half of the result that says whether the other half could be noise.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Evan Miller, "Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations," arXiv:2411.00640, Anthropic, 2024. <a href="https://arxiv.org/abs/2411.00640">arxiv.org/abs/2411.00640</a></li>
+        <li>Stella Biderman, Hailey Schoelkopf, Lintang Sutawika et al. (EleutherAI), "Lessons from the Trenches on Reproducible Evaluation of Language Models," arXiv:2405.14782. <a href="https://arxiv.org/abs/2405.14782">arxiv.org/abs/2405.14782</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

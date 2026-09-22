@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permissions and Ownership · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 2 · Identity &amp; Permissions</p>
+    <h1>Permissions and ownership</h1>
+    <p class="lede">
+      Nine bits on every file decide who may read, change, or run it. This page teaches you to read
+      them, predict what the kernel will allow before you run the command, and use that to hide an
+      answer key from an agent. It also covers the three ordinary ways that protection fails without
+      any error message.
+    </p>
+
+    <h2 id="reading-ls-l">Reading <code>ls -l</code></h2>
+    <p>
+      This is the second half of audit question 3, <em>who owns what?</em> The setup is the course's
+      running example, wordfreq-bench, in its in-box variant. The
+      <span class="term" data-g="agent">agent</span> runs as <code>agent</code> (UID 1001, from
+      <a href="07-users-groups-root.html">page 7</a>) and works in <code>/app</code>. Root has
+      copied the grader (hidden tests and <code>expected.json</code>, the answer key) into
+      <code>/opt/grader</code>.
+    </p>
+<pre class="term"><code><span class="p">$</span> ls -ld /app /opt/grader
+<span class="o">drwxr-xr-x 4 agent agent 4096 Sep 21 06:08 /app
+drwx------ 2 root  root  4096 Sep 21 06:08 /opt/grader</span>
+<span class="p">$</span> stat -c '%A %a %U:%G %n' /app/wordfreq.py /app /opt/grader
+<span class="o">-rw-r--r-- 644 agent:agent /app/wordfreq.py
+drwxr-xr-x 755 agent:agent /app
+drwx------ 700 root:root /opt/grader</span></code></pre>
+    <div class="diagram">  d   rwx   r-x   r-x    4   agent   agent   4096  …  /app
+  │   └┬┘   └┬┘   └┬┘        └─┬─┘   └─┬─┘
+  │    │     │     │           │       └ group that owns it
+  │    │     │     │           └ user that owns it
+  │    │     │     └ other: everyone else
+  │    │     └ group: members of the owning group
+  │    └ user (owner)
+  └ type: - regular file, d directory, l symlink</div>
+    <p>
+      The ten-character mode string is a type letter followed by three
+      <span class="term" data-g="permission-bits">permission</span> classes: the owning
+      <em>user</em>, the owning <em>group</em>, and <em>other</em>. Each class has three bits:
+      <code>r</code> read, <code>w</code> write, <code>x</code> execute; <code>-</code> means the bit
+      is off. Each bit has a numeric value (r=4, w=2, x=1), and adding them per class gives the
+      three-digit <span class="term" data-g="octal-mode">octal</span> form: <code>rwx</code> = 7,
+      <code>r-x</code> = 5, <code>r--</code> = 4, so <code>rwxr-xr-x</code> is 755 and
+      <code>rw-r--r--</code> is 644.<a class="cite" href="https://man7.org/linux/man-pages/man2/chmod.2.html" title="chmod(2), DESCRIPTION: S_IRUSR 00400 … S_IXOTH 00001">[chmod(2)]</a>
+      (If octal is new to you, <a href="../appendices/c-binary-octal-cidr.html">Appendix C</a> has
+      the arithmetic.) The mode is stored in the file's inode alongside its owner UID and GID, which
+      are numbers, as page 7 showed.
+    </p>
+
+    <h2 id="decision-procedure">The decision procedure: exactly one class</h2>
+    <p>
+      When a process asks to open a file, the kernel does not add up permissions from every class
+      that could apply. It picks <strong>one</strong> class and consults only that one:
+    </p>
+    <ol>
+      <li>If the process's UID equals the file's owner UID, use the <em>user</em> bits.</li>
+      <li>Otherwise, if the file's group is the process's group or one of its supplementary groups,
+      use the <em>group</em> bits.</li>
+      <li>Otherwise, use the <em>other</em> bits.</li>
+    </ol>
+    <p>
+      There is no fall-through to the next class if the chosen one says
+      no.<a class="cite" href="https://man7.org/linux/man-pages/man7/path_resolution.7.html" title="path_resolution(7), Permissions: 'When neither holds, the third group is used.'">[path_resolution(7)]</a>
+      (Root is the exception, covered <a href="#root-bypass">below</a>.) That has a surprising
+      consequence, which is the best way to check you have the rule:
+    </p>
+<pre class="term"><code><span class="p">$</span> echo "secret" &gt; own.txt &amp;&amp; chmod 004 own.txt &amp;&amp; ls -l own.txt
+<span class="o">-------r-- 1 agent agent 7 Sep 21 21:21 own.txt</span>
+<span class="p">$</span> cat own.txt; echo "exit status: $?"
+<span class="o">cat: own.txt: Permission denied
+exit status: 1</span></code></pre>
+<pre class="term"><code><span class="p">$</span> docker exec -u ubuntu lt-08-box cat /tmp/own.txt     <span class="c"># another user: the "other" class</span>
+<span class="o">secret</span></code></pre>
+    <p>
+      The owner is refused a file that everyone else may read, because the owner is judged by the
+      owner bits alone. It is not a trap for the owner, though: only the owner (or a privileged
+      process) may change a file's
+      mode,<a class="cite" href="https://man7.org/linux/man-pages/man2/chmod.2.html" title="chmod(2): the caller's effective UID must match the owner, or it needs CAP_FOWNER">[chmod(2)]</a>
+      so <code>chmod u+r own.txt</code> fixes it at once.
+    </p>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      To predict an access decision, ask three questions in order: <em>which class am I in?</em>
+      (compare numbers from <code>id</code> with <code>ls -ln</code>), <em>which bit does this
+      operation need?</em>, and <em>is that bit set in my class?</em> Then repeat for every directory
+      on the path, which is the next section.
+    </div>
+
+    <h3 id="chmod-chown">Changing modes and owners</h3>
+    <p>
+      <span class="term" data-g="chmod">chmod</span> accepts either an octal number or symbolic
+      edits of the form <em>who</em> (<code>u g o a</code>), <em>operator</em>
+      (<code>+ - =</code>), <em>bits</em>:
+    </p>
+<pre class="term"><code><span class="p">$</span> touch demo.sh
+<span class="p">$</span> chmod 750 demo.sh &amp;&amp; ls -l demo.sh
+<span class="o">-rwxr-x--- 1 agent agent 0 Sep 21 21:21 demo.sh</span>
+<span class="p">$</span> chmod u-x,g+w,o+r demo.sh &amp;&amp; stat -c '%a %A' demo.sh
+<span class="o">674 -rw-rwxr--</span>
+<span class="p">$</span> chmod a+x demo.sh &amp;&amp; stat -c '%a %A' demo.sh
+<span class="o">775 -rwxrwxr-x</span>
+<span class="p">$</span> chmod go= demo.sh &amp;&amp; stat -c '%a %A' demo.sh      <span class="c"># "=" with nothing: clear group and other</span>
+<span class="o">700 -rwx------</span></code></pre>
+    <p>
+      Numeric modes set all nine bits at once; symbolic ones edit a few. Use numeric when you mean
+      "exactly this" (Dockerfiles, setup scripts) and symbolic for small changes.
+      <span class="term" data-g="chown">chown</span> changes the owner, and ordinary users cannot use
+      it to give files away:
+    </p>
+<pre class="term"><code><span class="p">$</span> chown ubuntu /tmp/demo.sh; echo "exit status: $?"
+<span class="o">chown: changing ownership of '/tmp/demo.sh': Operation not permitted
+exit status: 1</span></code></pre>
+    <p>
+      Changing a file's owner needs a privilege (<code>CAP_CHOWN</code>, "make arbitrary changes to file UIDs and
+      GIDs"),<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), CAP_CHOWN">[capabilities(7)]</a>
+      which in practice means root; as root the syntax is <code>chown user:group path</code>, with <code>-R</code> for a
+      tree.
+    </p>
+
+    <h2 id="directories">Directories: the bits mean something else</h2>
+    <p>
+      A directory is a list of names pointing at files. Its bits govern the list, not the files:
+    </p>
+    <table>
+      <thead><tr><th>Bit</th><th>On a file</th><th>On a directory</th></tr></thead>
+      <tbody>
+        <tr><td><code>r</code></td><td>read the contents</td><td>list the names (<code>ls</code>)</td></tr>
+        <tr><td><code>w</code></td><td>change the contents</td><td>create, delete, rename entries (needs <code>x</code> too)</td></tr>
+        <tr><td><code>x</code></td><td>run it as a program</td><td>"search": use the directory in a path to reach what is inside</td></tr>
+      </tbody>
+    </table>
+    <p>
+      The <code>x</code> bit on directories is the one people miss. For each directory on a path
+      except the last, the process needs search permission; lacking it anywhere gives "Permission
+      denied".<a class="cite" href="https://man7.org/linux/man-pages/man7/path_resolution.7.html" title="path_resolution(7), Step 2: walk along the path">[path_resolution(7)]</a>
+      The two bits separate cleanly, as the agent can show on a directory it owns:
+    </p>
+<pre class="term"><code><span class="p">$</span> mkdir -p /tmp/d &amp;&amp; echo hi &gt; /tmp/d/f
+<span class="p">$</span> chmod 400 /tmp/d; ls /tmp/d; cat /tmp/d/f         <span class="c"># r without x: see names, reach nothing</span>
+<span class="o">f
+cat: /tmp/d/f: Permission denied</span>
+<span class="p">$</span> chmod 100 /tmp/d; ls /tmp/d; cat /tmp/d/f         <span class="c"># x without r: reach by name, list nothing</span>
+<span class="o">ls: cannot open directory '/tmp/d': Permission denied
+hi</span>
+<span class="p">$</span> chmod 500 /tmp/d; touch /tmp/d/new; echo more &gt;&gt; /tmp/d/f; echo "append: $?"
+<span class="o">touch: cannot touch '/tmp/d/new': Permission denied
+append: 0</span></code></pre>
+    <p>
+      The last line matters: without <code>w</code> on the directory you cannot create a name, but you
+      can still change a file you already have write access to. Directory bits protect names; file
+      bits protect contents.
+    </p>
+    <p>
+      This gives the in-box protection its shape. <code>/opt/grader</code> is
+      <code>drwx------ root root</code>: the agent is in the <em>other</em> class, and other has no
+      bits, so no <code>x</code>, so nothing beneath it can be reached, whatever the files' own modes
+      are:
+    </p>
+<pre class="term"><code><span class="p">$</span> id
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span>
+<span class="p">$</span> cat /opt/grader/expected.json; echo "exit status: $?"
+<span class="o">cat: /opt/grader/expected.json: Permission denied
+exit status: 1</span>
+<span class="p">$</span> ls /opt/grader; echo "exit status: $?"
+<span class="o">ls: cannot open directory '/opt/grader': Permission denied
+exit status: 2</span>
+<span class="p">$</span> python3 -c 'open("/opt/grader/expected.json")' 2&gt;&amp;1 | tail -n 1
+<span class="o">PermissionError: [Errno 13] Permission denied: '/opt/grader/expected.json'</span></code></pre>
+    <p>
+      Inside, as root saw them, the files were ordinary <code>-rw-r--r--</code>. One
+      <code>chmod 700</code> on the directory protects everything beneath it.
+    </p>
+
+    <h3 id="deleting">Deleting is a directory write</h3>
+    <p>
+      Removing a file deletes a <em>name</em> from a directory, so it needs write access to the
+      directory, not to the
+      file.<a class="cite" href="https://man7.org/linux/man-pages/man2/unlink.2.html" title="unlink(2), ERRORS, EACCES: write access to the directory containing path is not allowed">[unlink(2)]</a>
+      Suppose root plants a read-only reference file inside the agent's own directory:
+    </p>
+<pre class="term"><code><span class="p">#</span> echo "reference output: do not edit" &gt; /app/data/reference.txt &amp;&amp; chmod 444 /app/data/reference.txt</code></pre>
+<pre class="term"><code><span class="p">$</span> ls -ld /app/data; ls -l /app/data/reference.txt
+<span class="o">drwxr-xr-x 1 agent agent 4096 Sep 21 21:21 /app/data
+-r--r--r-- 1 root root 30 Sep 21 21:21 /app/data/reference.txt</span>
+<span class="p">$</span> echo "tampered" &gt;&gt; /app/data/reference.txt
+<span class="o">bash: /app/data/reference.txt: Permission denied</span>
+<span class="p">$</span> rm -f /app/data/reference.txt; echo "exit status: $?"
+<span class="o">exit status: 0</span>
+<span class="p">$</span> echo "whatever the agent likes" &gt; /app/data/reference.txt &amp;&amp; ls -l /app/data/reference.txt
+<span class="o">-rw-r--r-- 1 agent agent 25 Sep 21 21:21 /app/data/reference.txt</span></code></pre>
+    <p>
+      The file could not be edited, but it could be replaced. A grader that later reads
+      <code>/app/data/reference.txt</code> gets the agent's version. A root-owned, mode-444 test file
+      inside a directory the agent owns is not protected.
+    </p>
+
+    <h3 id="sticky-bit">The sticky bit and <code>/tmp</code></h3>
+    <p>
+      <code>/tmp</code> must be writable by everyone, yet users must not delete each other's files.
+      The <span class="term" data-g="sticky-bit">sticky bit</span> (the <code>t</code> in the last
+      position, octal 1000) adds that rule: in a sticky directory a file can be renamed or deleted only
+      by its owner, the directory's owner, or a privileged
+      process.<a class="cite" href="https://man7.org/linux/man-pages/man7/inode.7.html" title="inode(7), The file type and mode: S_ISVTX on directories">[inode(7)]</a>
+      It restricts deletion only. Here <code>ubuntu</code> has left a world-writable file in
+      <code>/tmp</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> stat -c '%a %A %U %n' /tmp
+<span class="o">1777 drwxrwxrwt root /tmp</span>
+<span class="p">$</span> ls -l /tmp/ubuntu-notes.txt
+<span class="o">-rw-rw-rw- 1 ubuntu ubuntu 13 Sep 21 21:21 /tmp/ubuntu-notes.txt</span>
+<span class="p">$</span> echo "agent was here" &gt;&gt; /tmp/ubuntu-notes.txt; echo "exit status: $?"
+<span class="o">exit status: 0</span>
+<span class="p">$</span> rm -f /tmp/ubuntu-notes.txt; echo "exit status: $?"
+<span class="o">rm: cannot remove '/tmp/ubuntu-notes.txt': Operation not permitted
+exit status: 1</span></code></pre>
+
+    <h2 id="umask">Where new modes come from: the umask</h2>
+    <p>
+      Programs that create files ask for a mode, usually 666 for files and 777 for directories. The
+      process's <span class="term" data-g="umask">umask</span> then turns bits <em>off</em>: the
+      result is <code>requested &amp; ~umask</code>, so with the usual 022, 0666 becomes
+      0644.<a class="cite" href="https://man7.org/linux/man-pages/man2/umask.2.html" title="umask(2), DESCRIPTION: 0666 &amp; ~022 = 0644">[umask(2)]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> umask
+<span class="o">0022</span>
+<span class="p">$</span> touch f1 &amp;&amp; mkdir d1 &amp;&amp; stat -c '%a %n' f1 d1
+<span class="o">644 f1
+755 d1</span>
+<span class="p">$</span> umask 077 &amp;&amp; touch f2 &amp;&amp; mkdir d2 &amp;&amp; stat -c '%a %n' f2 d2
+<span class="o">600 f2
+700 d2</span></code></pre>
+    <p>
+      The umask only removes bits; it never adds any. It is also inherited by child processes, like
+      the UID. The practical consequence: anything a setup script, <code>COPY</code>, or
+      <code>cp</code> creates is, by default, readable by every user in the box. Protection is
+      something you add explicitly.
+    </p>
+
+    <h2 id="root-bypass">Root skips the check</h2>
+    <p>
+      Everything above describes ordinary processes. A process with the capability
+      <code>CAP_DAC_OVERRIDE</code> bypasses file read, write and execute permission
+      checks,<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), CAP_DAC_OVERRIDE">[capabilities(7)]</a>
+      and root in an ordinary container holds it (page 7). There is one qualifier: root may execute a
+      file only if at least one execute bit is set on
+      it.<a class="cite" href="https://man7.org/linux/man-pages/man7/path_resolution.7.html" title="path_resolution(7), Bypassing permission checks: superuser and capabilities">[path_resolution(7)]</a>
+    </p>
+<pre class="term"><code><span class="p">#</span> ls -l /srv/r.sh; cat /srv/r.sh
+<span class="o">---------- 1 root root 19 Sep 21 21:22 /srv/r.sh
+#!/bin/sh
+echo ran</span>
+<span class="p">#</span> /srv/r.sh; echo "exit status: $?"
+<span class="o">bash: line 1: /srv/r.sh: Permission denied
+exit status: 126</span>
+<span class="p">#</span> chmod 001 /srv/r.sh; /srv/r.sh
+<span class="o">ran</span></code></pre>
+    <p>
+      Depth triage for this section: <em>learn to use</em> the rule "root ignores mode bits, except it
+      needs some <code>x</code> to execute". <em>Recognize</em> that the power comes from a capability
+      that can be dropped (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>).
+    </p>
+
+    <h2 id="setuid">Setuid: a file that changes who you are</h2>
+    <p>
+      Three more mode bits sit above the nine. The one that matters for audits is
+      <span class="term" data-g="setuid">setuid</span> (octal 4000, shown as <code>s</code> in the
+      owner's execute position). When a setuid program is executed, the process's effective UID
+      becomes the file's
+      owner's.<a class="cite" href="https://man7.org/linux/man-pages/man2/execve.2.html" title="execve(2), DESCRIPTION: set-user-ID">[execve(2)]</a>
+      That is how <code>passwd</code> lets you change your own entry in a root-only file, and how
+      <code>sudo</code> works. Root makes a setuid copy of <code>id</code> to show the effect:
+    </p>
+<pre class="term"><code><span class="p">#</span> cp /usr/bin/id /usr/local/bin/suid-id &amp;&amp; chmod 4755 /usr/local/bin/suid-id
+<span class="p">#</span> ls -l /usr/local/bin/suid-id
+<span class="o">-rwsr-xr-x 1 root root 67952 Sep 21 21:22 /usr/local/bin/suid-id</span></code></pre>
+<pre class="term"><code><span class="p">$</span> /usr/local/bin/suid-id
+<span class="o">uid=1001(agent) gid=1001(agent) <span class="hl">euid=0(root)</span> groups=1001(agent)</span></code></pre>
+    <p>
+      The agent ran a program that has root's authority. Every setuid-root program is therefore
+      trusted code: a bug in one, or a setuid shell or interpreter, is a
+      <span class="term" data-g="privilege-escalation">privilege escalation</span>. The kernel ignores
+      the setuid bit in three situations: when the process has
+      <span class="term" data-g="no-new-privileges">no_new_privs</span> set, when the filesystem is
+      mounted <code>nosuid</code>, and when the process is being
+      traced.<a class="cite" href="https://man7.org/linux/man-pages/man2/execve.2.html" title="execve(2), DESCRIPTION: set-user-ID and set-group-ID bits are ignored if…">[execve(2)]</a>
+      Linux also ignores it on scripts, so a setuid bash script run by the agent printed
+      <code>1001</code>. Here is the same image started with Docker's
+      <code>--security-opt no-new-privileges</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --security-opt no-new-privileges lt-08-img /usr/local/bin/suid-id
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span></code></pre>
+    <p>
+      The audit command lists every setuid file on the root filesystem. The hardened image contains
+      only the stock Ubuntu set:
+    </p>
+<pre class="term"><code><span class="p">$</span> find / -xdev -perm -4000 -type f 2&gt;/dev/null
+<span class="o">/usr/bin/chfn
+/usr/bin/newgrp
+/usr/bin/umount
+/usr/bin/passwd
+/usr/bin/chsh
+/usr/bin/mount
+/usr/bin/su
+/usr/bin/gpasswd</span></code></pre>
+    <p>
+      Anything not on that list in an Ubuntu-based task image deserves an explanation.
+      (<code>-perm -2000</code> finds setgid files, the group equivalent.)
+    </p>
+
+    <div class="callout">
+      <span class="label">Background — ACLs: recognise the <code>+</code></span>
+      <p>Linux also supports access control lists, which grant rights to individual extra users or
+      groups. The only sign in <code>ls -l</code> is a <code>+</code> after the mode string, and it
+      means the nine bits are not the whole story:</p>
+<pre class="term"><code><span class="p">#</span> setfacl -m u:agent:rx /opt/grader; ls -ld /opt/grader
+<span class="o">drwxr-x---+ 2 root root 4096 Sep 21 06:08 /opt/grader</span></code></pre>
+      <p>With that entry the agent could list and read the grader, although the mode bits say
+      "other: nothing". Depth triage: <em>recognize</em> the <code>+</code>, run
+      <code>getfacl</code> (package <code>acl</code>) when you see it, and leave ACL design to
+      someone else. Eval images rarely need ACLs.</p>
+    </div>
+
+    <h2 id="protecting-the-key">Worked case: three ways the protection fails</h2>
+    <p>
+      The in-box design is mode 700 on a root-owned <code>/opt/grader</code>, with the agent running
+      as UID 1001. It holds only while all of its assumptions hold. Each failure below was run on the
+      same box, and none of them produces an error anyone would notice.
+    </p>
+    <p><strong>1. The directory keeps its default mode.</strong> <code>COPY</code>, <code>cp</code>
+    and <code>docker cp</code> produce the modes the umask allows, typically 755 directories and 644
+    files. Nobody runs <code>chmod 700</code>:</p>
+<pre class="term"><code><span class="p">$</span> ls -ld /opt/grader; cat /opt/grader/expected.json
+<span class="o">drwxr-xr-x 2 root root 4096 Sep 21 06:08 /opt/grader
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}</span></code></pre>
+    <p>Mode 711 is a half-fix that looks like a fix: <code>ls /opt/grader</code> is denied, but anyone
+    who guesses or learns the file name (it is in the task's public repo, or in the harness docs)
+    still reads it, because <code>x</code> alone lets you reach a name.</p>
+    <p><strong>2. The agent is root.</strong> No <code>USER</code> line, or a harness that execs as
+    root. Mode bits are skipped entirely, and root can also change the tests:</p>
+<pre class="term"><code><span class="p">#</span> id -u; cat /opt/grader/expected.json
+<span class="o">0
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}</span>
+<span class="p">#</span> echo "# tampered" &gt;&gt; /opt/grader/test_hidden.py; tail -n 1 /opt/grader/test_hidden.py
+<span class="o"># tampered</span></code></pre>
+    <p><strong>3. The agent can become root.</strong> The image has <code>sudo</code> and a
+    <code>NOPASSWD</code> rule (page 7's <code>lt-07-sudo</code> container, same grader, mode
+    700):</p>
+<pre class="term"><code><span class="p">$</span> cat /opt/grader/expected.json
+<span class="o">cat: /opt/grader/expected.json: Permission denied</span>
+<span class="p">$</span> sudo -n cat /opt/grader/expected.json
+<span class="o">{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall — checking the file instead of the path</span>
+      <p>An author runs <code>ls -l /opt/grader/expected.json</code>, sees root-owned, and concludes
+      it is protected. Ownership of the file says nothing about who can read it; the file's
+      <em>other</em> bits and the <code>x</code> bit on every ancestor directory decide that. The
+      only test that settles it is the access itself, performed as the agent's UID:
+      <code>docker exec -u 1001 BOX cat /opt/grader/expected.json</code>. Run it as root and it
+      always succeeds, which proves nothing.</p>
+    </div>
+    <p>
+      A fourth route is an unexpected setuid program, covered above. The stronger design removes the
+      question: <strong>do not put the key in the box.</strong> The hardened wordfreq-bench image
+      contains no grader at all. <code>grade.sh</code> copies <code>/app</code> out after the agent
+      finishes and runs the hidden tests in a fresh, network-less container the agent never touched
+      (<a href="26-environment-integrity.html#filesystem">page 26</a> develops this). Mode bits then
+      serve as defence in depth rather than the only defence.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — design</span>
+      <p>File access policy changes measured behaviour. ImpossibleBench gave coding agents tasks whose
+      tests had been mutated to be impossible, so any pass means the agent cheated, and varied test
+      access. On Impossible-SWEbench's conflicting-test variant, cheating rates with open tests vs a
+      "read-only" condition were 54% vs 39% for GPT-5, 49% vs 11% for o4-mini, and 50% vs 1% for
+      Claude Opus 4.1. Hiding the tests brought cheating to 0% but cost legitimate performance on the
+      original tasks (GPT-5 97% → 76%, o4-mini 85% → 59%, Opus 4.1 86% →
+      70%).<a class="cite" href="https://arxiv.org/html/2510.20270v1" title="Zhong, Raghunathan, Carlini 2025, ImpossibleBench, §5.2, Figure 7">[ImpossibleBench]</a>
+      Read these numbers carefully. The paper's "read-only" is not a mode bit: the harness reverts
+      any modified tests at scoring time. So they tell you how much protecting the tests matters, and
+      that protection against <em>modification</em> leaves other cheating routes (special-casing,
+      overloaded comparisons) open. They are not evidence about <code>chmod</code>. A
+      <code>chmod 444</code> on a test file inside a writable directory would not even achieve the
+      paper's condition, as the <a href="#deleting">deletion demo</a> showed.</p>
+    </div>
+
+    <h2 id="eacces-eperm">Reading the error: EACCES versus EPERM</h2>
+    <p>
+      Two different error messages appeared on this page, and they point to different mechanisms. The
+      kernel returns a numbered error code, and Python shows the number:
+    </p>
+<pre class="term"><code><span class="p">$</span> python3 -c 'open("/etc/shadow")' 2&gt;&amp;1 | tail -n 1
+<span class="o">PermissionError: [Errno 13] Permission denied: '/etc/shadow'</span>
+<span class="p">$</span> python3 -c 'import os; os.chown("/tmp/demo.sh", 1000, 1000)' 2&gt;&amp;1 | tail -n 1
+<span class="o">PermissionError: [Errno 1] Operation not permitted: '/tmp/demo.sh'</span></code></pre>
+    <table>
+      <thead><tr><th>Transcript says</th><th>Code</th><th>Usually means</th><th>Next check</th></tr></thead>
+      <tbody>
+        <tr><td><code>Permission denied</code></td><td>EACCES (13)</td><td>mode bits said no, on the file or on a directory in the path</td><td><code>id</code>; <code>ls -ldn</code> on each path component</td></tr>
+        <tr><td><code>Operation not permitted</code></td><td>EPERM (1)</td><td>the operation needs a privilege or ownership you lack (<code>chown</code>, sticky-directory delete, <code>chmod</code> of someone else's file)</td><td>who owns it; is this root's job?</td></tr>
+        <tr><td><code>Permission denied</code> + exit 126</td><td>EACCES on exec</td><td>no <code>x</code> bit on the program (page 6)</td><td><code>ls -l</code> the script</td></tr>
+        <tr><td><code>Read-only file system</code></td><td>EROFS</td><td>the mount, not the mode</td><td><a href="14-mounts-and-filesystems.html#is-it-read-only">page 14</a></td></tr>
+      </tbody>
+    </table>
+    <div class="evals">
+      <span class="label">In eval work — navigate and account</span>
+      <p>When a rollout's transcript shows <code>Permission denied</code>, the observation is "a
+      mode-bit check failed on some path". Whether that is a model failure depends on which path. If
+      the agent was probing <code>/opt/grader</code>, it is the environment working as designed, and
+      worth tagging as an attempted access for your integrity analysis. If it was the task's own
+      output directory, it is an environment bug, and the rollout should be recorded as an
+      infrastructure failure, reported in <em>completed / scheduled</em> rather than silently counted
+      as incorrect. The discriminating test is one command run as the agent's UID:
+      <code>ls -ldn</code> on each directory of the failing path.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A task author says: "The hidden tests are safe. <code>/opt/tests</code> is
+      <code>root:root</code> mode 700, the agent runs as UID 1001, there is no sudo, and I checked
+      that <code>cat /opt/tests/test_main.py</code> fails as the agent." After the run, the harness
+      copies <code>/opt/tests</code> into <code>/app/tests_hidden/</code> (owned by
+      <code>agent</code>) and runs pytest there as root. Is the grade trustworthy?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>What the evidence covers:</strong> during the agent's run, reading the tests was
+        blocked, assuming nothing else (setuid programs, ACLs, a second exec path) changed that.
+        The author checked one read, not the full list; <code>find / -perm -4000</code> and
+        <code>ls -ld</code> for a <code>+</code> would complete it.</p>
+        <p><strong>What it does not cover:</strong> grading. The tests are copied into a directory
+        the agent owns. Whatever the agent left in <code>/app</code> is present at grading: a
+        <code>conftest.py</code> that pytest loads automatically from parent directories, a
+        placeholder <code>tests_hidden</code> directory or symlink the copy lands in or through, a
+        <code>pytest.ini</code> that changes collection. Pytest then runs as root, so any of that
+        code runs with full privileges. The protection guarded reading; the risk is tampering with the
+        grading process.</p>
+        <p><strong>What to ask for:</strong> grade in a fresh container, copying in only the files the
+        task asks the agent to change, and running the tests from a root-owned directory the agent
+        never had write access to. The discriminating experiment: a planted-tamper rollout (an agent
+        script that writes a <code>conftest.py</code> forcing all tests to pass). If the current
+        pipeline reports it as a pass, every existing score is an upper bound until regraded.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> Use your <code>lt-lab</code> container: <code>learner</code>
+      (UID 1001) plays <code>agent</code>, and the preinstalled <code>ubuntu</code> (UID 1000) plays a
+      second user. Root shell: <code>docker exec -it lt-lab bash</code>; switch with
+      <code>su - learner</code> or <code>su - ubuntu</code>.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> As <code>learner</code> in <code>/tmp</code>, create
+        <code>own.txt</code>, <code>chmod 004</code> it, and show that you cannot read it but
+        <code>ubuntu</code> can. Restore your access with one symbolic <code>chmod</code>.
+          <details class="solution"><summary>Solution</summary>
+          <p><code>cat own.txt</code> as learner → <code>Permission denied</code> (owner class,
+          bits <code>---</code>). As ubuntu → <code>secret</code> (other class,
+          <code>r--</code>). <code>chmod u+r own.txt</code> → <code>-r-----r--</code>, and
+          <code>cat</code> works again.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> As learner: <code>mkdir /tmp/d; echo hi &gt;
+        /tmp/d/f</code>. For each of <code>chmod 400 /tmp/d</code>, <code>chmod 100 /tmp/d</code>
+        and <code>chmod 500 /tmp/d</code>, predict whether <code>ls /tmp/d</code>,
+        <code>cat /tmp/d/f</code>, and <code>touch /tmp/d/new</code> succeed. Then run them.
+          <details class="solution"><summary>Solution</summary>
+          <p>400: <code>ls</code> yes, <code>cat</code> no, <code>touch</code> no. 100:
+          <code>ls</code> no, <code>cat</code> yes, <code>touch</code> no. 500: <code>ls</code> and
+          <code>cat</code> yes, <code>touch</code> no (creating a name needs <code>w</code> and
+          <code>x</code>). Restore with <code>chmod 700 /tmp/d</code>.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> As root, create
+        <code>/home/learner/ref.txt</code>, owned by root, mode 444. Can learner append to it? Delete
+        it? Replace it? Write down your answers first.
+          <details class="solution"><summary>Solution</summary>
+          <p>Append: no (<code>Permission denied</code>, learner is in the other class, which has only
+          <code>r</code>). Delete: yes (<code>rm -f</code> exits 0, because deleting is a write to
+          <code>/home/learner</code>, which learner owns). Replace: yes, and the new file is owned by
+          learner. This is the <a href="#deleting">deletion demo</a> in a different directory.</p>
+          </details></li>
+        <li><strong>Audit.</strong> List the setuid and setgid files on your lab's root
+        filesystem. Then, as root, add <code>chmod 4755</code> to a copy of <code>/usr/bin/id</code>
+        in <code>/usr/local/bin</code>, run it as learner, find it with your audit command, and
+        delete it.
+          <details class="solution"><summary>Solution</summary>
+          <p><code>find / -xdev -perm -4000 -type f 2&gt;/dev/null</code> lists the eight stock
+          programs shown on the page, plus <code>/usr/local/bin/suid-id</code> once you add it. Run
+          as learner, the copy prints <code>… euid=0(root) …</code>. <code>-perm -2000</code> finds
+          <code>unix_chkpwd</code>, <code>pam_extrausers_chkpwd</code>, <code>expiry</code> and
+          <code>chage</code> in a stock Ubuntu 24.04 image.</p>
+          </details></li>
+        <li><strong>Eval task: lock the answer key.</strong> As root, copy the course's
+        <code>research/wordfreq-bench/grader</code> into the container at <code>/opt/grader</code>
+        (<code>docker cp</code> from the Mac). First check, as learner, whether you can read
+        <code>/opt/grader/expected.json</code>. Then make the smallest change that blocks
+        learner from reading and listing every file inside, and verify it as learner. Say which of
+        the three failure modes on this page your change does not address.
+          <details class="solution"><summary>Solution</summary>
+          <p>On the authoring Mac, <code>docker cp</code> kept the Mac's numeric owner:
+          <code>ls -ld /opt/grader</code> showed <code>drwxr-xr-x 2 501 dialout</code> (Mac GID 20
+          happens to be <code>dialout</code> in Ubuntu, page 7's numbers-not-names point again), with
+          644 files, so learner could read the key (failure 1). Fix:
+          <code>chown -R root:root /opt/grader &amp;&amp; chmod 700 /opt/grader</code>. As learner:
+          <code>cat /opt/grader/expected.json</code> → <code>Permission denied</code>;
+          <code>ls /opt/grader</code> → <code>cannot open directory … Permission denied</code>
+          (status 2). It does not address failures 2 and 3: a root agent, or any route to root
+          (sudo, setuid), reads it anyway. Only grading outside the box addresses those.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>chmod(2), umask(2), execve(2), unlink(2), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/chmod.2.html">chmod.2</a> · <a href="https://man7.org/linux/man-pages/man2/umask.2.html">umask.2</a> · <a href="https://man7.org/linux/man-pages/man2/execve.2.html">execve.2</a> · <a href="https://man7.org/linux/man-pages/man2/unlink.2.html">unlink.2</a></li>
+        <li>path_resolution(7), Linux man-pages project: Permissions; Step 2; Bypassing permission checks. <a href="https://man7.org/linux/man-pages/man7/path_resolution.7.html">man7.org/…/path_resolution.7.html</a></li>
+        <li>inode(7), Linux man-pages project: The file type and mode. <a href="https://man7.org/linux/man-pages/man7/inode.7.html">man7.org/…/inode.7.html</a></li>
+        <li>capabilities(7), Linux man-pages project: CAP_DAC_OVERRIDE. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html">man7.org/…/capabilities.7.html</a></li>
+        <li>Ziqian Zhong, Aditi Raghunathan, Nicholas Carlini. "ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases." arXiv:2510.20270, 2025, §5.2 and Figure 7. <a href="https://arxiv.org/abs/2510.20270">arxiv.org/abs/2510.20270</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

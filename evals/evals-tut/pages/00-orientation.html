@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orientation: Why Evals · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 0 · Orientation</p>
+    <h1>Why evals are the job</h1>
+    <p class="lede">
+      Building with LLMs feels easy at first — a demo comes together in an afternoon. Then the system
+      meets real users, and the question that decides everything is one the demo never answered:
+      <em>how do you know it works?</em> This page explains why evaluation is the actual bottleneck of
+      AI engineering, and lays out the map this course follows.
+    </p>
+
+    <h2 id="the-plateau">The plateau every AI product hits</h2>
+    <p>
+      Hamel Husain, who has consulted on dozens of AI products, reports that the unsuccessful ones
+      almost always share one root cause: <em>"a failure to create robust evaluation
+      systems."</em><a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+      The pattern is consistent enough to be a syndrome. His canonical case study is Lucy, a real-estate
+      AI assistant built by the company Rechat: early progress came fast through prompt tweaking, then
+      performance plateaued as the product's surface area grew. The symptoms he lists will sound
+      familiar to anyone who has shipped an LLM feature:
+    </p>
+    <ul>
+      <li>Fixing one failure caused others to appear — "resembling a game of whack-a-mole."</li>
+      <li>Nobody could say how well the system actually performed across tasks, "beyond vibe checks."</li>
+      <li>Prompts bloated into unwieldy walls of edge cases and examples.<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a></li>
+    </ul>
+    <p>
+      The way out was not a better prompt. It was building the machinery to <em>measure</em>: logging
+      every interaction as a <span class="term" data-g="trace">trace</span>, reading those traces
+      systematically, writing hundreds of small automated checks, and validating any automated grader
+      against human judgment. Husain's framing is that success with AI, like success in software
+      generally, "hinges on how fast you can iterate" — and you cannot iterate on what you cannot
+      measure.<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+    </p>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>An <span class="term" data-g="eval">eval</span> is not a report card you fill out at the end.
+      It is the steering mechanism of the development loop: it tells you what's broken, whether your fix
+      worked, and whether the fix broke something else. Teams that treat evaluation as an afterthought
+      don't iterate more slowly — past a certain complexity, they stop being able to iterate at all.</p>
+    </div>
+
+    <p>
+      How much of the job is this, really? Husain and Shreya Shankar, whose process material forms the
+      spine of Modules 1–3, put a number on it from their own project work: <em>"we've spent 60–80% of
+      our development time on error analysis and evaluation."</em><a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar 2026, LLM Evals: Everything You Need to Know">[Evals FAQ]</a>
+      That is not a typo, and it is the single most useful expectation to recalibrate before you start.
+      Evaluation isn't a tax on the real work. For LLM systems, it largely <em>is</em> the real work.
+    </p>
+
+    <h2 id="why-llms-are-different">Why this is harder than testing normal software</h2>
+    <p>
+      Ordinary software is deterministic: given the same input, it does the same thing, so a test
+      suite of exact assertions can pin its behavior down. An <span class="term" data-g="llm">LLM</span>-based
+      system breaks the assumptions that testing tradition rests on, in three stacked ways:
+    </p>
+    <ul>
+      <li><strong>The output space is open.</strong> There are countless acceptable answers to "summarize
+        this email" and countless unacceptable ones, and no string comparison separates them.</li>
+      <li><strong>The behavior is probabilistic.</strong> The same input can produce different outputs
+        across runs, so any score you measure is partly luck — which is why this course has an entire
+        statistics module (<a href="16-error-bars.html">Module 5</a>).</li>
+      <li><strong>The failure surface is unbounded.</strong> Users will phrase things you never imagined,
+        and the system fails in ways you didn't know existed until you look. You cannot enumerate the
+        test cases up front; you have to discover them from data
+        (<a href="04-error-analysis.html">Module 2</a>).</li>
+    </ul>
+    <p>
+      Shankar and Husain's book organizes these difficulties as the <strong>"Three Gulfs of LLM
+      Application Development"</strong> — three gaps that evaluation work has to bridge: the gulf of
+      <em>comprehension</em> (between the developer and the data), the gulf of <em>specification</em>
+      (between the developer and the LLM pipeline), and the gulf of <em>generalization</em> (between the
+      data and the pipeline).<a class="cite" href="https://www.oreilly.com/library/view/evals-for-ai/9798341660717/" title="Shankar &amp; Husain, Evals for AI Engineers (O'Reilly, Early Release)">[Evals Book]</a>
+      You don't fully know what your users ask, you can't fully specify what you want, and what works
+      on the cases you've seen won't automatically work on the cases you haven't. Every technique in
+      this course is an attack on one of those three gaps.
+    </p>
+
+    <h2 id="three-layers">The map: three layers of evaluation</h2>
+    <p>
+      "Evals" means different things in different rooms, and a lot of confusion comes from not noticing
+      which layer is being discussed. This course covers all three:
+    </p>
+    <div class="card">
+      <p><strong>1. Product evals</strong> — <em>does my application work for my users?</em>
+      Specific to one product, built from that product's real failures, graded against that product's
+      definition of quality. This is the Husain/Shankar territory:
+      <span class="term" data-g="error-analysis">error analysis</span>, custom graders, judges aligned
+      with a domain expert. Modules 1–3.</p>
+      <p><strong>2. Capability benchmarks</strong> — <em>how good is the model?</em>
+      Standardized, public, model-versus-model comparisons: SWE-bench, GAIA, MMLU and kin. These are
+      shared scientific instruments — and like any instrument they can be miscalibrated, gamed, or
+      contaminated. Modules 4 and 6 teach you to read them critically.</p>
+      <p><strong>3. The layer in between</strong> — <em>can this system reliably achieve outcomes in my
+      domain?</em> Evaluating agentic systems on outcomes — with the reliability, cost, and validity
+      questions that neither product-eval practice nor public benchmarks fully answer yet. The field's
+      open frontier; Modules 4–6 build the tools for it.</p>
+    </div>
+    <p>
+      The distinction matters because the methods don't transfer blindly. A
+      <span class="term" data-g="capability-eval">capability benchmark</span> score tells you
+      surprisingly little about whether a model will work in <em>your</em> pipeline; a perfect
+      <span class="term" data-g="product-eval">product eval</span> tells you nothing about models you
+      haven't plugged in. Knowing which question you're asking — and which layer answers it — is half
+      of eval literacy.
+    </p>
+
+    <h2 id="distrust">The second half: distrusting measurements properly</h2>
+    <p>
+      The deeper theme of this course is that <strong>the measurement itself can be broken</strong>, and
+      usually nothing looks wrong when it is. A few verified examples of what's coming:
+    </p>
+    <ul>
+      <li>When LLMs are used to grade other LLMs' outputs, they exhibit systematic biases — most judges
+        favor whichever answer appears <em>first</em> in the comparison, among other documented
+        distortions.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena">[MT-Bench]</a>
+        (<a href="09-judge-biases.html">Module 3</a>)</li>
+      <li>A famous benchmark's test questions can leak into a model's training data, inflating scores in
+        ways that evaporate on fresh questions of equal difficulty. (<a href="21-contamination.html">Module 6</a>)</li>
+      <li>Two models can differ by several points on an eval and be statistically indistinguishable —
+        noise wearing the costume of progress. (<a href="16-error-bars.html">Module 5</a>)</li>
+    </ul>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>The most common eval failure isn't having no evals — it's having evals you trust more than you
+      should. An unvalidated grader, an underpowered comparison, or a contaminated benchmark is worse
+      than no measurement, because it manufactures confidence. A recurring rule in this course:
+      <strong>every measuring instrument must itself be measured</strong> before you lean on it.</p>
+    </div>
+
+    <h2 id="how-to-read">How to read this course</h2>
+    <p>
+      The modules build in order, but every page stands alone wiki-style — follow cross-links backward
+      when you hit something unfamiliar. Dashed-underlined terms like
+      <span class="term" data-g="benchmark">benchmark</span> show a tooltip on hover and link into the
+      <a href="../glossary.html">glossary</a>. Statistics appear gently in context, with
+      <a href="../appendices/a-probability.html">Appendices A–F</a> teaching the underlying math from
+      zero whenever you want the real machinery.
+    </p>
+    <p>
+      Every empirical claim here was verified against its primary source — fetched and checked, not
+      recalled — and carries an inline citation; each page ends with a source box, and the
+      <a href="../bibliography.html">annotated bibliography</a> collects the whole citation universe.
+      Where a source's own evidence is weaker than its reputation (it happens more than you'd hope),
+      the page says so. A course on measurement that didn't audit its own claims would be a joke at its
+      own expense.
+    </p>
+    <p>
+      Start with <a href="01-what-is-an-eval.html">Module 1: What is an eval?</a> — or jump to whatever
+      question brought you here.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Hamel Husain, "Your AI Product Needs Evals," hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a></li>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+        <li>Shreya Shankar &amp; Hamel Husain, <em>Evals for AI Engineers</em>, O'Reilly Media, Early Release (final publication October 2026). <a href="https://www.oreilly.com/library/view/evals-for-ai/9798341660717/">oreilly.com</a></li>
+        <li>Lianmin Zheng et al., "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena," NeurIPS 2023. <a href="https://arxiv.org/abs/2306.05685">arxiv.org/abs/2306.05685</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

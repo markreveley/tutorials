@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Addresses, Interfaces, and Routes · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 5 · Networking for Sandboxes</p>
+    <h1>Addresses, interfaces, and routes</h1>
+    <p class="lede">
+      Two small kernel tables — the addresses on each interface, and the routes — decide what a box
+      can send packets to. This page teaches you to read both from inside a sandbox, and to turn
+      what you read into the list that matters for an eval: what is <em>adjacent</em> to the agent.
+    </p>
+
+    <p>
+      This is the first half of <strong>audit question 4: what can it reach?</strong> The concepts
+      themselves — what an address is, what a subnet is, how a route is chosen — are taught in the
+      sibling course, <em>Networking for LLM Evals</em>
+      (<a href="../../../networking/networking-tut/pages/02-addresses-and-ports.html">addresses and ports</a>,
+      <a href="../../../networking/networking-tut/pages/03-ip-and-routing.html">IP, subnets, and routes</a>).
+      Here each concept gets a sentence, and the words go to the Linux side: the commands that read
+      the box's network state, what Docker builds around a container, and what that puts within
+      reach of an agent.
+    </p>
+
+    <div class="callout">
+      <span class="label">Before you start</span>
+      <p>The stock <code>ubuntu:24.04</code> image has none of the tools on this page — no
+      <code>ip</code>, no <code>ping</code>, no <code>curl</code>. The
+      <a href="01-lab-setup.html">page-1 lab container</a> installed <code>iproute2</code> (which
+      provides <code>ip</code> and <code>ss</code>) and <code>curl</code>; for <code>ping</code> add
+      <code>apt-get install -y iputils-ping</code>. Sessions below run as the non-root user
+      <code>learner</code>: reading network state needs no privilege, which is exactly why an agent
+      can do it too.</p>
+    </div>
+
+    <h2 id="the-model">The model: interfaces have addresses, the kernel has a route table</h2>
+    <p>
+      An <span class="term" data-g="ip-address">IP address</span> does not name a machine. It names a
+      <span class="term" data-g="network-interface">network interface</span> — a point where the
+      kernel can send and receive packets. A laptop with Wi-Fi and Ethernet has two addresses; a
+      Docker host has one per bridge it runs; every container has at least two interfaces of its
+      own. "What is this box's IP?" is therefore the wrong question. The right one is "which
+      interfaces does this box have, and what address is on each?"
+    </p>
+    <p>
+      An IPv4 address is 32 bits written as four decimal
+      numbers. It is nearly always shown with a <span class="term" data-g="cidr">CIDR</span> prefix:
+      in <code>172.17.0.3/16</code> the <code>/16</code> says the first 16 bits identify the network
+      (the <span class="term" data-g="subnet">subnet</span>), and the rest identify the interface
+      within it.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc4632#section-3.1" title="RFC 4632 §3.1: prefix notation; the decimal after the slash is the number of significant bits">[RFC 4632]</a>
+      So <code>172.17.0.3/16</code> means "I am <code>172.17.0.3</code>, and everything from
+      <code>172.17.0.0</code> to <code>172.17.255.255</code> is on my local network". The bit
+      arithmetic — and why a /24 holds 256 addresses and a /12 over a million — is worked by hand in
+      <a href="../appendices/c-binary-octal-cidr.html">Appendix C</a>.
+    </p>
+    <p>
+      A handful of ranges are worth recognising on sight, because they tell you what <em>kind</em>
+      of network you are looking at:
+    </p>
+    <table>
+      <tr><th>Range</th><th>Name</th><th>What seeing it tells you</th></tr>
+      <tr><td><code>10.0.0.0/8</code><br><code>172.16.0.0/12</code><br><code>192.168.0.0/16</code></td>
+          <td><span class="term" data-g="private-address-range">Private</span> ranges<a class="cite" href="https://www.rfc-editor.org/rfc/rfc1918#section-3" title="RFC 1918 §3: the three private blocks, 10/8, 172.16/12 (ending at 172.31.255.255), 192.168/16">[RFC 1918]</a></td>
+          <td>An internal network. Anyone may reuse these without coordination, and packets carrying them are not forwarded across the public Internet — so reaching the outside from one requires address translation.</td></tr>
+      <tr><td><code>127.0.0.0/8</code></td>
+          <td><span class="term" data-g="loopback">Loopback</span><a class="cite" href="https://www.rfc-editor.org/rfc/rfc6890#section-2.2.2" title="RFC 6890 §2.2.2: special-purpose registry; 127.0.0.0/8 Loopback, 169.254.0.0/16 Link Local">[RFC 6890]</a></td>
+          <td>This network environment talking to itself. The whole /8, not just <code>127.0.0.1</code>. Never leaves the box.</td></tr>
+      <tr><td><code>169.254.0.0/16</code></td>
+          <td>Link-local<a class="cite" href="https://www.rfc-editor.org/rfc/rfc6890#section-2.2.2" title="RFC 6890 §2.2.2: special-purpose registry; 127.0.0.0/8 Loopback, 169.254.0.0/16 Link Local">[RFC 6890]</a></td>
+          <td>Valid only on the directly attached link. One address in it matters enormously on cloud machines: <code>169.254.169.254</code> (<a href="#adjacent">below</a>).</td></tr>
+    </table>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><strong>Not every 172.x address is private.</strong> The /12 runs from
+      <code>172.16.0.0</code> to <code>172.31.255.255</code>; <code>172.32.0.1</code> is an ordinary
+      public address.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc1918#section-3" title="RFC 1918 §3: 172.16.0.0 - 172.31.255.255 (172.16/12 prefix)">[RFC 1918]</a>
+      An allowlist or deny rule written as "172.*" is wrong in both directions. Appendix C shows why
+      the boundary falls at 31.</p>
+    </div>
+
+    <h2 id="ip-addr">Reading <code>ip addr</code></h2>
+    <p>
+      <code>ip</code> is the one command for the kernel's network state; its sub-commands name the
+      table you want: <code>ip address</code>, <code>ip link</code>, <code>ip route</code> (all
+      abbreviable: <code>ip a</code>, <code>ip r</code>).<a class="cite" href="https://man7.org/linux/man-pages/man8/ip.8.html" title="ip(8): objects address, link, route; -br brief output">[ip(8)]</a>
+      Here is a container started with a plain <code>docker run</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> ip addr
+<span class="o">1: <span class="hl">lo</span>: &lt;LOOPBACK,UP,LOWER_UP&gt; mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    <span class="hl">inet 127.0.0.1/8 scope host</span> lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host
+       valid_lft forever preferred_lft forever
+…
+11: <span class="hl">eth0@if471</span>: &lt;BROADCAST,MULTICAST,<span class="hl">UP,LOWER_UP</span>&gt; mtu 65535 qdisc noqueue <span class="hl">state UP</span> group default
+    link/ether 2e:53:81:d5:01:a6 brd ff:ff:ff:ff:ff:ff link-netnsid 0
+    <span class="hl">inet 172.17.0.3/16</span> brd 172.17.255.255 <span class="hl">scope global</span> eth0
+       valid_lft forever preferred_lft forever</span></code></pre>
+    <p>Each numbered block is one interface. Read five things and ignore the rest:</p>
+    <ul>
+      <li><strong>The name.</strong> <code>lo</code> is loopback. <code>eth0</code> is the
+        container's one real interface. The <code>@if471</code> suffix says "my other end is
+        interface number 471, somewhere else" — the clue that this is one end of a virtual cable
+        (<a href="#what-docker-builds">next section</a>).</li>
+      <li><strong>The flags and state.</strong> <code>UP</code> means administratively enabled;
+        <code>LOWER_UP</code> means the link underneath is live. Loopback's
+        <code>state UNKNOWN</code> is normal — it has no physical link to report on.</li>
+      <li><strong><code>inet</code></strong> — the IPv4 address and prefix. This is the line you
+        came for.</li>
+      <li><strong><code>scope</code></strong> — <code>host</code> means "only meaningful inside
+        this box" (loopback); <code>global</code> means routable beyond it.</li>
+      <li><strong><code>inet6</code></strong> — an <span class="term" data-g="ipv6">IPv6</span>
+        address. <code>::1</code> is IPv6's loopback.</li>
+    </ul>
+    <p>
+      The <code>…</code> hides nine lines you will see if you run this on a Mac:
+      <code>tunl0@NONE</code>, <code>gre0@NONE</code>, <code>sit0@NONE</code> and friends, all
+      <code>state DOWN</code>. They are unused tunnel placeholders that Docker Desktop's VM kernel
+      creates in every network environment; they carry nothing, and on a native Linux Docker host
+      you normally get just <code>lo</code> and <code>eth0</code>. When a listing is cluttered,
+      <code>ip -br addr</code> ("brief") gives one line per interface:
+    </p>
+<pre class="term"><code><span class="p">$</span> ip -br addr
+<span class="o">lo               UNKNOWN        127.0.0.1/8 ::1/128
+…
+eth0@if471       UP             172.17.0.3/16</span></code></pre>
+
+    <h2 id="ip-route">Reading <code>ip route</code></h2>
+    <p>
+      Addresses say who you are; the <span class="term" data-g="routing-table">routing table</span>
+      says where packets go. The kernel consults it for every outgoing packet and picks the most
+      specific matching
+      entry.<a class="cite" href="https://www.rfc-editor.org/rfc/rfc4632#section-5.1" title="RFC 4632 §5.1: forwarding in the Internet is done on a longest-match basis">[RFC 4632]</a>
+      The same container:
+    </p>
+<pre class="term"><code><span class="p">$</span> ip route
+<span class="o">default via 172.17.0.1 dev eth0
+172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3</span></code></pre>
+    <p>Two lines, and they are the whole of this box's idea of the world:</p>
+    <ul>
+      <li><code>172.17.0.0/16 dev eth0 … scope link</code> — anything in my own subnet is
+        <em>directly</em> on the wire attached to <code>eth0</code>; send it straight there. The
+        kernel added this line itself (<code>proto kernel</code>) when the address was assigned.</li>
+      <li><code>default via 172.17.0.1 dev eth0</code> — everything else goes to
+        <code>172.17.0.1</code>, the <span class="term" data-g="default-gateway">default
+        gateway</span>, and becomes its problem.</li>
+    </ul>
+    <p>
+      You do not have to do the matching in your head. <code>ip route get</code> asks the kernel
+      which route it <em>would</em> use for a destination, "exactly as the kernel sees
+      it",<a class="cite" href="https://man7.org/linux/man-pages/man8/ip-route.8.html" title="ip-route(8), ip route get: gets a single route to a destination and prints its contents exactly as the kernel sees it">[ip-route(8)]</a>
+      without sending anything:
+    </p>
+<pre class="term"><code><span class="p">$</span> ip route get 1.1.1.1
+<span class="o">1.1.1.1 <span class="hl">via 172.17.0.1</span> dev eth0 src 172.17.0.3 uid 1001
+    cache</span>
+<span class="p">$</span> ip route get 172.17.0.9
+<span class="o">172.17.0.9 dev eth0 src 172.17.0.3 uid 1001
+    cache</span>
+<span class="p">$</span> ip route get 127.0.0.1
+<span class="o">local 127.0.0.1 dev lo src 127.0.0.1 uid 1001
+    cache &lt;local&gt;</span></code></pre>
+    <p>
+      An Internet address goes <code>via</code> the gateway. A neighbour in the same /16 has no
+      <code>via</code>: it is delivered directly — nothing sits in between to filter it. Loopback
+      is <code>local</code>. That presence or absence of <code>via</code> is the most useful single
+      word on this page.
+    </p>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>A route is a statement of <em>intent</em>, not of reachability. <code>ip route get</code>
+      tells you which way a packet would leave; whether anything answers is a separate question
+      settled by firewalls and listeners (pages <a href="17-ports-and-sockets.html">17</a> and
+      <a href="19-firewalls-and-egress.html">19</a>). But the converse is solid: <strong>no route,
+      no reach</strong>. An empty route table is the one network guarantee you can verify by
+      reading.</p>
+    </div>
+
+    <h2 id="what-docker-builds">What Docker builds around a container</h2>
+    <p>
+      Where did <code>eth0</code>, <code>172.17.0.3</code>, and the gateway come from? Each container
+      gets its own <span class="term" data-g="network-namespace">network namespace</span> — a
+      private copy of the interface list, the route table, and the port space
+      (<a href="20-namespaces.html">page 20</a>). Docker then wires that namespace to the host:
+    </p>
+    <div class="diagram">  container A (netns)        container B (netns)
+  eth0 172.17.0.3/16         eth0 172.17.0.10/16
+  default via 172.17.0.1     default via 172.17.0.1
+        │ veth pair                │ veth pair
+────────┼──────────────────────────┼──────────────── host (netns)
+   veth4c1cb72                vethfb91090
+        └────────┬─────────────────┘
+             docker0  172.17.0.1/16        ◀─ bridge = virtual switch;
+                 │                            its address IS the gateway
+           routing + NAT (masquerade)
+                 │   src 172.17.0.3  ──▶  src = host's own address
+             host eth0  ──▶  the outside world</div>
+    <p>Three pieces, each inspectable:</p>
+    <p>
+      <strong>A <span class="term" data-g="veth">veth</span> pair</strong> is a virtual Ethernet
+      cable: two interfaces created together, where "packets transmitted on one device in the pair
+      are immediately received on the other
+      device."<a class="cite" href="https://man7.org/linux/man-pages/man4/veth.4.html" title="veth(4): veth devices are always created in interconnected pairs">[veth(4)]</a>
+      Docker puts one end inside the container and names it <code>eth0</code>; the other stays on
+      the host. You can match the ends by number. Inside a container:
+    </p>
+<pre class="term"><code><span class="p">$</span> ip -br link show eth0
+<span class="o">eth0<span class="hl">@if485</span>       UP             2a:8a:ab:33:31:0a &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt;</span>
+<span class="p">$</span> cat /sys/class/net/eth0/iflink
+<span class="o">485</span></code></pre>
+    <p>And on the host side, interface 485 is the other end, plugged into the bridge:</p>
+<pre class="term"><code><span class="p">#</span> ip -d link show | grep -A2 '^485:'
+<span class="o"><span class="hl">485: veth4c1cb72@if11</span>: &lt;BROADCAST,MULTICAST,UP,LOWER_UP&gt; mtu 65535 qdisc noqueue <span class="hl">master docker0</span> state UP …
+    link/ether 3e:ed:54:1c:18:6c brd ff:ff:ff:ff:ff:ff link-netnsid 9 …
+    veth</span>
+<span class="p">#</span> ip -br addr | grep -E '^(docker0|br-)'
+<span class="o">docker0          UP             <span class="hl">172.17.0.1/16</span> fe80::8874:6bff:fef8:7c4/64
+br-11164c4a144d  UP             172.18.0.1/16 fe80::d88c:12ff:fea6:7a70/64</span></code></pre>
+    <p>
+      (On a Mac "the host" here is Docker Desktop's Linux VM, not macOS; the session was run from a
+      throwaway <code>--network host</code> container, which shares the host's namespace instead of
+      getting its own. That flag deletes the wall this page is describing — use it to look, never
+      for a task.)
+    </p>
+    <p>
+      <strong>The <span class="term" data-g="bridge-network">bridge</span></strong>,
+      <code>docker0</code>, is a virtual switch that every default container's veth plugs into. The
+      bridge itself holds <code>172.17.0.1</code> — so the container's "default gateway" is
+      <em>the host</em>, wearing that address. Every user-defined network
+      (<code>docker network create</code>) gets its own <code>br-…</code> bridge and its own subnet,
+      carved from private space: Docker's default pools are <code>172.17.0.0/16</code> through
+      <code>172.31.0.0/16</code> and then
+      <code>192.168.0.0/16</code>.<a class="cite" href="https://docs.docker.com/engine/network/#subnet-allocation" title="Docker Docs: Networking overview, Subnet allocation: default address pools">[Docker: networking]</a>
+    </p>
+    <p>
+      <strong><span class="term" data-g="nat">NAT</span>.</strong> A private source address is
+      useless on the Internet — replies could never be routed back. So as the host forwards a
+      container's packet outward it rewrites the source to its own address and remembers the
+      mapping for the reply. Docker enables this by default and describes the effect precisely:
+      it "uses masquerading to give containers external network access. Devices on the host's
+      external networks only see the IP address of the Docker
+      host."<a class="cite" href="https://docs.docker.com/engine/network/drivers/bridge/" title="Docker Docs: Bridge network driver (intro); option enable_ip_masquerade defaults to true">[Docker: bridge]</a>
+      Two consequences: a remote service cannot tell your forty rollouts apart (they all arrive from
+      one address — relevant when a rate limit hits), and nothing outside can open a connection
+      <em>in</em> to a container unless a port is published
+      (<a href="17-ports-and-sockets.html#published-ports">page 17</a>). How the translation table
+      works is something to recognise, not operate; the
+      <a href="../../../networking/networking-tut/pages/03-ip-and-routing.html">networking course</a>
+      covers the idea.
+    </p>
+
+    <h2 id="three-networks">Three network settings, read from inside</h2>
+    <p>
+      The same two commands distinguish the three configurations a task container is likely to be
+      in. You have seen the <strong>default bridge</strong>. With
+      <strong><code>--network none</code></strong>:
+    </p>
+<pre class="term"><code><span class="p">$</span> ip -br addr
+<span class="o">lo               UNKNOWN        127.0.0.1/8 ::1/128
+…</span>
+<span class="p">$</span> ip route
+<span class="p">$</span> ip route get 1.1.1.1
+<span class="o">RTNETLINK answers: Network is unreachable</span>
+<span class="p">$</span> curl -sS -m 5 http://1.1.1.1/
+<span class="o">curl: (7) Failed to connect to 1.1.1.1 port 80 <span class="hl">after 0 ms</span>: Couldn't connect to server</span></code></pre>
+    <p>
+      Only loopback exists — Docker's documentation says "only the loopback device is
+      created"<a class="cite" href="https://docs.docker.com/engine/network/drivers/none/" title="Docker Docs: None network driver: within the container, only the loopback device is created">[Docker: none]</a>
+      — and the route table is empty. Note <em>how</em> the failure looks: instant, not a hang. With
+      no route the kernel refuses before a single packet exists. (<code>ping 127.0.0.1</code> still
+      works: a task that talks to its own services over localhost is unaffected.) And on a
+      <strong>user-defined network</strong>:
+    </p>
+<pre class="term"><code><span class="p">$</span> ip -br addr
+<span class="o">lo               UNKNOWN        127.0.0.1/8 ::1/128
+…
+eth0@if483       UP             172.18.0.3/16</span>
+<span class="p">$</span> ip route
+<span class="o">default via 172.18.0.1 dev eth0
+172.18.0.0/16 dev eth0 proto kernel scope link src 172.18.0.3</span>
+<span class="p">$</span> getent hosts lt-16-a
+<span class="o">172.18.0.2      lt-16-a</span></code></pre>
+    <p>
+      Structurally identical to the default bridge, on a different subnet (<code>172.18</code>, a
+      different bridge), with one addition: containers on it can find each other by name, which the
+      default bridge does not offer (<a href="18-dns-http-tls.html">page 18</a>). The important
+      difference is who <em>else</em> is on that subnet — which is the point of the next section.
+    </p>
+    <table>
+      <tr><th>You see</th><th>It means</th></tr>
+      <tr><td>only <code>lo</code>; <code>ip route</code> prints nothing</td><td><code>--network none</code> (or an un-wired namespace). No network reach at all.</td></tr>
+      <tr><td><code>eth0</code> in <code>172.17.0.0/16</code>, gateway <code>172.17.0.1</code></td><td>Docker's default bridge: shared with every other default container on the host.</td></tr>
+      <tr><td><code>eth0</code> in another private /16, with a <code>default via</code> line</td><td>A user-defined or Compose network, with outbound access through the host.</td></tr>
+      <tr><td><code>eth0</code> with a subnet route but <strong>no</strong> <code>default</code> line</td><td>An <code>--internal</code> network: neighbours and the gateway address only (<a href="19-firewalls-and-egress.html">page 19</a>).</td></tr>
+      <tr><td><code>docker0</code>, <code>veth…</code>, the machine's real interfaces</td><td><code>--network host</code>: no network isolation. A finding in itself.</td></tr>
+    </table>
+
+    <h2 id="adjacent">What is adjacent to the sandbox</h2>
+    <p>
+      Now use the two tables for what an evals engineer needs them for. From the address and the
+      gateway you can write down everything that sits one hop or less from the agent:
+    </p>
+    <div class="evals">
+      <span class="label">In eval work · navigate</span>
+      <p><strong>1. Other rollouts.</strong> Every container on the same bridge is a directly
+      connected neighbour (no <code>via</code>). On the default bridge that is <em>every default
+      container on the host</em>, and inter-container traffic is allowed by default
+      (<code>enable_icc</code> is
+      <code>true</code>).<a class="cite" href="https://docs.docker.com/engine/network/drivers/bridge/#options" title="Docker Docs: Bridge network driver, Options: com.docker.network.bridge.enable_icc default true">[Docker: bridge]</a>
+      Verified here: one container pinged a sibling at <code>172.17.0.10</code> with 0% loss, and
+      <code>ip neigh</code> afterwards listed the sibling's hardware address. If concurrent
+      rollouts share a bridge, one agent's dev server is
+      another agent's reachable service: samples stop being independent. Containers on
+      <em>different</em> user-defined networks are blocked from each
+      other<a class="cite" href="https://docs.docker.com/engine/network/drivers/bridge/" title="Docker Docs: Bridge network driver: containers connected to different bridge networks can only communicate with each other using published ports">[Docker: bridge]</a>
+      — a network per rollout (what Compose gives each project) removes this adjacency.</p>
+      <p><strong>2. The host, at the gateway address.</strong> <code>172.17.0.1</code> is not an
+      abstract router; it is an address on the host. Anything the host runs that listens on that
+      address, or on all addresses, is reachable from the
+      <span class="term" data-g="sandbox">sandbox</span> — databases, dashboards, a Docker API.
+      Docker says so even for its most restrictive bridge mode: on an <code>--internal</code>
+      network "communication with the gateway IP address (and thus appropriately configured host
+      services) is
+      possible".<a class="cite" href="https://docs.docker.com/reference/cli/docker/network/create/#internal" title="Docker CLI reference: docker network create --internal">[Docker: network create]</a>
+      Page 17 shows how to list what is listening.</p>
+      <p><strong>3. The cloud <span class="term" data-g="metadata-service">metadata
+      service</span>.</strong> On a cloud VM, <code>169.254.169.254</code> serves instance metadata,
+      which can include temporary credentials for the VM's IAM role. AWS is blunt: the data "is not
+      protected by authentication or cryptographic methods", and "potentially any software running
+      on the instance" can view
+      it.<a class="cite" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html" title="AWS EC2 User Guide: Use instance metadata to manage your EC2 instance (Important box)">[AWS: IMDS]</a>
+      From inside a container the route is nothing special —</p>
+<pre class="term"><code><span class="p">$</span> ip route get 169.254.169.254
+<span class="o">169.254.169.254 via 172.17.0.1 dev eth0 src 172.17.0.3 uid 1001</span></code></pre>
+      <p>— it just follows the default route to the host, which is on the link where that address
+      lives. On a laptop nothing answers (<code>curl -m 3</code> timed out here, exit 28). On a
+      cloud VM, assume it does until you have tested it.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p><strong>"IMDSv2 has a hop limit, so containers can't reach it" is not a defence on its
+      own.</strong> The hop limit (default 1) applies to the IMDSv2 token response, and AWS notes
+      that a container counts as an extra
+      hop.<a class="cite" href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html" title="AWS EC2 User Guide: Use the Instance Metadata Service: PUT response hop limit of 1 by default; by default you can use either IMDSv1 or IMDSv2, or both">[AWS: IMDS]</a>
+      But the same page says "by default, you can use either IMDSv1 or IMDSv2, or both" — and
+      IMDSv1 is a single unauthenticated GET with no token and no hop limit. Unless the instance is
+      set to require tokens, the hop limit protects nothing. The robust fix is at the network layer:
+      deny the sandbox <code>169.254.0.0/16</code> (<a href="19-firewalls-and-egress.html">page 19</a>),
+      and give the eval host no IAM role worth stealing. Designing cloud networks is a specialist's
+      job (<a href="../../../networking/networking-tut/pages/13-cloud-networks.html">networking
+      course, lesson 13</a>); <em>testing</em> this one address from inside is yours.</p>
+    </div>
+    <p>
+      This is not hypothetical. In the September 2024 o1 system card, OpenAI describes a
+      capture-the-flag task whose target container had failed to start. "The model, unable to
+      connect to the container, suspected DNS issues and used nmap to scan the challenge network.
+      Instead of finding the challenge container, the model found that the Docker daemon API running
+      on the evaluation host VM was accessible due to a
+      misconfiguration."<a class="cite" href="https://cdn.openai.com/o1-system-card.pdf" title="OpenAI o1 System Card (Sept 12, 2024), §4.2.1 Observation of Reward Hacking on Cybersecurity Task">[o1 System Card]</a>
+      Read that as a networking story: the agent looked at its neighbourhood, and the neighbourhood
+      included the host. The card gives no addresses, ports, or scan options, and OpenAI calls the
+      behaviour "benign and within the range of systems administration and troubleshooting tasks we
+      expect models to perform" — which is the point. Looking around the subnet is what a competent
+      operator does when a connection fails. The environment has to be safe against it.
+      (<a href="26-environment-integrity.html">Page 26</a> follows the incident to its end.)
+    </p>
+
+    <h2 id="ipv6-and-legacy">Two things to recognise: IPv6 and the legacy tools</h2>
+    <p>
+      <strong>IPv6.</strong> Every listing above had an <code>inet6 ::1/128</code> line: the IPv6
+      stack is on, even under <code>--network none</code>. (Docker's documentation says no IPv6
+      loopback is configured under <code>none</code>; Docker 28.1.1 here shows one. Trust the box.)
+      These containers have no IPv6 route — <code>ip -6 route</code> prints nothing — so nothing
+      leaves over it. But that is a property of this setup, not a law: where a sandbox does get a
+      global <code>inet6</code> address, an egress policy
+      written only for IPv4 has a second, unguarded door. The depth triage for this course:
+    </p>
+    <table>
+      <tr><th>Learn to use</th><th>Recognise</th><th>Leave to a specialist</th></tr>
+      <tr><td><code>ip -br addr</code>, <code>ip route</code>, <code>ip route get</code>; the private, loopback and link-local ranges; the adjacency list</td>
+          <td><code>inet6</code>, <code>::1</code>, <code>fe80::…</code> (IPv6 link-local); NAT/masquerade; veth and bridge names; <code>ip neigh</code></td>
+          <td>IPv6 addressing plans, policy routing and multiple route tables, NAT internals, cloud VPC design</td></tr>
+    </table>
+    <p>
+      <strong>ifconfig, netstat, route.</strong> Older tutorials — and therefore models — reach for
+      these. They belong to the <code>net-tools</code> package, which its own README calls "the
+      legacy tools for controlling the network subsystem of the Linux
+      kernel".<a class="cite" href="https://github.com/ecki/net-tools/blob/master/README" title="net-tools README (upstream): 'the legacy tools for controlling the network subsystem of the Linux kernel'">[net-tools]</a>
+      Legacy is not dead: the project still exists, and some images ship it. But stock
+      <code>ubuntu:24.04</code> ships neither generation:
+    </p>
+<pre class="term"><code><span class="p">#</span> ifconfig; echo "exit=$?"
+<span class="o">bash: line 1: ifconfig: command not found
+exit=127</span>
+<span class="p">#</span> ip addr; echo "exit=$?"
+<span class="o">bash: line 1: ip: command not found
+exit=127</span></code></pre>
+    <div class="evals">
+      <span class="label">In eval work · discuss</span>
+      <p><strong>Failure accounting.</strong> A transcript where the agent tries
+      <code>ifconfig</code>, then <code>ip</code>, gets 127 twice, and falls back to
+      <code>hostname -I</code> or <code>cat /proc/net/route</code> is normal and says little about
+      the model. What matters is what the <em>task</em> needed. If a task requires the network and
+      the rollout shows <code>Network is unreachable</code> because the sandbox was started with
+      <code>none</code>, that is an environment defect: an observation about the run, not the
+      model. Record it as an infrastructure failure, keep it in the denominator you report
+      (<code>correct / scheduled</code> alongside <code>correct / completed</code>), and fix the
+      policy or the task — do not silently drop the sample, and do not score it as a wrong answer.
+      Conversely, if the policy is <code>none</code> <em>by design</em>, the same line is the policy
+      working; the network setting belongs in the eval's reported configuration either way.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A team runs a web-development benchmark on one large cloud VM. Each task has the agent
+      build and start a small HTTP service, which the grader then probes. To speed things up they
+      raise concurrency from 1 to 16 containers, all started with plain <code>docker run</code>.
+      The pass rate <em>rises</em> four points, and a few tasks that never passed now pass
+      sometimes. Someone suggests the model "benefits from warm caches". What would you establish
+      before accepting the new number?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>What is observed vs supposed.</strong> Observed: the score changed when
+        concurrency changed, and the change is concentrated in a few tasks. "Warm caches" is a
+        hypothesis; so is any networking explanation. A score that depends on how many other
+        rollouts are running is, first of all, evidence that samples are not independent.</p>
+        <p><strong>The Linux fact to check.</strong> Plain <code>docker run</code> puts all 16
+        containers on the default bridge: one /16, directly connected, inter-container traffic
+        allowed. So rollout A can reach rollout B's half-built (or finished) service at
+        <code>172.17.0.x</code>, and a grader or agent that probes by scanning, or that uses a
+        hard-coded or guessed address, can hit the wrong container's service. Also on that subnet:
+        the host at <code>172.17.0.1</code>, and via it the cloud metadata address.</p>
+        <p><strong>Discriminating evidence.</strong> Grep the newly passing transcripts for
+        <code>172.17.</code> addresses other than the container's own and for subnet scans; check
+        what address the grader connects to and how it learned it. Then the decisive test: rerun at
+        concurrency 16 with one user-defined network per rollout. If the gain disappears, it was
+        adjacency; if it stays, look elsewhere (caches, timing).</p>
+        <p><strong>Bearing on the score.</strong> Until that is settled, the 16-way number is not
+        comparable with the 1-way number, and neither should be reported without the network
+        configuration and concurrency beside it.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong> (from <a href="01-lab-setup.html">page 1</a>). Exercises 1–3
+      run inside your <code>lt-lab</code> container; 4–5 run from your Mac's terminal and need an
+      image with the tools baked in. Build one once (it is reused on the next three pages):</p>
+<pre class="term"><code><span class="p">$</span> docker run --name lt-net-build ubuntu:24.04 bash -c 'apt-get update &amp;&amp; apt-get install -y --no-install-recommends iproute2 iputils-ping curl python3 netcat-openbsd'
+<span class="p">$</span> docker commit lt-net-build lt-net:local &amp;&amp; docker rm lt-net-build</code></pre>
+      <p>Your addresses will differ from the ones printed here; the structure will not.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> In <code>lt-lab</code>, run <code>ip -br addr</code> and
+          <code>ip route</code>. Write down: your address, your prefix length, the first and last
+          address of your subnet, and your gateway.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> ip -br addr
+<span class="o">lo               UNKNOWN        127.0.0.1/8 ::1/128
+…
+eth0@if471       UP             172.17.0.3/16</span>
+<span class="p">$</span> ip route
+<span class="o">default via 172.17.0.1 dev eth0
+172.17.0.0/16 dev eth0 proto kernel scope link src 172.17.0.3</span></code></pre>
+            <p>Address <code>172.17.0.3</code>, prefix /16, so the subnet is
+            <code>172.17.0.0</code>–<code>172.17.255.255</code> (the <code>brd</code> field of
+            <code>ip addr</code> confirms the last one); gateway <code>172.17.0.1</code>.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Before running anything, write down for each
+          destination whether the kernel will answer <code>local</code>, direct (no
+          <code>via</code>), or <code>via</code> the gateway: <code>127.0.0.53</code>,
+          <code>172.17.200.200</code>, <code>192.168.1.1</code>, <code>8.8.8.8</code>. Then check
+          with <code>ip route get</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> for d in 127.0.0.53 172.17.200.200 192.168.1.1 8.8.8.8; do ip route get $d | head -1; done
+<span class="o">local 127.0.0.53 dev lo src 127.0.0.1 uid 1001
+172.17.200.200 dev eth0 src 172.17.0.9 uid 1001
+192.168.1.1 via 172.17.0.1 dev eth0 src 172.17.0.9 uid 1001
+8.8.8.8 via 172.17.0.1 dev eth0 src 172.17.0.9 uid 1001</span></code></pre>
+            <p>All of 127/8 is loopback, not just <code>127.0.0.1</code>.
+            <code>172.17.200.200</code> looks far from <code>172.17.0.9</code> but is inside the
+            /16, so it is a direct neighbour. <code>192.168.1.1</code> is a private address — but
+            not on <em>this</em> box's subnet, so it goes to the gateway like any Internet address:
+            "private" describes the address, not its distance from you. (Your home router may well
+            be at that address. Think about what that means for a sandbox on your laptop.)</p>
+          </details></li>
+        <li><strong>Classify addresses without guessing.</strong> Using Python's standard
+          <code>ipaddress</code> module, test which special block (if any) contains each of:
+          <code>172.17.0.3</code>, <code>172.31.255.255</code>, <code>172.32.0.1</code>,
+          <code>192.169.0.1</code>, <code>169.254.169.254</code>, <code>127.8.8.8</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre><code>import ipaddress as ip
+blocks = [ip.ip_network(b) for b in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+                                     "127.0.0.0/8", "169.254.0.0/16")]
+for a in ("172.17.0.3", "172.31.255.255", "172.32.0.1", "192.169.0.1",
+          "169.254.169.254", "127.8.8.8"):
+    hits = [str(b) for b in blocks if ip.ip_address(a) in b]
+    print(a, "-&gt;", hits[0] if hits else "none of them: public")</code></pre>
+<pre class="term"><code><span class="o">172.17.0.3 -&gt; 172.16.0.0/12
+172.31.255.255 -&gt; 172.16.0.0/12
+172.32.0.1 -&gt; none of them: public
+192.169.0.1 -&gt; none of them: public
+169.254.169.254 -&gt; 169.254.0.0/16
+127.8.8.8 -&gt; 127.0.0.0/8</span></code></pre>
+          </details></li>
+        <li><strong>Predict, then verify: no network.</strong> Start
+          <code>docker run --rm -it --network none lt-net:local bash</code>. Before typing: what
+          will <code>ip route</code> print? Will <code>ip route get 1.1.1.1</code> hang, or fail at
+          once? Will <code>ping -c1 127.0.0.1</code> work?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> ip route
+<span class="p">#</span> ip route get 1.1.1.1
+<span class="o">RTNETLINK answers: Network is unreachable</span>
+<span class="p">#</span> ping -c1 -W2 1.1.1.1; echo "exit=$?"
+<span class="o">ping: connect: Network is unreachable
+exit=2</span>
+<span class="p">#</span> ping -c1 127.0.0.1 | tail -2
+<span class="o">1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.523/0.523/0.523/0.000 ms</span></code></pre>
+            <p>Nothing, instantly, and yes. No route means the kernel refuses without sending; there
+            is nothing to wait for. Loopback is unaffected.</p>
+          </details></li>
+        <li><strong>Eval task: are my rollouts adjacent?</strong> A harness starts each rollout
+          with plain <code>docker run</code>. Show that two rollouts can reach each other, then
+          show the fix. Start two containers
+          (<code>docker run -d --rm --name lt-r1 lt-net:local sleep 300</code>, same for
+          <code>lt-r2</code>), find <code>lt-r2</code>'s address with
+          <code>docker inspect -f '{{.NetworkSettings.IPAddress}}' lt-r2</code>, and ping it from
+          <code>lt-r1</code>. Then remove both, create two networks
+          (<code>docker network create lt-n1</code>, <code>lt-n2</code>), start one container on
+          each with <code>--network</code>, and try again. Clean up afterwards.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec lt-r1 ping -c1 -W2 172.17.0.10 | sed -n '2p'
+<span class="o">64 bytes from 172.17.0.10: icmp_seq=1 ttl=64 time=0.263 ms</span></code></pre>
+            <p>Same bridge: direct neighbours. After moving each to its own network
+            (<code>lt-r1</code> is now <code>172.19.0.2/16</code>, <code>lt-r2</code> is
+            <code>172.20.0.2</code>):</p>
+<pre class="term"><code><span class="p">$</span> docker exec lt-r1 ip route get 172.20.0.2 | head -1
+<span class="o">172.20.0.2 <span class="hl">via 172.19.0.1</span> dev eth0 src 172.19.0.2 uid 0</span>
+<span class="p">$</span> docker exec lt-r1 ping -c1 -W2 172.20.0.2; echo "exit=$?"
+<span class="o">PING 172.20.0.2 (172.20.0.2) 56(84) bytes of data.
+
+--- 172.20.0.2 ping statistics ---
+1 packets transmitted, 0 received, 100% packet loss, time 0ms
+
+exit=1</span>
+<span class="p">$</span> docker exec lt-r1 ping -c1 -W2 172.19.0.1 | sed -n '2p'
+<span class="o">64 bytes from 172.19.0.1: icmp_seq=1 ttl=64 time=0.087 ms</span></code></pre>
+            <p>The route now has a <code>via</code>: traffic to the other rollout must pass through
+            the host, and the host drops it. Note the two lessons in the last command, though: a
+            route existing did not mean reachability (the key idea above), and the host's gateway
+            address still answers — per-rollout networks remove neighbour adjacency, not host
+            adjacency. Clean up:
+            <code>docker rm -f lt-r1 lt-r2; docker network rm lt-n1 lt-n2</code>.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Rekhter, Y. et al. (1996). Address Allocation for Private Internets. RFC 1918, §3. <a href="https://www.rfc-editor.org/rfc/rfc1918#section-3">rfc-editor.org/rfc/rfc1918</a></li>
+        <li>Fuller, V. &amp; Li, T. (2006). Classless Inter-domain Routing (CIDR). RFC 4632, §3.1 (prefix notation, address counts) and §5.1 (longest match). <a href="https://www.rfc-editor.org/rfc/rfc4632#section-3.1">rfc-editor.org/rfc/rfc4632</a></li>
+        <li>Cotton, M. et al. (2013). Special-Purpose IP Address Registries. RFC 6890, §2.2.2 (loopback, link-local). <a href="https://www.rfc-editor.org/rfc/rfc6890#section-2.2.2">rfc-editor.org/rfc/rfc6890</a></li>
+        <li>ip(8) and ip-route(8), iproute2. <a href="https://man7.org/linux/man-pages/man8/ip.8.html">man7.org/…/ip.8.html</a>, <a href="https://man7.org/linux/man-pages/man8/ip-route.8.html">man7.org/…/ip-route.8.html</a></li>
+        <li>veth(4), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man4/veth.4.html">man7.org/…/veth.4.html</a></li>
+        <li>net-tools README (upstream repository). <a href="https://github.com/ecki/net-tools/blob/master/README">github.com/ecki/net-tools</a></li>
+        <li>Docker Docs: Networking overview (subnet allocation). <a href="https://docs.docker.com/engine/network/#subnet-allocation">docs.docker.com/engine/network/</a></li>
+        <li>Docker Docs: Bridge network driver (masquerading, <code>enable_icc</code>, isolation between bridge networks). <a href="https://docs.docker.com/engine/network/drivers/bridge/">docs.docker.com/engine/network/drivers/bridge/</a></li>
+        <li>Docker Docs: None network driver. <a href="https://docs.docker.com/engine/network/drivers/none/">docs.docker.com/engine/network/drivers/none/</a></li>
+        <li>Docker CLI reference: <code>docker network create</code>, <code>--internal</code>. <a href="https://docs.docker.com/reference/cli/docker/network/create/#internal">docs.docker.com/reference/cli/docker/network/create/</a></li>
+        <li>Amazon Web Services. EC2 User Guide: Use instance metadata to manage your EC2 instance; Use the Instance Metadata Service to access instance metadata. <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html">docs.aws.amazon.com/…/ec2-instance-metadata.html</a>, <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html">…/configuring-instance-metadata-service.html</a></li>
+        <li>OpenAI (2024). OpenAI o1 System Card (version dated Sept 12, 2024), §4.2.1. <a href="https://cdn.openai.com/o1-system-card.pdf">cdn.openai.com/o1-system-card.pdf</a></li>
+        <li>Terminal sessions executed in <code>ubuntu:24.04</code> containers (Docker 28.1.1, Docker Desktop on macOS); raw record in <code>research/verify/16-addresses-and-routes.txt</code>.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

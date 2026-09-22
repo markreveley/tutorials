@@ -1,0 +1,514 @@
+=== page 22 verification session, 2026-09-21 — Docker Desktop (Mac, arm64)
+$ docker version --format 'client {{.Client.Version}} / server {{.Server.Version}}'
+client 28.1.1 / server 28.1.1
+[exit=0]
+$ docker info --format '{{.Driver}} {{.DriverStatus}}'
+overlayfs [[driver-type io.containerd.snapshotter.v1]]
+[exit=0]
+$ docker images wordfreq-bench
+REPOSITORY       TAG        IMAGE ID       CREATED       SIZE
+wordfreq-bench   hardened   82e0a1d29453   4 hours ago   198MB
+wordfreq-bench   sloppy     030d48a44685   5 hours ago   317MB
+[exit=0]
+$ docker image inspect --format '{{index .RepoDigests 0}}' ubuntu:24.04
+ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+[exit=0]
+$ docker image inspect --format '{{.Id}}' wordfreq-bench:hardened
+sha256:82e0a1d29453139ac5067345ff29b98d2e34d7b07603d9a692546a4973a0dec3
+[exit=0]
+$ docker build -t lt-22-probe:1 . 2>&1 | tail -25
+#4 [internal] load build context
+#4 transferring context: 490B done
+#4 DONE 0.0s
+
+#7 [2/5] RUN apt-get update && apt-get install -y --no-install-recommends python3     && rm -rf /var/lib/apt/lists/*
+#7 CACHED
+
+#8 [3/5] RUN useradd --create-home --uid 1001 --shell /bin/bash agent
+#8 CACHED
+
+#9 [4/5] COPY --chown=agent:agent app /app
+#9 CACHED
+
+#10 [5/5] WORKDIR /app
+#10 CACHED
+
+#11 exporting to image
+#11 exporting layers done
+#11 exporting manifest sha256:45d3a4102c52bef3bbe7a93c5d493d5c95503c08147fe6049af1f9f5140229a5 done
+#11 exporting config sha256:5c2e6646471ad76555dd8e92aac5b11a759a37acfd4ef296f74b8575b4eb36b6 done
+#11 exporting attestation manifest sha256:891e14e062d61d63470eab55258e9588d6bf3c16d38515c35270ae990641d449 done
+#11 exporting manifest list sha256:0375d1f779722dc378225841dd482c3f459c3ab1ec7fae4ad9f77913e86473dc done
+#11 naming to docker.io/library/lt-22-probe:1 done
+#11 unpacking to docker.io/library/lt-22-probe:1 done
+#11 DONE 0.0s
+[exit=0]
+$ docker image inspect --format '{{.Id}}' lt-22-probe:1
+sha256:0375d1f779722dc378225841dd482c3f459c3ab1ec7fae4ad9f77913e86473dc
+[exit=0]
+$ docker history wordfreq-bench:hardened
+IMAGE          CREATED       CREATED BY                                      SIZE      COMMENT
+82e0a1d29453   4 hours ago   CMD ["sleep" "infinity"]                        0B        buildkit.dockerfile.v0
+<missing>      4 hours ago   USER agent                                      0B        buildkit.dockerfile.v0
+<missing>      4 hours ago   WORKDIR /app                                    4.1kB     buildkit.dockerfile.v0
+<missing>      4 hours ago   COPY --chown=agent:agent app /app # buildkit    32.8kB    buildkit.dockerfile.v0
+<missing>      4 hours ago   RUN /bin/sh -c useradd --create-home --uid 1…   77.8kB    buildkit.dockerfile.v0
+<missing>      4 hours ago   RUN /bin/sh -c apt-get update && apt-get ins…   45.2MB    buildkit.dockerfile.v0
+<missing>      9 days ago    /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B        
+<missing>      9 days ago    /bin/sh -c #(nop) ADD file:ff1ce8d2ee022926e…   110MB     
+<missing>      9 days ago    /bin/sh -c #(nop)  LABEL org.opencontainers.…   0B        
+<missing>      9 days ago    /bin/sh -c #(nop)  ARG LAUNCHPAD_BUILD_ARCH     0B        
+<missing>      9 days ago    /bin/sh -c #(nop)  ARG RELEASE                  0B        
+[exit=0]
+$ docker history --no-trunc --format '{{.CreatedBy}}	{{.Size}}' wordfreq-bench:hardened
+CMD ["sleep" "infinity"]	0B
+USER agent	0B
+WORKDIR /app	4.1kB
+COPY --chown=agent:agent app /app # buildkit	32.8kB
+RUN /bin/sh -c useradd --create-home --uid 1001 --shell /bin/bash agent # buildkit	77.8kB
+RUN /bin/sh -c apt-get update && apt-get install -y --no-install-recommends python3     && rm -rf /var/lib/apt/lists/* # buildkit	45.2MB
+/bin/sh -c #(nop)  CMD ["/bin/bash"]	0B
+/bin/sh -c #(nop) ADD file:ff1ce8d2ee022926eb353ff9248358531fbe1661ef12d8784e68fbc52738ed34 in / 	110MB
+/bin/sh -c #(nop)  LABEL org.opencontainers.image.version=24.04	0B
+/bin/sh -c #(nop)  ARG LAUNCHPAD_BUILD_ARCH	0B
+/bin/sh -c #(nop)  ARG RELEASE	0B
+[exit=0]
+
+=== run flags
+$ docker run --rm wordfreq-bench:hardened id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened pwd
+/app
+[exit=0]
+$ docker run --rm -u root -w /tmp -e SEED=42 wordfreq-bench:hardened bash -c 'id -un; pwd; echo $SEED'
+root
+/tmp
+42
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened python3 wordfreq.py data/sample.txt
+3 The
+3 the
+2 on
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened cat data/sample.txt
+The cat sat on the mat. The dog sat on the log.
+the end, said The cat; THE END.
+[exit=0]
+$ docker run --rm --read-only --tmpfs /tmp wordfreq-bench:hardened bash -c 'touch /app/x; touch /tmp/ok && echo tmp-ok'
+touch: cannot touch '/app/x': Read-only file system
+tmp-ok
+[exit=0]
+$ docker run --rm --network none wordfreq-bench:hardened bash -c 'cat /sys/class/net/*/operstate; ls /sys/class/net'
+down
+down
+down
+down
+down
+down
+down
+unknown
+down
+down
+bonding_masters
+erspan0
+gre0
+gretap0
+ip6_vti0
+ip6gre0
+ip6tnl0
+ip_vti0
+lo
+sit0
+tunl0
+[exit=0]
+$ docker run --rm --memory 256m --cpus 1.5 --pids-limit 100 wordfreq-bench:hardened bash -c 'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max'
+268435456
+150000 100000
+100
+[exit=0]
+$ docker run --rm --mount type=bind,src=$PWD/grader,dst=/opt/grader,readonly -u root wordfreq-bench:hardened bash -c 'ls /opt/grader; echo x >> /opt/grader/expected.json'
+expected.json
+run-tests.sh
+test_hidden.py
+bash: line 1: /opt/grader/expected.json: Read-only file system
+[exit=1]
+
+=== a rollout: -d, exec, inspect
+$ docker run -d --name lt-22-rollout --init wordfreq-bench:hardened
+d3ee5d716b8f6f03f411e01145107222bcca37f9b17e12cea72e6d0443756e65
+[exit=0]
+$ docker ps --filter name=lt-22
+CONTAINER ID   IMAGE                     COMMAND            CREATED                  STATUS                  PORTS     NAMES
+d3ee5d716b8f   wordfreq-bench:hardened   "sleep infinity"   Less than a second ago   Up Less than a second             lt-22-rollout
+[exit=0]
+$ docker exec lt-22-rollout ps -ef
+UID        PID  PPID  C STIME TTY          TIME CMD
+agent        1     0  0 10:53 ?        00:00:00 /sbin/docker-init -- sleep infinity
+agent        7     1  0 10:53 ?        00:00:00 sleep infinity
+agent        8     0  0 10:53 ?        00:00:00 ps -ef
+[exit=0]
+$ docker exec lt-22-rollout bash -c 'PYTHONPATH=. python3 -m unittest discover -s tests 2>&1 | tail -4'
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
+[exit=0]
+
+=== network none, functional check
+$ docker run --rm --network none wordfreq-bench:hardened python3 -c "import urllib.request; urllib.request.urlopen('http://example.com', timeout=3)" 2>&1 | tail -1
+urllib.error.URLError: <urlopen error [Errno -3] Temporary failure in name resolution>
+[exit=0]
+
+=== the agent 'works' (fix applied via exec; scratch files)
+$ docker cp /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/fix.py lt-22-rollout:/tmp/fix.py
+[exit=0]
+$ docker exec lt-22-rollout python3 /tmp/fix.py
+[exit=0]
+$ docker exec lt-22-rollout python3 wordfreq.py data/sample.txt
+7 the
+2 cat
+2 end
+[exit=0]
+$ docker exec lt-22-rollout bash -c 'echo notes > /app/NOTES.txt; rm /app/README.md; echo hi > /home/agent/.bash_history'
+[exit=0]
+$ docker exec -u root lt-22-rollout id -un
+root
+[exit=0]
+$ docker diff lt-22-rollout
+C /app
+A /app/NOTES.txt
+A /app/__pycache__
+A /app/__pycache__/wordfreq.cpython-312.pyc
+C /app/tests
+A /app/tests/__pycache__
+A /app/tests/__pycache__/test_basic.cpython-312.pyc
+C /app/wordfreq.py
+D /app/README.md
+C /home
+C /home/agent
+A /home/agent/.bash_history
+C /tmp
+A /tmp/fix.py
+C /usr
+C /usr/sbin
+A /usr/sbin/docker-init
+[exit=0]
+$ docker logs lt-22-rollout
+[exit=0]
+$ docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} user={{.Config.User}} image={{.Image}}' lt-22-rollout
+running exit=0 oom=false user=agent image=sha256:82e0a1d29453139ac5067345ff29b98d2e34d7b07603d9a692546a4973a0dec3
+[exit=0]
+$ docker inspect --format '{{json .Config.Env}}' lt-22-rollout
+["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]
+[exit=0]
+$ docker stats --no-stream --format 'table {{.Name}}	{{.CPUPerc}}	{{.MemUsage}}	{{.PIDs}}' lt-22-rollout
+NAME            CPU %     MEM USAGE / LIMIT     PIDS
+lt-22-rollout   0.01%     1.309MiB / 7.654GiB   2
+[exit=0]
+$ docker cp lt-22-rollout:/app/wordfreq.py /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/submitted.py && grep -n 'findall' /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/submitted.py
+9:    return Counter(re.findall(r"[a-z]+(?:'[a-z]+)*", text.lower()))
+[exit=0]
+
+=== logs: only the main command's streams
+$ docker run --name lt-22-once wordfreq-bench:hardened python3 wordfreq.py nosuchfile
+Traceback (most recent call last):
+  File "/app/wordfreq.py", line 29, in <module>
+    sys.exit(main(sys.argv))
+             ^^^^^^^^^^^^^^
+  File "/app/wordfreq.py", line 22, in main
+    with open(argv[1], encoding="utf-8") as f:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: 'nosuchfile'
+[exit=1]
+$ docker ps -a --filter name=lt-22 --format 'table {{.Names}}	{{.Status}}	{{.Command}}'
+NAMES           STATUS                              COMMAND
+lt-22-once      Exited (1) Less than a second ago   "python3 wordfreq.py…"
+lt-22-rollout   Up 25 seconds                       "sleep infinity"
+[exit=0]
+$ docker logs lt-22-once 2>/dev/null | wc -l
+       0
+[exit=0]
+$ docker logs lt-22-once 2>&1 >/dev/null | tail -1
+FileNotFoundError: [Errno 2] No such file or directory: 'nosuchfile'
+[exit=0]
+$ docker inspect --format '{{.State.ExitCode}}' lt-22-once
+1
+[exit=0]
+
+=== reset = remove + run again
+$ docker rm -f lt-22-rollout lt-22-once
+lt-22-rollout
+lt-22-once
+[exit=0]
+$ docker run -d --name lt-22-rollout --init wordfreq-bench:hardened
+992d46e6125fcd74daf3b0f9e39bec51d97a716074ec100411eaf676330290bb
+[exit=0]
+$ docker exec lt-22-rollout python3 wordfreq.py data/sample.txt
+3 The
+3 the
+2 on
+[exit=0]
+$ docker diff lt-22-rollout
+C /usr
+C /usr/sbin
+A /usr/sbin/docker-init
+[exit=0]
+$ docker rm -f lt-22-rollout
+lt-22-rollout
+[exit=0]
+
+=== named volume survives --rm
+$ docker run --rm --mount type=volume,src=lt-22-cache,dst=/cache -u root wordfreq-bench:hardened bash -c 'echo rollout-1-was-here > /cache/note'
+[exit=0]
+$ docker run --rm --mount type=volume,src=lt-22-cache,dst=/cache wordfreq-bench:hardened cat /cache/note
+rollout-1-was-here
+[exit=0]
+$ docker volume ls --filter name=lt-22
+DRIVER    VOLUME NAME
+local     lt-22-cache
+[exit=0]
+$ docker volume rm lt-22-cache
+lt-22-cache
+[exit=0]
+
+=== exit codes
+$ docker run --rm wordfreq-bench:hardened nosuchcmd
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "nosuchcmd": executable file not found in $PATH: unknown
+
+Run 'docker run --help' for more information
+[exit=127]
+$ docker run --rm wordfreq-bench:hardened /app/wordfreq.py
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/app/wordfreq.py": permission denied: unknown
+
+Run 'docker run --help' for more information
+[exit=126]
+$ docker run --rm --nosuchflag wordfreq-bench:hardened true 2>&1 | head -1; echo "exit=${PIPESTATUS[0]}"
+unknown flag: --nosuchflag
+exit=
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened bash -c 'exit 3'
+[exit=3]
+
+=== sloppy: history and the deleted layer
+$ docker history --format '{{.CreatedBy}}	{{.Size}}' wordfreq-bench:sloppy | head -6
+CMD ["sleep" "infinity"]	0B
+WORKDIR /app	4.1kB
+RUN /bin/sh -c rm -rf /tmp/solution # buildk…	8.19kB
+COPY solution /tmp/solution # buildkit	16.4kB
+COPY grader /opt/grader # buildkit	24.6kB
+COPY build/repo-with-history /app # buildkit	283kB
+[exit=0]
+$ docker run --rm wordfreq-bench:sloppy ls /tmp/solution
+ls: cannot access '/tmp/solution': No such file or directory
+[exit=2]
+$ docker save wordfreq-bench:sloppy -o img.tar && tar -xf img.tar && ls
+blobs
+img.tar
+index.json
+manifest.json
+oci-layout
+[exit=0]
+$ for l in $(jq -r '.[0].Layers[]' manifest.json); do echo "== ${l:0:28}…"; tar -tf "$l" | grep -i solution; done
+== blobs/sha256/8a38824eedc553b…
+== blobs/sha256/90576bef26a27ad…
+== blobs/sha256/17c8267281c8249…
+== blobs/sha256/85b8d5e3859f776…
+== blobs/sha256/88440700ca8c404…
+tmp/solution/
+tmp/solution/wordfreq.patch.py
+== blobs/sha256/84eb90d2670f6cf…
+tmp/.wh.solution
+== blobs/sha256/4f4fb700ef54461…
+[exit=1]
+
+=== exit 125 (redo)
+$ docker run --rm --nosuchflag wordfreq-bench:hardened true
+unknown flag: --nosuchflag
+
+Usage:  docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+
+Run 'docker run --help' for more information
+[exit=125]
+
+=== deleted layer, jq-free
+$ for l in blobs/sha256/*; do tar -tf "$l" 2>/dev/null | grep solution && echo "   ^ in ${l:0:28}…"; done
+tmp/.wh.solution
+   ^ in blobs/sha256/84eb90d2670f6cf…
+tmp/solution/
+tmp/solution/wordfreq.patch.py
+   ^ in blobs/sha256/88440700ca8c404…
+[exit=1]
+$ tar -xOf blobs/sha256/88440700ca8c404* tmp/solution/wordfreq.patch.py | tail -2
+def count_words(text):
+    return Counter(re.findall(r"[a-z]+(?:'[a-z]+)*", text.lower()))
+[exit=0]
+
+=== secrets in ARG/ENV
+$ cat Dockerfile
+FROM ubuntu:24.04
+ARG HF_TOKEN
+ENV JUDGE_API_KEY=sk-judge-999
+RUN echo "downloading with $HF_TOKEN" > /dev/null
+[exit=0]
+$ docker build -q --build-arg HF_TOKEN=hf_secret_777 -t lt-22-arg:1 .
+sha256:ea350388034a9e8c8db5bb4ed4ed7a0b416b0c33a68d7310d894268f9f41d85f
+[exit=0]
+$ docker history --no-trunc --format '{{.CreatedBy}}' lt-22-arg:1 | head -3
+RUN |1 HF_TOKEN=hf_secret_777 /bin/sh -c echo "downloading with $HF_TOKEN" > /dev/null # buildkit
+ENV JUDGE_API_KEY=sk-judge-999
+ARG HF_TOKEN=hf_secret_777
+[exit=0]
+$ docker run --rm lt-22-arg:1 env | grep -E 'TOKEN|KEY'
+JUDGE_API_KEY=sk-judge-999
+[exit=0]
+$ docker rmi lt-22-arg:1 lt-22-probe:1
+Untagged: lt-22-arg:1
+Deleted: sha256:ea350388034a9e8c8db5bb4ed4ed7a0b416b0c33a68d7310d894268f9f41d85f
+Untagged: lt-22-probe:1
+Deleted: sha256:0375d1f779722dc378225841dd482c3f459c3ab1ec7fae4ad9f77913e86473dc
+[exit=0]
+$ docker pull -q redis:7-alpine
+docker.io/library/redis:7-alpine
+[exit=0]
+
+=== compose
+$ cat compose.yaml
+# wordfreq-bench, two-service variant: the agent's box plus a cache it must talk to.
+name: lt-22-task
+services:
+  default:                        # the service the harness execs into
+    image: wordfreq-bench:hardened
+    init: true
+    user: agent
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    networks: [tasknet]
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: redis:7-alpine
+    networks: [tasknet]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+networks:
+  tasknet:
+    internal: true                # services reach each other; nothing reaches out
+[exit=0]
+$ docker compose up -d 2>&1 | sed 's/\[[0-9;]*[A-Za-z]//g' | tail -8
+ Container lt-22-task-default-1  Creating
+ Container lt-22-task-default-1  Created
+ Container lt-22-task-db-1  Starting
+ Container lt-22-task-db-1  Started
+ Container lt-22-task-db-1  Waiting
+ Container lt-22-task-db-1  Healthy
+ Container lt-22-task-default-1  Starting
+ Container lt-22-task-default-1  Started
+[exit=0]
+$ docker compose ps --format 'table {{.Name}}	{{.Service}}	{{.Status}}'
+NAME                   SERVICE   STATUS
+lt-22-task-db-1        db        Up 2 seconds (healthy)
+lt-22-task-default-1   default   Up Less than a second
+[exit=0]
+$ docker compose exec default getent hosts db
+172.18.0.2      db
+[exit=0]
+$ docker compose exec default python3 -c "import socket; s=socket.create_connection(('db',6379),3); s.sendall(b'PING
+'); print(s.recv(16))"
+b'+PONG\r\n'
+[exit=0]
+$ docker compose exec default python3 -c "import socket; socket.create_connection(('1.1.1.1',443),3)" 2>&1 | tail -1
+
+[exit=0]
+$ docker compose exec default getent hosts example.com
+
+[exit=2]
+$ docker network ls --filter name=lt-22
+NETWORK ID     NAME                 DRIVER    SCOPE
+de5686be26fd   lt-22-task_tasknet   bridge    local
+[exit=0]
+$ docker compose down -v 2>&1 | sed 's/\[[0-9;]*[A-Za-z]//g' | tail -6
+ Container lt-22-task-db-1  Stopping
+ Container lt-22-task-db-1  Stopped
+ Container lt-22-task-db-1  Removing
+ Container lt-22-task-db-1  Removed
+ Network lt-22-task_tasknet  Removing
+ Network lt-22-task_tasknet  Removed
+[exit=0]
+$ docker ps -a --filter name=lt-22 --format '{{.Names}}'
+[exit=0]
+
+=== compose, egress re-check with -T
+$ docker compose exec -T default python3 -c "import socket; socket.create_connection((\"1.1.1.1\", 443), 3)"
+OSError: [Errno 101] Network is unreachable
+
+[exit=]
+$ docker compose exec -T default getent hosts example.com; echo $?
+
+[exit=2]
+$ docker compose exec -T default cat /etc/resolv.conf
+
+nameserver 127.0.0.11
+options ndots:0
+
+
+=== lab 4: post-mortem
+$ docker run --name lt-22-pm --memory 64m --memory-swap 64m wordfreq-bench:hardened python3 -c 'x = bytearray(200*1024*1024)'
+[exit=137]
+$ docker ps -a --filter name=lt-22-pm --format '{{.Names}}	{{.Status}}'
+lt-22-pm	Exited (137) Less than a second ago
+[exit=0]
+$ docker logs lt-22-pm
+[exit=0]
+$ docker inspect --format 'exit={{.State.ExitCode}} oom={{.State.OOMKilled}} mem={{.HostConfig.Memory}}' lt-22-pm
+exit=137 oom=true mem=67108864
+[exit=0]
+$ docker diff lt-22-pm
+[exit=0]
+$ docker rm lt-22-pm
+lt-22-pm
+[exit=0]
+
+=== lab: digest pin run
+$ docker run --rm ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3 cat /etc/os-release | head -2
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+[exit=0]
+
+=== lab 1-2
+$ docker run -d --name lt-22-wf --init wordfreq-bench:hardened
+54eb6d8a9385d88a9a0d58c8bc330be2646800732c57a5ffb2d0dad13c63d986
+[exit=0]
+$ docker exec lt-22-wf bash -c 'echo notes > /app/NOTES.txt; echo x > /tmp/x'
+[exit=0]
+$ docker diff lt-22-wf
+C /app
+A /app/NOTES.txt
+C /usr
+C /usr/sbin
+A /usr/sbin/docker-init
+C /tmp
+A /tmp/x
+[exit=0]
+$ docker logs lt-22-wf
+[exit=0]
+$ docker rm -f lt-22-wf
+lt-22-wf
+[exit=0]
+$ docker run -d --name lt-22-wf --init wordfreq-bench:hardened
+40e13781bd8e09c35d72ed61d1b449a5ec3f182feef0f85ed8dcd2b031fab67a
+[exit=0]
+$ docker exec lt-22-wf ls /app/NOTES.txt
+ls: cannot access '/app/NOTES.txt': No such file or directory
+[exit=2]
+$ docker rm -f lt-22-wf
+lt-22-wf
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened uname -m
+aarch64
+[exit=0]

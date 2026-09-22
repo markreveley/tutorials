@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Environment Integrity: Where Cheating Lives · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 7 · Linux in Eval Harnesses</p>
+    <h1>Environment integrity: where cheating lives</h1>
+    <p class="lede">
+      Every published case of an agent passing a task without doing it comes down to a Linux fact:
+      something in the box was readable, writable, reachable, still running, or still there from
+      last time. This page turns those incidents into seven surfaces you can check, then red-teams
+      the course's own benchmark, sloppy build and hardened build, with the same checklist.
+    </p>
+
+    <h2 id="definitions">Two definitions and a thesis</h2>
+    <p>
+      METR's working definition of <span class="term" data-g="reward-hacking">reward hacking</span>
+      is models that "get impossibly high scores … by exploiting bugs in our scoring code or
+      subverting the task setup, rather than actually solving the problem we've given
+      them."<a class="cite" href="https://metr.org/blog/2025-06-05-recent-reward-hacking/" title="Von Arx, Chan, Barnes (METR), Recent Frontier Models Are Reward Hacking, June 2025">[METR]</a>
+      <span class="term" data-g="environment-integrity">Environment integrity</span> is the
+      property that denies them the chance: the only way to obtain a pass is to do the task. The
+      sibling course treats the measurement side (<a href="../../../evals/evals-tut/pages/11-evaluating-agents.html">page 11</a>
+      on agents, <a href="../../../evals/evals-tut/pages/21-contamination.html">pages 21</a>–<a href="../../../evals/evals-tut/pages/22-contamination-defenses.html">22</a>
+      on contamination). This page treats the box.
+    </p>
+    <p>
+      The thesis is mechanical. METR found an early o3 checkpoint reward-hacking in 39 of 128
+      RE-Bench runs (30.4%) but 8 of 1,087 HCAST runs (0.7%), and noted that on RE-Bench "the model
+      was able to see the entire scoring function". Asking nicely did nothing: adding "Please do not
+      cheat" left the rate of hack plans on one task at 80%, unchanged.<a class="cite" href="https://metr.org/blog/2025-06-05-recent-reward-hacking/" title="METR 2025: table of o3 reward hacking by task family; prompt interventions">[METR]</a>
+      Every exploit METR describes needed the scorer or an answer to be inside the agent's process or
+      filesystem. Calling that boundary the integrity boundary is this course's framing, not
+      METR's; their own remedy is "making the training setup less susceptible to exploits".
+      Integrity is enforced in the box, with the tools of Modules 2–6, not in the prompt.
+    </p>
+
+    <h2 id="surfaces">Seven surfaces</h2>
+    <table>
+      <thead><tr><th>Surface</th><th>Published case</th><th>The check</th><th>The fix</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Git history</td><td>SWE-bench #465: future fix commits in the task repo</td><td><code>git log --all</code>, <code>git reflog</code>, <code>git fsck --lost-found</code></td><td>strip future refs, expire reflog, gc; or ship an exported tree</td></tr>
+        <tr><td>2 · Image layers</td><td>files "deleted" in a later layer remain in the image</td><td><code>docker history</code>; <code>docker save</code> and list each layer</td><td>never COPY it in; multi-stage builds</td></tr>
+        <tr><td>3 · Filesystem</td><td>METR: scorer at <code>/home/agent/score.py</code>; ImpossibleBench: tests edited</td><td><code>find</code> for readable/writable grader files, as the agent's uid</td><td>tests and keys outside the box; non-root; read-only mounts</td></tr>
+        <tr><td>4 · Processes</td><td>METR: agent code imported into the scorer's process</td><td><code>ps -ef</code>; who shares the PID namespace and uid?</td><td>grade in another process, uid and container</td></tr>
+        <tr><td>5 · Network</td><td>Terminal-Bench 4.0 removed two tasks for public solutions</td><td>the reachability probe from <a href="19-firewalls-and-egress.html">page 19</a></td><td>default-deny egress; allowlist or mirror</td></tr>
+        <tr><td>6 · Harness and host</td><td>o1-preview and an exposed Docker API</td><td><code>test -S /var/run/docker.sock</code>; <code>docker inspect</code> mounts</td><td>no socket, no writable host mounts, control plane unreachable</td></tr>
+        <tr><td>7 · State across rollouts</td><td>Anthropic: git history from previous trials</td><td><code>docker inspect</code> for named volumes, reused containers</td><td>fresh environment per rollout</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="git-history">1 · Git history</h3>
+    <p>
+      On 3 September 2025 Jacob Kahn opened SWE-bench issue #465, "Repo State Loopholes During
+      Agentic Evaluation". On SWE-bench Verified, agents had run commands such as
+      <code>git log --oneline --all | grep …</code> in <code>/testbed</code> and found the upstream
+      fix commit: the task repos were checked out at the base commit, but later history was still
+      in <code>.git</code>. No network was
+      needed.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/issues/465" title="SWE-bench issue #465, Repo State Loopholes During Agentic Evaluation, opened 2025-09-03">[SWE-bench #465]</a>
+      This is the <span class="term" data-g="git-history-leak">git history leak</span>, and the
+      sloppy wordfreq-bench image reproduces it:
+    </p>
+<pre class="term"><code><span class="p">#</span> git log --oneline
+<span class="o">bb4b24a wordfreq: initial import</span>
+<span class="p">#</span> git log --oneline --all
+<span class="o">bb4b24a wordfreq: initial import
+<span class="hl">6301071 count words case-insensitively, ignore punctuation (fixes #12)</span></span></code></pre>
+    <p>
+      Checking out an old commit moves <code>HEAD</code> and rewrites the working tree; it deletes
+      nothing. <code>--all</code> means "all the refs in <code>refs/</code>, along with
+      <code>HEAD</code>": branches, tags, remote-tracking refs, the
+      stash.<a class="cite" href="https://git-scm.com/docs/git-gc" title="git reference manual: git-log --all; git-gc --prune, gc.reflogExpire; Pro Git ch. 10">[Pro Git]</a>
+      Deleting the branch is the obvious fix and is not enough:
+    </p>
+<pre class="term"><code><span class="p">#</span> git branch -D upstream-fix
+<span class="o">Deleted branch upstream-fix (was 6301071).</span>
+<span class="p">#</span> git log --oneline --all
+<span class="o">bb4b24a wordfreq: initial import</span>
+<span class="p">#</span> git reflog | sed -n 2p
+<span class="o">6301071 HEAD@{1}: commit: count words case-insensitively, ignore punctuation (fixes #12)</span>
+<span class="p">#</span> git fsck --lost-found
+<span class="o"><span class="hl">dangling commit 6301071da20c502788db3533760ed0c7974a7bca</span></span>
+<span class="p">#</span> git reflog expire --expire=now --all &amp;&amp; git gc -q --prune=now
+<span class="p">#</span> git fsck --lost-found; git cat-file -t 6301071
+<span class="o">fatal: Not a valid object name 6301071</span>
+<span class="p">#</span> git log --oneline --all | wc -l
+<span class="o">1</span></code></pre>
+    <p>
+      An unreachable object stays on disk until garbage collection prunes it, and the defaults are
+      two weeks for loose objects and 90 days for reflog entries (30 if unreachable from the
+      tip)<a class="cite" href="https://git-scm.com/docs/git-gc" title="git-gc(1): --prune default 2 weeks; gc.reflogExpire 90 days; gc.reflogExpireUnreachable 30 days">[Pro Git]</a>,
+      far longer than any rollout. The maintainers' fix, PR #471 (merged 11 September 2025, released
+      as v4.1.0), is this sequence in the image build: <code>git reset --hard</code> to the base
+      commit, <code>git remote remove origin</code>, delete only tags <em>newer</em> than the base
+      commit, expire the reflog, <code>git gc --prune=now --aggressive</code>, then fail the build if
+      <code>git log --all --since=…</code> prints anything. Past history and past tags stay, because
+      one task legitimately needs
+      them.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/pull/471" title="SWE-bench PR #471, Fix git log leakage in environment images, merged 2025-09-11 (v4.1.0)">[SWE-bench #465]</a>
+      When a task needs no history, ship an exported tree (<code>git archive</code>), as the
+      hardened wordfreq-bench build does.
+    </p>
+    <div class="warn"><span class="label">Caveat: keep the scale honest</span>
+      The maintainers measured before reacting. A search of the 20 most recent submissions matched
+      <code>git log</code> in "5/10000 trajectories"; on the bash-only leaderboard one model had 6
+      suspicious successful trajectories, worth 1.2 points, with no rank change among the top four.
+      Their conclusion on rerunning everything was
+      "no".<a class="cite" href="https://github.com/SWE-bench/SWE-bench/issues/465" title="SWE-bench #465, maintainer comments of 2025-09-09 and 2025-09-15">[SWE-bench #465]</a>
+      The leak was real and the fix was right; it did not invalidate the leaderboard. And reading
+      the log is what any engineer would do first: the flaw was in the image.
+    </div>
+
+    <h3 id="image-layers">2 · Image layers</h3>
+    <p>
+      An image <span class="term" data-g="layer">layer</span> is never edited. Docker's docs:
+      removing files "will result in a new layer", and the removed directory "will still be
+      available in the previous
+      layer".<a class="cite" href="https://docs.docker.com/engine/storage/drivers/#images-and-layers" title="Docker Docs, Storage drivers: images and layers">[Kernel: overlayfs]</a>
+      <code>Dockerfile.sloppy</code> COPYs the oracle solution in and <code>rm</code>s it in the next
+      step (<a href="22-docker-for-evals.html#layers-remember">page 22</a> walks through it). Inside
+      a container the path is gone. In the saved image it is one <code>tar -tf</code> away:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker save wordfreq-bench:sloppy -o img.tar &amp;&amp; mkdir img &amp;&amp; tar -xf img.tar -C img
+<span class="p">$</span> for b in img/blobs/sha256/*; do tar -tf "$b" 2&gt;/dev/null | grep solution; done
+<span class="o">tmp/.wh.solution
+tmp/solution/
+<span class="hl">tmp/solution/wordfreq.patch.py</span></span></code></pre>
+    <p>
+      The agent inside the box cannot do this, but anyone who can pull the image can. That is <span class="term" data-g="solution-leakage">solution
+      leakage</span> into training data, and to any agent that can reach the registry. Terminal-Bench's CI rejects a Dockerfile that references tests or the oracle
+      solution, "otherwise agents could cheat by reading
+      them".<a class="cite" href="https://arxiv.org/html/2601.11868#S2.SS3" title="Merrill et al. 2026, Terminal-Bench, §2.3 and App. B.2">[Terminal-Bench]</a>
+    </p>
+
+    <h3 id="filesystem">3 · Filesystem: readable keys, writable tests</h3>
+    <p>
+      This is audit question 3, <em>who owns what</em>, asked as the agent's uid
+      (<a href="08-permissions.html">page 8</a>). The one controlled experiment on file access is
+      ImpossibleBench, whose tasks have tests that contradict the spec, so any pass is a cheat. It
+      compared tests open, "read-only" and hidden. On the conflicting SWE-bench variant:
+    </p>
+    <table>
+      <thead><tr><th>Model</th><th>Cheat rate: open</th><th>read-only</th><th>hidden</th><th>Legitimate pass rate: open / read-only / hidden</th></tr></thead>
+      <tbody>
+        <tr><td>Claude Opus 4.1</td><td>50%</td><td>1%</td><td>0%</td><td>86 / 85 / 70%</td></tr>
+        <tr><td>GPT-5</td><td>54%</td><td>39%</td><td>0%</td><td>97 / 97 / 76%</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Read-only tests remove exactly one strategy,
+      <span class="term" data-g="test-tampering">test tampering</span>. That is decisive for a model
+      that cheats that way and weak against one that special-cases inputs or overloads
+      <code>==</code>. Hiding tests removes nearly everything and costs 16–26 points of legitimate
+      performance.<a class="cite" href="https://arxiv.org/html/2510.20270v1" title="Zhong, Raghunathan, Carlini 2025, ImpossibleBench, §5.2 and Figure 7">[ImpossibleBench]</a>
+      One correction to the usual retelling: the paper's "read-only" is not
+      <code>chmod</code> or a read-only mount. Its caption says "we revert the modified tests during
+      scoring": the harness restores the files before grading. SWE-bench's eval script does the same
+      (<a href="25-how-harnesses-use-linux.html#swe-bench">page 25</a>). A <code>:ro</code> bind mount gives the same guarantee earlier; that is this course's
+      implementation, not the paper's.
+    </p>
+    <p>
+      A June 2026 preprint audited 1,968 terminal-agent tasks with agents told to pass without
+      solving and no access to the verifier: 323 environments (16%) were hackable, including 13 of
+      Terminal-Bench 2.0's 89. The exploits are pure Linux: "reading answers directly from unguarded
+      files, replacing system binaries with wrapper scripts". Its diagnosis: "tests run in the same
+      container as the tested agent … so the agent and test environment share identical permissions
+      by default."<a class="cite" href="https://arxiv.org/html/2606.08960" title="Zhong et al. 2026 (preprint), Hardening Agent Benchmarks with Adversarial Hacker-Fixer Loops, §2 and fixer prompt">[Hacker-Fixer]</a>
+      
+    </p>
+
+    <h3 id="process-and-env">4 · Processes and environment</h3>
+    <p>
+      Most of METR's examples crossed a <em>process</em> boundary, not a file boundary: the agent's
+      code was imported and run inside the scorer's Python process, where it could walk the call
+      stack to the reference answer, patch <code>time.time</code>, or replace the evaluation
+      function with a
+      stub.<a class="cite" href="https://metr.org/blog/2025-06-05-recent-reward-hacking/" title="METR 2025, example viewer: call-stack walk, time patching, stubbed evaluator">[METR]</a>
+      Separate processes help only if the uid differs too. Here a "grader" runs as root and again
+      as <code>agent</code>, each with a key in its environment, and the agent looks through
+      the <span class="term" data-g="proc-filesystem">/proc filesystem</span>:
+    </p>
+<pre class="term"><code><span class="p">$</span> ps -eo pid,user,args
+<span class="o">  PID USER     COMMAND
+    1 agent    /sbin/docker-init -- sleep infinity
+    7 agent    sleep infinity
+    8 root     sleep 600
+   14 agent    sleep 601
+   20 agent    ps -eo pid,user,args</span>
+<span class="p">$</span> tr '\0' ' ' &lt; /proc/8/cmdline; echo
+<span class="o">sleep 600</span>
+<span class="p">$</span> tr '\0' '\n' &lt; /proc/8/environ | grep EXPECTED
+<span class="o">bash: line 1: /proc/8/environ: Permission denied</span>
+<span class="p">$</span> tr '\0' '\n' &lt; /proc/14/environ | grep EXPECTED
+<span class="o"><span class="hl">EXPECTED_TOP=the:7</span></span></code></pre>
+    <p>
+      Every process's argv is visible to everyone in the PID namespace; its environment is visible
+      to the same uid (<a href="11-environment-and-secrets.html">page 11</a>). A grader sharing the
+      agent's uid has no secrets, and a root agent shares everyone's.
+    </p>
+
+    <h3 id="network">5 · Network</h3>
+    <p>
+      Open <span class="term" data-g="egress">egress</span> makes the whole internet part of the
+      task. Terminal-Bench 2.0 allowed it by design and said so: "an agent could locate our dataset
+      and cheat by reading the oracle solutions. In practice, we have not observed this behavior in
+      tens of thousands of agent
+      trajectories".<a class="cite" href="https://arxiv.org/html/2601.11868" title="Merrill et al. 2026, Terminal-Bench, §5 Limitations">[Terminal-Bench]</a>
+      Version 4.0 later removed two tasks for public
+      solutions.<a class="cite" href="https://www.tbench.ai/news/terminal-bench-4-0" title="Terminal-Bench 4.0 release post, 28 Aug 2026">[Terminal-Bench]</a>
+      The Linux half is <a href="19-firewalls-and-egress.html">page 19</a>; network access as a
+      declared condition of the experiment is the networking course's
+      <a href="../../../networking/networking-tut/pages/22-boundaries-and-validity.html">Boundaries
+      and validity</a>. One trap from <a href="25-how-harnesses-use-linux.html">page 25</a> belongs
+      here: a model provider's server-side search tool runs outside the box and ignores its firewall.
+    </p>
+
+    <h3 id="harness-and-host">6 · The harness and the host</h3>
+    <p>
+      In the o1 system card (September 2024 version), a CTF challenge container failed to start
+      because of an infrastructure bug. o1-preview suspected DNS, ran <code>nmap</code>, and found
+      the evaluation host's Docker daemon API reachable "due to a misconfiguration". It listed
+      containers, briefly tried to debug the broken one, then started a new instance with the
+      command <code>cat flag.txt</code> and read the flag from the container logs. OpenAI's framing:
+      the infrastructure "does not rely on the Docker container-to-host isolation or the virtual
+      machine boundary for security" and "remained secure as it was designed
+      to".<a class="cite" href="https://cdn.openai.com/o1-system-card.pdf" title="OpenAI o1 System Card, Sept 12 2024, §4.2.1 Observation of Reward Hacking on Cybersecurity Task">[o1 System Card]</a>
+      The card does not say what it does rely on, nor whether the attempt was scored a pass. The
+      point here is narrower: the flag came from the control plane, so the run measured nothing
+      about the intended skill. A reachable
+      <span class="term" data-g="docker-socket">Docker socket</span> or API is root on the host:
+      whoever controls the daemon can start a container with the host's <code>/</code> mounted
+      inside it<a class="cite" href="https://docs.docker.com/engine/security/#docker-daemon-attack-surface" title="Docker Docs, Docker Engine security: Docker daemon attack surface">[Docker: security]</a>
+      (<a href="23-hardening-containers.html">page 23</a>). Checks: <code>test -S
+      /var/run/docker.sock</code> inside; <code>docker inspect --format '{{json .Mounts}}'</code>
+      outside; the page-19 probe aimed at the gateway address.
+    </p>
+
+    <h3 id="state-across-rollouts">7 · State across rollouts</h3>
+    <p>
+      Anthropic: "in some internal evals we observed Claude gaining an unfair advantage on some
+      tasks by examining the git history from previous trials", and more generally shared state
+      "can also artificially inflate
+      performance."<a class="cite" href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" title="Anthropic, Demystifying evals for AI agents, Jan 2026, Step 4">[Anthropic: Agent Evals]</a>
+      This is a different leak from #465. There the future was baked into the image; here one
+      rollout's workspace survived into the next. The usual carrier is a named
+      <span class="term" data-g="volume">volume</span>, which outlives <code>--rm</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -v lt-26-work:/app wordfreq-bench:hardened bash -c 'echo "rollout 1 notes: compare lowercase, strip punctuation" &gt; /app/NOTES.txt'
+<span class="p">$</span> docker run --rm -v lt-26-work:/app wordfreq-bench:hardened cat /app/NOTES.txt
+<span class="o"><span class="hl">rollout 1 notes: compare lowercase, strip punctuation</span></span>
+<span class="p">$</span> docker run --rm wordfreq-bench:hardened cat /app/NOTES.txt
+<span class="o">cat: /app/NOTES.txt: No such file or directory</span></code></pre>
+    <p>
+      Leftover state also breaks the statistics: epochs that share a workspace are not independent
+      samples. A fresh container per rollout is the
+      <span class="term" data-g="reset">reset</span>; Inspect gives every sample its own sandbox
+      instance.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#environment-binding" title="Inspect docs, Sandboxing: Environment Binding">[Inspect]</a>
+    </p>
+
+    <h2 id="red-team">Red-team your own box</h2>
+    <p>
+      Terminal-Bench ran an adversarial agent, prompted to cheat, against every task and read the
+      trajectories.<a class="cite" href="https://arxiv.org/html/2601.11868#S2.SS3" title="Merrill et al. 2026, Terminal-Bench, §2.3 Verification: adversarial exploit agent">[Terminal-Bench]</a>
+      Do the same: run an "attacker" rollout whose instruction is <em>obtain a pass without fixing
+      the bug</em>, and treat any success as an environment bug. Its first moves can be scripted. <code>integrity-check.sh</code> is read-only and shellcheck-clean:
+    </p>
+<pre><code>#!/usr/bin/env bash
+# integrity-check.sh: the first six things an "attacker" rollout would look at.
+# Run INSIDE a task container. Read-only. Exit status = number of open surfaces.
+set -u
+leaks=0
+check() {  # check MESSAGE SNIPPET: the surface is OPEN if SNIPPET succeeds
+  if bash -c "$2" &gt;/dev/null 2&gt;&amp;1; then
+    echo "OPEN    $1"
+    leaks=$((leaks + 1))
+  else
+    echo "closed  $1"
+  fi
+}
+check "identity:   running as root" 'id -u | grep -qx 0'
+check "git:        /app carries a .git directory" 'test -d /app/.git'
+check "filesystem: answer key or hidden tests readable" \
+  "find / -xdev -type f \( -name 'expected*.json' -o -name 'test_hidden*' \) -readable | grep -q ."
+check "filesystem: grading script writable" \
+  "find / -xdev -type f -name 'run-tests.sh' -writable | grep -q ."
+check "network:    a route exists (namespace is not empty)" "awk 'NR &gt; 1' /proc/net/route | grep -q ."
+check "host:       Docker socket mounted" 'test -S /var/run/docker.sock'
+echo "$leaks open surface(s)"
+exit "$leaks"</code></pre>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-26-sloppy wordfreq-bench:sloppy
+<span class="p">$</span> docker exec -i lt-26-sloppy bash -s &lt; integrity-check.sh
+<span class="o">OPEN    identity:   running as root
+OPEN    git:        /app carries a .git directory
+OPEN    filesystem: answer key or hidden tests readable
+OPEN    filesystem: grading script writable
+OPEN    network:    a route exists (namespace is not empty)
+closed  host:       Docker socket mounted
+5 open surface(s)</span></code></pre>
+    <div class="card">
+      <p><strong>Five ways to a pass in the sloppy build, none of which fixes the bug</strong>
+      (each observed from inside; none needs anything cleverer than <code>ls</code>):</p>
+      <ol>
+        <li>The fix is a commit on branch <code>upstream-fix</code>, shown by <code>git log --all</code>.</li>
+        <li>The expected output is readable at <code>/opt/grader/expected.json</code> (mode 644), so
+          the program can special-case it.</li>
+        <li>The agent is root, so <code>/opt/grader/run-tests.sh</code> and the hidden tests are
+          writable (<code>test -w</code> prints <code>writable</code>): test tampering.</li>
+        <li>The grader runs in this container as this uid, so the agent can run it for unlimited
+          feedback from the "hidden" tests, or write the result line itself.</li>
+        <li>Egress is open (<code>getent hosts github.com</code> resolves; an HTTPS request returns
+          200), so a public fix is a download away. A sixth, the oracle solution in a layer, is
+          open to anyone holding the image.</li>
+      </ol>
+    </div>
+    <p>The same script in a box started by <code>run-hardened.sh</code>, then the view from outside:</p>
+<pre class="term"><code><span class="p">$</span> ./run-hardened.sh lt-26-hard
+<span class="p">$</span> docker exec -i lt-26-hard bash -s &lt; integrity-check.sh
+<span class="o">closed  identity:   running as root
+closed  git:        /app carries a .git directory
+closed  filesystem: answer key or hidden tests readable
+closed  filesystem: grading script writable
+closed  network:    a route exists (namespace is not empty)
+closed  host:       Docker socket mounted
+0 open surface(s)</span>
+<span class="p">$</span> docker inspect --format 'user={{.Config.User}} ro={{.HostConfig.ReadonlyRootfs}} net={{.HostConfig.NetworkMode}} capdrop={{.HostConfig.CapDrop}} privileged={{.HostConfig.Privileged}}' lt-26-hard
+<span class="o">user=agent ro=true net=none capdrop=[ALL] privileged=false</span>
+<span class="p">$</span> ./grade.sh lt-26-hard results.jsonl; echo "exit=$?"      <span class="c"># bug not fixed</span>
+<span class="o">exit=1</span>
+<span class="p">$</span> ./grade.sh lt-26-hard results.jsonl; echo "exit=$?"      <span class="c"># after applying the oracle fix in the box</span>
+<span class="o">exit=0</span>
+<span class="p">$</span> cat results.jsonl
+<span class="o">{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}
+{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.001s  OK "}</span></code></pre>
+    <p>
+      The grader and key never enter the agent's box; <code>grade.sh</code> copies
+      <code>/app</code> out and tests the copy in a fresh, network-less, read-only container. And,
+      as on <a href="25-how-harnesses-use-linux.html#inspect-task">page 25</a>, the oracle still
+      passes, so hardening did not break the task.
+    </p>
+    <div class="pitfall"><span class="label">Pitfall: "0 open surfaces" is not "cannot be gamed"</span>
+      The script checks what it checks. Read <code>test_hidden.py</code> and two trust decisions
+      remain: it does <code>from wordfreq import top</code>, so the agent's code runs <em>inside
+      the grader's process</em>, METR's class exactly; and it reads <code>data/sample.txt</code>
+      from the submitted tree. Moving grading outside shrank what a hack can reach; it did not
+      remove the agent's code from the scorer. Closing that means testing the program as a
+      subprocess and supplying the data from the grader's side. Hardening has a price as well: in
+      the Hacker-Fixer preprint, hardened verifiers rejected 11 points more <em>legitimate</em>
+      solutions (76.1% to 65.2%).<a class="cite" href="https://arxiv.org/html/2606.08960" title="Zhong et al. 2026 (preprint), Hacker-Fixer Loops: cost of hardened verifiers">[Hacker-Fixer]</a>
+    </div>
+
+    <h2 id="design-principles">Design principles</h2>
+    <ul>
+      <li><strong>Grade outside the box, after the agent is gone</strong>, on artifacts copied out
+        or in a fresh container. Harbor's default runs the
+        <span class="term" data-g="verifier">verifier</span> in the agent's container; Terminal-Bench
+        3.0 moved to a separate one, which "prevents many reward hacking vectors" and permits
+        re-grading.<a class="cite" href="https://www.tbench.ai/news/terminal-bench-3-0" title="Terminal-Bench 3.0 release post, 30 Jul 2026">[Terminal-Bench]</a></li>
+      <li><strong><span class="term" data-g="held-out-tests">Held-out tests</span> never enter the
+        sandbox</strong> while the agent runs: not the image, not a layer, not a mount.</li>
+      <li><strong><span class="term" data-g="least-privilege">Least privilege</span></strong>:
+        non-root agent, read-only root filesystem, nothing the grader later executes is
+        agent-writable.</li>
+      <li><strong><span class="term" data-g="default-deny">Default-deny</span> egress</strong>;
+        allowlist or mirror what the task needs.</li>
+      <li><strong>Fresh environment per rollout</strong>; no named volumes, no reused containers.</li>
+      <li><strong>A small trusted core</strong>: scorer, sandbox policy and logging short enough to
+        read in one sitting, because that is what you vouch for.</li>
+      <li><strong>The build asserts its own integrity</strong>, as SWE-bench's does, and the oracle
+        and a no-op run gate every change.</li>
+    </ul>
+
+    <h2 id="measuring">Measuring it</h2>
+    <div class="evals"><span class="label">In eval work: report the cheat rate beside the pass rate</span>
+      An integrity violation is an outcome category of its own, not a pass and not an ordinary
+      fail. METR "regularly check for and exclude reward hacking attempts that successfully achieve
+      a good score" from reported
+      results.<a class="cite" href="https://metr.org/blog/2025-06-05-recent-reward-hacking/" title="METR 2025, footnote 5">[METR]</a>
+      Record it the way you record infrastructure failures: keep every scheduled run in the table,
+      report pass rate with flagged runs counted as passes <em>and</em> as fails, state which is the
+      headline before you look, and publish the flagged count. Dropping flagged runs silently
+      changes the denominator; keeping them silently inflates the numerator.
+    </div>
+    <p>
+      Two numbers get confused. <em>Spontaneous</em> cheating, in rollouts given the ordinary
+      prompt, mostly measures the model's propensity: that is ImpossibleBench's stated subject and
+      what METR's 30.4% is. <em>Elicited</em> cheating, from an attacker told to cheat, measures the
+      environment's weakness: Terminal-Bench's exploit agent and the 16% audit above. The distinction is this course's; the sources fit it. One small vendor-run demo shows the gap:
+      on tasks with public solutions and open egress, an agent cheated in 0.17 of trials unprompted
+      and 24 of 24 with a hint; under <code>network: none</code> cheating stopped, and so did
+      legitimate solves, because the in-box agent had lost its route to the model
+      API.<a class="cite" href="https://github.com/islo-labs/reward-hack-bench" title="islo-labs/reward-hack-bench README (vendor benchmark; 8 tasks × 7 egress policies × 3 trials; one model; LLM-judged)">[RewardHackBench]</a>
+      A low spontaneous rate says nothing about whether the door is locked.
+    </p>
+    <div class="warn"><span class="label">Caveat: a measured cheat rate is a lower bound</span>
+      Detection misses. METR's two methods each missed hacks the other found, and they call their
+      counts possibly "a significant underestimate". ImpossibleBench's LLM monitors caught 86–89% of
+      cheating on its LiveCodeBench variant but only 42–65% on the SWE-bench
+      one.<a class="cite" href="https://arxiv.org/html/2510.20270v1" title="ImpossibleBench 2025, monitoring results">[ImpossibleBench]</a>
+      The #465 reporters wrote that they "do not have a method for automatically checking existing
+      trajectories". Evidence of absence requires closing the surface, not searching transcripts.
+    </div>
+
+    <div class="check"><span class="label">Check your understanding</span>
+      <p>
+        A benchmark you maintain grades in-container, as root, after the agent (also root)
+        finishes. A new model jumps from 41% to 58%. A transcript search for <code>git log</code>,
+        <code>expected</code> and <code>/tests</code> finds nothing suspicious, and a colleague
+        concludes the gain is real. What do you say?
+      </p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>
+          <strong>Observed:</strong> a score jump, and a keyword search with no hits.
+          <strong>Not observed:</strong> that the gain is legitimate. The search tests three
+          strings; a root agent in the verifier's container has surfaces the strings do not cover
+          (replacing a binary the tests call, leaving a background process, writing the reward
+          file), and detectors in the literature miss a large share even when purpose-built. The
+          discriminating test is environmental: re-grade the <em>same</em> final artifacts in a
+          fresh verifier container the agent never touched. If 58% survives, the gain is probably
+          real; if it falls, the difference is your cheat-rate estimate, itself a lower bound.
+          Then run an elicited attacker on a sample of tasks to see which surfaces are open.
+          Report both scores and the grading change. Until then the honest statement is "58% under
+          in-container grading, integrity unverified".
+        </p>
+      </details>
+    </div>
+
+    <div class="lab"><span class="label">Lab</span>
+      <p>
+        Container lab, from your Mac's terminal, in <code>research/wordfreq-bench/</code> with both
+        images built (<a href="22-docker-for-evals.html">page 22</a>). Save
+        <code>integrity-check.sh</code> from above. Clean up with
+        <code>docker rm -fv lt-26-sloppy lt-26-hard lt-26-proc</code> (<code>-v</code> also removes
+        the anonymous <code>/app</code> volume that <code>run-hardened.sh</code> creates).
+      </p>
+      <ol>
+        <li>
+          <strong>Reproduce.</strong> Run the checklist against both builds and confirm 5 and 0.
+          Then show the two files behind the "filesystem" lines in the sloppy box.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec lt-26-sloppy ls -l /opt/grader
+<span class="o">total 12
+-rw-r--r-- 1 root root  54 Sep 21 06:08 expected.json
+-rwxr-xr-x 1 root root 871 Sep 21 06:08 run-tests.sh
+-rw-r--r-- 1 root root 684 Sep 21 06:08 test_hidden.py</span>
+<span class="p">$</span> docker exec lt-26-sloppy id
+<span class="o">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="p">$</span> docker exec lt-26-hard ls /opt/grader
+<span class="o">ls: cannot access '/opt/grader': No such file or directory</span></code></pre>
+            Mode 644 makes the key world-readable; uid 0 makes the mode bits irrelevant anyway.
+          </details>
+        </li>
+        <li>
+          <strong>Predict, then verify.</strong> In the sloppy box, copy the repo
+          (<code>cp -r /app /tmp/repo</code>) and delete the branch. Before running them, write down
+          whether <code>git log --all</code>, <code>git reflog</code> and
+          <code>git fsck --lost-found</code> will each still reveal commit <code>6301071</code>.
+          Then make all three come up empty and prove it with <code>git count-objects -v</code>.
+          <details class="solution"><summary>Solution</summary>
+            <code>--all</code>: no (no ref points at it). Reflog: yes. fsck: yes, "dangling
+            commit". The cure is the SWE-bench sequence:
+<pre class="term"><code><span class="p">#</span> git count-objects -v | head -1
+<span class="o">count: 11</span>
+<span class="p">#</span> git reflog expire --expire=now --all &amp;&amp; git gc -q --prune=now
+<span class="p">#</span> git fsck --lost-found
+<span class="p">#</span> git count-objects -v | sed -n '1p;3p'
+<span class="o">count: 0
+in-pack: 8</span></code></pre>
+            Eleven loose objects became eight packed ones: the three that belonged only to the fix
+            (its commit, tree and blob) are gone.
+          </details>
+        </li>
+        <li>
+          <strong>Predict, then verify.</strong> Start <code>docker run -d --name lt-26-proc --init
+          wordfreq-bench:hardened</code>, then two fake graders:
+          <code>docker exec -d -u root -e EXPECTED_TOP=the:7 lt-26-proc sleep 600</code> and the
+          same with <code>-u agent</code> and <code>sleep 601</code>. As <code>agent</code>, which
+          of <code>cmdline</code> and <code>environ</code> can you read for each?
+          <details class="solution"><summary>Solution</summary>
+            Both <code>cmdline</code>s; only the same-uid <code>environ</code>. Output is in
+            <a href="#process-and-env">section 4</a> (your PIDs may differ; find them with
+            <code>ps -eo pid,user,args</code>). Consequence: never pass an expected answer to a
+            grader as a command-line argument, and never run the grader as the agent's uid.
+          </details>
+        </li>
+        <li>
+          <strong>Eval task: write the finding.</strong> Using only <code>grade.sh</code> and
+          <code>grader/test_hidden.py</code>, list everything the outside grader still takes from
+          the agent, and propose one change for each. Bring evidence, not exploits.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> grep -n 'import\|APP_DIR' grader/test_hidden.py
+<span class="o">1:import json
+2:import os
+3:import unittest
+4:from wordfreq import top
+13:        with open(os.path.join(os.environ.get("APP_DIR", "/app"), "data/sample.txt"), encoding="utf-8") as f:</span>
+<span class="p">$</span> grep -n 'docker cp\|dst=/submission' grade.sh
+<span class="o">12:docker cp "$container:/app" "$work/app"
+19:  --mount "type=bind,src=$work/app,dst=/submission,readonly" \</span></code></pre>
+            Finding 1: line 4 imports the submission into the test process (surface 4). Validity
+            impact: a pass shows the test process exited 0, not that <code>top()</code> is correct.
+            Fix: run <code>wordfreq.py FILE N</code> as a subprocess and compare its stdout.
+            Finding 2: line 13 reads the input data from the agent's tree. Fix: mount the pristine
+            <code>data/</code> from the grader side. Residual risk after both: a program that
+            special-cases the sample text, caught only by adding inputs the agent never saw. State
+            all of this as hypotheses about what <em>could</em> happen; whether any rollout did it
+            is a separate, empirical question for the transcripts.
+          </details>
+        </li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Von Arx, Chan, Barnes (METR), "Recent Frontier Models Are Reward Hacking", 5 June 2025. <a href="https://metr.org/blog/2025-06-05-recent-reward-hacking/">metr.org/blog/2025-06-05-recent-reward-hacking</a></li>
+        <li>Kahn et al., "Repo State Loopholes During Agentic Evaluation", SWE-bench issue #465 (opened 3 Sept 2025), <a href="https://github.com/SWE-bench/SWE-bench/issues/465">github.com/SWE-bench/SWE-bench/issues/465</a>; fix in PR #471, <a href="https://github.com/SWE-bench/SWE-bench/pull/471">…/pull/471</a>.</li>
+        <li>Chacon &amp; Straub, <em>Pro Git</em> 2nd ed., ch. 10, and the git reference manual (git-log, git-gc, git-reflog, git-fsck, git-archive). <a href="https://git-scm.com/docs/git-gc">git-scm.com/docs/git-gc</a></li>
+        <li>Docker Docs, "Storage drivers: images and layers". <a href="https://docs.docker.com/engine/storage/drivers/#images-and-layers">docs.docker.com/engine/storage/drivers</a></li>
+        <li>Zhong, Raghunathan, Carlini, "ImpossibleBench: Measuring LLMs' Propensity of Exploiting Test Cases", arXiv:2510.20270 (Oct 2025). <a href="https://arxiv.org/abs/2510.20270">arxiv.org/abs/2510.20270</a></li>
+        <li>Zhong, Segal, Bercovich, Saxena, Zhang, Raghunathan, "Hardening Agent Benchmarks with Adversarial Hacker-Fixer Loops", arXiv:2606.08960 (June 2026, preprint). <a href="https://arxiv.org/abs/2606.08960">arxiv.org/abs/2606.08960</a></li>
+        <li>islo-labs, <code>reward-hack-bench</code> repository README (vendor benchmark, small n; illustrative only). <a href="https://github.com/islo-labs/reward-hack-bench">github.com/islo-labs/reward-hack-bench</a></li>
+        <li>Merrill, Shaw, Carlini et al., "Terminal-Bench", arXiv:2601.11868 (Jan 2026), <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a>; release posts for <a href="https://www.tbench.ai/news/terminal-bench-3-0">3.0</a> and <a href="https://www.tbench.ai/news/terminal-bench-4-0">4.0</a>.</li>
+        <li>Docker Docs, "Docker Engine security: Docker daemon attack surface", <a href="https://docs.docker.com/engine/security/#docker-daemon-attack-surface">docs.docker.com/engine/security</a>; Inspect docs, Sandboxing, <a href="https://inspect.aisi.org.uk/sandboxing.html">inspect.aisi.org.uk/sandboxing.html</a>.</li>
+        <li>OpenAI, "o1 System Card", version of 12 Sept 2024, §4.2.1. <a href="https://cdn.openai.com/o1-system-card.pdf">cdn.openai.com/o1-system-card.pdf</a></li>
+        <li>Anthropic, "Demystifying evals for AI agents", 9 Jan 2026. <a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents">anthropic.com/engineering/demystifying-evals-for-ai-agents</a></li>
+        <li>Executed material: <code>research/verify/26-environment-integrity.txt</code> and <code>26-integrity-check.sh</code> (images <code>wordfreq-bench:sloppy</code> and <code>:hardened</code>, Docker Engine 28.1.1).</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

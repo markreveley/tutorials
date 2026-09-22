@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Judge Biases and Failure Modes · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 3 · LLM-as-Judge</p>
+    <h1>Judge biases and failure modes</h1>
+    <p class="lede">
+      An LLM judge doesn't fail randomly — it fails <em>systematically</em>, in directions that have
+      been measured. This page catalogues the documented biases with their actual numbers, including
+      one famous bias whose evidence is weaker than its reputation, and the mitigations with verified
+      effect sizes.
+    </p>
+
+    <h2 id="position">Position bias: the order of answers changes the verdict</h2>
+    <p>
+      Show a judge two answers and ask which is better; then swap their order and ask again. A
+      consistent judge gives the same verdict. Measured judges mostly don't. In MT-Bench's controlled
+      test, <span class="term" data-g="position-bias">position bias</span> was severe enough that only
+      GPT-4 stayed consistent in more than 60% of cases — 65.0% with the default prompt — while
+      GPT-3.5 managed 46.2% and Claude-v1 just
+      23.8%.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.3, Table 2">[MT-Bench]</a>
+      "Most LLM judges favor the first position" — though not all: Claude-v1, when answers were renamed,
+      showed a bias toward whatever was labeled "Assistant A," a <em>name</em> bias riding on top of the
+      position bias.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.3">[MT-Bench]</a>
+    </p>
+    <p>
+      The Panickssery–Bowman–Feng self-preference study (next section) independently measured the same
+      phenomenon as <em>preference reversal rates</em> — how often the verdict flips when options swap:
+      GPT-4 25%, GPT-3.5 58%, Llama 2
+      89%.<a class="cite" href="https://arxiv.org/abs/2404.13076" title="Panickssery et al. 2024, LLM Evaluators Recognize and Favor Their Own Generations">[Self-Pref]</a>
+      Two different labs, two methodologies, one conclusion: a single-pass pairwise verdict is
+      substantially an artifact of ordering.
+    </p>
+    <div class="card">
+      <p><strong>Verified mitigations:</strong></p>
+      <ul style="margin-bottom:0">
+        <li><strong>Swap and require agreement</strong> — judge twice with orders swapped; "only declare
+          a win when an answer is preferred in both orders," else call it a tie. This is MT-Bench's own
+          conservative protocol.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.4">[MT-Bench]</a></li>
+        <li><strong>Swap and average</strong> — prompt twice and average the confidence scores, the
+          self-preference paper's approach.<a class="cite" href="https://arxiv.org/abs/2404.13076" title="Panickssery et al. 2024">[Self-Pref]</a></li>
+        <li><strong>Few-shot calibration</strong> — raised GPT-4's consistency from 65.0% to 77.5%, at
+          ~4× the cost.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.4">[MT-Bench]</a></li>
+      </ul>
+    </div>
+
+    <h2 id="verbosity">Verbosity bias: longer looks better</h2>
+    <p>
+      <span class="term" data-g="verbosity-bias">Verbosity bias</span> — favoring the longer answer
+      independent of quality — was probed with a designed attack: take a model's answer, have it
+      restated as a "repetitive list" that adds words but no information, and see whether judges fall
+      for it. Failure rates on the 23 attacked answers: Claude-v1 <strong>91.3%</strong>, GPT-3.5
+      <strong>91.3%</strong>, GPT-4
+      <strong>8.7%</strong>.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.3, Table 3">[MT-Bench]</a>
+      The calibration detail matters: all three judges correctly tie <em>identical</em> answers, so the
+      bias isn't noise — it's a learned preference for padding. The practical defense is indirect but
+      effective: binary single-answer grading against a concrete criterion gives verbosity nothing to
+      win; verbosity is mostly a pairwise-comparison disease.
+    </p>
+
+    <h2 id="self-enhancement">Self-enhancement bias: famous, and officially inconclusive</h2>
+    <p>
+      The claim everyone repeats — "judges favor their own outputs" — deserves the careful version,
+      because it's a two-paper story and the first paper explicitly declined to conclude it.
+    </p>
+    <p>
+      MT-Bench catalogued <span class="term" data-g="self-enhancement-bias">self-enhancement bias</span>
+      as a <em>potential</em> limitation and reported suggestive numbers: GPT-4 as judge favored its own
+      answers by a 10% higher win rate, Claude-v1 by 25% — but GPT-3.5 did <em>not</em> favor itself,
+      and the authors wrote plainly: "our study cannot determine whether the models exhibit a
+      self-enhancement bias."<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.3">[MT-Bench]</a>
+      A course on measurement should hold that up as a model of honest reporting — and as a warning
+      about how "suggestive" hardens into "established" through repeated citation.
+    </p>
+    <p>
+      The stronger evidence came a year later. Panickssery, Bowman and Feng studied
+      <span class="term" data-g="self-preference">self-preference</span> directly on two summarization
+      tasks and added the mechanism: <span class="term" data-g="self-recognition">self-recognition</span>.
+      The verified chain of findings:<a class="cite" href="https://arxiv.org/abs/2404.13076" title="Panickssery et al. 2024, NeurIPS 2024">[Self-Pref]</a>
+    </p>
+    <ul>
+      <li>GPT-3.5, GPT-4, and Llama 2 all "disproportionately favor summaries written by themselves
+        over those by other LLMs and from humans."</li>
+      <li>All three models recognize their own outputs above chance out of the box (pairwise format);
+        GPT-4 hits 73.5% accuracy distinguishing its text from two other LLMs and humans.</li>
+      <li>Fine-tuning GPT-3.5 and Llama 2 on just 500 examples pushes self-recognition above 90% — and
+        <strong>self-preference strength rises linearly with self-recognition ability</strong>, with
+        control fine-tunes (on length, vowel-counting, readability) falling on the same trend line,
+        ruling out the obvious confounds.</li>
+      <li>The cleanest demonstration: swap the authorship <em>labels</em>, and GPT-4 and GPT-3.5 flip to
+        preferring whichever summary is <em>labeled</em> as their own. The preference attaches to
+        perceived authorship, not text quality.</li>
+    </ul>
+    <div class="warn">
+      <span class="label">Caveat — state the causal claim the way the authors do</span>
+      <p>The paper says its experiments "can only provide evidence towards the causal hypothesis without
+      fully validating it."<a class="cite" href="https://arxiv.org/abs/2404.13076" title="Panickssery et al. 2024, §5.2">[Self-Pref]</a>
+      Teach it as a well-controlled intervention that makes the recognition→preference story credible —
+      not proven. Scope notes: news summarization, 2023-era models; weaker models can't even distinguish
+      themselves from stronger ones (Llama 2 vs GPT-4), so the bias profile is model-dependent. And
+      prior papers conflict on which models self-prefer most — the authors use exactly that conflict to
+      argue for multi-dataset evaluation before generalizing.</p>
+    </div>
+    <p>
+      The practical upshot for the "same model as task and judge" question from
+      <a href="08-llm-as-judge.html">page 8</a>: for scoped binary checks against criteria, it remains
+      "usually fine"; for <em>comparative</em> evaluation where the judge's own output is among the
+      candidates — leaderboards, model selection, best-of-n reranking — use a judge that isn't a
+      contestant, or obfuscate authorship, the countermeasure the paper itself
+      proposes.<a class="cite" href="https://arxiv.org/abs/2404.13076" title="Panickssery et al. 2024, §6">[Self-Pref]</a>
+    </p>
+
+    <h2 id="competence">Competence gaps: the judge can't grade what it can't do — and sometimes not even what it can</h2>
+    <p>
+      Bias bends judgments; competence gaps break them. Three verified examples, in increasing order of
+      discomfort:
+    </p>
+    <ul>
+      <li><strong>Math grading fails even within competence.</strong> GPT-4, shown wrong answers to
+        elementary math problems <em>it can solve when asked directly</em>, "was misled by the provided
+        answers" — judging wrong solutions correct in 14 of 20 trials with the default prompt.
+        Reference-guided grading (judge generates its own solution first, then grades against it) cut
+        failures to 3 of 20.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.3–3.4, Table 4">[MT-Bench]</a></li>
+      <li><strong>Detection is asymmetric.</strong> The factual-consistency judge from
+        <a href="03-types-of-evaluators.html">page 3</a> caught &gt;95% of consistent summaries but only
+        30–60% of inconsistent ones<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024, LLM-Evaluators">[Yan]</a> —
+        judges are systematically better at confirming than at catching.</li>
+      <li><strong>Hallucination detection barely beats chance.</strong> Best HaluEval result: 58.5%
+        accuracy.<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024">[Yan]</a></li>
+    </ul>
+
+    <h2 id="meta">The meta-bias: judges are persuasive</h2>
+    <p>
+      One more MT-Bench finding belongs in this catalogue because it compromises the <em>auditor</em>:
+      when human reviewers disagreed with GPT-4's judgment and were then shown its reasoning, they
+      "deemed GPT-4's judgments reasonable in 75% of cases and are even willing to change their choices
+      in 34% of cases."<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §4.2">[MT-Bench]</a>
+      Whether that's the judge being right or being persuasive, the operational lesson is the same:
+      collect human labels <em>before</em> showing humans the judge's output. An alignment measurement
+      where the human saw the judge's critique first is contaminated in the same direction the judge is
+      biased.
+    </p>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Every bias in this catalogue was found the same way: <em>controlled perturbation</em>. Swap the
+      order — does the verdict flip? Pad the answer — does the score rise? Swap the authorship labels —
+      does the preference follow? You can run these probes on your own judge in an afternoon, with your
+      own data. A judge you haven't probed isn't unbiased; it's unexamined.</p>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Patching biases one by one and declaring victory. Mitigations interact: few-shot examples
+      reduce position bias but "may introduce new biases"<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, §3.4">[MT-Bench]</a>;
+      tighter rubrics can shift errors from false passes to false failures. The end-to-end check —
+      measured agreement with fresh human labels, the subject of
+      <a href="10-aligning-judges.html">the next page</a> — is the only metric that catches the bias
+      you didn't think to probe for.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Lianmin Zheng et al., "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena," NeurIPS 2023. <a href="https://arxiv.org/abs/2306.05685">arxiv.org/abs/2306.05685</a></li>
+        <li>Arjun Panickssery, Samuel R. Bowman, Shi Feng, "LLM Evaluators Recognize and Favor Their Own Generations," NeurIPS 2024. <a href="https://arxiv.org/abs/2404.13076">arxiv.org/abs/2404.13076</a></li>
+        <li>Eugene Yan, "Evaluating the Effectiveness of LLM-Evaluators (aka LLM-as-Judge)," eugeneyan.com, August 2024. <a href="https://eugeneyan.com/writing/llm-evaluators/">eugeneyan.com/writing/llm-evaluators</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

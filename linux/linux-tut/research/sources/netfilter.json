@@ -1,0 +1,256 @@
+{
+ "id": "netfilter",
+ "tag": "[nftables]",
+ "citation": {
+  "authors": "Netfilter project; Docker Inc.",
+  "title": "nftables wiki (What is nftables?, Configuring chains, Rejecting traffic, Matching connection tracking stateful metainformation, Netfilter hooks, Simple ruleset for a workstation); netfilter.org nftables project page; iptables(8), iptables-extensions(8); Docker Engine docs: Packet filtering and firewalls, Docker with iptables, Docker with nftables, None/Bridge network drivers, docker network create",
+  "venue": "wiki.nftables.org / netfilter.org / man7.org / docs.docker.com",
+  "year": "2026 (living documents)",
+  "url": "https://wiki.nftables.org/wiki-nftables/index.php/Main_Page"
+ },
+ "fetched_urls": [
+  "https://wiki.nftables.org/wiki-nftables/index.php/Main_Page",
+  "https://wiki.nftables.org/wiki-nftables/index.php/Quick_reference-nftables_in_10_minutes",
+  "https://wiki.nftables.org/wiki-nftables/index.php/What_is_nftables%3F",
+  "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains",
+  "https://wiki.nftables.org/wiki-nftables/index.php/Rejecting_traffic",
+  "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation",
+  "https://wiki.nftables.org/wiki-nftables/index.php/Netfilter_hooks",
+  "https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation",
+  "https://www.netfilter.org/projects/nftables/index.html",
+  "https://www.netfilter.org/projects/nftables/manpage.html",
+  "https://man7.org/linux/man-pages/man8/iptables.8.html",
+  "https://man7.org/linux/man-pages/man8/iptables-extensions.8.html",
+  "https://docs.docker.com/engine/network/packet-filtering-firewalls/",
+  "https://docs.docker.com/engine/network/firewall-iptables/",
+  "https://docs.docker.com/engine/network/firewall-nftables/",
+  "https://docs.docker.com/engine/network/drivers/none/",
+  "https://docs.docker.com/engine/network/drivers/bridge/",
+  "https://docs.docker.com/engine/network/",
+  "https://docs.docker.com/reference/cli/docker/network/create/",
+  "https://docs.docker.com/desktop/features/networking/networking-how-tos/",
+  "https://docs.docker.com/engine/network/port-publishing/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "nftables replaces iptables/ip6tables/arptables/ebtables; tables -> chains -> rules; base chains attach to hooks (prerouting, input, forward, output, postrouting) with a policy (accept/drop)",
+   "verdict": "confirmed",
+   "finding": "netfilter.org: \"nftables replaces the popular {ip,ip6,arp,eb}tables\"; available since Linux 3.13; an iptables compatibility layer exists (Ubuntu 24.04's iptables reports \"iptables v1.8.10 (nf_tables)\" - executed). No predefined tables/chains: you create a table, then a BASE chain with `type filter hook <hook> priority <n>; policy <accept|drop>;`. Hooks: ingress, prerouting, input, forward, output, postrouting. \"the two possible default policies are accept and drop\". A chain created without the {type hook priority} block is a regular chain that sees no packets.",
+   "quote": "nftables replaces the popular {ip,ip6,arp,eb}tables. This software provides a new in-kernel packet classification framework that is based on a network-specific Virtual Machine (VM) and a new nft userspace command line tool.",
+   "location": "netfilter.org, nftables project page",
+   "cite_url": "https://www.netfilter.org/projects/nftables/index.html"
+  },
+  {
+   "planned": "Default-deny = chain policy drop + explicit accept rules; stateful rule 'ct state established,related accept'",
+   "verdict": "confirmed",
+   "finding": "The wiki's workstation ruleset is exactly this shape: `type filter hook input priority 0; policy drop;` then `iif lo accept` and `ct state established,related accept`. Executed the egress version (hook output, policy drop, allow lo + established,related + one IP:443): allowed target returned HTTP 301; another IP timed out (exit 28); a hostname failed with exit 6 because DNS was dropped too.",
+   "quote": "type filter hook input priority 0; policy drop; # accept any localhost traffic iif lo accept # accept traffic originated from us ct state established,related accept",
+   "location": "nftables wiki: Simple ruleset for a workstation",
+   "cite_url": "https://wiki.nftables.org/wiki-nftables/index.php/Simple_ruleset_for_a_workstation"
+  },
+  {
+   "planned": "DROP vs REJECT: drop is silent (client times out), reject sends an error (client fails fast)",
+   "verdict": "confirmed",
+   "finding": "iptables(8): \"DROP means to drop the packet on the floor\". REJECT \"send[s] back an error packet ... otherwise it is equivalent to DROP\"; default error is ICMP port-unreachable, optional TCP RST. nftables wiki: `reject` with no reason sends ICMP/ICMPv6 port unreachable. Executed with nft in a --cap-add NET_ADMIN container: drop -> curl (28) after 3007 ms (only because --connect-timeout 3 was set); reject -> curl (7) after 0 ms; reject with tcp reset -> curl (7) after 0 ms.",
+   "quote": "If you don't specify any reason, an ICMP/ICMPv6 port unreachable packet is sent to the origin.",
+   "location": "nftables wiki: Rejecting traffic",
+   "cite_url": "https://wiki.nftables.org/wiki-nftables/index.php/Rejecting_traffic"
+  },
+  {
+   "planned": "Docker manipulates iptables/nftables itself; rules for containers must go in the DOCKER-USER chain; published ports bypass ufw-style INPUT rules (Docker docs wording)",
+   "verdict": "confirmed",
+   "finding": "Exact wording: DOCKER-USER is \"A placeholder for user-defined rules that will be processed before rules in the DOCKER-FORWARD and DOCKER chains\"; \"Rules appended to the FORWARD chain will be processed after Docker's rules\"; \"you should not modify the rules created by Docker\". ufw: published-port traffic \"gets diverted before it goes through the ufw firewall settings ... effectively ignoring your firewall configuration\". Default backend is iptables; the nftables backend (Docker 29.0.0+, experimental) has NO DOCKER-USER chain - you add your own table with base chains at the same hooks. In DOCKER-USER packets are already DNATed, so match container IP/port or use conntrack --ctorigdst.",
+   "quote": "Packets that get accepted or rejected by rules in these custom chains will not be seen by user-defined rules appended to the FORWARD chain. So, to add additional rules to filter these packets, use the DOCKER-USER chain.",
+   "location": "Docker Docs: Docker with iptables > Add iptables policies before Docker's rules",
+   "cite_url": "https://docs.docker.com/engine/network/firewall-iptables/"
+  },
+  {
+   "planned": "--network none: container has only a loopback interface; docker network create --internal creates a network with no external connectivity; default bridge docker0, containers NATed (masquerade) to the host's address; inter-container communication (icc) on default bridge is enabled by default",
+   "verdict": "confirmed",
+   "finding": "none: \"Within the container, only the loopback device is created.\" --internal: \"no default route is configured and firewall rules are set up to drop all traffic to or from other networks\" BUT \"Communication with the gateway IP address (and thus appropriately configured host services) is possible\" - an internal network is not isolated from the HOST. Bridge: masquerading on by default (enable_ip_masquerade default true; \"Devices on the host's external networks only see the IP address of the Docker host\"); enable_icc default true (daemon flag --icc for docker0). Executed: none -> only lo, empty `ip route`; internal -> eth0 with 172.19.0.2/16, route table has only the subnet line (no default), ping to gateway 172.19.0.1 succeeds, curl to 1.1.1.1 exit 7, DNS SERVFAIL. One doc/reality gap: docs say \"No IPv6 loopback address is configured for containers using the none driver\" but on Docker 28.1.1 lo showed `inet6 ::1/128`.",
+   "quote": "If you want to completely isolate the networking stack of a container, you can use the --network none flag when starting the container. Within the container, only the loopback device is created.",
+   "location": "Docker Docs: None network driver",
+   "cite_url": "https://docs.docker.com/engine/network/drivers/none/"
+  },
+  {
+   "planned": "Containers on the same bridge network can reach each other and typically the host's bridge gateway address (host services bound to 0.0.0.0) - verify wording; host.docker.internal on Docker Desktop",
+   "verdict": "confirmed",
+   "finding": "Bridge doc: by default a bridge network \"Allows unrestricted network access to containers in the network from the host, and from other containers connected to the same bridge network\" and \"Blocks access from containers in other networks and from outside the Docker host\". Overview: on the default bridge containers \"have unrestricted network access to each other using container IP addresses. They cannot refer to each other by name.\" Gateway/host reachability is stated explicitly only for --internal networks (\"Communication with the gateway IP address (and thus appropriately configured host services) is possible\"); the \"services bound to 0.0.0.0\" phrasing is not in the docs. host.docker.internal is documented for Docker Desktop: \"Resolves to the internal IP address of your host\"; gateway.docker.internal \"Resolves to the gateway IP of the Docker VM\". Executed: default-bridge container pinged a sibling at 172.17.0.2 (0% loss) while `getent hosts <name>` failed (exit 2).",
+   "quote": "Allows unrestricted network access to containers in the network from the host, and from other containers connected to the same bridge network. Blocks access from containers in other networks and from outside the Docker host.",
+   "location": "Docker Docs: Bridge network driver (intro)",
+   "cite_url": "https://docs.docker.com/engine/network/drivers/bridge/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Executed: what --network none leaves in the container.",
+   "quote": "$ docker run --rm --network none lt-r4-tools:local bash -c \"ip -br addr; ip route; cat /etc/resolv.conf\"\nlo               UNKNOWN        127.0.0.1/8 ::1/128\n(ip route prints nothing)\n# Generated by Docker Engine. ...\nnameserver 192.168.65.7\n# Based on host file: '/etc/resolv.conf' (legacy)\n\n$ curl https://example.com      -> curl: (6) Could not resolve host: example.com   exit=6\n$ curl -sS http://93.184.215.14/ -> curl: (7) Failed to connect to 93.184.215.14 port 80 after 0 ms: Couldn't connect to server   exit=7\n$ ping -c1 1.1.1.1              -> ping: connect: Network is unreachable   exit=2",
+   "location": "executed lt-r4-tools:local = ubuntu:24.04 (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; nftables + iptables v1.8.10 (nf_tables) in ubuntu:24.04; Docker Desktop also lists DOWN tunl0/gre0/sit0... placeholder devices, trimmed here - see iproute2 note). /etc/hosts has localhost entries but no container-IP line; localhost still works (curl to 127.0.0.1:9 -> exit 7 refused)."
+  },
+  {
+   "finding": "Executed: --internal network.",
+   "quote": "$ docker network create --internal lt-R4-int; docker run --rm --network lt-R4-int lt-r4-tools:local ...\n$ ip -br addr show eth0 -> eth0@if35  UP  172.19.0.2/16\n$ ip route            -> 172.19.0.0/16 dev eth0 proto kernel scope link src 172.19.0.2     (no default route)\n$ resolv.conf         -> nameserver 127.0.0.11 / options ndots:0\n$ curl https://example.com        -> curl: (6) Could not resolve host: example.com  exit=6\n$ curl --connect-timeout 5 http://1.1.1.1/ -> curl: (7) Failed to connect to 1.1.1.1 port 80 after 0 ms: Couldn't connect to server  exit=7\n$ ping -c1 172.19.0.1 -> 1 packets transmitted, 1 received",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; nftables + iptables v1.8.10 (nf_tables) in ubuntu:24.04)"
+  },
+  {
+   "finding": "Executed: nft drop / reject / default-deny egress inside a container with --cap-add NET_ADMIN (nft fails with \"Operation not permitted (you must be root)\" without NET_ADMIN even as uid 0). Gotcha: `lt` and `out` are nft keywords - table/chain names like \"lt\"/\"out\" give syntax errors.",
+   "quote": "# nft add table inet sandbox\n# nft 'add chain inet sandbox egress { type filter hook output priority 0; policy accept; }'\n# nft add rule inet sandbox egress ip daddr 1.1.1.1 tcp dport 80 drop      -> curl: (28) ... after 3007 ms: Timeout was reached\n# nft add rule inet sandbox egress ip daddr 1.1.1.1 tcp dport 80 reject    -> listed as \"reject with icmp port-unreachable\"; curl: (7) ... after 0 ms\n# ... reject with tcp reset                                               -> curl: (7) ... after 0 ms",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; nftables + iptables v1.8.10 (nf_tables) in ubuntu:24.04)"
+  },
+  {
+   "finding": "Executed: default-deny egress ruleset as listed back by nft, and its effect.",
+   "quote": "table inet sandbox {\n\tchain egress {\n\t\ttype filter hook output priority filter; policy drop;\n\t\toif \"lo\" accept\n\t\tct state established,related accept\n\t\tip daddr 1.1.1.1 tcp dport 443 accept\n\t}\n}\nhttps://1.1.1.1/ -> http=301 exit=0 ; https://example.com/ -> curl: (6) Could not resolve host ; http://1.0.0.1/ -> curl: (28) timeout",
+   "location": "executed lt-r4-tools:local (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; nftables + iptables v1.8.10 (nf_tables) in ubuntu:24.04)"
+  },
+  {
+   "finding": "Docker creates and owns firewall rules; bridge only.",
+   "quote": "On Linux, Docker creates firewall rules to implement network isolation, port publishing and filtering. Because these rules are required for the correct functioning of Docker bridge networks, you should not modify the rules created by Docker.",
+   "location": "Docker Docs: Packet filtering and firewalls",
+   "cite_url": "https://docs.docker.com/engine/network/packet-filtering-firewalls/"
+  },
+  {
+   "finding": "No rules for ipvlan/macvlan/host networking.",
+   "quote": "Docker creates firewall rules for bridge networks. No rules are created for ipvlan, macvlan or host networking.",
+   "location": "Docker Docs: Packet filtering and firewalls (Note)"
+  },
+  {
+   "finding": "DOCKER-USER definition (exact).",
+   "quote": "DOCKER-USER: A placeholder for user-defined rules that will be processed before rules in the DOCKER-FORWARD and DOCKER chains.",
+   "location": "Docker Docs: Docker with iptables > Docker and iptables chains",
+   "cite_url": "https://docs.docker.com/engine/network/firewall-iptables/"
+  },
+  {
+   "finding": "Docker enables IP forwarding and sets FORWARD policy DROP.",
+   "quote": "Docker requires IP Forwarding to be enabled on the host for its default bridge network configuration. If it enables IP Forwarding, it also sets the default policy of the iptables FORWARD chain in the filter table to DROP.",
+   "location": "Docker Docs: Docker with iptables"
+  },
+  {
+   "finding": "ufw wording.",
+   "quote": "When you publish a container's ports using Docker, traffic to and from that container gets diverted before it goes through the ufw firewall settings. Docker routes container traffic in the nat table, which means that packets are diverted before it reaches the INPUT and OUTPUT chains that ufw uses.",
+   "location": "Docker Docs: Packet filtering and firewalls > Docker and ufw"
+  },
+  {
+   "finding": "Published ports are open to the world by default; DOCKER-USER example to restrict.",
+   "quote": "By default, all external source IPs are allowed to connect to ports that have been published to the Docker host's addresses. ... $ iptables -I DOCKER-USER -i ext_if ! -s 192.0.2.2 -j DROP",
+   "location": "Docker Docs: Docker with iptables > Restrict external connections to containers"
+  },
+  {
+   "finding": "DNAT happens before DOCKER-USER.",
+   "quote": "When packets arrive to the DOCKER-USER chain, they have already passed through a Destination Network Address Translation (DNAT) filter. That means that the iptables flags you use can only match internal IP addresses and ports of containers.",
+   "location": "Docker Docs: Docker with iptables > Match the original IP and ports for requests"
+  },
+  {
+   "finding": "nftables backend status and the absence of DOCKER-USER.",
+   "quote": "Support for nftables introduced in Docker 29.0.0 is experimental ... In Docker's nftables implementation, there is no DOCKER-USER chain. Instead, rules can be added in separate tables, with base chains that have the same types and hook points as Docker's base chains.",
+   "location": "Docker Docs: Docker with nftables",
+   "cite_url": "https://docs.docker.com/engine/network/firewall-nftables/"
+  },
+  {
+   "finding": "Docker also writes DNS rules inside the container netns.",
+   "quote": "For bridge and other network types, iptables rules for DNS are also created in the container's network namespace.",
+   "location": "Docker Docs: Docker with iptables (intro)"
+  },
+  {
+   "finding": "Disabling Docker's iptables handling is not a hardening step.",
+   "quote": "with Docker's firewalling disabled and no replacement rules, containers in bridge networks will not be able to access internet hosts by masquerading, but all of their ports will be accessible to hosts on the local network.",
+   "location": "Docker Docs: Packet filtering and firewalls > Prevent Docker from manipulating firewall rules"
+  },
+  {
+   "finding": "--internal exact wording.",
+   "quote": "Containers on an internal network may communicate between each other, but not with any other network, as no default route is configured and firewall rules are set up to drop all traffic to or from other networks. Communication with the gateway IP address (and thus appropriately configured host services) is possible, and the host may communicate with any container IP directly.",
+   "location": "Docker CLI reference: docker network create > Network internal mode (--internal)",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/network/create/#internal"
+  },
+  {
+   "finding": "Bridge driver option defaults: enable_ip_masquerade true; enable_icc true; daemon equivalents --ip-masq and --icc for the default bridge.",
+   "quote": "com.docker.network.bridge.enable_icc | true | Enable or Disable inter-container connectivity.",
+   "location": "Docker Docs: Bridge network driver > Options",
+   "cite_url": "https://docs.docker.com/engine/network/drivers/bridge/#options"
+  },
+  {
+   "finding": "Masquerading wording; default bridge called \"bridge\"; user-defined recommended.",
+   "quote": "Uses masquerading to give containers external network access. Devices on the host's external networks only see the IP address of the Docker host.",
+   "location": "Docker Docs: Bridge network driver (intro)"
+  },
+  {
+   "finding": "Different bridge networks are isolated from each other except via published ports.",
+   "quote": "By default, the Docker bridge driver automatically installs rules in the host machine so that containers connected to different bridge networks can only communicate with each other using published ports.",
+   "location": "Docker Docs: Bridge network driver (intro)"
+  },
+  {
+   "finding": "Default address pools (why containers get 172.17-172.31.x and 192.168.x addresses, all RFC 1918).",
+   "quote": "{ \"base\": \"172.17.0.0/16\", \"size\": 16 }, { \"base\": \"172.18.0.0/16\", \"size\": 16 }, { \"base\": \"172.19.0.0/16\", \"size\": 16 }, { \"base\": \"172.20.0.0/14\", \"size\": 16 }, { \"base\": \"172.24.0.0/14\", \"size\": 16 }, { \"base\": \"172.28.0.0/14\", \"size\": 16 }, { \"base\": \"192.168.0.0/16\", \"size\": 20 }",
+   "location": "Docker Docs: Networking overview > Subnet allocation",
+   "cite_url": "https://docs.docker.com/engine/network/#subnet-allocation"
+  },
+  {
+   "finding": "Driver table one-liners.",
+   "quote": "host: Remove network isolation between the container and the Docker host. none: Completely isolate a container from the host and other containers.",
+   "location": "Docker Docs: Networking overview > Drivers"
+  },
+  {
+   "finding": "Containers can make outgoing connections by default.",
+   "quote": "Containers have networking enabled by default, and they can make outgoing connections.",
+   "location": "Docker Docs: Networking overview (intro)"
+  },
+  {
+   "finding": "host.docker.internal (Docker Desktop).",
+   "quote": "host.docker.internal: Resolves to the internal IP address of your host. gateway.docker.internal: Resolves to the gateway IP of the Docker VM",
+   "location": "Docker Docs: Explore networking how-tos on Docker Desktop",
+   "cite_url": "https://docs.docker.com/desktop/features/networking/networking-how-tos/"
+  },
+  {
+   "finding": "nftables vs iptables: no predefined chains.",
+   "quote": "Unlike in iptables, there are no predefined chains like INPUT, OUTPUT, etc. Instead, to filter packets at a particular processing step, you explicitly create a base chain with name of your choosing, and attach it to the appropriate Netfilter hook.",
+   "location": "nftables wiki: Configuring chains",
+   "cite_url": "https://wiki.nftables.org/wiki-nftables/index.php/Configuring_chains"
+  },
+  {
+   "finding": "Base chain syntax and policy.",
+   "quote": "add chain [<family>] <table_name> <chain_name> { type <type> hook <hook> [device <device>] priority <priority> ; [policy <policy> ;] [comment <comment> ;] } ... As in iptables, the two possible default policies are accept and drop.",
+   "location": "nftables wiki: Configuring chains > Adding base chains"
+  },
+  {
+   "finding": "Hook meanings.",
+   "quote": "prerouting: sees all incoming packets, before any routing decision has been made. ... input: sees incoming packets that are addressed to and have now been routed to the local system ... forward: sees incoming packets that are not addressed to the local system. output: sees packets that originated from processes in the local machine.",
+   "location": "nftables wiki: Configuring chains > Base chain hooks"
+  },
+  {
+   "finding": "drop is final, accept is not (across chains on the same hook).",
+   "quote": "an accept verdict - be it by way of a rule or the default chain policy - isn't necessarily final. However, the same is not true of packets that are subjected to a drop verdict. Instead, drops take immediate effect, with no further rules or chains being evaluated.",
+   "location": "nftables wiki: Configuring chains > Base chain priority"
+  },
+  {
+   "finding": "inet family = one ruleset for IPv4+IPv6.",
+   "quote": "The nftables inet family allows you to register base chains that see both IPv4 and IPv6 traffic. It is no longer necessary to rely on scripts to duplicate your ruleset.",
+   "location": "nftables wiki: What is nftables? > Main differences with iptables",
+   "cite_url": "https://wiki.nftables.org/wiki-nftables/index.php/What_is_nftables%3F"
+  },
+  {
+   "finding": "conntrack states.",
+   "quote": "established: Netfilter has seen valid packets travel in both directions between this pair of hosts. For TCP connections, the three-way-handshake has been successfully completed. related: This connection was initiated after the main connection, as expected from normal operation of the main connection.",
+   "location": "nftables wiki: Matching connection tracking stateful metainformation",
+   "cite_url": "https://wiki.nftables.org/wiki-nftables/index.php/Matching_connection_tracking_stateful_metainformation"
+  },
+  {
+   "finding": "iptables built-in filter chains and targets.",
+   "quote": "ACCEPT means to let the packet through. DROP means to drop the packet on the floor. RETURN means stop traversing this chain and resume at the next rule in the previous (calling) chain.",
+   "location": "iptables(8) TARGETS",
+   "cite_url": "https://man7.org/linux/man-pages/man8/iptables.8.html"
+  },
+  {
+   "finding": "xtables still maintained (wiki, as of 2021) - so \"replaces\" means \"supersedes\", not \"iptables is gone\".",
+   "quote": "nftables is the modern Linux kernel packet classification framework. New code should use it instead of the legacy {ip,ip6,arp,eb}_tables (xtables) infrastructure. For existing codebases that have not yet converted, the legacy xtables infrastructure is still maintained as of 2021.",
+   "location": "nftables wiki: What is nftables?"
+  },
+  {
+   "finding": "(added by author of page 17, fetched 2026-09-21) Port publishing semantics: without -p, container ports on a bridge network are reachable from the Docker host and from containers on the same network, but not from outside the host. -p creates a host firewall rule mapping a host port to the container port. With no host IP given, Docker publishes to all host addresses (0.0.0.0 and [::]). Docker's own words: publishing is 'insecure by default'; prefixing 127.0.0.1 (or ::1) restricts the published port to the Docker host. Docs warn that in releases older than 28.0.0 hosts on the same L2 segment could still reach ports published to localhost.",
+   "quote": "Publishing container ports is insecure by default. Meaning, when you publish a container's ports it becomes available not only to the Docker host, but to the outside world as well. If you include the localhost IP address (127.0.0.1, or ::1) with the publish flag, only the Docker host can access the published container port.",
+   "location": "Docker Docs: Port publishing and mapping > Publishing ports (Important box); 'Setting the default bind address for containers' for the 0.0.0.0 and [::] default",
+   "cite_url": "https://docs.docker.com/engine/network/port-publishing/"
+  }
+ ],
+ "teaching_notes": "Things authors must carry over exactly: (1) DOCKER-USER exists only with the iptables backend (still the default); Docker 29's experimental nftables backend has none. (2) --internal blocks other networks but NOT the host gateway address - host services listening on the bridge IP/0.0.0.0 remain reachable (Docker wording: \"appropriately configured host services\"). (3) --network none docs claim no IPv6 loopback; Docker 28.1.1 showed ::1/128 - do not print the docs claim as observed behaviour. (4) The sandbox-side firewall demos need --cap-add NET_ADMIN; default containers lack it, which is itself a teaching point: an agent with default caps cannot change its own firewall. (5) Host-side firewall behaviour (DOCKER-USER, ufw bypass) was NOT executed (Docker Desktop VM); it is docs-backed only - pages must describe, not show invented output. ICC default true means sibling eval containers on the default bridge can reach each other by IP."
+}

@@ -1,0 +1,303 @@
+# Page 04 verification. Container lt-04-lab: ubuntu:24.04 + python3 3.12.3 + jq 1.7, user learner (uid 1001). 2026-09-21.
+# Part A: non-interactive runner (docker exec -t -u learner). NOTE fd 0 -> /tmp/p4a.cmds is a runner artefact (loop reads its command file on stdin); Part B is the real interactive pty session used for the fd listings on the page.
+$ ls -l /proc/self/fd
+total 0
+lr-x------ 1 learner learner 64 Sep 21 16:25 0 -> /tmp/p4a.cmds
+lrwx------ 1 learner learner 64 Sep 21 16:25 1 -> /dev/pts/0
+lrwx------ 1 learner learner 64 Sep 21 16:25 2 -> /dev/pts/0
+lr-x------ 1 learner learner 64 Sep 21 16:25 3 -> /proc/407/fd
+$ ls -l /proc/self/fd > fds.txt
+$ cat fds.txt
+total 0
+lr-x------ 1 learner learner 64 Sep 21 16:25 0 -> /tmp/p4a.cmds
+l-wx------ 1 learner learner 64 Sep 21 16:25 1 -> /home/learner/fds.txt
+lrwx------ 1 learner learner 64 Sep 21 16:25 2 -> /dev/pts/0
+lr-x------ 1 learner learner 64 Sep 21 16:25 3 -> /proc/408/fd
+$ ls -l /proc/self/fd 2> /dev/null < /etc/hostname | cat
+total 0
+lr-x------ 1 learner learner 64 Sep 21 16:25 0 -> /etc/hostname
+l-wx------ 1 learner learner 64 Sep 21 16:25 1 -> pipe:[143093]
+l-wx------ 1 learner learner 64 Sep 21 16:25 2 -> /dev/null
+lr-x------ 1 learner learner 64 Sep 21 16:25 3 -> /proc/410/fd
+
+$ ls /etc/hostname /nope
+ls: cannot access '/nope': No such file or directory
+/etc/hostname
+$ ls /etc/hostname /nope > out.txt
+ls: cannot access '/nope': No such file or directory
+$ cat out.txt
+/etc/hostname
+$ ls /etc/hostname /nope 2> err.txt
+/etc/hostname
+$ cat err.txt
+ls: cannot access '/nope': No such file or directory
+$ ls /etc/hostname /nope > both.txt 2>&1
+$ cat both.txt
+ls: cannot access '/nope': No such file or directory
+/etc/hostname
+$ ls /etc/hostname /nope 2>&1 > wrong.txt
+ls: cannot access '/nope': No such file or directory
+$ cat wrong.txt
+/etc/hostname
+$ ls /etc/hostname /nope &> amp.txt
+$ cat amp.txt
+ls: cannot access '/nope': No such file or directory
+/etc/hostname
+$ echo one > log.txt; echo two > log.txt; echo three >> log.txt; cat log.txt
+two
+three
+$ wc -l < log.txt
+2
+$ ls /etc/hostname /nope 2> /dev/null
+/etc/hostname
+$ ls -l /dev/null
+crw-rw-rw- 1 root root 1, 3 Sep 21 10:52 /dev/null
+$ echo hi > /etc/motd2
+/usr/local/bin/run.sh: line 7: /etc/motd2: Permission denied
+$ printf 'b\na\n' > names.txt; sort names.txt > names.txt; wc -c names.txt
+0 names.txt
+
+$ ls /etc/hostname /nope | wc -l
+ls: cannot access '/nope': No such file or directory
+1
+$ ls /etc/hostname /nope 2>&1 | wc -l
+2
+$ ls /etc/hostname /nope 2>&1 > /dev/null | wc -l
+1
+$ ls -l /proc/self/fd | cat
+total 0
+lr-x------ 1 learner learner 64 Sep 21 16:25 0 -> /tmp/p4a.cmds
+l-wx------ 1 learner learner 64 Sep 21 16:25 1 -> pipe:[148438]
+lrwx------ 1 learner learner 64 Sep 21 16:25 2 -> /dev/pts/0
+lr-x------ 1 learner learner 64 Sep 21 16:25 3 -> /proc/435/fd
+$ false | true; echo $?
+0
+$ true | false; echo $?
+1
+$ false | true; echo "${PIPESTATUS[*]}"
+1 0
+$ set -o pipefail; false | true; echo $?; set +o pipefail
+1
+$ bash -c 'exit 3' | bash -c 'exit 4' | true; echo "${PIPESTATUS[*]}"
+3 4 0
+$ python3 -m pytest tests/
+/usr/bin/python3: No module named pytest
+$ python3 -m pytest tests/ | tee test.log; echo "exit=$?"
+/usr/bin/python3: No module named pytest
+exit=0
+$ cat test.log
+$ set -o pipefail; python3 -m pytest tests/ | tee test.log; echo "exit=$?"; set +o pipefail
+/usr/bin/python3: No module named pytest
+exit=1
+$ python3 -m pytest tests/ 2>&1 | tee test.log; echo "exit=$?"
+/usr/bin/python3: No module named pytest
+exit=0
+$ echo "today is $(date +%F), kernel $(uname -r)"
+today is 2026-09-21, kernel 6.10.14-linuxkit
+$ n=$(ls /etc | wc -l); echo "$n entries"
+84 entries
+$ out=$(ls /nope); echo "captured: [$out]"
+ls: cannot access '/nope': No such file or directory
+captured: []
+$ out=$(ls /nope 2>&1); echo "captured: [$out]"
+captured: [ls: cannot access '/nope': No such file or directory]
+$ wc -w <<< "three little words"
+3
+$ yes | head -n 2; echo "${PIPESTATUS[*]}"
+y
+y
+141 0
+$ seq 1 2000000 | wc -c
+14888896
+$ seq 1 2000000 | tail -n 2
+1999999
+2000000
+
+# Part B: interactive session via: docker exec -i lt-04-lab script -qc 'su - learner' /dev/null
+ls -l /proc/self/fd
+ls -l /proc/self/fd > fds.txt
+cat fds.txt
+echo hi > /etc/motd2
+ls -l /proc/self/fd 2> /dev/null < /etc/hostname | cat
+exit
+learner@a138d722e1d4:~$ ls -l /proc/self/fd
+total 0
+lrwx------ 1 learner learner 64 Sep 21 16:26 0 -> /dev/pts/1
+lrwx------ 1 learner learner 64 Sep 21 16:26 1 -> /dev/pts/1
+lrwx------ 1 learner learner 64 Sep 21 16:26 2 -> /dev/pts/1
+lr-x------ 1 learner learner 64 Sep 21 16:26 3 -> /proc/483/fd
+learner@a138d722e1d4:~$ ls -l /proc/self/fd > fds.txt
+learner@a138d722e1d4:~$ cat fds.txt
+total 0
+lrwx------ 1 learner learner 64 Sep 21 16:26 0 -> /dev/pts/1
+l-wx------ 1 learner learner 64 Sep 21 16:26 1 -> /home/learner/fds.txt
+lrwx------ 1 learner learner 64 Sep 21 16:26 2 -> /dev/pts/1
+lr-x------ 1 learner learner 64 Sep 21 16:26 3 -> /proc/484/fd
+learner@a138d722e1d4:~$ echo hi > /etc/motd2
+-bash: /etc/motd2: Permission denied
+learner@a138d722e1d4:~$ <-l /proc/self/fd 2> /dev/null < /etc/hostname | cat
+total 0
+lr-x------ 1 learner learner 64 Sep 21 16:26 0 -> /etc/hostname
+l-wx------ 1 learner learner 64 Sep 21 16:26 1 -> pipe:[145335]
+l-wx------ 1 learner learner 64 Sep 21 16:26 2 -> /dev/null
+lr-x------ 1 learner learner 64 Sep 21 16:26 3 -> /proc/486/fd
+learner@a138d722e1d4:~$ exit
+logout
+
+# Part C: script p4c.sh run as learner (docker exec -u learner, no tty: fd 0 is /dev/null there)
+## script:
+cd ~ || exit 1
+echo '--- heredoc unquoted'
+cat > greet.sh <<EOF
+echo "home is $HOME"
+EOF
+cat greet.sh
+echo '--- heredoc quoted'
+cat > greet.sh <<'EOF'
+echo "home is $HOME"
+EOF
+cat greet.sh
+echo '--- buffering'
+cat > chatty.py <<'EOF'
+import sys
+print("out: collected 3 tests")
+print("err: warning, slow disk", file=sys.stderr)
+print("out: 3 passed")
+EOF
+echo '$ python3 chatty.py > run.log 2>&1; cat run.log'
+python3 chatty.py > run.log 2>&1; cat run.log
+echo '$ python3 -u chatty.py > run.log 2>&1; cat run.log'
+python3 -u chatty.py > run.log 2>&1; cat run.log
+echo '$ PYTHONUNBUFFERED=1 python3 chatty.py > run.log 2>&1; cat run.log'
+PYTHONUNBUFFERED=1 python3 chatty.py > run.log 2>&1; cat run.log
+echo '$ stdbuf -oL python3 chatty.py > run.log 2>&1; cat run.log'
+stdbuf -oL python3 chatty.py > run.log 2>&1; cat run.log
+echo '--- harness capture'
+cat > harness.py <<'EOF'
+import subprocess
+r = subprocess.run(["bash", "-c", "python3 -m pytest tests/"],
+                   capture_output=True, text=True)
+print("returncode:", r.returncode)
+print("stdout:", repr(r.stdout))
+print("stderr:", repr(r.stderr))
+EOF
+python3 harness.py
+echo '--- harness capture with 2>/dev/null'
+python3 - <<'EOF'
+import subprocess
+r = subprocess.run(["bash", "-c", "python3 -m pytest tests/ 2>/dev/null"], capture_output=True, text=True)
+print("returncode:", r.returncode); print("stdout:", repr(r.stdout)); print("stderr:", repr(r.stderr))
+EOF
+echo '--- lab 5'
+cat > run-tests.sh <<'EOF'
+#!/bin/bash
+python3 -m pytest tests/ 2>/dev/null | tee /tmp/test.log
+echo "tests finished"
+EOF
+chmod +x run-tests.sh
+./run-tests.sh; echo "exit=$?"
+cat > run-tests-fixed.sh <<'EOF'
+#!/bin/bash
+set -o pipefail
+python3 -m pytest tests/ 2>&1 | tee /tmp/test.log
+status=$?
+echo "tests finished with status $status"
+exit "$status"
+EOF
+chmod +x run-tests-fixed.sh
+./run-tests-fixed.sh; echo "exit=$?"
+echo '--- lab misc'
+echo '$ ls -l /proc/self/fd 2> err.txt | cat'
+ls -l /proc/self/fd 2> err.txt | cat
+echo '$ ls /etc/hostname /nope 2>&1 >/dev/null | wc -l'
+ls /etc/hostname /nope 2>&1 >/dev/null | wc -l
+echo '$ ls /nope | tee l.txt; echo ${PIPESTATUS[*]} $?'
+ls /nope | tee l.txt; echo "${PIPESTATUS[*]}"
+echo '$ (echo out; echo err >&2) 2>&1 | tr a-z A-Z'
+(echo out; echo err >&2) 2>&1 | tr a-z A-Z
+echo '$ find / -name "*.conf" | wc -l ; then with 2>/dev/null'
+find / -name '*.conf' 2>&1 | grep -c 'Permission denied'
+find / -name '*.conf' 2>/dev/null | wc -l
+echo '$ bash -c "kill -9 \$\$" | tee x; PIPESTATUS'
+bash -c 'kill -9 $$' | tee x.log; echo "${PIPESTATUS[*]}"
+echo '$ head -c'
+seq 1 2000000 | head -c 40 | tr '\n' ' '; echo
+## output:
+--- heredoc unquoted
+echo "home is /home/learner"
+--- heredoc quoted
+echo "home is $HOME"
+--- buffering
+$ python3 chatty.py > run.log 2>&1; cat run.log
+err: warning, slow disk
+out: collected 3 tests
+out: 3 passed
+$ python3 -u chatty.py > run.log 2>&1; cat run.log
+out: collected 3 tests
+err: warning, slow disk
+out: 3 passed
+$ PYTHONUNBUFFERED=1 python3 chatty.py > run.log 2>&1; cat run.log
+out: collected 3 tests
+err: warning, slow disk
+out: 3 passed
+$ stdbuf -oL python3 chatty.py > run.log 2>&1; cat run.log
+err: warning, slow disk
+out: collected 3 tests
+out: 3 passed
+--- harness capture
+returncode: 1
+stdout: ''
+stderr: '/usr/bin/python3: No module named pytest\n'
+--- harness capture with 2>/dev/null
+returncode: 1
+stdout: ''
+stderr: ''
+--- lab 5
+tests finished
+exit=0
+/usr/bin/python3: No module named pytest
+tests finished with status 1
+exit=1
+--- lab misc
+$ ls -l /proc/self/fd 2> err.txt | cat
+total 0
+lr-x------ 1 learner learner 64 Sep 21 16:26 0 -> /dev/null
+l-wx------ 1 learner learner 64 Sep 21 16:26 1 -> pipe:[153256]
+l-wx------ 1 learner learner 64 Sep 21 16:26 2 -> /home/learner/err.txt
+lr-x------ 1 learner learner 64 Sep 21 16:26 3 -> /proc/524/fd
+$ ls /etc/hostname /nope 2>&1 >/dev/null | wc -l
+1
+$ ls /nope | tee l.txt; echo ${PIPESTATUS[*]} $?
+ls: cannot access '/nope': No such file or directory
+2 0
+$ (echo out; echo err >&2) 2>&1 | tr a-z A-Z
+OUT
+ERR
+$ find / -name "*.conf" | wc -l ; then with 2>/dev/null
+13
+40
+$ bash -c "kill -9 \$\$" | tee x; PIPESTATUS
+137 0
+$ head -c
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 1
+# shellcheck on run-tests-fixed.sh: exit 0, no findings
+
+# Part D: interactive pty session (lab 1 and here-documents)
+learner@a138d722e1d4:~$ ls -l /proc/self/fd 2> err.txt | cat
+total 0
+lrwx------ 1 learner learner 64 Sep 21 16:29 0 -> /dev/pts/0
+l-wx------ 1 learner learner 64 Sep 21 16:29 1 -> pipe:[193889]
+l-wx------ 1 learner learner 64 Sep 21 16:29 2 -> /home/learner/err.txt
+lr-x------ 1 learner learner 64 Sep 21 16:29 3 -> /proc/553/fd
+learner@a138d722e1d4:~$ cat > greet.sh <<EOF
+> echo "home is $HOME"
+> EOF
+learner@a138d722e1d4:~$ cat greet.sh
+echo "home is /home/learner"
+learner@a138d722e1d4:~$ cat > greet.sh <<'EOF'
+> echo "home is $HOME"
+> EOF
+learner@a138d722e1d4:~$ cat greet.sh
+echo "home is $HOME"
+learner@a138d722e1d4:~$ exit
+logout

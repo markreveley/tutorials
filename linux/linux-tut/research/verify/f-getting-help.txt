@@ -1,0 +1,352 @@
+# Verification for appendices/f-getting-help.html — 2026-09-21. Container lt-f-man = ubuntu:24.04 + man-db + 'yes | unminimize' + manpages manpages-dev less procps
+$ man man | col -b | sed -n "/The table below/,/9   Kernel/p"
+man: can't resolve man7/groff_man.7
+       The table below shows the section numbers of the manual followed by the
+       types of pages they contain.
+
+       1   Executable programs or shell commands
+       2   System calls (functions provided by the kernel)
+       3   Library calls (functions within program libraries)
+       4   Special files (usually found in /dev)
+       5   File formats and conventions, e.g. /etc/passwd
+       6   Games
+       7   Miscellaneous  (including  macro  packages  and  conventions), e.g.
+	   man(7), groff(7), man-pages(7)
+       8   System administration commands (usually only for root)
+       9   Kernel routines [Non standard]
+[exit=0]
+$ man -f kill
+kill (1)             - send a signal to a process
+kill (2)             - send signal to a process
+[exit=0]
+$ whatis signal
+signal (2)           - ANSI C signal handling
+signal (7)           - overview of signals
+[exit=0]
+$ man -w signal; man -w 7 signal
+/usr/share/man/man2/signal.2.gz
+/usr/share/man/man7/signal.7.gz
+[exit=0]
+$ man -k "send a signal" | head; echo; apropos -s 1 signal | head -8
+kill (1)             - send a signal to a process
+killall5 (8)         - send a signal to all processes
+pidfd_send_signal (2) - send a signal to a process specified by a file descri...
+pthread_kill (3)     - send a signal to a thread
+raise (3)            - send a signal to the caller
+skill (1)            - send a signal or report process status
+snice (1)            - send a signal or report process status
+tgkill (2)           - send a signal to a thread
+tkill (2)            - send a signal to a thread
+
+kill (1)             - send a signal to a process
+pgrep (1)            - look up, signal, or wait for processes based on name a...
+pidwait (1)          - look up, signal, or wait for processes based on name a...
+pkill (1)            - look up, signal, or wait for processes based on name a...
+skill (1)            - send a signal or report process status
+snice (1)            - send a signal or report process status
+[exit=0]
+$ man -k . | wc -l
+3191
+[exit=0]
+$ man timeout | col -b | sed -n "/^SYNOPSIS/,/^DESCRIPTION/p"
+SYNOPSIS
+       timeout [OPTION] DURATION COMMAND [ARG]...
+       timeout [OPTION]
+
+DESCRIPTION
+[exit=0]
+$ man cp | col -b | sed -n "/^SYNOPSIS/,/^DESCRIPTION/p"
+SYNOPSIS
+       cp [OPTION]... [-T] SOURCE DEST
+       cp [OPTION]... SOURCE... DIRECTORY
+       cp [OPTION]... -t DIRECTORY SOURCE...
+
+DESCRIPTION
+[exit=0]
+$ man 7 signal | col -b | grep -n -m3 "SIGKILL"
+257:       SIGKILL	    P1990      Term    Kill signal
+287:       The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
+341:       SIGKILL		9	    9	    9	    9
+[exit=0]
+$ timeout --help | head -12
+Usage: timeout [OPTION] DURATION COMMAND [ARG]...
+  or:  timeout [OPTION]
+Start COMMAND, and kill it if still running after DURATION.
+
+Mandatory arguments to long options are mandatory for short options too.
+      --preserve-status
+                 exit with the same status as COMMAND, even when the
+                   command times out
+      --foreground
+                 when not running timeout directly from a shell prompt,
+                   allow COMMAND to read from the TTY and get TTY signals;
+                   in this mode, children of COMMAND will not be timed out
+[exit=0]
+$ type cd kill ls timeout; type -a kill
+cd is a shell builtin
+kill is a shell builtin
+ls is /usr/bin/ls
+timeout is /usr/bin/timeout
+kill is a shell builtin
+kill is /usr/bin/kill
+kill is /bin/kill
+[exit=0]
+$ help cd | head -6
+cd: cd [-L|[-P [-e]] [-@]] [dir]
+    Change the shell working directory.
+    
+    Change the current directory to DIR.  The default DIR is the value of the
+    HOME shell variable. If DIR is "-", it is converted to $OLDPWD.
+    
+[exit=0]
+$ help kill | head -4
+kill: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]
+    Send a signal to a job.
+    
+    Send the processes identified by PID or JOBSPEC the signal named by
+[exit=0]
+$ man cd
+No manual entry for cd
+[exit=16]
+$ which info tldr; echo "exit=$?"
+exit=1
+[exit=0]
+$ ls --hepl
+ls: unrecognized option '--hepl'
+Try 'ls --help' for more information.
+[exit=2]
+$ man ls | head -4; echo; echo PAGER=$PAGER MANPAGER=$MANPAGER
+LS(1)                            User Commands                           LS(1)
+
+NAME
+       ls - list directory contents
+
+PAGER= MANPAGER=
+[exit=0]
+$ dpkg -S /usr/share/man/man7/signal.7.gz /usr/share/man/man2/kill.2.gz /usr/share/man/man1/kill.1.gz /usr/share/man/man1/timeout.1.gz
+manpages: /usr/share/man/man7/signal.7.gz
+manpages-dev: /usr/share/man/man2/kill.2.gz
+procps: /usr/share/man/man1/kill.1.gz
+coreutils: /usr/share/man/man1/timeout.1.gz
+[exit=0]
+$ man 5 passwd | col -b | sed -n "1,8p"; man -w passwd; man -aw passwd
+PASSWD(5)		File Formats and Configuration		     PASSWD(5)
+
+NAME
+       passwd - the password file
+
+DESCRIPTION
+       /etc/passwd contains one line for each user account, with seven fields
+       delimited by colons (":"). These fields are:
+/usr/share/man/man1/passwd.1.gz
+/usr/share/man/man1/passwd.1.gz
+/usr/share/man/man5/passwd.5.gz
+[exit=0]
+
+## less keys (from less --help, in lt-f-man)
+  h  H		       Display this help.
+  q  :q	 Q  :Q	ZZ     Exit.
+  b  ^B	 ESC-v	    *  Backward one window (or N lines).
+  /pattern	    *  Search forward for (N-th) matching line.
+  ?pattern	    *  Search backward for (N-th) matching line.
+  g  <	ESC-<	    *  Go to first line in file (or line N).
+  G  >	ESC->	    *  Go to last line in file (or line N).
+
+## fresh minimal images
+$ docker run --rm ubuntu:24.04 man ls
+This system has been minimized by removing packages and content that are
+not required on a system that users do not log into.
+
+$ docker run --rm debian:bookworm-slim man ls
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "man": executable file not found in $PATH: unknown
+
+Run 'docker run --help' for more information
+[exit=127]
+$ docker run --rm alpine:3.20 man ls
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "man": executable file not found in $PATH: unknown
+
+Run 'docker run --help' for more information
+[exit=127]
+$ docker run --rm alpine:3.20 sh -c "ls --help 2>&1 | head -4"
+BusyBox v1.36.1 (2025-11-23 14:32:18 UTC) multi-call binary.
+
+Usage: ls [-1AaCxdLHRFplinshrSXvctu] [-w WIDTH] [FILE]...
+
+$ docker run --rm ubuntu:24.04 bash -c "ls --help | head -4"
+Usage: ls [OPTION]... [FILE]...
+List information about the FILEs (the current directory by default).
+Sort entries alphabetically if none of -cftuvSUX nor --sort is specified.
+
+
+## man with and without a terminal; MANPAGER
+95
+95
+TIMEOUT(1)                       User Commands                      TIMEOUT(1)
+
+NAME
+
+## Mac side
+$ man timeout (macOS)
+curs_inopts(3X)                                                curs_inopts(3X)
+
+$ man ls | head (macOS)
+LS(1)			    General Commands Manual			 LS(1)
+
+NAME
+     ls – list directory contents
+$ zsh: help cd
+zsh:1: command not found: help
+$ docker --help | head -14
+Usage:  docker [OPTIONS] COMMAND
+
+A self-sufficient runtime for containers
+
+Common Commands:
+  run         Create and run a new container from an image
+  exec        Execute a command in a running container
+  ps          List containers
+  build       Build an image from a Dockerfile
+  bake        Build from a file
+  pull        Download an image from a registry
+  push        Upload an image to a registry
+  images      List images
+  login       Authenticate to a registry
+$ docker run --help | head -12
+Usage:  docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+
+Create and run a new container from an image
+
+Aliases:
+  docker container run, docker run
+
+Options:
+      --add-host list                    Add a custom host-to-IP mapping
+                                         (host:ip)
+      --annotation map                   Add an annotation to the
+                                         container (passed through to the
+$ docker run --help | grep -E -- "--(rm|memory|network|read-only) "
+  -m, --memory bytes                     Memory limit
+      --network network                  Connect a container to a network
+      --read-only                        Mount the container's root
+      --rm                               Automatically remove the
+
+## man7.org
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+         "https://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+Linux man pages online
+        man7.org > Linux > man-pages
+Linux man pages online
+    The links from this page display HTML renderings of the
+    man pages from the Linux
+    man-pages project
+    as well as a
+    curated
+    collection of pages from
+    various other free software projects.
+<!--
+    List of all man pages, by section
+    List of all man pages, alphabetically
+    List of all man pages, broken down by project
+-->
+        List of all man pages: &nbsp;
+    by section &nbsp;|&nbsp;
+    alphabetically &nbsp;|&nbsp;
+    by project
+    Individual sections (page names only):
+    1,&nbsp;
+    2,&nbsp;
+    3,&nbsp;
+    4,&nbsp;
+    5,&nbsp;
+    6,&nbsp;
+    7,&nbsp;
+    8&nbsp;
+200
+COLOPHON  &nbsp; &nbsp; &nbsp; &nbsp; top
+       This page is part of the man-pages (Linux kernel and C library
+       user-space interface documentation) project.  Information about
+       the project can be found at 
+       ⟨https://www.kernel.org/doc/man-pages/⟩.  If you have a bug report
+       for this manual page, see
+       ⟨https://git.kernel.org/pub/scm/docs/man-pages/man-pages.git/tree/CONTRIBUTING⟩.
+       This page was obtained from the tarball man-pages-6.19.tar.gz
+       fetched from
+
+## lab
+$ man -f shadow
+shadow (5)           - shadowed password file
+[exit=0]
+$ man 7 signal | col -b | grep -E "^ +SIGPIPE"
+       SIGPIPE	    P1990      Term    Broken pipe: write to pipe with no
+       SIGPIPE	       13	   13	   13	   13
+[exit=0]
+$ man 7 signal | col -b | grep -B2 -A8 "^ +Term +Default"
+[exit=1]
+$ docker run --rm ubuntu:24.04 bash -c "timeout --help | grep -B1 -A6 124"
+Exit status:
+  124  if COMMAND times out, and --preserve-status is not specified
+  125  if the timeout command itself fails
+  126  if COMMAND is found but cannot be invoked
+  127  if COMMAND cannot be found
+  137  if COMMAND (or timeout itself) is sent the KILL (9) signal (128+9)
+  -    the exit status of COMMAND otherwise
+
+$ docker run --rm ubuntu:24.04 bash -c "help type | head -3; type -t cd ls"
+type: type [-afptP] name [name ...]
+    Display information about command type.
+    
+builtin
+file
+$ dpkg versions
+man-db 2.12.0-4build2
+manpages 6.7-2
+manpages-dev 6.7-2
+
+## extra checks
+$ timeout 5 ls -ld /tmp
+drwxrwxrwt 1 root root 4096 Sep 21 16:16 /tmp
+[exit=0]
+$ man timeout | grep -A3 -- " -k"
+       -k, --kill-after=DURATION
+
+              also send a KILL signal if COMMAND is still running
+
+[exit=0]
+$ man 7 signal | grep -E '^ +SIGPIPE'
+       SIGPIPE      P1990      Term    Broken pipe: write to pipe with no
+       SIGPIPE         13          13      13      13
+[exit=0]
+$ yes | head -1; echo "${PIPESTATUS[0]}"
+y
+141
+[exit=0]
+$ man ls | tail -8
+
+SEE ALSO
+       dircolors(1)
+
+       Full documentation <https://www.gnu.org/software/coreutils/ls>
+       or available locally via: info '(coreutils) ls invocation'
+
+GNU coreutils 9.4                 August 2026                            LS(1)
+[exit=0]
+$ man timeout | wc -l
+95
+[exit=0]
+$ docker run --rm ubuntu:24.04 bash -c 'timeout --help | grep -A6 "^Exit status"'
+Exit status:
+  124  if COMMAND times out, and --preserve-status is not specified
+  125  if the timeout command itself fails
+  126  if COMMAND is found but cannot be invoked
+  127  if COMMAND cannot be found
+  137  if COMMAND (or timeout itself) is sent the KILL (9) signal (128+9)
+  -    the exit status of COMMAND otherwise
+$ docker run ubuntu:24.04 --rm bash
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "--rm": executable file not found in $PATH: unknown
+
+Run 'docker run --help' for more information
+[exit=127]
+$ docker run --help | grep -c -E "^ +(-[a-zA-Z], )?--"
+100
+$ man docker-run (macOS)
+No manual entry for docker-run

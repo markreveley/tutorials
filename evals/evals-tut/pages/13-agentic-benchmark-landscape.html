@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Agentic Benchmark Landscape · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 4 · Evaluating Agents</p>
+    <h1>The agentic benchmark landscape</h1>
+    <p class="lede">
+      Five more benchmarks, each read the way <a href="12-swe-bench-case-study.html">SWE-bench</a> was:
+      as an artifact whose design choices — environment, grading, human baseline, failure handling —
+      determine what its numbers can mean. Each one is presented as the best exemplar of one design
+      idea worth stealing.
+    </p>
+
+    <h2 id="gaia">GAIA: invert the difficulty, constrain the answer</h2>
+    <p>
+      GAIA (Mialon et al., 2023) poses 466 questions requiring "reasoning, multi-modality handling, web
+      browsing, and generally tool-use proficiency" — find a fact buried in a video, cross-reference a
+      paper with a database, compute something from a
+      spreadsheet.<a class="cite" href="https://arxiv.org/abs/2311.12983" title="Mialon et al. 2023, GAIA">[GAIA]</a>
+      Its first design idea is an inversion: instead of chasing tasks ever harder for humans, GAIA
+      targets questions "conceptually simple for humans yet challenging for most advanced AIs." The
+      measured gap proved the point: humans 92%, GPT-4 with plugins 15% — and by difficulty level
+      (defined jointly by steps and tools required), GPT-4+plugins fell from 30.3% (Level 1) to 9.7%
+      (Level 2) to <strong>0%</strong> (Level 3) while humans stayed nearly flat (93.9 / 91.8 /
+      87.3%).<a class="cite" href="https://arxiv.org/abs/2311.12983" title="Mialon et al. 2023, §4">[GAIA]</a>
+    </p>
+    <p>
+      Its second idea is buying cheap, objective grading by constraining the answer format: every answer
+      is a short factoid — "a string (one or a few words), a number, or a comma separated list" — scored
+      by quasi-exact match with normalization.<a class="cite" href="https://arxiv.org/abs/2311.12983" title="Mialon et al. 2023, §3">[GAIA]</a>
+      The trade is explicit and the authors also concede the cost: "GAIA does not evaluate the trace
+      leading to the answer" — process is invisible to the
+      grader.<a class="cite" href="https://arxiv.org/abs/2311.12983" title="Mialon et al. 2023, limitations">[GAIA]</a>
+      Note the defense built in: all 466 questions are public, but the <em>answers</em> to the 300 test
+      questions are retained to power the leaderboard — a partial
+      <span class="term" data-g="private-holdout">private holdout</span>
+      (<a href="22-contamination-defenses.html">Module 6</a> develops this design space).
+    </p>
+
+    <h2 id="webarena">WebArena: outcome rewards, and a probe for hallucinated success</h2>
+    <p>
+      WebArena (Zhou et al., ICLR 2024) gives agents a self-hosted miniature internet — fully functional
+      replica sites for e-commerce, a Reddit-style forum, GitLab, and a CMS, plus a map and tools — and
+      812 tasks instantiated from 241 hand-curated
+      templates.<a class="cite" href="https://arxiv.org/abs/2307.13854" title="Zhou et al. 2024, WebArena">[WebArena]</a>
+      Self-hosting trades realism's edge cases for reproducibility and resettability — the right call
+      for a shared instrument. Grading is programmatic functional correctness over the end state,
+      which the authors argue "is not only more reliable than comparing the textual surface-form action
+      sequences but also accommodate[s] a range of potential valid paths" — the
+      outcome-vs-process choice from <a href="11-evaluating-agents.html">page 11</a>, decided for
+      outcomes.<a class="cite" href="https://arxiv.org/abs/2307.13854" title="Zhou et al. 2024, §4">[WebArena]</a>
+      At publication: best GPT-4 agent 14.41%, humans 78.24%.<a class="cite" href="https://arxiv.org/abs/2307.13854" title="Zhou et al. 2024, Table 2">[WebArena]</a>
+    </p>
+    <p>
+      Two details deserve stealing. First, WebArena includes deliberately <em>unachievable</em> tasks:
+      humans recognized 100% of them as impossible; GPT-4, only 44.44% — a designed probe for agents
+      that hallucinate success rather than admit
+      defeat.<a class="cite" href="https://arxiv.org/abs/2307.13854" title="Zhou et al. 2024, Table 2">[WebArena]</a>
+      Second, per-template consistency exposes brittleness the headline hides: GPT-4 achieved 100%
+      success on only 4 of 241 templates — everywhere else, success on one phrasing coexisted with
+      failure on a paraphrase.<a class="cite" href="https://arxiv.org/abs/2307.13854" title="Zhou et al. 2024, §5">[WebArena]</a>
+    </p>
+    <div class="warn">
+      <span class="label">And the cautionary sequel</span>
+      <p>WebArena also illustrates what happens without a holdout. The Princeton audit found the
+      top leaderboard agent, STeP, reached 35.8% partly by hardcoding policies for specific WebArena
+      tasks (e.g., constructing Reddit URLs by pattern). The authors are careful to note STeP's
+      developers had legitimate, different goals — but a leaderboard without a held-out set can't
+      distinguish general capability from task-specific tailoring, and "the majority" of 17 agent
+      benchmarks analyzed "do not include an appropriate held-out
+      set."<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §5">[Agents That Matter]</a>
+      <a href="15-cost-and-capability.html">Page 15</a> returns to this.</p>
+    </div>
+
+    <h2 id="osworld">OSWorld: when the environment is a whole computer</h2>
+    <p>
+      OSWorld (Xie et al., NeurIPS 2024) scales the environment to a full operating system: 369 real
+      computing tasks executed in an Ubuntu VM (plus an additional 43-task Windows set), spanning
+      Chrome, VS Code, LibreOffice, GIMP, email, and the
+      terminal.<a class="cite" href="https://arxiv.org/abs/2404.07972" title="Xie et al. 2024, OSWorld">[OSWorld]</a>
+      Its design lesson is the <em>price of valid grading in rich environments</em>: every task needs a
+      custom initial-state setup (302 distinct initial states) and a near-task-specific execution-based
+      evaluation script — getter functions extract the relevant end state, evaluator functions judge it;
+      134 unique evaluation functions in all, at roughly two man-hours of development per
+      evaluator.<a class="cite" href="https://arxiv.org/abs/2404.07972" title="Xie et al. 2024, §3.2–3.3">[OSWorld]</a>
+      Generic graders don't survive contact with real software; valid ones are hand-made.
+    </p>
+    <p>
+      The results carry two validity lessons. Humans scored 72.36% — measured, not assumed, and notably
+      below perfect — while the best model managed 12.24%, and that with text-based accessibility-tree
+      input; screenshot-only vision models topped out near
+      5–6%.<a class="cite" href="https://arxiv.org/abs/2404.07972" title="Xie et al. 2024, Table 5">[OSWorld]</a>
+      (Observation format moves the leaderboard — the harness lesson again.) And the aggregate hides a
+      cliff: on multi-application workflow tasks agents generally scored below 5% while human
+      performance stayed flat around 70% — an
+      <span class="term" data-g="saturation">aggregate score</span> averaging over a capability gap
+      rather than revealing it.<a class="cite" href="https://arxiv.org/abs/2404.07972" title="Xie et al. 2024, §4.2">[OSWorld]</a>
+      OSWorld also adopted the infeasible-task probe: 30 impossible tasks where reward comes only from
+      correctly declaring impossibility.<a class="cite" href="https://arxiv.org/abs/2404.07972" title="Xie et al. 2024, §3.2">[OSWorld]</a>
+    </p>
+
+    <h2 id="agentbench">AgentBench: breadth, and a failure taxonomy</h2>
+    <p>
+      AgentBench (Liu et al., ICLR 2024) went wide instead of deep: eight environments in three
+      grounding categories — Code (operating system, database, knowledge graph), Game (card game,
+      lateral-thinking puzzles, household), Web (shopping, browsing) — five of the eight purpose-built,
+      with tasks taking 5–50 interaction
+      rounds.<a class="cite" href="https://arxiv.org/abs/2308.03688" title="Liu et al. 2024, AgentBench">[AgentBench]</a>
+      Its 2023-era headline — commercial API models averaged 2.32 vs 0.51 for open-source models up to
+      70B, a ~4.5× gap<a class="cite" href="https://arxiv.org/abs/2308.03688" title="Liu et al. 2024, §4.2">[AgentBench]</a> —
+      is a snapshot, not a law. What lasts is the failure taxonomy: the dominant failure mode was
+      <em>Task Limit Exceeded</em> — agents floundering until the turn budget ran out — ahead of format
+      and invalid-action errors, with "poor long-term reasoning, decision-making, and instruction
+      following" as the named obstacles.<a class="cite" href="https://arxiv.org/abs/2308.03688" title="Liu et al. 2024, §4.3">[AgentBench]</a>
+      Agents mostly don't crash; they wander. Which means <em>turn limits are part of your metric</em>:
+      where you cap the episode decides how much wandering counts as failure.
+    </p>
+
+    <h2 id="terminal-bench">Terminal-Bench: the living benchmark</h2>
+    <p>
+      Terminal-Bench (a Stanford × Laude Institute collaboration) tests agents on terminal tasks —
+      compiling code, training models, configuring servers — and is the most instructive example of
+      benchmark <em>operations</em>. Every task has four components: an English instruction, a Docker
+      environment, a verification test script, and a reference "oracle" solution that must pass the
+      tests — a built-in proof that the task is solvable and the verifier
+      non-vacuous.<a class="cite" href="https://www.tbench.ai/docs" title="Terminal-Bench documentation, tbench.ai (accessed 2026-06-10)">[Terminal-Bench]</a>
+      Instead of freezing one dataset, it maintains a versioned registry — 1.0 (80 tasks), 2.0 (89
+      tasks), with 2.1 active and successors in development (counts as of June
+      2026)<a class="cite" href="https://www.tbench.ai/registry" title="Terminal-Bench registry (accessed 2026-06-10)">[Terminal-Bench]</a> —
+      treating the benchmark as software with releases, a lifecycle answer to contamination and
+      saturation. And its leaderboard reports success rates <em>with error bars</em> — under which the
+      top several agents overlap, ranking them statistically
+      indistinguishable<a class="cite" href="https://www.tbench.ai/leaderboard/terminal-bench/2.0" title="Terminal-Bench 2.0 leaderboard (accessed 2026-06-10)">[Terminal-Bench]</a> —
+      a practice <a href="16-error-bars.html">Module 5</a> will argue should be universal.
+    </p>
+
+    <h2 id="patterns">The design space, compressed</h2>
+    <table>
+      <tr><th></th><th>Environment</th><th>Grading</th><th>Human baseline</th><th>Notable design idea</th></tr>
+      <tr><td>GAIA</td><td>Open web + files</td><td>Quasi-exact match on factoid answers</td><td>92%</td><td>Easy-for-humans difficulty inversion; answers withheld</td></tr>
+      <tr><td>WebArena</td><td>Self-hosted web replicas</td><td>Programmatic end-state checks</td><td>78.24%</td><td>Unachievable-task probe; template consistency</td></tr>
+      <tr><td>OSWorld</td><td>Real OS in a VM</td><td>Per-task getter+evaluator scripts</td><td>72.36%</td><td>Hand-built graders at scale; infeasible tasks</td></tr>
+      <tr><td>AgentBench</td><td>8 simulated environments</td><td>Per-environment metrics</td><td>—</td><td>Breadth; failure taxonomy (turn-limit exhaustion)</td></tr>
+      <tr><td>Terminal-Bench</td><td>Docker containers</td><td>Test scripts + oracle solutions</td><td>—</td><td>Versioned releases; leaderboard error bars</td></tr>
+    </table>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Across the landscape, the same checklist decides what a score means: <em>What does the grader
+      literally check, and what is it blind to? Was the human baseline measured? Can the agent
+      distinguish impossible from hard? Is there a holdout? Who verified the verifier?</em> No benchmark
+      answers all five perfectly — the skill is knowing which answers are missing when you read a
+      leaderboard.</p>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Citing any of these numbers without a date. Every figure on this page is a point-in-time
+      measurement of specific 2023–2024 systems — WebArena's 14.41% and OSWorld's 12.24% were both left
+      far behind by later agents, and Terminal-Bench's task counts change by design. The design
+      lessons are durable; the leaderboard positions are perishable. Date-stamp every benchmark number
+      you ever quote.</p>
+    </div>
+
+    <p>
+      Two threads from this page get full treatment next: reliability across repeated trials —
+      <a href="14-reliability-pass-hat-k.html">pass^k</a> — and the economics of agent evaluation,
+      <a href="15-cost-and-capability.html">cost frontiers and time horizons</a>.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Grégoire Mialon et al., "GAIA: a benchmark for General AI Assistants," arXiv:2311.12983, 2023. <a href="https://arxiv.org/abs/2311.12983">arxiv.org/abs/2311.12983</a></li>
+        <li>Shuyan Zhou et al., "WebArena: A Realistic Web Environment for Building Autonomous Agents," ICLR 2024. <a href="https://arxiv.org/abs/2307.13854">arxiv.org/abs/2307.13854</a></li>
+        <li>Tianbao Xie et al., "OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments," NeurIPS 2024. <a href="https://arxiv.org/abs/2404.07972">arxiv.org/abs/2404.07972</a></li>
+        <li>Xiao Liu et al., "AgentBench: Evaluating LLMs as Agents," ICLR 2024. <a href="https://arxiv.org/abs/2308.03688">arxiv.org/abs/2308.03688</a></li>
+        <li>Terminal-Bench (Stanford × Laude Institute), tbench.ai docs, registry, and leaderboard, accessed 2026-06-10. <a href="https://www.tbench.ai/">tbench.ai</a></li>
+        <li>Sayash Kapoor, Benedikt Stroebl et al., "AI Agents That Matter," arXiv:2407.01502, 2024. <a href="https://arxiv.org/abs/2407.01502">arxiv.org/abs/2407.01502</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

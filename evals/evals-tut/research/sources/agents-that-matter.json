@@ -1,0 +1,94 @@
+{
+  "id": "agents-that-matter",
+  "citation": {
+    "authors": "Sayash Kapoor, Benedikt Stroebl, Zachary S. Siegel, Nitya Nadgir, Arvind Narayanan",
+    "title": "AI Agents That Matter",
+    "venue": "arXiv preprint arXiv:2407.01502, Princeton University",
+    "year": "2024",
+    "url": "https://arxiv.org/abs/2407.01502"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2407.01502",
+    "https://arxiv.org/pdf/2407.01502"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Agent benchmarks often ignore cost; calls for cost-controlled evaluation and accuracy/cost Pareto frontiers — confirm framing and case studies (HumanEval agents vs simple baselines?)",
+      "verdict": "confirmed",
+      "finding": "Contribution 1 is exactly this: 'AI agent evaluations must be cost-controlled.' The case study is HumanEval (164 problems; the LDB-modified version with example test cases for all 164 tasks). They re-evaluated three SOTA agents from the PapersWithCode HumanEval leaderboard — LDB, LATS, and Reflexion — against simple baselines, plotting accuracy vs. cost (USD, measured April 2024) as a Pareto frontier (Figure 1). Each agent run five times; mean accuracy and mean total cost reported. Cost is not a top-line metric in any of the agent papers.",
+      "quote": "AI agent evaluations must be cost-controlled (Section 2). ... We introduce three new simple baseline agents and empirically show that they outperform many SoTA complex agent architectures on HumanEval while costing much less. Therefore, agent evaluations must be cost-controlled; otherwise it will encourage researchers to develop extremely costly agents just to claim they topped the leaderboard.",
+      "location": "Section 1 (contribution 1), Sections 2.2-2.3, Figure 1"
+    },
+    {
+      "planned": "Simple baselines (retry, warming) can match complex agent architectures at lower cost — confirm specifics",
+      "verdict": "confirmed",
+      "finding": "Three baselines: Retry (re-invoke at temperature 0, up to five times, if the example test cases fail), Warming (same, but temperature gradually increased from 0 to 0.5 across runs), Escalation (start with Llama-3 8B, escalate to GPT-3.5, Llama-3 70B, then GPT-4 on test-case failure). Result: no significant accuracy difference between warming and the best complex agent architecture, while cost differs by almost two orders of magnitude. Reflexion and LDB cost over 50% more than warming; LATS over 50 times more. Escalation strictly improves accuracy while costing less than half of LDB (GPT-3.5). Note: baselines MATCH the best agents' accuracy at lower cost — they don't exceed it.",
+      "quote": "“State-of-the-art” agent architectures for HumanEval do not outperform simple baselines. There is no significant accuracy difference between our warming strategy and the best-performing agent architecture. ... For substantially similar accuracy, the cost can differ by almost two orders of magnitude. ... Reflexion and LDB cost over 50% more than the warming strategy, and LATS over 50 times more",
+      "location": "Sections 2.2-2.3, Figure 1"
+    },
+    {
+      "planned": "Overfitting due to inadequate holdout sets in agent benchmarks — confirm which benchmarks were critiqued",
+      "verdict": "confirmed",
+      "finding": "Section 5 ('Agent benchmarks allow shortcuts'). They analyzed 17 agent benchmarks against four levels of generality (distribution-specific, task-specific, domain-general, fully general). Table 1 — benchmarks with appropriate holdouts: 1/1 distribution-specific, 3/6 task-specific, 1/8 domain-general, 0/2 fully general. The majority lack appropriate held-out sets, including 7 with no holdout at all and no stated intent to add one. Named case study: WebArena and its top leaderboard agent STeP — 35.8% accuracy (more than double WebArena's top baseline agent, over 10 percentage points above the next-best agent), achieved by hardcoding policies for specific WebArena tasks (e.g., for Reddit tasks: 'look at the current base URL and add a suffix /user/user_name'), which is brittle to drift. WebArena lacks a held-out test set and does not model drift.",
+      "quote": "Yet, surprisingly, we find that many agent benchmarks do not include held-out test sets. ... the majority of benchmarks do not include an appropriate held-out set, including 7 that have no hold-out and no indication that a holdout set will be added in future editions of the benchmark. ... It turns out that STeP hardcodes policies to solve the specific tasks included in WebArena.",
+      "location": "Section 5, Table 1, Section 5.1"
+    },
+    {
+      "planned": "Distinction between model evaluation and downstream/agent evaluation needs",
+      "verdict": "confirmed",
+      "finding": "Section 4: 'Model and downstream developers have distinct benchmarking needs.' Model evaluation is a scientific question for researchers — staying away from dollar costs makes sense there (proxies like parameter count or training compute keep a level playing field over time). Downstream evaluation is an engineering/procurement question where dollar cost IS the construct of interest; cost proxies mislead (example: Mistral's Mixtral 8x22B chart used active parameters as a cost proxy, yet as of June 2024 Mixtral 8x7B cost twice as much as Llama 2 13B on Anyscale). Case study: NovelQA (novels 50,000 to over 1 million words, 5-100 questions each) evaluates by asking ALL questions about a novel at once, making RAG look much worse than reality: in a real-world sequential-query scenario long-context and RAG are roughly equally accurate with RAG costing more than 20 times less, but on NovelQA RAG costs only half as much — 'a tenfold overestimate' of RAG's relative cost. Recommendation: downstream evals should report input/output token counts alongside dollar costs so costs can be recalculated as prices change.",
+      "quote": "Model evaluation is a scientific question of interest to researchers. Here, it makes sense to stay away from dollar costs ... Downstream evaluation is an engineering question that helps inform a procurement decision of which model or agent to use in a particular application. Here, cost is the actual construct of interest.",
+      "location": "Section 4, Section 4.1"
+    },
+    {
+      "planned": "Joint optimization of accuracy and cost",
+      "verdict": "confirmed",
+      "finding": "Section 3 (contribution 2): they modified the DSPy framework and used Optuna hyperparameter search on HotPotQA (100 training samples to optimize, 200 evaluation samples; search over per-module temperature, number of few-shot examples, which examples, and whether to add formatting instructions). Results: GPT-3.5 — 53% lower variable cost with similar accuracy vs. both default DSPy implementations; Llama-3-70B — 41% lower cost while maintaining accuracy. The framing splits fixed costs (one-time agent-design optimization) from variable costs (per-run); joint optimization becomes cheaper in total cost than default DSPy after 1,350 tasks, and variable cost dominates 'by orders of magnitude' at real-world scale.",
+      "quote": "for GPT-3.5, joint optimization leads to 53% lower variable cost with similar accuracy compared to both default DSPy implementations. Similarly, for Llama-3-70B, it leads to a 41% lower cost while maintaining accuracy.",
+      "location": "Sections 3, 3.1, 3.2, Figure 2"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Retrying alone can inflate accuracy without limit, so accuracy alone cannot identify research progress. AlphaCode's accuracy rises from near 0% zero-shot to over 15% with 1,000 retries and over 30% with a million retries.",
+      "quote": "the accuracy of AlphaCode increases from close to 0% zero-shot to over 15% with 1,000 retries and over 30% with a million retries ... Accuracy alone cannot identify progress because it can be improved by scientifically meaningless methods such as retrying.",
+      "numbers": "~0% zero-shot -> >15% at 1,000 retries -> >30% at 1,000,000 retries"
+    },
+    {
+      "point": "Because agent papers haven't tested simple baselines, there is no good evidence that 'System 2' ideas (planning, reflection, debugging) drive code-generation gains — the question remains open. The authors explicitly allow that System 2 techniques may help on harder tasks like SWE-bench.",
+      "quote": "Since papers proposing new agents haven't adequately tested simple baselines, it has led to widespread beliefs in the community that complex ideas like planning, reflection, and debugging are responsible for accuracy gains. Based on our findings, the question of whether debugging, reflection, and other such “System 2” approaches are useful for code generation remains open.",
+      "numbers": "n/a"
+    },
+    {
+      "point": "Evaluating agents is itself expensive, which is why error bars are rare. SWE-bench has over 2,000 programming tasks; SWE-Agent's authors capped cost at USD 4 per task, so one full evaluation run could cost over USD 8,000. The authors found reported accuracy scores above the maximum of their five reproduction runs, and reported baselines sometimes below their minimum.",
+      "quote": "Evaluating SWE-Agent on the entire benchmark could cost over USD 8,000 for a single evaluation run. ... We found that many reported accuracy scores were above the maximum of five runs that we performed in our reproduction attempts, and the reported baselines were in some cases lower than the minimum of five runs we performed.",
+      "numbers": "SWE-bench: >2,000 tasks; $4/task cap; >$8,000 per full evaluation run"
+    },
+    {
+      "point": "Five root causes of irreproducible agent evals (Section 6): (1) eval scripts assume agent designs not satisfied by all agents; (2) repurposing LLM benchmarks for agents introduces inconsistencies — HumanEval lacks example test cases for 3 of 164 problems and embeds them in docstrings, so Reflexion and LATS removed those problems while LDB added machine-readable tests; (3) high cost prevents confidence intervals; (4) environment interactions break assumptions — WebArena's Reddit clone has rate limits, so evaluating Reddit tasks back-to-back makes them much more likely to fail (task order matters); (5) subtle bugs — both LATS and STeP marked some incorrectly completed tasks as correct, and removed 1 and 8 benchmark tasks respectively.",
+      "quote": "HumanEval does not include example test cases for 3 of the 164 problems. ... One of the websites included in the benchmark (a clone of Reddit) has rate limits for certain agent actions ... As a result, if the tasks involving Reddit posts are evaluated one after another, they are much more likely to fail. ... both LATS and STeP marked some incorrectly completed tasks as correct.",
+      "numbers": "3/164 HumanEval problems lack example tests; LATS removed 1 task, STeP removed 8"
+    },
+    {
+      "point": "Principled holdout framework: four levels of agent generality, each requiring a different holdout type — distribution-specific (hold out in-distribution samples), task-specific (out-of-distribution samples), domain-general (hold out entire tasks), fully general (hold out entire domains). The more general the intended agent, the more the held-out set should differ from the training set. Preventing shortcuts is the benchmark developer's responsibility, not the agent developer's.",
+      "quote": "We propose as a core principle that the more general the intended generality of the agent, the more the held-out set should differ from the training set ... We view this as the responsibility of benchmark developers rather than agent developers, because designing benchmarks that don't allow shortcuts is much easier than checking every single agent to see if it takes shortcuts.",
+      "numbers": "17 benchmarks analyzed; appropriate holdouts by level: 1/1, 3/6, 1/8, 0/2"
+    },
+    {
+      "point": "Agent benchmarks don't account for humans in the loop, which can cause UNDERestimation of usefulness (the mirror image of missing-holdout overoptimism). Simple human feedback raised GPT-4 from 0% to over 86% on challenging programming problems (Shi et al., cited).",
+      "quote": "Human feedback might greatly increase accuracy. For example, Shi et al. [43] find that simple feedback increases the performance of GPT-4 from 0% to over 86% on challenging programming problems—from entirely useless to almost perfect.",
+      "numbers": "0% -> >86% with simple human feedback"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do NOT say the simple baselines 'beat' SOTA agents on accuracy. The body's claim is 'no significant accuracy difference' between warming and the best agent architecture — baselines match accuracy at drastically lower cost (a Pareto improvement). The intro's 'outperform' refers to the joint accuracy/cost picture.",
+    "The overfitting/holdout case study is WebArena + the STeP agent, NOT HumanEval. HumanEval is the cost case study (Section 2); it reappears only in Section 6's reproducibility critique (3 of 164 problems lack example test cases).",
+    "STeP's hardcoded policies were not framed as cheating — the paper says STeP developers' goals (composable policies for known fixed tasks) are 'orthogonal' to benchmark goals; the problem is that the leaderboard misleads downstream developers.",
+    "Joint-optimization savings (53% GPT-3.5, 41% Llama-3-70B) are variable-cost reductions on HotPotQA with a modified DSPy pipeline — not general-purpose savings figures.",
+    "Cost figures are time-stamped: Figure 1 measured April 2024, Figure 2 May 2024, both USD. The paper itself recommends publishing input/output token counts so costs can be recalculated as prices change.",
+    "Not all agent benchmarks lack holdouts: 5 of 17 analyzed had appropriate holdouts; 7 had none at all.",
+    "The retry baseline runs up to five times at temperature zero (justified because LLMs aren't deterministic even at temperature 0) — don't describe warming as 'raising temperature on failure to random values'; it ramps 0 to 0.5 across runs."
+  ],
+  "notes_for_authors": "Verified against the full v1 PDF (arXiv:2407.01502; PDF dated July 2, 2024; arXiv lists only v1, submitted July 1, 2024; Princeton University). All five planned claims confirmed with exact passages. Strongest teaching artifacts: Figure 1 (HumanEval accuracy/cost Pareto plot — LDB, LATS, Reflexion vs. retry/warming/escalation; cost axis runs to ~$135 for LATS GPT-4 across the 164 problems while baselines sit in low single-digit dollars), Table 1 (holdout adequacy by generality level), and the five reproducibility root causes in Section 6. The paper's five numbered contributions in Section 1 map cleanly onto a lesson structure. Section 1.1 offers a useful 'agentic is a spectrum' definition with three factor clusters (environment and goals; user interface and supervision; system design). There is a companion web app for recalculating cost tradeoffs: https://benediktstroebl.github.io/agent-eval-webapp/. Venue caution: this fetch confirms only the arXiv preprint; if you want to cite a peer-reviewed venue (e.g., a later NeurIPS appearance), verify that independently rather than assuming."
+}

@@ -1,0 +1,140 @@
+## per-command presence in stock ubuntu:24.04 and dpkg -S owner (cmd|base|pkg)
+bash|base|bash
+type|base|builtin|
+command|base|builtin|
+which|base|debianutils
+man|base|local diversion from
+local diversion to
+help|base|builtin|
+echo|base|builtin|coreutils
+printf|base|builtin|coreutils
+env|base|coreutils
+export|base|builtin|
+ls|base|coreutils
+cd|base|builtin|
+pwd|base|builtin|coreutils
+cat|base|coreutils
+less|MISSING
+head|base|coreutils
+tail|base|coreutils
+cp|base|coreutils
+mv|base|coreutils
+rm|base|coreutils
+mkdir|base|coreutils
+touch|base|coreutils
+ln|base|coreutils
+stat|base|coreutils
+find|base|findutils
+file|MISSING
+du|base|coreutils
+df|base|coreutils
+readlink|base|coreutils
+chmod|base|coreutils
+chown|base|coreutils
+umask|base|builtin|
+grep|base|grep
+sed|base|sed
+awk|base|mawk
+sort|base|coreutils
+uniq|base|coreutils
+cut|base|coreutils
+wc|base|coreutils
+tr|base|coreutils
+tee|base|coreutils
+xargs|base|findutils
+jq|MISSING
+diff|base|diffutils
+id|base|coreutils
+whoami|base|coreutils
+su|base|util-linux
+sudo|MISSING
+useradd|base|passwd
+getent|base|libc-bin
+ps|base|procps
+top|base|procps
+pgrep|base|procps
+pkill|base|procps
+kill|base|builtin|procps
+timeout|base|coreutils
+nohup|base|coreutils
+strace|MISSING
+lsof|MISSING
+tmux|MISSING
+free|base|procps
+uptime|base|procps
+ulimit|base|builtin|
+nproc|base|coreutils
+journalctl|MISSING
+systemctl|MISSING
+dmesg|base|util-linux
+mount|base|mount
+findmnt|base|util-linux
+lsblk|base|util-linux
+ip|MISSING
+ss|MISSING
+ping|MISSING
+dig|MISSING
+nslookup|MISSING
+curl|MISSING
+nc|MISSING
+tcpdump|MISSING
+nft|MISSING
+iptables|MISSING
+apt-get|base|apt
+apt-cache|base|apt
+dpkg|base|dpkg
+pip|MISSING
+python3|MISSING
+unshare|base|util-linux
+nsenter|base|util-linux
+lsns|base|util-linux
+capsh|MISSING
+setpriv|base|util-linux
+git|MISSING
+ssh|MISSING
+tar|base|tar
+sha256sum|base|coreutils
+trap|base|builtin|
+## after apt-get install --no-install-recommends ... (cmd|path|realpath|dpkg -S realpath|dpkg -S path)
+less|/usr/bin/less|/usr/bin/less|less|less
+file|/usr/bin/file|/usr/bin/file|file|file
+jq|/usr/bin/jq|/usr/bin/jq|jq|jq
+sudo|/usr/bin/sudo|/usr/bin/sudo|sudo|sudo
+strace|/usr/bin/strace|/usr/bin/strace|strace|strace
+lsof|/usr/bin/lsof|/usr/bin/lsof|lsof|lsof
+tmux|/usr/bin/tmux|/usr/bin/tmux|tmux|tmux
+journalctl|/usr/bin/journalctl|/usr/bin/journalctl|systemd|systemd
+systemctl|/usr/bin/systemctl|/usr/bin/systemctl|systemd|systemd
+ip|/usr/sbin/ip|/usr/bin/ip||
+ss|/usr/bin/ss|/usr/bin/ss||
+ping|/usr/bin/ping|/usr/bin/ping|iputils-ping|iputils-ping
+dig|/usr/bin/dig|/usr/bin/dig|bind9-dnsutils|bind9-dnsutils
+nslookup|/usr/bin/nslookup|/usr/bin/nslookup|bind9-dnsutils|bind9-dnsutils
+curl|/usr/bin/curl|/usr/bin/curl|curl|curl
+nc|/usr/bin/nc|/usr/bin/nc.openbsd||
+tcpdump|/usr/bin/tcpdump|/usr/bin/tcpdump|tcpdump|tcpdump
+nft|/usr/sbin/nft|/usr/sbin/nft|nftables|nftables
+iptables|/usr/sbin/iptables|/usr/sbin/xtables-nft-multi|iptables|
+pip|/usr/bin/pip|/usr/bin/pip|python3-pip|python3-pip
+python3|/usr/bin/python3|/usr/bin/python3.12|python3.12-minimal|python3-minimal
+capsh|/usr/sbin/capsh|/usr/sbin/capsh|libcap2-bin|libcap2-bin
+git|/usr/bin/git|/usr/bin/git|git|git
+ssh|/usr/bin/ssh|/usr/bin/ssh|openssh-client|openssh-client
+man|/usr/bin/man|/usr/bin/man|local diversion from
+local diversion to
+man-db|local diversion from
+local diversion to
+man-db
+Package: dnsutils
+Depends: bind9-dnsutils
+iproute2: /bin/ip
+iproute2: /bin/ss
+netcat-openbsd: /bin/nc.openbsd
+dpkg-query: no path found matching pattern /usr/sbin/ip
+netcat-openbsd: /bin/nc.openbsd
+iproute2: /bin/ss
+procps: /usr/bin/ps
+dpkg-query: no path found matching pattern /usr/bin/ip
+iproute2: /bin/ip
+Depends: bind9-dnsutils
+Description: Transitional package for bind9-dnsutils

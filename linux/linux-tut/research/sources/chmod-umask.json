@@ -1,0 +1,250 @@
+{
+ "id": "chmod-umask",
+ "tag": "[chmod(2)]",
+ "citation": {
+  "authors": "Linux man-pages project; GNU coreutils (chmod(1))",
+  "title": "chmod(2), umask(2), chown(2), execve(2), path_resolution(7), inode(7), capabilities(7) — Linux man-pages 6.19; chmod(1) — GNU coreutils",
+  "venue": "man7.org",
+  "year": "2026 (man-pages 6.19)",
+  "url": "https://man7.org/linux/man-pages/man2/chmod.2.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man2/chmod.2.html",
+  "https://man7.org/linux/man-pages/man1/chmod.1.html",
+  "https://man7.org/linux/man-pages/man2/umask.2.html",
+  "https://man7.org/linux/man-pages/man2/chown.2.html",
+  "https://man7.org/linux/man-pages/man2/execve.2.html",
+  "https://man7.org/linux/man-pages/man7/path_resolution.7.html",
+  "https://man7.org/linux/man-pages/man7/inode.7.html",
+  "https://man7.org/linux/man-pages/man7/capabilities.7.html",
+  "https://man7.org/linux/man-pages/man2/unlink.2.html",
+  "https://man7.org/linux/man-pages/man2/open.2.html",
+  "https://man7.org/linux/man-pages/man2/mkdir.2.html",
+  "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Mode bits and octal values: S_ISUID 04000, S_ISGID 02000, S_ISVTX 01000, rwx for user/group/other 0400..0001",
+   "verdict": "confirmed",
+   "finding": "Exact table: S_ISUID 04000, S_ISGID 02000, S_ISVTX 01000, S_IRUSR 00400, S_IWUSR 00200, S_IXUSR 00100, S_IRGRP 00040, S_IWGRP 00020, S_IXGRP 00010, S_IROTH 00004, S_IWOTH 00002, S_IXOTH 00001. To chmod a file the caller's effective UID must match the owner, or it needs CAP_FOWNER.",
+   "quote": "S_ISUID (04000) set-user-ID (set process effective user ID on execve(2)) S_ISGID (02000) set-group-ID ... S_ISVTX (01000) sticky bit (restricted deletion flag, as described in unlink(2)) S_IRUSR (00400) read by owner S_IWUSR (00200) write by owner S_IXUSR (00100) execute/search by owner",
+   "location": "chmod(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chmod.2.html"
+  },
+  {
+   "planned": "Permission check uses exactly ONE class: owner if UID matches, else group if a GID matches, else other (so owner with 0 perms is denied even if 'other' allows) — find authoritative wording (path_resolution(7) or inode(7) or POSIX)",
+   "verdict": "confirmed",
+   "finding": "Authoritative wording found in two places. Linux: path_resolution(7) 'Permissions' — first group of three bits 'is used when' the effective (fs) UID equals the owner; second 'is used when' the file's group matches the effective GID or a supplementary GID; 'When neither holds, the third group is used.' POSIX XBD 3.142: a process is in the file group class only 'if the process is not in the file owner class'; 3.149: in the other class only if in neither. There is no fall-through. Executed: file 0004 owned by alice — alice denied, bob (other) reads it; file 0604 alice:bob — bob (group class, no bits) denied although 'other' has r. The owner can always chmod the bits back.",
+   "quote": "The second group of three is used when the group ID of the file either equals the effective group ID of the calling process, or is one of the supplementary group IDs of the calling process (as set by setgroups(2)). When neither holds, the third group is used.",
+   "location": "path_resolution(7) 'Permissions'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "planned": "Directory bits: r = list names, w = create/delete entries, x = search/traverse; deleting a file needs write on the DIRECTORY, not the file",
+   "verdict": "confirmed",
+   "finding": "chmod(2): for directories x is 'search' and 'means that entries within the directory can be accessed'. unlink(2) EACCES: 'Write access to the directory containing path is not allowed'. (Coreutils manual gives the plain-English r/w/x-for-directories list — see coreutils note.) In practice creating/deleting needs w AND x on the directory. Executed as non-root: dir 0400 -> `ls` lists names but `cat d/f` denied; dir 0100 -> `ls` denied but `cat d/f` works; dir 0500 with file 0666 -> rm denied, create denied, append to the file allowed; dir 0700 containing a root-owned 0444 file -> `rm -f` succeeds.",
+   "quote": "execute/search by owner (\"search\" applies for directories, and means that entries within the directory can be accessed)",
+   "location": "chmod(2) DESCRIPTION, S_IXUSR; unlink(2) ERRORS EACCES",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chmod.2.html"
+  },
+  {
+   "planned": "Sticky bit on a directory restricts deletion to file owner, directory owner, or privileged process (why /tmp is 1777)",
+   "verdict": "confirmed",
+   "finding": "inode(7): in a sticky directory a file 'can be renamed or deleted only by the owner of the file, by the owner of the directory, and by a privileged process' (Linux: CAP_FOWNER, per unlink(2)). It restricts rename/delete only — not writing to the file. chmod(1) calls it the 'restricted deletion flag' and names /tmp. Executed: /tmp and /var/tmp are 1777 drwxrwxrwt; in a 1777 dir bob's `rm`/`mv` of alice's 0666 file -> 'Operation not permitted', but bob could append to it; after chmod 0777 bob's rm succeeded.",
+   "quote": "The sticky bit (S_ISVTX) on a directory means that a file in that directory can be renamed or deleted only by the owner of the file, by the owner of the directory, and by a privileged process.",
+   "location": "inode(7) 'The file type and mode'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "planned": "umask clears bits from the mode requested at creation: files typically created 0666 & ~umask, dirs 0777 & ~umask; common default 022",
+   "verdict": "confirmed",
+   "finding": "umask(2): 'permissions in the umask are turned off from the mode argument to open(2) and mkdir(2)'; typical default 022; worked example 0666 & ~022 = 0644. open(2): created mode is (mode & ~umask); mkdir(2): (mode & ~umask & 0777). The umask only removes bits from what the PROGRAM asked for — it never adds (mktemp asks for 0600 and gets 0600 even with umask 000). It is bitwise AND-NOT, not subtraction. If the parent directory has a default ACL the umask is ignored. Executed: umask 022 -> file 644, dir 755; 077 -> 600/700; 027 -> 640/750; umask inherited by child shells; root's umask in the image is 0022.",
+   "quote": "The typical default value for the process umask is S_IWGRP | S_IWOTH (octal 022).",
+   "location": "umask(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/umask.2.html"
+  },
+  {
+   "planned": "Only a privileged process (CAP_CHOWN) may change a file's owner; owner may change group to one they belong to",
+   "verdict": "confirmed",
+   "finding": "Verbatim. Also: when an unprivileged user changes owner/group of an executable, S_ISUID and S_ISGID are cleared (since Linux 2.2.13 root is treated the same), and file capabilities are cleared. Executed: alice `chown bob mine` -> 'Operation not permitted'; `chgrp bob` denied until alice was added to group bob, then succeeded; root `chown` of a 4755 file left it -rwxr-xr-x.",
+   "quote": "Only a privileged process (Linux: one with the CAP_CHOWN capability) may change the owner of a file. The owner of a file may change the group of the file to any group of which that owner is a member. A privileged process (Linux: with CAP_CHOWN) may change the group arbitrarily.",
+   "location": "chown(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chown.2.html"
+  },
+  {
+   "planned": "Set-user-ID: execve sets effective UID to file owner; ignored for scripts on Linux; ignored under nosuid mounts and no_new_privs",
+   "verdict": "confirmed",
+   "finding": "All parts verbatim in execve(2). The ignore list has THREE items: no_new_privs set, filesystem mounted nosuid, or the calling process is being ptraced; file capabilities are ignored in the same cases. Scripts: 'Linux (like most other modern UNIX systems) ignores the set-user-ID and set-group-ID bits on scripts.' Real UID/GID and supplementary groups are unchanged by execve. Executed: copy of /usr/bin/id with mode 4755 run by alice -> euid=0(root); a 4755 root-owned bash script run by alice -> id -u 1001, EUID 1001; same setuid binary under `setpriv --no-new-privs` -> no euid change.",
+   "quote": "Linux (like most other modern UNIX systems) ignores the set-user-ID and set-group-ID bits on scripts.",
+   "location": "execve(2) VERSIONS, 'Interpreter scripts' (last paragraph); set-user-ID rules in DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+  },
+  {
+   "planned": "Root (CAP_DAC_OVERRIDE) bypasses read/write/execute permission checks (execute only if some x bit is set) — cite capabilities(7)",
+   "verdict": "confirmed",
+   "finding": "capabilities(7): CAP_DAC_OVERRIDE = 'Bypass file read, write, and execute permission checks.' The 'execute only if some x bit is set' qualifier is NOT in capabilities(7); it is in path_resolution(7) (and POSIX XBD 4.7). CAP_DAC_READ_SEARCH is the narrower read-and-directory-search bypass. Executed as root: reading a mode-000 file works; executing it -> 'Permission denied' (status 126); after chmod 001 it runs. Remember this is a capability: a 'root' in a container that has had CAP_DAC_OVERRIDE dropped does not get the bypass.",
+   "quote": "The CAP_DAC_OVERRIDE capability overrides all permission checking, but grants execute permission only when at least one of the file's three execute permission bits is set.",
+   "location": "path_resolution(7) 'Bypassing permission checks: superuser and capabilities'; capabilities(7) CAP_DAC_OVERRIDE",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "First sentence of the class rule (precedes the quote in the claim).",
+   "quote": "The permission bits of a file consist of three groups of three bits; see chmod(1) and stat(2). The first group of three is used when the effective user ID of the calling process equals the owner ID of the file.",
+   "location": "path_resolution(7) 'Permissions'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "fact": "umask(2)'s worked example.",
+   "quote": "(octal 0666) when creating a new file, the permissions on the resulting file will be: S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH (because 0666 & ~022 = 0644; i.e., rw-r--r--).",
+   "location": "umask(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/umask.2.html"
+  },
+  {
+   "fact": "umask mechanism sentence.",
+   "quote": "Specifically, permissions in the umask are turned off from the mode argument to open(2) and mkdir(2).",
+   "location": "umask(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/umask.2.html"
+  },
+  {
+   "fact": "execve set-user-ID rule and the three-item ignore list.",
+   "quote": "The aforementioned transformations of the effective IDs are not performed (i.e., the set-user-ID and set-group-ID bits are ignored) if any of the following is true: the no_new_privs attribute is set for the calling thread (see prctl(2)); the underlying filesystem is mounted nosuid (the MS_NOSUID flag for mount(2)); or the calling process is being ptraced.",
+   "location": "execve(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+  },
+  {
+   "fact": "What set-user-ID does.",
+   "quote": "If the set-user-ID bit is set on the program file referred to by path, then the effective user ID of the calling process is changed to that of the owner of the program file.",
+   "location": "execve(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+  },
+  {
+   "fact": "nosuid behaviour varies by kernel: some refuse with EPERM, some silently ignore the bits.",
+   "quote": "The result of mounting a filesystem nosuid varies across Linux kernel versions: some will refuse execution of set-user-ID and set-group-ID executables when this would give the user powers they did not have already (and return EPERM), some will just ignore the set-user-ID and set-group-ID bits and exec() successfully.",
+   "location": "execve(2) NOTES",
+   "cite_url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+  },
+  {
+   "fact": "Shebang facts: '#!interpreter [optional-arg]'; on Linux everything after the interpreter is passed as ONE argument; max length 255 chars since Linux 5.1 (127 before).",
+   "quote": "On Linux, the entire string following the interpreter name is passed as a single argument to the interpreter, and this string can include white space.",
+   "location": "execve(2) VERSIONS, 'Interpreter scripts'",
+   "cite_url": "https://man7.org/linux/man-pages/man2/execve.2.html"
+  },
+  {
+   "fact": "Linux uses the fsuid/fsgid, not the effective IDs, for the class test (normally identical).",
+   "quote": "Linux uses the fsuid instead of the effective user ID in permission checks. Ordinarily the fsuid will equal the effective user ID",
+   "location": "path_resolution(7) 'Permissions'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "fact": "POSIX normative form of the class rule.",
+   "quote": "A process is in the file group class of a file if the process is not in the file owner class and if the effective group ID or one of the supplementary group IDs of the process matches the group ID associated with the file.",
+   "location": "POSIX.1-2024 XBD 3.142 File Group Class",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html"
+  },
+  {
+   "fact": "CAP_DAC_READ_SEARCH.",
+   "quote": "The CAP_DAC_READ_SEARCH capability grants read and search permission on directories, and read permission on ordinary files.",
+   "location": "path_resolution(7) 'Bypassing permission checks'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/path_resolution.7.html"
+  },
+  {
+   "fact": "CAP_FOWNER: bypass owner-match checks (chmod, utime) and 'ignore directory sticky bit on file deletion'. CAP_CHOWN: 'Make arbitrary changes to file UIDs and GIDs'.",
+   "quote": "Bypass permission checks on operations that normally require the filesystem UID of the process to match the UID of the file (e.g., chmod(2), utime(2))",
+   "location": "capabilities(7) CAP_FOWNER, CAP_CHOWN",
+   "cite_url": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
+  },
+  {
+   "fact": "Who may chmod.",
+   "quote": "The effective UID of the calling process must match the owner of the file, or the process must be privileged (Linux: it must have the CAP_FOWNER capability).",
+   "location": "chmod(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chmod.2.html"
+  },
+  {
+   "fact": "Writing to a setuid file may clear the setuid/setgid bits (unless CAP_FSETID).",
+   "quote": "As a security measure, depending on the filesystem, the set-user-ID and set-group-ID execution bits may be turned off if a file is written.",
+   "location": "chmod(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chmod.2.html"
+  },
+  {
+   "fact": "Set-group-ID on a DIRECTORY: new files inherit the directory's group, and new subdirectories inherit the setgid bit — the standard shared-directory idiom.",
+   "quote": "For a directory, it indicates that BSD semantics are to be used for that directory: files created there inherit their group ID from the directory, not from the effective group ID of the creating process, and directories created there will also get the S_ISGID bit set.",
+   "location": "inode(7) 'The file type and mode'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/inode.7.html"
+  },
+  {
+   "fact": "chmod(1): sticky bit = 'restricted deletion flag'; commonly on /tmp.",
+   "quote": "For directories, it prevents unprivileged users from removing or renaming a file in the directory unless they own the file or the directory; this is called the restricted deletion flag for the directory, and is commonly found on world-writable directories like /tmp.",
+   "location": "chmod(1) RESTRICTED DELETION FLAG OR STICKY BIT",
+   "cite_url": "https://man7.org/linux/man-pages/man1/chmod.1.html"
+  },
+  {
+   "fact": "chmod(1): numeric modes do not clear setuid/setgid on directories unless you write 00755 / =755.",
+   "quote": "For directories chmod preserves set-user-ID and set-group-ID bits unless you explicitly specify otherwise.",
+   "location": "chmod(1) SETUID AND SETGID BITS",
+   "cite_url": "https://man7.org/linux/man-pages/man1/chmod.1.html"
+  },
+  {
+   "fact": "umask(2): only the permission bits of the mask are used; the call always succeeds; default ACLs override the umask.",
+   "quote": "umask() sets the calling process's file mode creation mask (umask) to mask & 0777 (i.e., only the file permission bits of mask are used), and returns the previous value of the mask.",
+   "location": "umask(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/umask.2.html"
+  },
+  {
+   "fact": "open(2)/mkdir(2) formula.",
+   "quote": "in the absence of a default ACL, the mode of the created file is (mode & ~umask).",
+   "location": "open(2) O_CREAT; mkdir(2): '(mode & ~umask & 0777)'",
+   "cite_url": "https://man7.org/linux/man-pages/man2/open.2.html"
+  },
+  {
+   "fact": "chown clears setuid/setgid and file capabilities.",
+   "quote": "When the owner or group of an executable file is changed by an unprivileged user, the S_ISUID and S_ISGID mode bits are cleared. ... When the owner or group of an executable file is changed (by any user), all capability sets for the file are cleared.",
+   "location": "chown(2) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man2/chown.2.html"
+  },
+  {
+   "fact": "Observed: one class only.",
+   "quote": "-------r-- 1 alice alice own.txt : (alice) cat -> Permission denied, status 1 ; (bob) cat -> secret, status 0\n-rw----r-- 1 alice bob grp.txt : (bob) cat -> Permission denied, status 1\n(alice) chmod u+r own.txt && cat own.txt -> secret",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Observed: root and mode 000.",
+   "quote": "---------- 1 root root r.sh : cat r.sh -> ok ; ./r.sh -> Permission denied (status 126) ; chmod 001 r.sh; ./r.sh -> ran (status 0)",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Observed: directory bits (non-root user alice, owner of d).",
+   "quote": "d=0400: ls d -> f (status 0) ; cat d/f -> Permission denied\nd=0100: ls d -> ls: cannot open directory '/srv/d': Permission denied (status 2) ; cat d/f -> hi\nd=0500, d/f=0666: rm d/f -> Permission denied ; echo more >> d/f -> ok ; touch d/new -> Permission denied\nd=0700, d/f root-owned 0444: rm -f d/f -> status 0",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Observed: sticky bit.",
+   "quote": "$ stat -c '%a %A %U %n' /tmp /var/tmp -> 1777 drwxrwxrwt root /tmp ; 1777 drwxrwxrwt root /var/tmp\n(bob, in 1777 dir, alice's 0666 file) rm -> rm: cannot remove '/srv/shared/alice.txt': Operation not permitted ; mv -> Operation not permitted ; echo >> file -> ok\nafter chmod 0777 shared: bob rm -> status 0",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Observed: umask arithmetic.",
+   "quote": "umask -> 0022: f1 644, d1 755 | umask 077: f2 600, d2 700 | umask 027: f3 640, d3 750 ; umask -S -> u=rwx,g=rx,o= | umask 000: mktemp file -> 600, touch f4 -> 666 | umask 077; bash -c 'umask; sh -c umask' -> 0077 / 0077",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Observed: setuid binary vs script vs no_new_privs.",
+   "quote": "-rwsr-xr-x 1 root root /srv/suid-id (copy of /usr/bin/id): as alice -> uid=1001(alice) gid=1001(alice) euid=0(root)\n-rwsr-xr-x 1 root root /srv/suid.sh (#!/bin/bash; id -u; echo euid=$EUID): as alice -> 1001 / euid=1001\nsetpriv --reuid=alice --regid=alice --init-groups --no-new-privs /srv/suid-id -> no euid= field (effective uid stayed alice)\nchown alice /srv/suid-id -> mode becomes -rwxr-xr-x",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "fact": "Setuid-root programs shipped in the base images (identical list in ubuntu:24.04 and debian:bookworm-slim); alpine:3.20 has none. `find / -xdev -perm -4000` is the audit command.",
+   "quote": "/usr/bin/chfn /usr/bin/chsh /usr/bin/gpasswd /usr/bin/mount /usr/bin/newgrp /usr/bin/passwd /usr/bin/su /usr/bin/umount",
+   "location": "executed ubuntu:24.04, debian:bookworm-slim, alpine:3.20 (`find / -xdev -perm -4000 -type f`)"
+  },
+  {
+   "fact": "Observed: chown rules.",
+   "quote": "(alice) chown bob mine -> chown: changing ownership of 'mine': Operation not permitted ; chgrp bob mine -> Operation not permitted ; after `usermod -aG bob alice`: chgrp bob mine -> status 0, stat -> alice:bob",
+   "location": "executed ubuntu:24.04"
+  }
+ ],
+ "teaching_notes": "Every planned claim held. Where to cite each: octal table -> chmod(2); ONE-class rule -> path_resolution(7) 'Permissions' (tag [path_resolution(7)]) with POSIX XBD 3.142 as the normative backup; sticky -> inode(7) / unlink(2); umask -> umask(2) (it contains the worked 0666 & ~022 = 0644 example); setuid -> execve(2). Two precision points: the 'root can execute only if some x bit is set' qualifier is in path_resolution(7), not capabilities(7); and the setuid ignore-list has a third member (being ptraced). Folklore to avoid: 'umask is subtracted' (it is AND-NOT, and only ever removes bits from what the program requested — mktemp files stay 0600 under umask 000); 'sticky bit protects files from modification' (it restricts only rename/delete — bob could still append to alice's 0666 file). no_new_privs neutralising setuid is the hook into the Docker/sudo material."
+}

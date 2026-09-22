@@ -1,0 +1,72 @@
+# Verification for pages/00-orientation.html — run 2026-09-21 on Docker Desktop (aarch64), image ubuntu:24.04
+# Interactive session recorded with: script -q lab00.txt docker run --rm -it --name lt-00-lab ubuntu:24.04 bash
+# (terminal escape sequences and colour codes stripped)
+
+root@75ffaabca095:/# id
+uid=0(root) gid=0(root) groups=0(root)
+root@75ffaabca095:/# head -2 /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+root@75ffaabca095:/# ps aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.0   4296  3576 pts/0    Ss   10:54   0:00 bash
+root        11  0.0  0.0   7628  3448 pts/0    R+   10:54   0:00 ps aux
+root@75ffaabca095:/# ip addr
+bash: ip: command not found
+root@75ffaabca095:/# echo $?
+127
+root@75ffaabca095:/# ls -la /
+total 56
+drwxr-xr-x   1 root root 4096 Sep 21 10:54 .
+drwxr-xr-x   1 root root 4096 Sep 21 10:54 ..
+-rwxr-xr-x   1 root root    0 Sep 21 10:54 .dockerenv
+lrwxrwxrwx   1 root root    7 Apr 22  2024 bin -> usr/bin
+drwxr-xr-x   2 root root 4096 Apr 22  2024 boot
+drwxr-xr-x   5 root root  360 Sep 21 10:54 dev
+drwxr-xr-x   1 root root 4096 Sep 21 10:54 etc
+drwxr-xr-x   3 root root 4096 Sep 11 02:12 home
+lrwxrwxrwx   1 root root    7 Apr 22  2024 lib -> usr/lib
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 media
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 mnt
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 opt
+dr-xr-xr-x 288 root root    0 Sep 21 10:54 proc
+drwx------   2 root root 4096 Sep 11 02:12 root
+drwxr-xr-x   4 root root 4096 Sep 11 02:12 run
+lrwxrwxrwx   1 root root    8 Apr 22  2024 sbin -> usr/sbin
+drwxr-xr-x   2 root root 4096 Sep 11 02:06 srv
+dr-xr-xr-x  11 root root    0 Sep 21 10:54 sys
+drwxrwxrwt   2 root root 4096 Sep 11 02:12 tmp
+drwxr-xr-x  11 root root 4096 Sep 11 02:06 usr
+drwxr-xr-x  11 root root 4096 Sep 11 02:12 var
+root@75ffaabca095:/# touch /i-was-here; ls /i-was-here
+/i-was-here
+root@75ffaabca095:/# exit
+exit
+
+# After exit, a NEW container from the same image does not have the file:
+$ docker run --rm ubuntu:24.04 ls /i-was-here
+ls: cannot access '/i-was-here': No such file or directory
+[exit=2]
+
+$ docker run --rm ubuntu:24.04 uname -sr   (kernel is the Docker Desktop VM kernel)
+Linux 6.10.14-linuxkit
+
+# OOM demo (memory-capped, safe): the box kills the command; the transcript only says 'Killed'
+$ docker run --rm --name lt-00-oom --memory 64m --memory-swap 64m ubuntu:24.04 bash -c 'tail /dev/zero; echo "exit status: $?"; cat /sys/fs/cgroup/memory.max; grep oom_kill /sys/fs/cgroup/memory.events'
+exit status: 137
+bash: line 1:     7 Killed                  tail /dev/zero
+67108864
+oom_kill 1
+[docker exit=0]
+
+# Same, interactively: docker run --rm -it --name lt-00-oom --memory 64m --memory-swap 64m ubuntu:24.04 bash
+root@bd3f10e364c0:/# tail /dev/zero
+Killed
+root@bd3f10e364c0:/# echo $?
+137
+root@bd3f10e364c0:/# cat /sys/fs/cgroup/memory.max
+67108864
+root@bd3f10e364c0:/# grep oom_kill /sys/fs/cgroup/memory.events
+oom_kill 1
+root@bd3f10e364c0:/# exit
+exit

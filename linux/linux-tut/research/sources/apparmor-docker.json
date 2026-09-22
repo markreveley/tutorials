@@ -1,0 +1,73 @@
+{
+ "id": "apparmor-docker",
+ "tag": "[Docker: AppArmor]",
+ "citation": {
+  "authors": "Docker Inc.",
+  "title": "AppArmor security profiles for Docker",
+  "venue": "Docker Docs (docs.docker.com)",
+  "year": "2026",
+  "url": "https://docs.docker.com/engine/security/apparmor/"
+ },
+ "fetched_urls": [
+  "https://docs.docker.com/engine/security/apparmor/",
+  "https://raw.githubusercontent.com/moby/profiles/main/apparmor/template.go",
+  "https://docs.docker.com/reference/cli/docker/container/run/",
+  "https://docs.docker.com/engine/security/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Docker auto-generates and loads a default profile 'docker-default' for containers on AppArmor-enabled hosts; it is 'moderately protective'",
+   "verdict": "confirmed",
+   "finding": "Both parts verbatim. Generation detail: 'The Docker binary generates this profile in tmpfs and then loads it into the kernel.' The profile applies to containers, not to the daemon. Full 'moderately protective' sentence: 'It is moderately protective while providing wide application compatibility.' (the same sentence Docker uses for the seccomp profile). The template now lives at github.com/moby/profiles (apparmor/template.go). Override per container with --security-opt apparmor=<profile>; --privileged 'Disables the default AppArmor profile' (run reference) and 'Privileged containers without an explicit AppArmor profile use unconfined'. Applicability caveat: AppArmor is an Ubuntu/Debian/SUSE-family LSM; this machine's Docker Desktop VM lists only seccomp and cgroupns under `docker info` Security Options (no apparmor), so nothing here can be demonstrated locally.",
+   "quote": "Docker automatically generates and loads a default profile for containers named `docker-default`. The Docker binary generates this profile in `tmpfs` and then loads it into the kernel.",
+   "location": "Docker Docs, 'AppArmor security profiles for Docker' (intro)",
+   "cite_url": "https://docs.docker.com/engine/security/apparmor/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "What AppArmor is, in Docker's words.",
+   "quote": "AppArmor (Application Armor) is a Linux security module that protects an operating system and its applications from security threats. To use it, a system administrator associates an AppArmor security profile with each program. Docker expects to find an AppArmor policy loaded and enforced.",
+   "location": "Docker Docs, 'AppArmor security profiles for Docker' (intro)",
+   "cite_url": "https://docs.docker.com/engine/security/apparmor/"
+  },
+  {
+   "finding": "'Moderately protective' sentence and default behaviour.",
+   "quote": "The `docker-default` profile is the default for running containers. It is moderately protective while providing wide application compatibility. [...] When you run a container, it uses the `docker-default` policy unless you override it with the `security-opt` option.",
+   "location": "Docker Docs, 'AppArmor security profiles for Docker' → 'Understand the policies'",
+   "cite_url": "https://docs.docker.com/engine/security/apparmor/#understand-the-policies"
+  },
+  {
+   "finding": "NEW (not folklore): since Docker Engine 29.8 the daemon can generate docker-default from a custom template.",
+   "quote": "Starting with Docker Engine 29.8, you can configure the daemon to generate the `docker-default` profile from a custom template. This changes the policy for containers that use `docker-default`. Privileged containers without an explicit AppArmor profile use `unconfined`",
+   "location": "Docker Docs, 'AppArmor security profiles for Docker' → 'Customize the default profile'",
+   "cite_url": "https://docs.docker.com/engine/security/apparmor/#customize-the-default-profile"
+  },
+  {
+   "finding": "What docker-default actually denies (from the built-in template): all mount operations; writes to /proc outside /proc/<pid> and most of /proc/sys; /proc/sysrq-trigger and /proc/kcore entirely; writes under /sys (except the cgroup fs path pattern); /sys/firmware, /sys/kernel/security; AF_ALG and AF_VSOCK sockets; ptrace only between processes of the same profile. It allows `network`, `capability`, `file`, `umount` broadly — i.e. it is a targeted deny-list on top of general allow rules.",
+   "quote": "deny @{PROC}/* w,   # deny write for all files directly in /proc (not in a subdir) [...] deny @{PROC}/sysrq-trigger rwklx, deny @{PROC}/kcore rwklx, deny mount, [...] deny /sys/firmware/** rwklx, [...] deny /sys/kernel/security/** rwklx,",
+   "location": "github.com/moby/profiles, apparmor/template.go, const baseTemplate",
+   "cite_url": "https://github.com/moby/profiles/blob/main/apparmor/template.go"
+  },
+  {
+   "finding": "Debugging: denials appear in the kernel log (dmesg) as audit lines with apparmor=\"DENIED\" and profile=\"docker-default\"; aa-status lists loaded profiles.",
+   "quote": "You can use `dmesg` to debug problems and `aa-status` check the loaded profiles.",
+   "location": "Docker Docs, 'AppArmor security profiles for Docker' → 'Debug AppArmor'",
+   "cite_url": "https://docs.docker.com/engine/security/apparmor/#debug-apparmor"
+  },
+  {
+   "finding": "Docker's view of LSM profiles as an extra net overlapping capabilities.",
+   "quote": "we ship a template that works with AppArmor and Red Hat comes with SELinux policies for Docker. These templates provide an extra safety net (even though it overlaps greatly with capabilities).",
+   "location": "Docker Docs, Docker Engine security, 'Other kernel security features'",
+   "cite_url": "https://docs.docker.com/engine/security/#other-kernel-security-features"
+  },
+  {
+   "finding": "EXECUTED — this host has no AppArmor in the Docker VM (Security Options lists only seccomp and cgroupns).",
+   "quote": "$ docker info | grep -A3 'Security Options'\n Security Options:\n  seccomp\n   Profile: unconfined\n  cgroupns",
+   "location": "executed (docker info); Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  }
+ ],
+ "teaching_notes": "Confirmed as planned. Keep the page honest about scope: AppArmor only exists on hosts whose kernel/distro enables it (not in Docker Desktop's VM here), so describe rather than demo. The interesting concrete content is the template: `deny mount`, /proc and /sys write denials, kcore/sysrq-trigger — a third, path-based layer over capabilities and seccomp (e.g. mount is denied three times over). New since folklore: template moved to moby/profiles; Engine 29.8 allows a custom docker-default template; the template denies AF_ALG/AF_VSOCK sockets."
+}

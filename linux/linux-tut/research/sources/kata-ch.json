@@ -1,0 +1,134 @@
+{
+ "id": "kata-ch",
+ "tag": "[Kata]",
+ "citation": {
+  "authors": "Kata Containers community (OpenInfra Foundation); Cloud Hypervisor project (Linux Foundation)",
+  "title": "Kata Containers Architecture (docs/design/architecture/README.md), Kata hypervisors doc, katacontainers.io; Cloud Hypervisor README and cloudhypervisor.org",
+  "venue": "Project documentation",
+  "year": "2026 (living documentation, main branches)",
+  "url": "https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md"
+ },
+ "fetched_urls": [
+  "https://katacontainers.io/",
+  "https://raw.githubusercontent.com/kata-containers/kata-containers/main/docs/design/architecture/README.md",
+  "https://raw.githubusercontent.com/kata-containers/kata-containers/main/docs/hypervisors.md",
+  "https://raw.githubusercontent.com/kata-containers/kata-containers/main/README.md",
+  "https://www.cloudhypervisor.org/",
+  "https://raw.githubusercontent.com/cloud-hypervisor/cloud-hypervisor/main/README.md"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Kata runs each container/pod inside a lightweight VM with its own kernel while presenting an OCI-compatible runtime; supports multiple hypervisors (QEMU, Cloud Hypervisor, Firecracker)",
+   "verdict": "confirmed",
+   "finding": "Lightweight VMs that feel like containers, hardware virtualization as 'a second layer of defence'.",
+   "quote": "Kata Containers is an open source community working to build a secure container runtime with lightweight virtual machines (VM's) that feel and perform like standard Linux containers, but provide stronger workload isolation using hardware virtualization technology as a second layer of defence.",
+   "location": "Kata Containers Architecture > Overview",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md"
+  },
+  {
+   "planned": "Kata runs each container/pod inside a lightweight VM with its own kernel while presenting an OCI-compatible runtime; supports multiple hypervisors (QEMU, Cloud Hypervisor, Firecracker)",
+   "verdict": "confirmed",
+   "finding": "Own (dedicated) kernel — site wording.",
+   "quote": "Runs in a dedicated kernel, providing isolation of network, I/O and memory and can utilize hardware-enforced isolation with virtualization VT extensions.",
+   "location": "katacontainers.io, features list ('Security')",
+   "cite_url": "https://katacontainers.io/"
+  },
+  {
+   "planned": "Kata runs each container/pod inside a lightweight VM with its own kernel while presenting an OCI-compatible runtime; supports multiple hypervisors (QEMU, Cloud Hypervisor, Firecracker)",
+   "verdict": "confirmed",
+   "finding": "OCI runtime-spec compatible; works with Kubernetes CRI via CRI-O and containerd.",
+   "quote": "The Kata Containers runtime is compatible with the OCI runtime specification and therefore works seamlessly with the Kubernetes Container Runtime Interface (CRI) through the CRI-O and containerd implementations.",
+   "location": "Kata Containers Architecture > Compatibility",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md"
+  },
+  {
+   "planned": "Kata runs each container/pod inside a lightweight VM with its own kernel while presenting an OCI-compatible runtime; supports multiple hypervisors (QEMU, Cloud Hypervisor, Firecracker)",
+   "verdict": "corrected",
+   "finding": "Hypervisor list is longer than planned: Cloud Hypervisor, Firecracker, QEMU, Dragonball, StratoVirt (hypervisors.md table). The website sentence names QEMU, Cloud-Hypervisor and Firecracker. All but QEMU are written in Rust per the table.",
+   "quote": "Kata Containers also supports multiple hypervisors including QEMU, Cloud-Hypervisor and Firecracker and integrates with the containerd project among others.",
+   "location": "katacontainers.io, 'About' paragraph",
+   "cite_url": "https://katacontainers.io/"
+  },
+  {
+   "planned": "Cloud Hypervisor: open-source VMM on KVM (and MSHV), Rust, focused on modern cloud workloads, minimal emulation",
+   "verdict": "confirmed",
+   "finding": "Open source VMM on KVM and Microsoft Hypervisor (MSHV); Rust; based on rust-vmm crates; 'Minimal emulation' is a listed objective.",
+   "quote": "Cloud Hypervisor is an open source Virtual Machine Monitor (VMM) that runs on top of the KVM hypervisor and the Microsoft Hypervisor (MSHV).",
+   "location": "Cloud Hypervisor README, §1 'What is Cloud Hypervisor?'",
+   "cite_url": "https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/README.md"
+  },
+  {
+   "planned": "Cloud Hypervisor: open-source VMM on KVM (and MSHV), Rust, focused on modern cloud workloads, minimal emulation",
+   "verdict": "confirmed",
+   "finding": "Focus on modern cloud workloads = paravirtualised (virtio) I/O, no legacy devices, 64-bit only.",
+   "quote": "This means modern operating systems with most I/O handled by paravirtualised devices (e.g. virtio), no requirement for legacy devices, and 64-bit CPUs. Cloud Hypervisor is implemented in Rust and is based on the Rust VMM crates.",
+   "location": "Cloud Hypervisor README, §1 'What is Cloud Hypervisor?'",
+   "cite_url": "https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/README.md"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Inside the Kata VM the workload is STILL containerized: the in-guest agent creates namespaces/cgroups using the guest kernel, equivalent to a runc environment. So Kata = container inside a VM, not container replaced by a VM.",
+   "quote": "The container environment created by the agent is equivalent to a container environment created by the runc OCI runtime; Linux cgroups and namespaces are created inside the VM by the guest kernel to isolate the workload from the VM environment the container is created in.",
+   "location": "Kata Containers Architecture > Container creation (Notes)",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md"
+  },
+  {
+   "finding": "Kata's one-line self-description (README).",
+   "quote": "Kata Containers is an open source project and community working to build a standard implementation of lightweight Virtual Machines (VMs) that feel and perform like containers, but provide the workload isolation and security advantages of VMs.",
+   "location": "kata-containers README > Introduction",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/README.md"
+  },
+  {
+   "finding": "Kata needs hardware virtualization: x86_64 Intel VT-x / AMD SVM; aarch64 ARM Hyp; also ppc64le and s390x.",
+   "quote": "Kata Containers currently runs on 64-bit systems supporting the following technologies:",
+   "location": "kata-containers README > Platform support (table follows)",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/README.md"
+  },
+  {
+   "finding": "How Kata describes Firecracker and Cloud Hypervisor.",
+   "quote": "Firecracker is a minimal and lightweight hypervisor created for the AWS Lambda product.",
+   "location": "Kata docs/hypervisors.md > Firecracker",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/docs/hypervisors.md"
+  },
+  {
+   "finding": "Host-to-guest control channel: the runtime talks to the kata-agent with ttRPC over VSOCK (another harness-to-sandbox interface example).",
+   "quote": "The runtime is responsible for starting the hypervisor and it's VM, and communicating with the agent using a ttRPC based protocol over a VSOCK socket that provides a communications link between the VM and the host.",
+   "location": "Kata Containers Architecture > Runtime",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md"
+  },
+  {
+   "finding": "The in-guest supervisor: kata-agent, written in Rust, one per VM.",
+   "quote": "is a long running process that runs inside the VM. It acts as the supervisor for managing the containers and the workload running within those containers. Only a single agent process is run for each VM created.",
+   "location": "Kata Containers Architecture > Agent",
+   "cite_url": "https://github.com/kata-containers/kata-containers/blob/main/docs/design/architecture/README.md"
+  },
+  {
+   "finding": "Cloud Hypervisor vs Firecracker: shares code lineage but aims to be general purpose; supports Windows guests, PCI hotplug and live migration — unlike Firecracker.",
+   "quote": "The goal of the Cloud Hypervisor project differs from the aforementioned projects in that it aims to be a general purpose VMM for Cloud Workloads and not limited to container/serverless or client workloads.",
+   "location": "Cloud Hypervisor README, §4 > 'Differences with Firecracker and crosvm'",
+   "cite_url": "https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/README.md"
+  },
+  {
+   "finding": "Cloud Hypervisor guest OS support.",
+   "quote": "Cloud Hypervisor supports 64-bit Linux and Windows 10/Windows Server 2019.",
+   "location": "Cloud Hypervisor README, §1 > Guest OS",
+   "cite_url": "https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/README.md"
+  },
+  {
+   "finding": "Cloud Hypervisor site headline numbers/claims: boot to userspace <100 ms with direct kernel boot; supported by Kata Containers; governed under the Linux Foundation.",
+   "quote": "Boot to userspace in less than 100ms with direct kernel boot",
+   "location": "cloudhypervisor.org, feature tiles ('Fast')",
+   "cite_url": "https://www.cloudhypervisor.org/"
+  },
+  {
+   "finding": "Site one-liner.",
+   "quote": "Cloud Hypervisor is an open source Virtual Machine Monitor (VMM) implemented in Rust that focuses on running modern, cloud workloads, with minimal hardware emulation.",
+   "location": "cloudhypervisor.org, hero text",
+   "cite_url": "https://www.cloudhypervisor.org/"
+  }
+ ],
+ "teaching_notes": "Brief-context source. Two things worth getting right: (1) Kata is 'container inside a lightweight VM' — the guest kernel still builds namespaces and cgroups for the workload, managed by an in-guest agent; the VM is 'a second layer of defence', not a replacement for the container. (2) Kata's hypervisor list is five (QEMU, Cloud Hypervisor, Firecracker, Dragonball, StratoVirt), and QEMU is the one Kata recommends for GPU/confidential-computing. Cloud Hypervisor is the general-purpose Rust VMM (Windows guests, PCI hotplug, live migration) where Firecracker is the serverless-specialised one; the NSDI'20 Firecracker paper measured Cloud Hypervisor at ~13MB overhead vs Firecracker ~3MB."
+}

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aligning Judges with Human Experts · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 3 · LLM-as-Judge</p>
+    <h1>Aligning judges with human experts</h1>
+    <p class="lede">
+      A judge earns trust one way: by demonstrably agreeing with your domain expert on outputs neither
+      has seen before. This page covers the workflow that gets you there — critique shadowing — and the
+      measurement that proves you arrived, with the statistics chosen so they don't flatter you.
+    </p>
+
+    <h2 id="critique-shadowing">Critique shadowing: the workflow</h2>
+    <p>
+      Husain's name for the process is <span class="term" data-g="critique-shadowing">critique
+      shadowing</span>: the judge learns to shadow a specific expert's judgment, expressed as binary
+      verdicts plus written critiques. The seven verified steps:<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024, Using LLM-as-a-Judge For Evaluation">[Husain, Judge]</a>
+    </p>
+    <div class="card">
+      <ol style="margin-bottom:0">
+        <li><strong>Find the principal domain expert</strong> — the "one (maybe two) key individuals
+          whose judgment is crucial." Husain is specific about why developers shouldn't stand in: "People
+          will have varying opinions about what is acceptable, and you can't make everyone happy. What's
+          important is that your principal domain expert is satisfied."</li>
+        <li><strong>Create a dataset</strong> — diverse, structured by dimensions (features × scenarios ×
+          personas), real plus synthetic (<a href="05-from-failures-to-evals.html">page 5</a>).</li>
+        <li><strong>Expert makes pass/fail judgments with critiques</strong> — each critique "detailed
+          enough that a new employee could understand it"; terseness is the common failure.</li>
+        <li><strong>Fix obvious errors</strong> — some failures need a bug fix, not a judge; loop back
+          to step 3 with fresh outputs.</li>
+        <li><strong>Build the judge iteratively</strong> — expert critiques become few-shot examples;
+          test the judge against expert verdicts; refine the prompt "until agreement is satisfactory."</li>
+        <li><strong>Perform error analysis</strong> — apply the judge to <em>unseen</em> data, compute
+          failure rates by dimension, classify root causes.</li>
+        <li><strong>Create specialized judges</strong> — if needed, split criteria into separate scoped
+          judges.</li>
+      </ol>
+    </div>
+    <p>
+      The loop has no exit: "This process never truly ends. It repeats periodically or when material
+      changes occur."<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024">[Husain, Judge]</a>
+      That's <a href="06-validating-the-grader.html">criteria drift</a> showing up as an operations
+      schedule.
+    </p>
+
+    <h2 id="honeycomb">A verified case study, with its caveat attached</h2>
+    <p>
+      The concrete numbers come from Husain's work on Honeycomb's natural-language query assistant, with
+      domain expert Phillip Carter. The mechanics were deliberately low-tech: a spreadsheet, sent every
+      few days, with 25–50 examples — each row showing the user's query, the generated result, the
+      judge's critique and verdict; Phillip filled in his own verdicts and
+      critiques.<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+      Disagreements drove prompt revisions. Tracked over iterations: "It took us only three iterations
+      to achieve &gt;90% agreement between the LLM and
+      Phillip."<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024">[Husain, Judge]</a>
+    </p>
+    <div class="warn">
+      <span class="label">The caveat is half the lesson</span>
+      <p>Husain immediately qualifies the metric: raw agreement was acceptable <em>only because the
+      dataset was roughly balanced</em> ("about 50% of instances were failures"); in general, "using raw
+      agreement … can be misleading when classes are imbalanced. Instead, you should typically measure
+      precision and recall separately."<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024">[Husain, Judge]</a>
+      Why: if only 5% of outputs fail, a judge that passes <em>everything</em> scores 95% agreement
+      while catching zero failures. (Worked example in
+      <a href="../appendices/e-agreement-metrics.html">Appendix E</a>.) And the "three iterations"
+      figure is one case study — "Your mileage may vary depending on the complexity of the task."</p>
+    </div>
+
+    <h2 id="metrics">Measuring alignment without flattering yourself</h2>
+    <p>
+      The measurement stack, from minimum to most rigorous — all computed on a held-out human-labeled
+      set the judge never saw during prompt iteration:
+    </p>
+    <table>
+      <tr><th>Metric</th><th>What it answers</th><th>When it misleads</th></tr>
+      <tr><td>Raw agreement</td><td>How often do judge and expert match?</td><td>Class imbalance; chance agreement</td></tr>
+      <tr><td><span class="term" data-g="true-positive-rate">TPR</span> + <span class="term" data-g="true-negative-rate">TNR</span></td><td>Catch rate on real failures; pass rate on real passes — separately</td><td>Rarely — this is the recommended pair<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a></td></tr>
+      <tr><td><span class="term" data-g="cohens-kappa">Cohen's kappa</span></td><td>Agreement <em>beyond chance</em></td><td>Small samples; but strictly more honest than raw agreement</td></tr>
+    </table>
+    <p>
+      The FAQ's verified protocol uses the middle row: "Focus on achieving high True Positive Rate (TPR)
+      and True Negative Rate (TNR) with your judge on a held out labeled test set" — and then puts those
+      rates to work: "Once you know your judge's True Positive and True Negative rates, you can correct
+      its estimates to determine the actual failure rate in your
+      system."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      That correction step is underused and valuable: an imperfect-but-characterized judge yields an
+      unbiased estimate of the true failure rate, because you know exactly how it errs.
+    </p>
+    <p>
+      Kappa is the honesty upgrade on raw agreement: it subtracts the agreement two graders would reach
+      by chance. Yan calls it "a more precise and conservative measurement of alignment compared to
+      percentage agreement" and reports the sobering reference points: GPT-4 and Llama-3-70B achieved
+      kappa of 0.84 and 0.79 against humans — good, yet "still significantly lower than the human-human
+      Cohen's κ of 0.97" in that study.<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024, LLM-Evaluators">[Yan]</a>
+      Recall the MT-Bench percentage story from <a href="08-llm-as-judge.html">page 8</a> — 85% vs 81%,
+      judge beats human — then notice that under a chance-corrected lens the same kind of comparison
+      can invert. Which metric you choose is itself a measurement decision.
+      For graded (non-binary) outputs, the corresponding tools are rank correlations —
+      <span class="term" data-g="spearman-correlation">Spearman's rho</span> or Kendall's tau.<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024">[Yan]</a>
+    </p>
+
+    <h2 id="maintenance">Maintenance: alignment decays</h2>
+    <p>
+      The verified cadence: re-run the human-comparison cycle "at regular intervals and whenever
+      something material changes" — a model swap, a prompt overhaul, a new feature. After the first
+      couple of iterations, shift sampling toward suspected errors plus a random slice, so expert
+      attention concentrates where the judge is most likely
+      wrong.<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024">[Husain, Judge]</a>
+      Budget for this up front: the standing cost of a judge is "100+ labeled examples, ongoing weekly
+      maintenance, and coordination between developers, PMs, and domain
+      experts."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Evals FAQ">[Evals FAQ]</a>
+      The expert never disappears from the loop, but their workload shrinks to "a representative sample
+      so you can have reliable statistics" — because, as Husain puts it, "the LLM still needs to be
+      aligned to something, and that something is usually a
+      human."<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024">[Husain, Judge]</a>
+    </p>
+
+    <div class="callout">
+      <span class="label">Do you really need all this?</span>
+      <p>Sometimes no. Husain's own shortcut criteria: if you <em>are</em> the domain expert (solo
+      developer), or your data is cheap to review by eye, run the lightweight version — grade outputs
+      yourself, keep notes, skip the formal judge until scale forces
+      it.<a class="cite" href="https://hamel.dev/blog/posts/llm-judge/" title="Husain 2024, 'Do You Really Need This?'">[Husain, Judge]</a>
+      The machinery exists to scale expert judgment, not to ritualize it.</p>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Iterating the judge prompt against the <em>same</em> labeled examples you'll report agreement
+      on. After enough revisions, the prompt has effectively memorized the answer key —
+      <span class="term" data-g="overfitting">overfitting</span>, in classical form — and the reported
+      agreement is fiction. Hold out a slice of expert labels from day one; report agreement only on
+      that slice; refresh it when you re-validate. (The same mistake at benchmark scale is
+      <a href="21-contamination.html">Module 6's</a> entire subject.)</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>A judge is a measuring instrument with a calibration certificate: who it was aligned to, on
+      what data, measured how (TPR/TNR, kappa), and when it expires. No certificate, no trust. With one,
+      an imperfect judge becomes a known instrument whose readings you can correct — which is all any
+      real instrument ever is.</p>
+    </div>
+
+    <p>
+      That closes the judge module. <a href="11-evaluating-agents.html">Module 4</a> moves to the
+      frontier: evaluating systems that don't just answer — they act.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Hamel Husain, "Using LLM-as-a-Judge For Evaluation: A Complete Guide," hamel.dev, October 2024. <a href="https://hamel.dev/blog/posts/llm-judge/">hamel.dev/blog/posts/llm-judge</a></li>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+        <li>Hamel Husain, "Your AI Product Needs Evals," hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a></li>
+        <li>Eugene Yan, "Evaluating the Effectiveness of LLM-Evaluators (aka LLM-as-Judge)," eugeneyan.com, August 2024. <a href="https://eugeneyan.com/writing/llm-evaluators/">eugeneyan.com/writing/llm-evaluators</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

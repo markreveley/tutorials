@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Shell and the Command Line · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · The Shell</p>
+    <h1>The shell and the command line</h1>
+    <p class="lede">
+      What happens between pressing Enter and output appearing: how a line of text becomes a running
+      program, how the shell finds that program, and how it reports success or failure. An agent's
+      every tool call goes through this machinery — in a mode that behaves differently from the
+      shell you type into — and the most common error in agent transcripts, <code>command not
+      found</code>, is a question about it.
+    </p>
+
+    <h2 id="three-things">Three things that look like one</h2>
+    <p>
+      When you open Terminal on your Mac and type <code>ls</code>, three separate pieces of software
+      cooperate, and beginners reasonably experience them as one thing called "the command line".
+      Pull them apart.
+    </p>
+    <ul>
+      <li>The <span class="term" data-g="terminal">terminal</span> is the window. It turns keystrokes
+        into bytes and bytes into glyphs. It knows nothing about files or commands.</li>
+      <li>The <span class="term" data-g="shell">shell</span> is a program that reads a line of text,
+        works out which program you meant, starts it, waits for it, and then prompts again. POSIX,
+        the standard that Unix-like systems share, calls it simply "the standard command language
+        interpreter".<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/sh.html" title="POSIX.1-2024 (Issue 8), XCU sh, NAME">[POSIX]</a>
+        On Ubuntu the interactive shell is <span class="term" data-g="bash">bash</span>; your Mac's is zsh
+        (<a href="../appendices/e-macos-vs-linux.html">Appendix E</a>).</li>
+      <li>The <em>program</em> — <code>ls</code>, <code>python3</code>, <code>pytest</code> — is a
+        file on disk that the shell asks the kernel to run as a
+        new process.</li>
+    </ul>
+    <div class="diagram">  you ──keys──▶ TERMINAL ──bytes──▶ SHELL (bash)
+                (a window)            │ 1. split the line into words
+                    ▲                 │ 2. find the program for word one
+                    │                 │ 3. start it as a child process
+                    │                 ▼
+                    └──── output ── PROGRAM (/usr/bin/ls)
+                                      │
+                                      └─ exit status ─▶ back to the shell ($?)
+
+  an agent:  HARNESS ──"bash -c '…'"──▶ SHELL ──▶ PROGRAM     (no terminal at all)</div>
+    <p>
+      The last line of the diagram is why this page exists. An <span class="term" data-g="agent">agent</span>
+      in a sandbox has no terminal. Its
+      <span class="term" data-g="harness">harness</span> starts a shell, hands it one string, collects
+      what comes back, and the shell exits. Same shell program, different mode, different behaviour —
+      we'll get to exactly how different <a href="#startup-files">below</a>.
+    </p>
+    <p>
+      Everything on this page was run in the container lab from
+      <a href="01-lab-setup.html">page 1</a>, as the non-root user <code>learner</code>.
+    </p>
+
+    <h2 id="anatomy">Anatomy of a command line</h2>
+    <p>
+      The shell splits your line on spaces into words. The first word is the
+      command; the rest are handed to it, untouched, as its
+      arguments. By convention — and it is only a
+      convention that each program implements for itself — arguments starting with a dash are
+      <span class="term" data-g="option-flag">options</span> that change behaviour, and the others
+      name the things to operate on.
+    </p>
+    <div class="diagram">   ls      -l -a          /etc/hostname
+   │        │                  │
+ command  options (flags)   argument (operand)</div>
+    <pre class="term"><code><span class="p">$</span> ls -l -a /etc/hostname
+<span class="o">-rw-r--r-- 1 root root 13 Sep 21 10:55 /etc/hostname</span>
+<span class="p">$</span> ls -la /etc/hostname                          <span class="c"># short flags can be bundled</span>
+<span class="o">-rw-r--r-- 1 root root 13 Sep 21 10:55 /etc/hostname</span>
+<span class="p">$</span> ls --all --human-readable -l /etc/hostname    <span class="c"># long flags: two dashes, a whole word</span>
+<span class="o">-rw-r--r-- 1 root root 13 Sep 21 10:55 /etc/hostname</span></code></pre>
+    <p>
+      Short flags are one dash and one letter and can be bundled (<code>-la</code> is <code>-l
+      -a</code>). Long flags are two dashes and a word. Most GNU tools offer both spellings; prefer
+      the long one in scripts, where a reader has to understand it later.
+    </p>
+    <p>
+      Because "starts with a dash" is the only thing that marks an option, data that happens to start
+      with a dash gets misread. The escape hatch is a bare <code>--</code>, which means "no more
+      options after this point":
+    </p>
+    <pre class="term"><code><span class="p">$</span> grep --timeout config.txt
+<span class="o">grep: unrecognized option '--timeout'
+Usage: grep [OPTION]... PATTERNS [FILE]...
+Try 'grep --help' for more information.</span>
+<span class="p">$</span> grep -- --timeout config.txt
+<span class="o">--timeout 30</span></code></pre>
+    <p>
+      The same trick deletes a file unluckily named <code>-rf</code> (<code>rm -- -rf</code>). You
+      will see agents discover this the hard way when they search logs for strings like
+      <code>--verbose</code>.
+    </p>
+
+    <h2 id="finding-programs">How the shell finds a program</h2>
+    <p>
+      You typed <code>ls</code>, not <code>/usr/bin/ls</code>. The shell filled in the rest using the
+      <span class="term" data-g="path-variable"><code>PATH</code> variable</span>: a colon-separated
+      list of directories, searched left to right, first match wins.
+    </p>
+    <pre class="term"><code><span class="p">$</span> echo $PATH
+<span class="o">/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</span></code></pre>
+    <p>
+      But <code>PATH</code> is the <em>last</em> place bash looks. For a name with no slash in it, bash
+      checks for a shell function of that name, then a
+      <span class="term" data-g="builtin">builtin</span>, and only then walks <code>PATH</code>;
+      it remembers where it found each program in a hash table so it doesn't search twice. If the name
+      contains a slash, no search happens at all — it's taken as a path to a
+      file.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Command-Search-and-Execution" title="GNU Bash Reference Manual, 3.7.2 Command Search and Execution">[Bash Manual]</a>
+      (In an interactive shell, <span class="term" data-g="alias">aliases</span> are substituted even
+      before that.) The command that shows you what bash will actually do with a name is
+      <code>type</code>:
+    </p>
+    <pre class="term"><code><span class="p">$</span> type ls
+<span class="o">ls is <span class="hl">aliased to `ls --color=auto'</span></span>
+<span class="p">$</span> type cd
+<span class="o">cd is a shell builtin</span>
+<span class="p">$</span> type -a echo                 <span class="c"># -a: every match, in priority order</span>
+<span class="o">echo is a shell builtin
+echo is /usr/bin/echo
+echo is /bin/echo</span>
+<span class="p">$</span> which ls
+<span class="o">/usr/bin/ls</span>
+<span class="p">$</span> which cd; echo "exit status: $?"
+<span class="o">exit status: 1</span></code></pre>
+    <p>
+      Note the disagreement. <code>which</code> is a separate program that only searches
+      <code>PATH</code>; it cannot know about your shell's aliases, functions, or builtins, so it told
+      you <code>ls</code> is <code>/usr/bin/ls</code> when this shell will really run
+      <code>ls --color=auto</code>, and it found no <code>cd</code> at all. Use <code>type</code> when
+      you're at a bash prompt, and <code>command -v</code> (the POSIX-portable spelling) in scripts.
+    </p>
+
+    <h3 id="why-cd-is-a-builtin">Why <code>cd</code> isn't a program</h3>
+    <p>
+      If you're wondering why some commands live inside the shell: a few <em>have</em> to. Every
+      process has its own working directory, and
+      a child process cannot change its parent's. Watch a child shell try:
+    </p>
+    <pre class="term"><code><span class="p">$</span> pwd
+<span class="o">/home/learner</span>
+<span class="p">$</span> bash -c 'cd /tmp; pwd'      <span class="c"># a child process changes ITS directory…</span>
+<span class="o">/tmp</span>
+<span class="p">$</span> pwd                          <span class="c"># …and ours hasn't moved</span>
+<span class="o">/home/learner</span></code></pre>
+    <p>
+      A <code>/usr/bin/cd</code> would change its own directory and exit, achieving nothing. The bash
+      manual says it directly: "<code>cd</code>, <code>break</code>, <code>continue</code>, and
+      <code>exec</code> cannot be implemented outside of the shell because they directly manipulate the
+      shell itself."<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#What-is-a-shell_003f" title="GNU Bash Reference Manual, 1.1 What is a shell?">[Bash Manual]</a>
+      Others — <code>pwd</code>, <code>kill</code>, <code>echo</code> — are builtins merely for
+      convenience, which is why <code>type -a echo</code> showed both a builtin and a file. Hold on to
+      the principle, because it returns all course long: <strong>a child process cannot alter its
+      parent</strong> — not its directory, not its variables.
+    </p>
+
+    <h3 id="a-path-walkthrough">A worked example: 127, 126, and success</h3>
+    <p>
+      The running example of this course is a toy benchmark, <code>wordfreq-bench</code>. Here we
+      install a stand-in for its command-line tool and watch every stage of lookup fail in turn.
+    </p>
+    <pre class="term"><code><span class="p">$</span> wordfreq
+<span class="o">bash: wordfreq: command not found</span>
+<span class="p">$</span> echo $?
+<span class="o"><span class="hl">127</span></span>
+<span class="p">$</span> mkdir ~/tools
+<span class="p">$</span> printf '#!/bin/bash\necho "wordfreq 1.0"\n' &gt; ~/tools/wordfreq
+<span class="p">$</span> ~/tools/wordfreq                  <span class="c"># has a slash: no PATH search, run this file</span>
+<span class="o">bash: /home/learner/tools/wordfreq: Permission denied</span>
+<span class="p">$</span> echo $?
+<span class="o"><span class="hl">126</span></span>
+<span class="p">$</span> chmod +x ~/tools/wordfreq         <span class="c"># mark it executable (<a href="08-permissions.html">page 8</a>)</span>
+<span class="p">$</span> ~/tools/wordfreq
+<span class="o">wordfreq 1.0</span>
+<span class="p">$</span> wordfreq                          <span class="c"># exists, executable — but not on PATH</span>
+<span class="o">bash: wordfreq: command not found</span>
+<span class="p">$</span> PATH=$HOME/tools:$PATH
+<span class="p">$</span> wordfreq
+<span class="o">wordfreq 1.0</span>
+<span class="p">$</span> type wordfreq
+<span class="o">wordfreq is hashed (/home/learner/tools/wordfreq)</span></code></pre>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>"Command not found" does not mean "not installed". It means <em>this shell, with this
+      <code>PATH</code>, found no function, builtin, or file by that name</em>. The program was on disk
+      the whole time in the example above. The question to ask is never "is it installed?" but "what
+      is <code>PATH</code> in the shell that ran it?"</p>
+    </div>
+
+    <h2 id="exit-status">The exit status: how a program says how it went</h2>
+    <p>
+      Every process, when it ends, hands one small integer back to whoever started it: its
+      <span class="term" data-g="exit-status">exit status</span>. Zero means success; anything else
+      means failure, and the program chooses which non-zero number. The bash manual admits this looks
+      backwards and gives the reason: "so there is one well-defined way to indicate success and a
+      variety of ways to indicate various failure
+      modes."<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a>
+      The shell keeps the most recent one in the special variable <code>$?</code>.
+    </p>
+    <pre class="term"><code><span class="p">$</span> true; echo $?
+<span class="o">0</span>
+<span class="p">$</span> false; echo $?
+<span class="o">1</span>
+<span class="p">$</span> ls /nope; echo $?
+<span class="o">ls: cannot access '/nope': No such file or directory
+2</span>
+<span class="p">$</span> grep learner /etc/passwd; echo $?
+<span class="o">learner:x:1001:1001::/home/learner:/bin/bash
+0</span>
+<span class="p">$</span> grep nobody-here /etc/passwd; echo $?       <span class="c"># no error message, no output…</span>
+<span class="o">1</span></code></pre>
+    <p>
+      That last one matters: <code>grep</code> exits 1 for "I ran fine and found nothing". A non-zero
+      status is a program's own vocabulary, and you have to know the program to read it. A few values,
+      though, are set by the shell and mean the same everywhere. The status is one byte, 0–255 (a
+      program that calls <code>exit(300)</code> is seen as 300 modulo 256, i.e.
+      44<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html" title="POSIX.1-2024, XCU 2.8.2 Exit Status for Commands">[POSIX]</a>),
+      and bash reserves the top of that
+      range:<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a>
+    </p>
+    <table>
+      <tr><th>Status</th><th>Who sets it</th><th>Meaning</th><th>First question to ask</th></tr>
+      <tr><td><code>0</code></td><td>the program</td><td>success</td><td>—</td></tr>
+      <tr><td><code>1</code>–<code>125</code></td><td>the program</td><td>failure, in the program's own dialect (<code>grep</code> 1 = no match; <code>ls</code> 2 = serious trouble)</td><td>What does <em>this</em> program mean by it? (<code>man</code>, <a href="../appendices/f-getting-help.html">Appendix F</a>)</td></tr>
+      <tr><td><code>2</code></td><td>bash builtins</td><td>incorrect usage: bad option or missing argument</td><td>Was the command line malformed?</td></tr>
+      <tr><td><code>126</code></td><td>the shell</td><td>found, but not executable</td><td>Missing <code>chmod +x</code>? A directory?</td></tr>
+      <tr><td><code>127</code></td><td>the shell</td><td>command not found</td><td>What is <code>PATH</code> in the shell that ran it?</td></tr>
+      <tr><td><code>128+N</code></td><td>the shell</td><td>killed by signal N (137 = 128+9, SIGKILL)</td><td>Timeout? Out of memory? → <a href="10-signals-exit-codes.html">page 10</a></td></tr>
+    </table>
+    <p>
+      The full tables are in <a href="../appendices/b-exit-codes-signals.html">Appendix B</a>. The
+      status is also what the shell's two "short-circuit" operators test: <code>A &amp;&amp; B</code>
+      runs B only if A succeeded; <code>A || B</code> runs B only if A failed.
+    </p>
+    <pre class="term"><code><span class="p">$</span> mkdir /tmp/demo &amp;&amp; echo "made it"
+<span class="o">made it</span>
+<span class="p">$</span> mkdir /tmp/demo || echo "could not make it"
+<span class="o">mkdir: cannot create directory '/tmp/demo': File exists
+could not make it</span>
+<span class="p">$</span> cd /nope &amp;&amp; rm -f *.log          <span class="c"># the rm never runs: good</span>
+<span class="o">bash: cd: /nope: No such file or directory</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall — <code>;</code> is not <code>&amp;&amp;</code>, and <code>$?</code> is only the last command</span>
+      <p>A semicolon runs the next command regardless. <code>cd /nope; rm -f *.log</code> deletes log
+      files in whatever directory you were already in. And a line's status is its <em>last</em>
+      command's status:</p>
+      <pre class="term"><code><span class="p">$</span> ls /nope; echo "done"
+<span class="o">ls: cannot access '/nope': No such file or directory
+done</span>
+<span class="p">$</span> echo $?
+<span class="o">0</span></code></pre>
+      <p>A harness that runs <code>run_tests; echo finished</code> and checks the status will record
+      success every time. <code>$?</code> is also overwritten by every command, including the
+      <code>echo</code> you used to look at it — capture it immediately (<code>rc=$?</code>) if you
+      need it twice.</p>
+    </div>
+
+    <h2 id="startup-files">Interactive and non-interactive shells</h2>
+    <p>
+      Now the part that separates your experience of a box from an agent's. Bash runs in different
+      modes, and which mode it's in decides which startup files it reads — and those files are
+      where <code>PATH</code> additions, aliases, and virtual-environment activations live. Two
+      independent questions define the mode:
+    </p>
+    <ul>
+      <li><strong>Interactive?</strong> A shell is interactive if it was started without a command
+        to run and is connected to a terminal (or was forced with <code>-i</code>).</li>
+      <li><strong>Login?</strong> A shell is a login shell if it was started as one — by
+        <code>ssh</code>, by <code>su -</code>, or with <code>--login</code>/<code>-l</code>.</li>
+    </ul>
+    <table>
+      <tr><th>How bash was started</th><th>Example</th><th>Startup files it reads</th></tr>
+      <tr><td>Login shell</td><td><code>ssh box</code>, <code>bash --login</code>, <code>bash -lc '…'</code></td><td><code>/etc/profile</code>, then the <em>first</em> that exists of <code>~/.bash_profile</code>, <code>~/.bash_login</code>, <code>~/.profile</code></td></tr>
+      <tr><td>Interactive, non-login</td><td>typing <code>bash</code>; <code>docker exec -it box bash</code></td><td><code>~/.bashrc</code></td></tr>
+      <tr><td>Non-interactive</td><td><code>bash -c '…'</code>, <code>bash script.sh</code></td><td>only the file named by <code>$BASH_ENV</code>, if that variable is set — normally <strong>nothing</strong></td></tr>
+    </table>
+    <p>
+      That table is the bash manual's
+      rule.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Bash-Startup-Files" title="GNU Bash Reference Manual, 6.2 Bash Startup Files">[Bash Manual]</a>
+      To see it bite, make the <code>PATH</code> change from the last section "permanent" the way every
+      tutorial tells you to — append it to <code>~/.bashrc</code> — along with an alias:
+    </p>
+    <pre class="term"><code><span class="p">$</span> echo 'export PATH=$HOME/tools:$PATH' &gt;&gt; ~/.bashrc
+<span class="p">$</span> echo "alias t='wordfreq --test'" &gt;&gt; ~/.bashrc
+<span class="p">$</span> bash                              <span class="c"># a fresh interactive shell reads ~/.bashrc</span>
+<span class="p">$</span> wordfreq
+<span class="o">wordfreq 1.0</span>
+<span class="p">$</span> echo $-                           <span class="c"># this shell's option letters: "i" = interactive</span>
+<span class="o">h<span class="hl">i</span>mBHs</span></code></pre>
+    <p>
+      Works for you. Now do what a harness does: from outside the box, ask for one command to be run.
+      (<code>mac$</code> is your Mac's prompt; <code>lt-lab</code> is the lab container.)
+    </p>
+    <pre class="term"><code><span class="p">mac$</span> docker exec -u learner lt-lab bash -c 'wordfreq'; echo "[exit status $?]"
+<span class="o">bash: line 1: wordfreq: command not found
+[exit status <span class="hl">127</span>]</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -c 'echo $-; echo $PATH'
+<span class="o">hBc
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -c 't'
+<span class="o">bash: line 1: t: command not found</span></code></pre>
+    <p>
+      No <code>i</code> in <code>$-</code>: non-interactive, so <code>~/.bashrc</code> was never read,
+      so <code>PATH</code> is the container's bare default and the alias doesn't exist. Same box, same
+      user, same file on disk, and the command that works when you look fails when the harness runs it.
+    </p>
+
+    <h3 id="remedies">Remedies, and one that doesn't work</h3>
+    <p>
+      The obvious fix is "make it a login shell". On Ubuntu that is not enough, and the reason is
+      instructive:
+    </p>
+    <pre class="term"><code><span class="p">mac$</span> docker exec -u learner lt-lab bash -lc 'wordfreq'
+<span class="o">bash: line 1: wordfreq: command not found</span></code></pre>
+    <p>
+      A login shell reads <code>~/.profile</code>, and Ubuntu's <code>~/.profile</code> does source
+      <code>~/.bashrc</code> — but Ubuntu's <code>~/.bashrc</code> opens with a guard that bails out
+      of non-interactive shells before reaching the line we appended at the bottom:
+    </p>
+    <pre><code># If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac</code></pre>
+    <p>
+      (Pointing <code>BASH_ENV</code> at <code>~/.bashrc</code> fails for the same reason; we tried.)
+      What a login shell <em>does</em> pick up is anything set in <code>~/.profile</code> itself. The
+      stock Ubuntu one adds <code>~/.local/bin</code> to <code>PATH</code> if that directory exists —
+      which is where <code>pip install --user</code> puts command-line tools:
+    </p>
+    <pre class="term"><code><span class="p">mac$</span> docker exec -u learner lt-lab bash -c 'mkdir -p ~/.local/bin &amp;&amp; cp ~/tools/wordfreq ~/.local/bin/wf2'
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -c 'wf2'
+<span class="o">bash: line 1: wf2: command not found</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -lc 'wf2'
+<span class="o">wordfreq 1.0</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -lc 'echo $PATH'
+<span class="o"><span class="hl">/home/learner/.local/bin</span>:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</span></code></pre>
+    <p>The remedies that don't depend on anyone's dotfiles are the ones to build an environment on:</p>
+    <pre class="term"><code><span class="p">mac$</span> docker exec -u learner lt-lab bash -c '/home/learner/tools/wordfreq'     <span class="c"># absolute path: no search</span>
+<span class="o">wordfreq 1.0</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -c 'PATH=/home/learner/tools:$PATH; wordfreq'
+<span class="o">wordfreq 1.0</span>
+<span class="p">mac$</span> docker exec -u learner \
+       -e PATH=/home/learner/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+       lt-lab bash -c 'wordfreq'                                           <span class="c"># set PATH in the environment</span>
+<span class="o">wordfreq 1.0</span></code></pre>
+    <p>
+      The last form is the general one: put <code>PATH</code> in the process's
+      environment from outside (in a
+      Dockerfile, that's an <code>ENV PATH=…</code> line — <a href="22-docker-for-evals.html">page
+      22</a>), so every shell in the box inherits it no matter its mode.
+      <a href="11-environment-and-secrets.html">Page 11</a> explains inheritance properly.
+    </p>
+
+    <div class="evals">
+      <span class="label">In eval work — 127 is a PATH question first</span>
+      <p>When a transcript shows
+      <code>pytest: command not found</code> with exit status 127, and you
+      <code>docker exec -it</code> into the same <span class="term" data-g="task-image">task image</span>
+      and <code>pytest</code> runs fine, nothing is missing: your interactive shell read a startup file
+      that the agent's non-interactive shell did not. Typical culprits are tools installed under
+      <code>~/.local/bin</code>, a virtual environment "activated" in <code>~/.bashrc</code>, and
+      version managers (conda, nvm, pyenv) that work by editing startup files. If the agent burns ten
+      turns rediscovering <code>python3 -m pytest</code>, the benchmark measured your image's
+      <code>PATH</code>, not the model — an
+      <span class="term" data-g="infrastructure-failure">infrastructure failure</span> scored as a
+      model failure. Audit by reproducing the harness's exact invocation, never by opening an
+      interactive shell. And account for it honestly: a rollout crippled by the image's
+      <code>PATH</code> is an observation about the <em>run</em>. Don't quietly drop those samples
+      (that shrinks the denominator from <em>scheduled</em> to <em>completed</em> and flatters the
+      score) and don't leave them in as model failures; fix the image, re-run, and say so.</p>
+    </div>
+
+    <div class="evals">
+      <span class="label">In eval work — every tool call is a fresh, non-interactive shell</span>
+      <p>Inspect's standard <code>bash()</code> tool executes each call as
+      <code>bash --login -c &lt;command&gt;</code> in the sandbox, and each call is a fresh shell:
+      no working directory and no variables carry over from the previous call. Its
+      <code>bash_session()</code> tool is the stateful alternative that keeps one shell
+      alive.<a class="cite" href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash" title="Inspect AI reference, inspect_ai.tool: bash, bash_session; source tool/_tools/_execute.py">[Inspect]</a>
+      The consequence is the <code>cd</code> lesson again, one level up — the shell that did the
+      <code>cd</code> has exited:</p>
+      <pre class="term"><code><span class="p">mac$</span> docker exec -u learner lt-lab bash --login -c 'cd /tmp &amp;&amp; export RUN_ID=42 &amp;&amp; pwd'
+<span class="o">/tmp</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash --login -c 'pwd; echo "RUN_ID=$RUN_ID"'
+<span class="o">/
+RUN_ID=</span></code></pre>
+      <p>So in a stateless harness a capable agent writes <code>cd /app &amp;&amp; pytest</code> in
+      <em>every</em> call, and a transcript where the agent runs <code>cd /app</code> alone and then
+      is confused by "No such file" is showing you a mismatch between the agent's mental model and the
+      harness, not an inability to fix the bug. Also implied by non-interactive: no aliases, no
+      one to answer prompts (run that way, <code>read -p "Continue? [Y/n] " x</code> gets
+      end-of-file at once: status 1, empty answer), and no terminal for programs that want one. Know which kind of tool your harness
+      provides before you read its transcripts; <a href="25-how-harnesses-use-linux.html">page 25</a>
+      goes through the interfaces.</p>
+    </div>
+
+    <h2 id="alpine">Alpine: when <code>bash</code> itself is the missing command</h2>
+    <p>
+      Many task images are built on <span class="term" data-g="alpine">Alpine</span>, a tiny
+      distribution where nearly every command is one multi-purpose binary,
+      <span class="term" data-g="busybox">BusyBox</span>, and the shell is BusyBox's <code>ash</code>.
+      There is no bash unless someone installs it:
+    </p>
+    <pre class="term"><code><span class="p">mac$</span> docker run --rm alpine:3.20 sh -c 'bash -c "echo hi"; echo "exit status: $?"; ls -l /bin/sh /bin/ls'
+<span class="o">sh: bash: not found
+exit status: 127
+lrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/ls -&gt; /bin/busybox
+lrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/sh -&gt; /bin/busybox</span>
+<span class="p">mac$</span> docker run --rm alpine:3.20 bash -c 'echo hi'
+<span class="o">docker: Error response from daemon: … exec: "bash": executable file not found in $PATH: unknown</span></code></pre>
+    <div class="warn">
+      <span class="label">Caveat — <code>sh</code> is not bash on Ubuntu either</span>
+      <p>On Ubuntu 24.04, <code>/bin/sh</code> is a symlink to <code>dash</code>, a small, strictly
+      POSIX shell — not bash. A harness or Dockerfile that runs commands with <code>sh -c</code> gets
+      dash on Ubuntu and ash on Alpine, and bash-only syntax (<code>[[ … ]]</code>, arrays) fails
+      there. A harness hard-wired to call <code>bash</code> cannot start at all in a stock Alpine
+      image. Which shell runs the agent's commands is a property of the environment you should be
+      able to state. <a href="06-shell-scripting.html">Page 6</a> returns to this.</p>
+    </div>
+
+    <h2 id="keys">The interactive conveniences, in one card</h2>
+    <div class="card">
+      <p>These exist only in an interactive shell — they're for you, not for agents.</p>
+      <ul>
+        <li><kbd>Tab</kbd> completes a command or file name; twice lists the candidates. Use it
+          constantly: a name that won't complete doesn't exist.</li>
+        <li><kbd>↑</kbd> / <kbd>↓</kbd> walk through previous commands; <kbd>Ctrl</kbd>+<kbd>R</kbd>
+          searches them; <code>history</code> prints them.</li>
+        <li><kbd>Ctrl</kbd>+<kbd>C</kbd> interrupts the running program (it sends a
+          signal, SIGINT — <a href="10-signals-exit-codes.html">page 10</a>).
+          The shell survives.</li>
+        <li><kbd>Ctrl</kbd>+<kbd>D</kbd> means "end of input". At an empty prompt it ends the shell,
+          like typing <code>exit</code>. If that shell was the container's main process, the container
+          stops with it.</li>
+      </ul>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A maintainer changes a benchmark's harness from <code>bash -c</code> to <code>bash -lc</code>
+      "to fix some environment issues". With the same model, the pass rate goes from 41% to 58%. You
+      are asked which number to publish. What do you ask first?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>What is observed:</strong> one flag changed and the score moved. <strong>What is
+      only supposed:</strong> that the old failures were <code>PATH</code> problems. The
+      discriminating evidence is in the old transcripts: count the rollouts with exit status 127 or
+      <code>command not found</code>, and see whether they cluster on tasks whose tools live where
+      only a login shell looks (<code>~/.local/bin</code>, anything set in <code>~/.profile</code>).
+      Then reproduce one: run the harness's exact old invocation in that task image and print
+      <code>$PATH</code>. If the flipped tasks are the 127 tasks, the 41% was partly measuring the
+      image, and those failures were infrastructure outcomes — observations about the run, not the
+      model. If they aren't, something else changed too, and you don't yet know what.</p>
+      <p>Two further questions bear on the published number. First, accounting: state which harness
+      version produced it, and don't splice old and new runs into one denominator. Second,
+      integrity: a login shell reads <code>~/.profile</code>, a file the agent's user can write. If
+      the <em>grader</em> also runs under <code>-lc</code> as that user, the fix opened a door
+      (lab exercise 5). The better repair is a <code>PATH</code> set in the image, which needs no
+      startup file at all.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong>, as <code>learner</code> (<code>docker exec -it -u learner lt-lab bash</code>).
+      Exercises 4 and 5 also use your Mac's prompt.</p>
+
+      <p><strong>1 · Reproduce.</strong> Ask bash what each of these is: <code>cd pwd echo [ ls grep if</code>.
+      Which would still work if <code>PATH</code> were empty?</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">$</span> type cd pwd echo [ ls grep if
+<span class="o">cd is a shell builtin
+pwd is a shell builtin
+echo is a shell builtin
+[ is a shell builtin
+ls is aliased to `ls --color=auto'
+grep is aliased to `grep --color=auto'
+if is a shell keyword</span></code></pre>
+      <p>The builtins and the keyword need no <code>PATH</code>. <code>ls</code> and <code>grep</code>
+      are aliases that expand to programs found through <code>PATH</code>, so they would fail with
+      127. (<code>type -a pwd</code> shows there is <em>also</em> a <code>/usr/bin/pwd</code>; the
+      builtin wins.)</p>
+      </details>
+
+      <p><strong>2 · Predict, then verify.</strong> Write down what each line prints before running it:
+      <code>bash -c 'exit 3'; echo $?</code> · <code>bash -c 'exit 300'; echo $?</code> ·
+      <code>false &amp;&amp; echo A || echo B</code>, then <code>echo $?</code>.</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">$</span> bash -c 'exit 3'; echo $?
+<span class="o">3</span>
+<span class="p">$</span> bash -c 'exit 300'; echo $?
+<span class="o">44</span>
+<span class="p">$</span> false &amp;&amp; echo A || echo B
+<span class="o">B</span>
+<span class="p">$</span> echo $?
+<span class="o">0</span></code></pre>
+      <p>300 doesn't fit in one byte: 300 − 256 = 44. In the third line <code>false</code> fails, so
+      <code>echo A</code> is skipped and <code>|| echo B</code> runs; the line's status is that of
+      <code>echo B</code>, which succeeded — the original failure is gone from <code>$?</code>.</p>
+      </details>
+
+      <p><strong>3 · Reproduce the mode gap.</strong> Do the <code>~/tools/wordfreq</code> walkthrough and
+      the <code>~/.bashrc</code> edit from this page. Then, from your Mac, run <code>wordfreq</code> via
+      <code>bash -c</code>, <code>bash -lc</code>, and <code>bash -ic</code>. Which work, and why does
+      <code>-ic</code> complain?</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">mac$</span> docker exec -u learner lt-lab bash -c 'wordfreq'
+<span class="o">bash: line 1: wordfreq: command not found</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -lc 'wordfreq'
+<span class="o">bash: line 1: wordfreq: command not found</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -ic 'wordfreq'
+<span class="o">bash: cannot set terminal process group (-1): Inappropriate ioctl for device
+bash: no job control in this shell
+wordfreq 1.0</span></code></pre>
+      <p>Only <code>-i</code> gets past the "if not running interactively" guard in
+      <code>~/.bashrc</code>. The two complaints are bash noticing that it was told to be interactive
+      but has no terminal (we didn't pass <code>-t</code>). Forcing <code>-i</code> is a hack, not a
+      remedy: that noise lands in the agent's output on every call.</p>
+      </details>
+
+      <p><strong>4 · Eval task: the 127 that isn't.</strong> A colleague reports: "the agent's first call,
+      <code>wf2</code>, fails with exit 127, but when I go into the container and <code>su - learner</code>, it works."
+      Using the <code>~/.local/bin/wf2</code> setup from this page, find the single flag in the harness's
+      invocation that explains the difference, and name a fix that doesn't depend on that flag.</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">mac$</span> docker exec -u learner lt-lab bash -c 'wf2; echo $?; shopt login_shell; echo $PATH'
+<span class="o">bash: line 1: wf2: command not found
+127
+login_shell    	off
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</span>
+<span class="p">mac$</span> docker exec -u learner lt-lab bash -lc 'wf2; shopt login_shell; echo $PATH'
+<span class="o">wordfreq 1.0
+login_shell    	on
+/home/learner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</span></code></pre>
+      <p>The harness used <code>bash -c</code>; <code>~/.local/bin</code> only joins <code>PATH</code>
+      in <code>~/.profile</code>, which only login shells read — and <code>su -</code> starts a login shell
+      (<code>su - learner -c 'wf2; shopt login_shell'</code> prints <code>wordfreq 1.0</code> and
+      <code>login_shell on</code>), so your colleague never saw the agent's <code>PATH</code>. Robust fix: set <code>PATH</code> in the image's
+      environment (<code>ENV PATH=/home/learner/.local/bin:$PATH</code>) or install the tool into
+      <code>/usr/local/bin</code>, which is on the default <code>PATH</code> in every mode.</p>
+      </details>
+
+      <p><strong>5 · Eval task: who answers to the name <code>pytest</code>?</strong> The container has no
+      pytest. Create an executable <code>/tmp/fake/pytest</code> that prints
+      <code>===== 5 passed in 0.01s =====</code> and exits 0, put <code>/tmp/fake</code> first in
+      <code>PATH</code>, and run <code>pytest; echo $?</code>. What does this imply about a grader that
+      runs bare <code>pytest</code> in a shell whose environment the agent could influence?</p>
+      <details class="solution"><summary>Solution</summary>
+      <pre class="term"><code><span class="p">$</span> mkdir -p /tmp/fake
+<span class="p">$</span> printf '#!/bin/bash\necho "===== 5 passed in 0.01s ====="\nexit 0\n' &gt; /tmp/fake/pytest
+<span class="p">$</span> chmod +x /tmp/fake/pytest
+<span class="p">$</span> pytest; echo $?
+<span class="o">bash: pytest: command not found
+127</span>
+<span class="p">$</span> PATH=/tmp/fake:$PATH
+<span class="p">$</span> pytest; echo $?
+<span class="o">===== 5 passed in 0.01s =====
+0</span>
+<span class="p">$</span> type -a pytest
+<span class="o">pytest is /tmp/fake/pytest</span></code></pre>
+      <p>A bare command name means "whatever <code>PATH</code> finds first". If the grader's shell
+      reads a startup file the agent can write (a login-shell grader reads the agent user's
+      <code>~/.profile</code>), or searches a directory the agent can write, the agent decides what
+      "pytest" is — a form of <span class="term" data-g="test-tampering">test tampering</span> that
+      never touches a test file. Graders should call interpreters by absolute path, run as a different
+      user with a fixed <code>PATH</code>, and ideally run outside the agent's box altogether
+      (<a href="26-environment-integrity.html">page 26</a>).</p>
+      </details>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Chet Ramey and Brian Fox, <em>GNU Bash Reference Manual</em> (Edition 5.3, 2025) — §1.1 What is a shell?, §3.7.2 Command Search and Execution, §3.7.5 Exit Status, §6.1–6.2 Invoking Bash and Bash Startup Files. The lab runs bash 5.2.21. <a href="https://www.gnu.org/software/bash/manual/bash.html">gnu.org/software/bash/manual/bash.html</a></li>
+        <li>The Open Group / IEEE, <em>Base Specifications Issue 8 (IEEE Std 1003.1-2024)</em> — XCU <code>sh</code>; XCU §2.8.2 Exit Status for Commands. <a href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html">pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html</a></li>
+        <li>UK AI Security Institute, <em>Inspect AI documentation</em> — reference for <code>inspect_ai.tool</code> (<code>bash</code>, <code>bash_session</code>) and the tool's source, fetched 2026-09-20. <a href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash">inspect.aisi.org.uk/reference/inspect_ai.tool.html</a></li>
+        <li>All terminal sessions were executed in <code>ubuntu:24.04</code> (bash 5.2.21) as a non-root user, and in <code>alpine:3.20</code> (BusyBox 1.36.1) for the Alpine section.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

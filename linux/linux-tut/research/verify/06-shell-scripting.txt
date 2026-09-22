@@ -1,0 +1,412 @@
+# Page 06 verification. Container lt-06-lab: ubuntu:24.04, bash 5.2.21, shellcheck 0.9.0, python 3.12.3; all run as user learner (uid 1001).
+# wordfreq-bench copied verbatim to ~/wordfreq-bench. /tmp/fixed = app/ with oracle fix applied; /tmp/hang = wordfreq.py replaced by time.sleep(600).
+
+## session A (bash -v a.sh: commands echoed as read, output may trail its command)
+mkdir -p ~/scripts && cd ~/scripts
+printf '%s\n' '#!/usr/bin/env bash' 'echo "hello from $0, running as $(whoami)"' > hello.sh
+ls -l hello.sh
+-rwxr-xr-x 1 learner learner 63 Sep 21 21:09 hello.sh
+./hello.sh
+hello from ./hello.sh, running as learner
+echo $?
+bash hello.sh
+0
+hello from hello.sh, running as learner
+chmod +x hello.sh
+ls -l hello.sh
+-rwxr-xr-x 1 learner learner 63 Sep 21 21:09 hello.sh
+./hello.sh
+hello from ./hello.sh, running as learner
+head -c 20 hello.sh | od -c | head -2
+# --- quoting
+mkdir q && cd q
+0000000   #   !   /   u   s   r   /   b   i   n   /   e   n   v       b
+0000020   a   s   h  \n
+touch "run 1.log" run.log 1.log
+ls -1
+1.log
+run 1.log
+run.log
+f="run 1.log"
+rm $f
+rm: cannot remove 'run': No such file or directory
+ls -1
+run 1.log
+run.log
+touch run.log 1.log
+rm "$f"
+ls -1
+1.log
+run.log
+printf '<%s>\n' $f
+printf '<%s>\n' "$f"
+cat > args.sh <<'XEOF'
+#!/usr/bin/env bash
+echo "got $# arguments"
+printf '  unquoted: <%s>\n' $@
+printf '  quoted:   <%s>\n' "$@"
+XEOF
+<run>
+<1.log>
+<run 1.log>
+chmod +x args.sh
+./args.sh "run 1.log" other.log
+got 2 arguments
+  unquoted: <run>
+  unquoted: <1.log>
+  unquoted: <other.log>
+  quoted:   <run 1.log>
+  quoted:   <other.log>
+cd ..
+# --- exit codes as control flow
+if grep -q learner /etc/passwd; then echo "found"; else echo "missing"; fi
+found
+if grep -q nosuchuser /etc/passwd; then echo "found"; else echo "missing"; fi
+grep -q nosuchuser /etc/passwd; echo $?
+missing
+1
+0
+1
+0
+[ is a shell builtin
+[[ is a shell keyword
+v is empty
+v is empty
+non-empty
+[[ -f hello.sh ]]; echo $?
+[[ -d hello.sh ]]; echo $?
+[ -f hello.sh ]; echo $?
+type [ [[
+v=""
+[[ -z $v ]] && echo "v is empty"
+[ -z $v ] && echo "v is empty"
+w="two words"
+[ -n $w ] && echo non-empty
+/tmp/a.sh: line 44: [: two: binary operator expected
+[[ -n $w ]] && echo non-empty
+mkdir -p out && cd out || exit 1
+/home/learner/scripts/out
+file: q/1.log
+file: q/run.log
+pwd
+cd ..
+# --- loops
+for f in q/*.log; do echo "file: $f"; done
+printf 'task-a 0\ntask-b 137\ntask-c 1\n' > codes.txt
+task-b failed with 137
+task-c failed with 1
+while read -r task code; do
+  if [[ $code -ne 0 ]]; then echo "$task failed with $code"; fi
+done < codes.txt
+fail_count() { grep -cv ' 0$' "$1"; }
+fail_count codes.txt
+2
+n=$(fail_count codes.txt)
+echo "failures: $n"
+failures: 2
+
+## session B
+$ cd ~/scripts
+$ cat nostrict.sh
+#!/usr/bin/env bash
+cd /nonexistent/build
+echo "cleaning $(pwd)"
+grep -c PASS "$RESULTS" | tee count.txt
+echo "done"
+$ ./nostrict.sh; echo "exit status: $?"
+./nostrict.sh: line 2: cd: /nonexistent/build: No such file or directory
+cleaning /home/learner/scripts
+grep: : No such file or directory
+done
+exit status: 0
+$ cat strict.sh
+#!/usr/bin/env bash
+set -euo pipefail
+cd /nonexistent/build
+echo "cleaning $(pwd)"
+echo "done"
+$ ./strict.sh; echo "exit status: $?"
+./strict.sh: line 3: cd: /nonexistent/build: No such file or directory
+exit status: 1
+$ bash -c 'set -u; echo "results in $RESULTS"; echo next'; echo "exit status: $?"
+bash: line 1: RESULTS: unbound variable
+exit status: 127
+$ bash -c 'false | true; echo "pipeline status: $?"'
+pipeline status: 0
+$ bash -c 'set -o pipefail; false | true; echo "pipeline status: $?"'
+pipeline status: 1
+$ cat e-exceptions.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+check() {
+  false
+  echo "check: still running after false"
+}
+
+if check; then echo "1. check 'succeeded'"; fi
+
+load() {
+  local v=$(false)
+  echo "2. load: still running after a failed \$(...)"
+}
+load
+
+false || echo "3. left side of || may fail"
+echo "4. reached the end"
+$ ./e-exceptions.sh; echo "exit status: $?"
+check: still running after false
+1. check 'succeeded'
+2. load: still running after a failed $(...)
+3. left side of || may fail
+4. reached the end
+exit status: 0
+$ shellcheck e-exceptions.sh
+
+In e-exceptions.sh line 12:
+  local v=$(false)
+        ^-- SC2034 (warning): v appears unused. Verify use (or export if used externally).
+        ^-- SC2155 (warning): Declare and assign separately to avoid masking return values.
+
+For more information:
+  https://www.shellcheck.net/wiki/SC2034 -- v appears unused. Verify use (or ...
+  https://www.shellcheck.net/wiki/SC2155 -- Declare and assign separately to ...
+$ cat cleanup.sh
+#!/usr/bin/env bash
+set -euo pipefail
+work=$(mktemp -d)
+trap 'rm -rf "$work"; echo "cleaned up $work"' EXIT
+echo "working in $work"
+ls -ld "$work"
+false
+echo "never printed"
+$ ./cleanup.sh; echo "exit status: $?"
+working in /tmp/tmp.4447xeyigI
+drwx------ 2 learner learner 4096 Sep 21 21:09 /tmp/tmp.4447xeyigI
+cleaned up /tmp/tmp.4447xeyigI
+exit status: 1
+$ ls -d /tmp/tmp.* 2>&1
+ls: cannot access '/tmp/tmp.*': No such file or directory
+$ cat collect.sh
+#!/bin/bash
+# Copy every rollout log into one directory and count failures.
+dir=$1
+cd $dir
+for f in $(ls *.log); do
+  cp $f /tmp/collected/
+done
+local_count=$(grep -l FAIL *.log | wc -l)
+echo "failures: $local_count"
+$ shellcheck collect.sh; echo "exit status: $?"
+
+In collect.sh line 4:
+cd $dir
+^-----^ SC2164 (warning): Use 'cd ... || exit' or 'cd ... || return' in case cd fails.
+   ^--^ SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+cd "$dir" || exit
+
+
+In collect.sh line 5:
+for f in $(ls *.log); do
+         ^---------^ SC2045 (error): Iterating over ls output is fragile. Use globs.
+              ^-- SC2035 (info): Use ./*glob* or -- *glob* so names with dashes won't become options.
+
+
+In collect.sh line 6:
+  cp $f /tmp/collected/
+     ^-- SC2086 (info): Double quote to prevent globbing and word splitting.
+
+Did you mean: 
+  cp "$f" /tmp/collected/
+
+
+In collect.sh line 8:
+local_count=$(grep -l FAIL *.log | wc -l)
+                           ^-- SC2035 (info): Use ./*glob* or -- *glob* so names with dashes won't become options.
+
+For more information:
+  https://www.shellcheck.net/wiki/SC2045 -- Iterating over ls output is fragi...
+  https://www.shellcheck.net/wiki/SC2164 -- Use 'cd ... || exit' or 'cd ... |...
+  https://www.shellcheck.net/wiki/SC2035 -- Use ./*glob* or -- *glob* so name...
+exit status: 1
+$ mkdir -p "/tmp/logs run 1" && cd "/tmp/logs run 1" && printf 'FAIL\n' > "task a.log" && printf 'ok\n' > b.log && cd ~/scripts
+$ ./collect.sh "/tmp/logs run 1"; echo "exit status: $?"
+./collect.sh: line 4: cd: too many arguments
+ls: cannot access '*.log': No such file or directory
+grep: *.log: No such file or directory
+failures: 0
+exit status: 0
+$ shellcheck collect-fixed.sh; echo "exit status: $?"
+exit status: 0
+$ ./collect-fixed.sh "/tmp/logs run 1"; echo "exit status: $?"
+failures: 1
+exit status: 0
+$ ls /tmp/collected
+b.log
+task a.log
+$ ls -l /bin/sh
+lrwxrwxrwx 1 root root 4 Mar 31  2024 /bin/sh -> dash
+$ sh -c 'set -o pipefail; echo ok'; echo "exit status: $?"
+sh: 1: set: Illegal option -o pipefail
+exit status: 2
+
+## session D (grader; files shown below)
+(output as captured in the authoring run: app->1, fixed->0, hang->124 after 1m0.040s, broken variant always 0, grade.py 1/0, inject.py prints INJECTED)
+--- run-tests-broken.sh
+#!/usr/bin/env bash
+# Grade one rollout. Usage: run-tests-broken.sh APP_DIR
+app_dir=$1
+grader_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+echo "running hidden tests..."
+APP_DIR="$app_dir" PYTHONPATH="$app_dir" python3 -m unittest discover -s "$grader_dir" -p 'test_hidden.py' 2>&1 | tail -n 3
+echo "tests finished"
+--- grade.py
+#!/usr/bin/env python3
+"""The same job as run-tests.sh, in Python. Usage: grade.py APP_DIR"""
+import json
+import os
+import subprocess
+import sys
+
+app_dir = sys.argv[1]
+grader_dir = os.path.dirname(os.path.abspath(__file__))
+env = {**os.environ, "APP_DIR": app_dir, "PYTHONPATH": app_dir, "PYTHONDONTWRITEBYTECODE": "1"}
+try:
+    proc = subprocess.run(
+        ["python3", "-m", "unittest", "discover", "-s", grader_dir, "-p", "test_hidden.py"],
+        capture_output=True, text=True, timeout=60, check=False, env=env,
+    )
+    status, stderr = proc.returncode, proc.stderr
+except subprocess.TimeoutExpired:
+    status, stderr = 124, "timed out after 60 s"
+print(json.dumps({"exit_code": status, "passed": status == 0,
+                  "stderr_tail": " ".join(stderr.splitlines()[-3:])}))
+sys.exit(status)
+--- inject.py
+import subprocess
+name = "x; echo INJECTED"
+subprocess.run("echo grading " + name, shell=True, check=False)
+subprocess.run(["echo", "grading", name], check=False)
+--- apply-fix.py
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace("import sys", "import re\nimport sys")
+s = s.replace("return Counter(text.split())", "return Counter(re.findall(r\"[a-z]+(?:'[a-z]+)*\", text.lower()))")
+open(p, "w").write(s)
+--- hang.py
+import time
+time.sleep(600)
+
+## alpine:3.20
+Terminated
+sh: exit status: 143
+bash: not found
+exit status: 127
+
+## session D real output
+$ cd ~/wordfreq-bench
+$ rm -rf /tmp/fixed /tmp/result.jsonl; cp -r app /tmp/fixed && python3 ~/scripts/apply-fix.py /tmp/fixed/wordfreq.py
+$ grader/run-tests.sh app /tmp/result.jsonl; echo "exit status: $?"
+exit status: 1
+$ grader/run-tests.sh /tmp/fixed /tmp/result.jsonl; echo "exit status: $?"
+exit status: 0
+$ cat /tmp/result.jsonl
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}
+{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.000s  OK "}
+$ ls -d /tmp/tmp.* 2>&1
+ls: cannot access '/tmp/tmp.*': No such file or directory
+$ cp ~/scripts/run-tests-broken.sh grader/
+$ grader/run-tests-broken.sh app; echo "exit status: $?"
+running hidden tests...
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)
+tests finished
+exit status: 0
+$ grader/run-tests-broken.sh /tmp/fixed; echo "exit status: $?"
+running hidden tests...
+Ran 2 tests in 0.000s
+
+OK
+tests finished
+exit status: 0
+$ grader/run-tests-broken.sh /nonexistent; echo "exit status: $?"
+running hidden tests...
+Ran 1 test in 0.000s
+
+FAILED (errors=1)
+tests finished
+exit status: 0
+$ shellcheck grader/run-tests-broken.sh; echo "exit status: $?"
+exit status: 0
+$ python3 grader/grade.py app; echo "exit status: $?"
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2)"}
+exit status: 1
+$ python3 grader/grade.py /tmp/fixed; echo "exit status: $?"
+{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.000s  OK"}
+exit status: 0
+$ cp -r app /tmp/hang && cp ~/scripts/hang.py /tmp/hang/wordfreq.py
+$ time grader/run-tests.sh /tmp/hang /tmp/result.jsonl; echo "exit status: $?"
+
+real	1m0.035s
+user	0m0.023s
+sys	0m0.029s
+exit status: 124
+$ tail -n 1 /tmp/result.jsonl
+{"exit_code": 124, "passed": false, "stderr_tail": ""}
+$ grader/run-tests-broken.sh /tmp/fixed | tail -n 1; grep -c . /tmp/result.jsonl
+tests finished
+3
+$ jq -c 'select(.passed|not)' /tmp/result.jsonl 2>&1 | head -3
+/tmp/run.sh: line 5: jq: command not found
+
+## session E
+$ cd ~/wordfreq-bench
+$ cp ~/scripts/run-tests-patched.sh grader/
+$ grader/run-tests-patched.sh app; echo "exit status: $?"
+running hidden tests...
+Ran 2 tests in 0.001s
+
+FAILED (failures=2)
+exit status: 1
+$ grader/run-tests-patched.sh /tmp/fixed; echo "exit status: $?"
+running hidden tests...
+Ran 2 tests in 0.000s
+
+OK
+tests finished
+exit status: 0
+$ for d in app /tmp/fixed; do grader/run-tests-broken.sh "$d" >/dev/null; echo "broken  $d -> $?"; grader/run-tests.sh "$d" /tmp/r2.jsonl; echo "real    $d -> $?"; done
+broken  app -> 0
+real    app -> 1
+broken  /tmp/fixed -> 0
+real    /tmp/fixed -> 0
+$ time python3 grader/grade.py /tmp/hang; echo "exit status: $?"
+{"exit_code": 124, "passed": false, "stderr_tail": "timed out after 60 s"}
+
+real	1m0.142s
+user	0m0.074s
+sys	0m0.030s
+exit status: 124
+--- run-tests-patched.sh
+#!/usr/bin/env bash
+# Grade one rollout. Usage: run-tests-patched.sh APP_DIR
+set -euo pipefail
+app_dir=${1:?usage: run-tests-patched.sh APP_DIR}
+grader_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+echo "running hidden tests..."
+APP_DIR="$app_dir" PYTHONPATH="$app_dir" python3 -m unittest discover -s "$grader_dir" -p 'test_hidden.py' 2>&1 | tail -n 3
+echo "tests finished"
+
+## alpine: bash shebang
+env: can't execute 'bash': No such file or directory
+exit status: 127
+4:check() {
+9:check
+exit status: 1
+bash: ./hello.sh: Permission denied

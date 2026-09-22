@@ -1,0 +1,125 @@
+{
+ "id": "cgroups-7",
+ "tag": "[cgroups(7)]",
+ "citation": {
+  "authors": "Linux man-pages project (Michael Kerrisk et al.)",
+  "title": "cgroups(7) — Linux control groups",
+  "venue": "Linux man-pages 6.19, man7.org rendering",
+  "year": "2026",
+  "url": "https://man7.org/linux/man-pages/man7/cgroups.7.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man7/cgroups.7.html",
+  "https://man7.org/linux/man-pages/man7/cgroup_namespaces.7.html",
+  "https://docs.kernel.org/admin-guide/cgroup-v2.html",
+  "https://docs.docker.com/engine/security/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Definition: control groups allow processes to be organized into hierarchical groups whose usage of resources can be limited and monitored; interface is a pseudo-filesystem (cgroupfs)",
+   "verdict": "confirmed",
+   "finding": "Verbatim first sentences of cgroups(7) DESCRIPTION.",
+   "quote": "Control groups, usually referred to as cgroups, are a Linux kernel feature which allow processes to be organized into hierarchical groups whose usage of various types of resources can then be limited and monitored. The kernel's cgroup interface is provided through a pseudo-filesystem called cgroupfs.",
+   "location": "cgroups(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/cgroups.7.html"
+  },
+  {
+   "planned": "cgroups v1 vs v2: v2 unified hierarchy; controllers available in v2 (cpu, memory, io, pids, cpuset, …)",
+   "verdict": "confirmed",
+   "finding": "v1: each controller could be mounted on its own hierarchy; first released in Linux 2.6.24. v2: 'all mounted controllers reside in a single unified hierarchy'; made official in Linux 4.5. cgroups(7) lists exactly these v2 controllers: cpu (since 4.15, successor of v1 cpu+cpuacct), cpuset (5.0), freezer (5.2), hugetlb (5.6), io (4.5, successor of v1 blkio), memory (4.5), perf_event (4.11), pids (4.5), rdma (4.11). No v2 equivalent of net_cls/net_prio; the v2 'devices' controller has no interface files (it is done by attaching an eBPF program). The current kernel doc additionally documents 'DMEM' and 'Misc' controllers, which the man page does not list. A controller cannot be used in v1 and v2 at the same time. v2 also has the 'no internal processes' rule (processes only in leaf cgroups, roughly). Executed in a container on this host: /sys/fs/cgroup is type cgroup2fs and cgroup.controllers reads 'cpuset cpu io memory hugetlb pids rdma'.",
+   "quote": "In cgroups v2, all mounted controllers reside in a single unified hierarchy. While (different) controllers may be simultaneously mounted under the v1 and v2 hierarchies, it is not possible to mount the same controller simultaneously under both the v1 and the v2 hierarchies.",
+   "location": "cgroups(7), CGROUPS VERSION 2 (intro) and 'Cgroups v2 controllers'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/cgroups.7.html"
+  },
+  {
+   "planned": "Namespaces control what a process can SEE; cgroups control how much it can USE (teaching framing — mark as framing, but confirm the two definitions support it)",
+   "verdict": "confirmed",
+   "finding": "FRAMING, not a quotation — neither man page uses the see/use slogan. The two definitions support it: namespaces(7) is about how a resource 'appear[s] to the processes within the namespace'; cgroups(7) is about groups 'whose usage of various types of resources can then be limited and monitored'. Docker's security page draws the same line: namespaces mean processes 'cannot see, and even less affect' others; control groups 'implement resource accounting and limiting' and 'do not play a role in preventing one container from accessing or affecting the data and processes of another container'. One wrinkle to mention: the cgroup NAMESPACE is a namespace (a view) over cgroups, and cgroup limits are NOT reflected in /proc — executed: a container with --cpus 1.5 --memory 256m still sees nproc=10 and MemTotal=8025424 kB (the host's).",
+   "quote": "Control Groups are another key component of Linux containers. They implement resource accounting and limiting. [...] So while they do not play a role in preventing one container from accessing or affecting the data and processes of another container, they are essential to fend off some denial-of-service attacks.",
+   "location": "Docker Docs, Docker Engine security, 'Control groups'",
+   "cite_url": "https://docs.docker.com/engine/security/#control-groups"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Terminology: a cgroup is a collection of processes bound to limits set via the cgroup filesystem; a subsystem / (resource) controller is the kernel component that enforces one resource type.",
+   "quote": "A cgroup is a collection of processes that are bound to a set of limits or parameters defined via the cgroup filesystem. A subsystem is a kernel component that modifies the behavior of the processes in a cgroup. [...] Subsystems are sometimes also known as resource controllers (or simply, controllers).",
+   "location": "cgroups(7), DESCRIPTION → Terminology"
+  },
+  {
+   "finding": "Limits are hierarchical: a child cgroup cannot exceed its ancestors' limits.",
+   "quote": "The limits, control, and accounting provided by cgroups generally have effect throughout the subhierarchy underneath the cgroup where the attributes are defined. Thus, for example, the limits placed on a cgroup at a higher level in the hierarchy cannot be exceeded by descendant cgroups.",
+   "location": "cgroups(7), DESCRIPTION → Terminology"
+  },
+  {
+   "finding": "History: v1 first released in Linux 2.6.24; v2 work began in 3.10 and became official in Linux 4.5; v1 is 'unlikely to be removed'.",
+   "quote": "Because of the problems with the initial cgroups implementation (cgroups version 1), starting in Linux 3.10, work began on a new, orthogonal implementation to remedy these problems. [...] the new version (cgroups version 2) was eventually made official with the release of Linux 4.5.",
+   "location": "cgroups(7), 'Cgroups version 1 and version 2'"
+  },
+  {
+   "finding": "Exact v2 controller list in cgroups(7).",
+   "quote": "cpu (since Linux 4.15) [...] cpuset (since Linux 5.0) [...] freezer (since Linux 5.2) [...] hugetlb (since Linux 5.6) [...] io (since Linux 4.5) This is the successor of the version 1 blkio controller. memory (since Linux 4.5) [...] perf_event (since Linux 4.11) [...] pids (since Linux 4.5) [...] rdma (since Linux 4.11)",
+   "location": "cgroups(7), 'Cgroups v2 controllers'"
+  },
+  {
+   "finding": "/proc/PID/cgroup format is hierarchy-ID:controller-list:cgroup-path; for v2 the entry is '0::/path'.",
+   "quote": "For each cgroup hierarchy of which the process is a member, there is one entry containing three colon-separated fields: hierarchy-ID:controller-list:cgroup-path",
+   "location": "cgroups(7), /proc files → /proc/pid/cgroup"
+  },
+  {
+   "finding": "memory.max is the hard limit; hitting it invokes the OOM killer INSIDE that cgroup. Default 'max' (unlimited).",
+   "quote": "Memory usage hard limit. This is the main mechanism to limit memory usage of a cgroup. If a cgroup's memory usage reaches this limit and can't be reduced, the OOM killer is invoked in the cgroup. Under certain circumstances, the usage may go over the limit temporarily.",
+   "location": "Kernel docs, Control Group v2, Memory Interface Files → memory.max",
+   "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files"
+  },
+  {
+   "finding": "memory.high throttles instead of killing.",
+   "quote": "Memory usage throttle limit. If a cgroup's usage goes over the high boundary, the processes of the cgroup are throttled and put under heavy reclaim pressure. Going over the high limit never invokes the OOM killer",
+   "location": "Kernel docs, Control Group v2, Memory Interface Files → memory.high",
+   "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files"
+  },
+  {
+   "finding": "memory.events has an oom_kill counter — the file to read to prove a task was OOM-killed.",
+   "quote": "oom_kill The number of processes belonging to this cgroup killed by any kind of OOM killer.",
+   "location": "Kernel docs, Control Group v2, Memory Interface Files → memory.events",
+   "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#memory-interface-files"
+  },
+  {
+   "finding": "What memory the controller tracks: page cache and anonymous memory, kernel data structures, TCP socket buffers — 'not completely water-tight'.",
+   "quote": "While not completely water-tight, all major memory usages by a given cgroup are tracked so that the total memory consumption can be accounted and controlled to a reasonable extent. Currently, the following types of memory usages are tracked. - Userland memory - page cache and anonymous memory. - Kernel data structures such as dentries and inodes. - TCP socket buffers.",
+   "location": "Kernel docs, Control Group v2, Controllers → Memory",
+   "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#memory"
+  },
+  {
+   "finding": "cpu.max format is '$MAX $PERIOD' (default 'max 100000'): the group may use $MAX microseconds of CPU per $PERIOD.",
+   "quote": "A read-write two value file which exists on non-root cgroups. The default is \"max 100000\". The maximum bandwidth limit. It's in the following format:: $MAX $PERIOD which indicates that the group may consume up to $MAX in each $PERIOD duration. \"max\" for $MAX indicates no limit.",
+   "location": "Kernel docs, Control Group v2, CPU Interface Files → cpu.max",
+   "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files"
+  },
+  {
+   "finding": "pids.max: hard limit on number of processes (fork-bomb defence). Default 'max'.",
+   "quote": "A read-write single value file which exists on non-root cgroups. The default is \"max\". Hard limit of number of processes.",
+   "location": "Kernel docs, Control Group v2, PID Interface Files → pids.max",
+   "cite_url": "https://docs.kernel.org/admin-guide/cgroup-v2.html#pid-interface-files"
+  },
+  {
+   "finding": "Docker history note: cgroups code 'was started in 2006, and initially merged in kernel 2.6.24' (matches cgroups(7)).",
+   "quote": "Control Groups have been around for a while as well: the code was started in 2006, and initially merged in kernel 2.6.24.",
+   "location": "Docker Docs, Docker Engine security, 'Control groups'",
+   "cite_url": "https://docs.docker.com/engine/security/#control-groups"
+  },
+  {
+   "finding": "EXECUTED — docker run flags map directly onto cgroup v2 files; and /proc is NOT virtualized by cgroups (nproc and MemTotal still show the host/VM).",
+   "quote": "$ docker run --rm --memory 256m --cpus 1.5 --pids-limit 100 ubuntu:24.04 sh -c 'cat /proc/self/cgroup; stat -fc %T /sys/fs/cgroup; cat /sys/fs/cgroup/cgroup.controllers; for f in memory.max cpu.max pids.max pids.current memory.current; do echo \"$f: $(cat /sys/fs/cgroup/$f)\"; done; nproc; grep MemTotal /proc/meminfo'\n0::/\ncgroup2fs\ncpuset cpu io memory hugetlb pids rdma\nmemory.max: 268435456\ncpu.max: 150000 100000\npids.max: 100\npids.current: 2\nmemory.current: 1699840\n10\nMemTotal:        8025424 kB",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — a default container has no limits at all.",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c 'for f in memory.max cpu.max pids.max; do echo \"$f: $(cat /sys/fs/cgroup/$f)\"; done'\nmemory.max: max\ncpu.max: max 100000\npids.max: max",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  }
+ ],
+ "teaching_notes": "The see/use slogan is framing — label it as such; Docker's security page is the best citable support. Most useful practical finding (executed): cgroup limits are invisible to /proc — a container limited to 1.5 CPUs and 256 MiB still reports 10 CPUs and ~8 GB via nproc and /proc/meminfo, so an agent (or a test suite) that sizes itself from those will overshoot and get OOM-killed; the truth is in /sys/fs/cgroup/{memory.max,cpu.max,pids.max}. Default Docker containers have memory.max=max, pids.max=max. Docker on this machine is cgroup v2 (cgroup2fs mounted read-only at /sys/fs/cgroup). cgroups(7) still says systemd mounts cgroup2 at /sys/fs/cgroup/unified 'on many modern systems' — that describes the old hybrid layout; do not repeat it as current (executed: it is mounted at /sys/fs/cgroup)."
+}

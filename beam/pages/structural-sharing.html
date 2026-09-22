@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Structural Sharing</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .heap-stage { height: 420px; }
+  .blk { position:absolute; width:200px; }
+  .blk .slot { cursor:default; }
+  .blk .slot.changed { background:rgba(201,138,75,.16); }
+  .leaf { width:150px; }
+  .leaf .bhead { color:var(--imm); }
+  .tag2 { position:absolute; font-family:var(--mono); font-size:12px; color:var(--ink-faint); }
+  .cnt { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:8px; }
+  .cnt .box { border:1px solid var(--line); border-radius:8px; padding:12px 14px; background:var(--bg-2); }
+  .cnt .box .n { font-family:var(--mono); font-size:26px; }
+  .cnt .box .lbl { font-size:12px; color:var(--ink-faint); }
+  .cnt .box.share .n { color:var(--imm); }
+  .cnt .box.copy .n { color:var(--rose); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 4 · data structures · the centerpiece</p>
+    <h1>Structural Sharing</h1>
+    <p class="lede">
+      One sentence in the Elixir docs does a lot of quiet work: <em>"the elements themselves are not
+      copied."</em> It's easy to nod past it and still have no idea <strong>where</strong> the
+      not-copied elements actually are. This page exists to give that "somewhere" a concrete address.
+    </p>
+
+    <h2>The misframe, and the fix</h2>
+    <p>
+      The instinct is to picture a tuple as a <em>box that contains its elements</em>, the way a physical box
+      contains physical things. With that picture, "shared, not copied" is genuinely confusing — if the
+      element isn't in <em>this</em> box and isn't in <em>that</em> box, where is it?
+    </p>
+    <p>
+      The fix is to drop the nesting picture entirely. A tuple is <strong>not</strong> a container holding its
+      elements. It is a small block whose slots hold <span style="color:var(--boxed)">pointers — drawn here as arrows —</span>
+      to where each element already lives. The element exists once, at one heap address. "Sharing" just means
+      <strong>more than one arrow points at that address.</strong>
+    </p>
+    <p>
+      Two clarifications make that picture exact — both inherited from <a href="machine-word-and-tags.html">rung&nbsp;2</a>:
+    </p>
+    <ul>
+      <li>
+        <strong>The "arrow" <em>is</em> the slot — it isn't a third thing between them.</strong> A slot is one
+        word. For a pointer, that word's bits <em>are</em> the element's heap address (low bits tagged
+        <code>10</code>, "boxed"). "Following the arrow" just means <em>read that one word as an address and go
+        there</em>. So the diagram's <span class="ptr">slot&nbsp;→&nbsp;map</span> is really
+        <strong>two</strong> things, slot-word and map, not three (slot → arrow → map): the arrow is just the
+        slot-word, drawn.
+      </li>
+      <li>
+        <strong>Only <em>boxed</em> elements get an arrow.</strong> If an element is an immediate — a small
+        integer, an atom, <code>[]</code>, a pid — its bits sit <em>in the slot itself</em>, so there's nothing
+        elsewhere to point at and nothing to share. Arrows, and therefore sharing, happen only for boxed
+        elements: maps, tuples, binaries, bignums, floats. The example below is a tuple of <em>maps</em> exactly
+        so every slot is a boxed pointer worth sharing — a slot holding <code>:a</code> would just carry the
+        atom inline, no arrow.
+      </li>
+    </ul>
+
+    <h2>Watch it happen</h2>
+    <p>
+      Below, <code>t</code> is a 4-tuple of (boxed) maps. Pick a slot and run <code>put_elem/3</code>. A
+      <em>new</em> tuple block appears — but look at the arrows: every unchanged slot points at the
+      <strong>same</strong> map the original does. Only the changed slot points at something new. Nothing was
+      duplicated.
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">the graph of arrows · put_elem(t, i, %{new})</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <label class="fld">update slot:
+            <div class="seg" id="slotSeg">
+              <button data-i="0">0</button><button data-i="1">1</button>
+              <button data-i="2" class="on">2</button><button data-i="3">3</button>
+            </div>
+          </label>
+          <button class="btn primary" id="updBtn">t2 = put_elem(t, <span id="slotN">2</span>, %{new})</button>
+          <button class="btn" id="rstBtn">reset</button>
+        </div>
+
+        <div class="heap-stage" id="stage">
+          <svg class="wires" id="wires"></svg>
+        </div>
+
+        <div class="cnt">
+          <div class="box share"><div class="n" id="sharedN">—</div><div class="lbl">words allocated by the update (<code>:erts_debug.size</code> view — sharing counted once)</div></div>
+          <div class="box copy"><div class="n" id="copyN">—</div><div class="lbl">words if it were deep-copied (<code>:erts_debug.flat_size</code> view — no sharing)</div></div>
+        </div>
+
+        <div class="legend">
+          <span class="key"><span class="swatch" style="background:var(--boxed)"></span> arrow = the slot's one word, read as a heap address</span>
+          <span class="key"><span class="swatch" style="background:var(--imm)"></span> leaf value (a map), lives once</span>
+          <span class="key"><span class="swatch" style="background:var(--accent)"></span> the selected slot (the one put_elem replaces)</span>
+        </div>
+      </div>
+      <div class="viz-foot">Word counts illustrative (each map ≈ 6 words). The real demonstration: <code>:erts_debug.size/1</code> (counts sharing) vs <code>:erts_debug.flat_size/1</code> (pretends none).</div>
+    </div>
+
+    <h2>The concrete story, in addresses</h2>
+    <p>
+      Strip it to two tuples and one shared map and it's unambiguous:
+    </p>
+    <pre><code>M  <span class="tok-com"># a big map, living at heap address 1000</span>
+t1 = {M, :a}        <span class="tok-com"># new block at 2000: slot0 = 1000 (arrow to M), slot1 = :a (immediate, inline)</span>
+t2 = put_elem(t1, 1, :b)
+                    <span class="tok-com"># new block at 3000: slot0 = 1000 (SAME arrow to SAME M), slot1 = :b</span></code></pre>
+
+    <p>Now build it one allocation at a time and watch the addresses fill in:</p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">walkthrough · M at 1000, then t1, then t2</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <button class="btn" id="wBack">← back</button>
+          <button class="btn primary" id="wNext">step →</button>
+          <button class="btn" id="wReset">restart</button>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--ink-faint)" id="wStepLbl"></span>
+        </div>
+        <div class="heap-stage" id="stage2" style="height:300px">
+          <svg class="wires" id="wires2"></svg>
+        </div>
+        <div class="readout" id="wNarr"></div>
+      </div>
+      <div class="viz-foot">3-word blocks (header + 2 slots) at illustrative addresses. <code>:a</code>/<code>:b</code> are immediates — inline in the slot; only <code>M</code> is boxed, so only it is reached by an arrow.</div>
+    </div>
+
+    <p>
+      <code>M</code> never moved and was never duplicated. It is the one block at 1000, now with
+      <strong>two</strong> arrows aimed at it — one from <code>t1</code>, one from <code>t2</code>. That is
+      "shared, not copied," exactly and physically.
+    </p>
+
+    <div class="callout aha">
+      <span class="label">Why this is safe</span>
+      In a <em>mutable</em> language, two structures sharing a pointer is a real hazard: mutating <code>M</code>
+      through <code>t1</code> would be visible through <code>t2</code> as well. Elixir removes that hazard with
+      <strong>immutability</strong>: <code>M</code> can never be mutated in place, so it doesn't matter that two
+      tuples point at it. Sharing is only possible <em>because</em> nothing can change underneath a reference.
+      The cost of an "update" is proportional to the <em>container</em>, never to the <em>contents</em>.
+    </div>
+
+    <h2>The model to carry forward</h2>
+    <p>
+      Stop imagining containers nested inside containers. Imagine a <strong>graph of small blocks connected by
+      arrows</strong>, where leaf values exist once and many arrows can point at them. <em>"Copied"</em> = a new
+      leaf block was allocated. <em>"Shared"</em> = no new leaf — just another arrow to the block that's already
+      there. The element is never "out there nowhere"; it's at a definite address, and sharing means more than
+      one arrow targets it.
+    </p>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.4 (term representation), Ch.11–12 (heap &amp; GC). Demonstration: <code>:erts_debug.size/1</code> vs <code>:erts_debug.flat_size/1</code>.</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('structural-sharing');
+
+const stage = document.getElementById('stage');
+const wires = document.getElementById('wires');
+const MAPS = ['%{a}','%{b}','%{c}','%{d}'];
+let chosen = 2, hasT2 = false;
+
+// leaf positions (right column)
+const LEAF_Y = [8, 92, 176, 260];
+function el(html){ const d=document.createElement('div'); d.innerHTML=html.trim(); return d.firstChild; }
+
+function tupleHTML(id, slots, changedIdx){
+  let s = `<div class="block tuple blk" id="${id}" style="left:18px;top:${id==='t1'?40:240}px">
+    <div class="bhead"><span>${id}</span><span>tuple/4</span></div>`;
+  slots.forEach((tgt,i)=>{
+    const ch = (i===changedIdx) ? ' changed' : '';
+    s += `<div class="slot${ch}" id="${id}_s${i}"><span class="idx">slot ${i}</span><span class="ptr">→</span></div>`;
+  });
+  return s + `</div>`;
+}
+
+function render(){
+  // wipe everything except the svg
+  [...stage.querySelectorAll('.blk,.leaf,.tag2')].forEach(n=>n.remove());
+  wires.innerHTML = WIKI.arrowDefs('var(--boxed)');
+
+  // leaves M0..M3 (right column)
+  MAPS.forEach((m,i)=>{
+    const lf = el(`<div class="block leaf" id="M${i}" style="left:430px;top:${LEAF_Y[i]}px">
+      <div class="bhead">M${i}</div><div class="slot"><span class="imm">${m}</span><span class="idx">~6w</span></div></div>`);
+    stage.appendChild(lf);
+  });
+  // original tuple t1 → M0..M3; before t2 exists, preview the slot put_elem will replace
+  stage.insertAdjacentHTML('beforeend', tupleHTML('t1',[0,1,2,3], hasT2 ? -1 : chosen));
+
+  let newLeaf=null;
+  if(hasT2){
+    // new leaf M_new for the changed slot
+    newLeaf = el(`<div class="block leaf fresh" id="Mnew" style="left:430px;top:344px">
+      <div class="bhead" style="color:var(--accent)">M_new</div><div class="slot"><span class="imm">%{new}</span><span class="idx">~6w</span></div></div>`);
+    stage.appendChild(newLeaf);
+    // t2: same targets except chosen slot → Mnew
+    const tgts=[0,1,2,3].map(i=> i===chosen ? 'new' : i);
+    stage.insertAdjacentHTML('beforeend', tupleHTML('t2',tgts,chosen));
+  }
+  requestAnimationFrame(drawAll);
+}
+
+function drawAll(){
+  wires.innerHTML = WIKI.arrowDefs('var(--boxed)');
+  // t1 arrows
+  [0,1,2,3].forEach(i=> WIKI.drawArrow(wires, document.getElementById(`t1_s${i}`), document.getElementById(`M${i}`)) );
+  if(hasT2){
+    [0,1,2,3].forEach(i=>{
+      const from=document.getElementById(`t2_s${i}`);
+      if(i===chosen) WIKI.drawArrow(wires, from, document.getElementById('Mnew'), {color:'var(--accent)', width:2.4});
+      else WIKI.drawArrow(wires, from, document.getElementById(`M${i}`), {color:'var(--imm)', dash:true});
+    });
+    // counters
+    const allocated = 5 /*new tuple block*/ + 6 /*Mnew*/;
+    const copied    = 5 + 4*6;
+    document.getElementById('sharedN').textContent = allocated + ' w';
+    document.getElementById('copyN').textContent   = copied + ' w';
+  } else {
+    document.getElementById('sharedN').textContent='—';
+    document.getElementById('copyN').textContent='—';
+  }
+}
+
+document.getElementById('slotSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#slotSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  chosen=+b.dataset.i; document.getElementById('slotN').textContent=chosen;
+  render();
+});
+document.getElementById('updBtn').addEventListener('click', ()=>{ hasT2=true; render(); });
+document.getElementById('rstBtn').addEventListener('click', ()=>{ hasT2=false; render(); });
+window.addEventListener('resize', ()=>requestAnimationFrame(drawAll));
+render();
+
+/* ---------- concrete address walkthrough: M / t1 / t2 ---------- */
+const stage2 = document.getElementById('stage2');
+const wires2 = document.getElementById('wires2');
+let wStep = 0;                       // 0..3
+const W_NARR = [
+  'Empty heap. Three addresses are about to be used: <b>1000</b>, <b>2000</b>, <b>3000</b>.',
+  '<b>M</b> — a big map — is allocated at address <b>1000</b>. It exists exactly once, here.',
+  '<code>t1 = {M, :a}</code> → a new 3-word block at <b>2000</b>. Slot&nbsp;0 holds the number <b class="ptr">1000</b> (an <span class="ptr">arrow</span> to M); slot&nbsp;1 holds the immediate <b>:a</b> inline. M did not move or copy.',
+  '<code>t2 = put_elem(t1, 1, :b)</code> → another new block at <b>3000</b>. Slot&nbsp;0 <b>also</b> holds <b class="ptr">1000</b> — the <span class="ptr">same arrow to the same M</span>. Slot&nbsp;1 holds <b>:b</b>. Now <b>two</b> arrows point at the one M at 1000.'
+];
+
+function wBlock(id, addr, label, color, x, y, slots){
+  let s=`<div class="block blk" id="${id}" style="left:${x};top:${y}px;width:190px;border-color:${color}">
+    <div class="bhead"><span>${label}</span><span>@${addr}</span></div>`;
+  slots.forEach(sl=> s+=`<div class="slot" ${sl.id?`id="${sl.id}"`:''}><span class="idx">${sl.k}</span><span class="${sl.cls||'imm'}">${sl.v}</span></div>`);
+  return s+`</div>`;
+}
+function renderWalk(){
+  [...stage2.querySelectorAll('.blk')].forEach(n=>n.remove());
+  wires2.innerHTML = WIKI.arrowDefs('var(--boxed)');
+
+  if(wStep>=1){
+    stage2.insertAdjacentHTML('beforeend',
+      wBlock('w_M','1000','M (big map)','var(--imm)','62%',110,[{k:'%{ … }',v:'~6 words',cls:'idx'}]));
+    stage2.querySelector('#w_M').classList.add('leaf');
+  }
+  if(wStep>=2){
+    stage2.insertAdjacentHTML('beforeend',
+      wBlock('w_t1','2000','t1','var(--boxed)','24px',24,[
+        {k:'slot 0', v:'→ 1000', cls:'ptr', id:'w_t1s0'},
+        {k:'slot 1', v:':a'} ]));
+  }
+  if(wStep>=3){
+    stage2.insertAdjacentHTML('beforeend',
+      wBlock('w_t2','3000','t2','var(--accent)','24px',180,[
+        {k:'slot 0', v:'→ 1000', cls:'ptr', id:'w_t2s0'},
+        {k:'slot 1', v:':b'} ]));
+  }
+  document.getElementById('wStepLbl').textContent = `step ${wStep} / 3`;
+  document.getElementById('wNarr').innerHTML = W_NARR[wStep];
+  document.getElementById('wNext').disabled = wStep>=3;
+  document.getElementById('wBack').disabled = wStep<=0;
+  requestAnimationFrame(drawWalk);
+}
+function drawWalk(){
+  wires2.innerHTML = WIKI.arrowDefs('var(--boxed)');
+  if(wStep>=2) WIKI.drawArrow(wires2, document.getElementById('w_t1s0'), document.getElementById('w_M'), {color:'var(--boxed)', width:2.2});
+  if(wStep>=3) WIKI.drawArrow(wires2, document.getElementById('w_t2s0'), document.getElementById('w_M'), {color:'var(--accent)', width:2.4});
+}
+document.getElementById('wNext').onclick=()=>{ if(wStep<3){wStep++; renderWalk();} };
+document.getElementById('wBack').onclick=()=>{ if(wStep>0){wStep--; renderWalk();} };
+document.getElementById('wReset').onclick=()=>{ wStep=0; renderWalk(); };
+window.addEventListener('resize', ()=>requestAnimationFrame(drawWalk));
+renderWalk();
+</script>
+</body>
+</html>

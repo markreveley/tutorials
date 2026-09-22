@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Users, Groups, and Root · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 2 · Identity &amp; Permissions</p>
+    <h1>Users, groups, and root</h1>
+    <p class="lede">
+      Every process on a Linux box runs as somebody, and that identity decides what it may read,
+      change, and kill. This page explains who a process "is", what makes root different, and why the
+      identity your agent runs under is one of the first things to check in any eval environment.
+    </p>
+
+    <h2 id="numbers-not-names">The kernel knows numbers; names are a lookup</h2>
+    <p>
+      This page begins the third audit question, <em>who owns what?</em> Start by asking who
+      <em>you</em> are. The examples use the course's running example: a container started from the
+      hardened wordfreq-bench image, in which the <span class="term" data-g="agent">agent</span>'s
+      commands run as a <span class="term" data-g="user">user</span> called <code>agent</code>.
+    </p>
+<pre class="term"><code><span class="p">$</span> whoami
+<span class="o">agent</span>
+<span class="p">$</span> id
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span>
+<span class="p">$</span> grep -E '^(Uid|Gid|Groups):' /proc/self/status
+<span class="o">Uid:	1001	1001	1001	1001
+Gid:	1001	1001	1001	1001
+Groups:	1001 </span></code></pre>
+    <p>
+      The second command is the honest one. A process carries a set of integers: a
+      <span class="term" data-g="uid">user ID</span>, a <span class="term" data-g="gid">group
+      ID</span>, and a list of supplementary group
+      IDs.<a class="cite" href="https://man7.org/linux/man-pages/man7/credentials.7.html" title="credentials(7): User and group identifiers — 'These IDs are integers'">[credentials(7)]</a>
+      The kernel's view, in <code>/proc/self/status</code>, contains no names at all. (The four
+      columns are the real, effective, saved and filesystem IDs. They differ only in special
+      situations such as <a href="08-permissions.html#setuid">setuid programs</a>; the filesystem ID,
+      which shadows the effective one, is what file permission checks
+      use.<a class="cite" href="https://man7.org/linux/man-pages/man7/credentials.7.html" title="credentials(7): Filesystem user ID">[credentials(7)]</a>)
+      The word <code>agent</code> comes from a text file that tools like <code>id</code> and
+      <code>ls</code> consult to make their output readable:
+    </p>
+<pre class="term"><code><span class="p">$</span> getent passwd agent
+<span class="o">agent:x:1001:1001::/home/agent:/bin/bash</span>
+<span class="p">$</span> head -n 3 /etc/passwd
+<span class="o">root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin</span></code></pre>
+    <p>
+      The <span class="term" data-g="passwd-file">/etc/passwd</span> file has one line per account
+      and exactly seven colon-separated
+      fields:<a class="cite" href="https://man7.org/linux/man-pages/man5/passwd.5.html" title="passwd(5), DESCRIPTION">[credentials(7)]</a>
+    </p>
+    <div class="diagram">agent : x : 1001 : 1001 :  : /home/agent : /bin/bash
+  │     │    │      │    │       │            │
+  │     │    │      │    │       │            └ login shell
+  │     │    │      │    │       └ home directory (sets $HOME)
+  │     │    │      │    └ comment / full name (empty here)
+  │     │    │      └ primary GID  (other groups: /etc/group)
+  │     │    └ UID: the number the kernel actually uses
+  │     └ "x": the password hash lives in /etc/shadow
+  └ login name: a label for humans</div>
+    <p>
+      <code>getent passwd NAME</code> is the lookup itself; prefer it to grepping the file. Because
+      names are only a lookup, a file can be owned by a number that has no name, and <code>ls</code>
+      then shows the bare number. As root:
+    </p>
+<pre class="term"><code><span class="p">#</span> touch /srv/orphan &amp;&amp; chown 4242:4242 /srv/orphan &amp;&amp; ls -l /srv/orphan
+<span class="o">-rw-r--r-- 1 <span class="hl">4242 4242</span> 0 Sep 21 21:16 /srv/orphan</span>
+<span class="p">#</span> ls -l /app/wordfreq.py; ls -ln /app/wordfreq.py
+<span class="o">-rw-r--r-- 1 agent agent 765 Sep 21 06:08 /app/wordfreq.py
+-rw-r--r-- 1 1001 1001 765 Sep 21 06:08 /app/wordfreq.py</span></code></pre>
+    <p>
+      <code>ls -n</code> skips the lookup and prints what is really stored. Make it a habit in
+      containers, for a reason that arrives in <a href="#uids-across-boundaries">a few sections</a>.
+    </p>
+
+    <h3 id="shadow-and-group">The other two files: <code>/etc/shadow</code> and <code>/etc/group</code></h3>
+<pre class="term"><code><span class="p">$</span> ls -l /etc/passwd /etc/shadow /etc/group
+<span class="o">-rw-r--r-- 1 root root   517 Sep 21 06:29 /etc/group
+-rw-r--r-- 1 root root   929 Sep 21 06:29 /etc/passwd
+-rw-r----- 1 root shadow 529 Sep 21 06:29 /etc/shadow</span>
+<span class="p">$</span> cat /etc/shadow; echo "exit status: $?"
+<span class="o">cat: /etc/shadow: Permission denied
+exit status: 1</span></code></pre>
+    <p>
+      <code>/etc/passwd</code> must be readable by everyone, because every <code>ls -l</code> needs
+      it. Password hashes were therefore moved to the
+      <span class="term" data-g="shadow-file">shadow file</span>, which "must not be readable by
+      regular users".<a class="cite" href="https://man7.org/linux/man-pages/man5/shadow.5.html" title="shadow(5), DESCRIPTION">[credentials(7)]</a>
+      Read as root, the interesting field is the second:
+    </p>
+<pre class="term"><code><span class="p">#</span> grep -E '^(root|ubuntu|agent):' /etc/shadow
+<span class="o">root:*:20707:0:99999:7:::
+ubuntu:!:20707:0:99999:7:::
+agent:!:20717:0:99999:7:::</span></code></pre>
+    <p>
+      A <code>*</code> or <code>!</code> there is not a valid hash, so no password will ever match:
+      nobody can log in to these accounts <em>with a
+      password</em>.<a class="cite" href="https://man7.org/linux/man-pages/man5/shadow.5.html" title="shadow(5): encrypted password field">[credentials(7)]</a>
+      That is normal for a container, which nobody logs in to. It is also why an agent that tries
+      <code>su -</code> to become root gets <code>su: Authentication failure</code>.
+    </p>
+    <p>
+      A <span class="term" data-g="group">group</span> is a named GID with a member list, stored in
+      <code>/etc/group</code> as <code>name:password:GID:user_list</code>. Each user has one primary
+      group (the GID field in <code>passwd</code>) and any number of supplementary ones. Groups exist
+      so that a file can be shared with some users and not others; page 8 puts them to work.
+    </p>
+<pre class="term"><code><span class="p">$</span> getent group agent sudo shadow
+<span class="o">agent:x:1001:
+sudo:x:27:ubuntu
+shadow:x:42:</span></code></pre>
+    <div class="callout">
+      <span class="label">Background — why is <code>agent</code> 1001 and not 1000?</span>
+      <p>The <code>ubuntu:24.04</code> image ships with a ready-made ordinary account,
+      <code>ubuntu</code>, at UID 1000, so the first user you add gets 1001. Look at the
+      <code>sudo</code> line above: that account is already a member of group <code>sudo</code>, even
+      though the image contains no <code>sudo</code> program. Debian's slim image has no UID-1000
+      user at all. A harness configured to "run as uid 1000" is therefore a different identity with
+      different group memberships on the two base images (both observations from running the
+      images).</p>
+    </div>
+
+    <h2 id="root">Root is UID 0, and what that buys</h2>
+    <p>
+      One UID is special. The account with user ID 0, conventionally named
+      <span class="term" data-g="root-user">root</span>, is the superuser: traditionally, a process
+      with effective UID 0 bypasses all kernel permission
+      checks.<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), DESCRIPTION: privileged processes (effective UID 0) bypass all kernel permission checks">[capabilities(7)]</a>
+      The agent made itself a private file; watch who can read it:
+    </p>
+<pre class="term"><code><span class="p">$</span> echo "agent private notes" &gt; ~/private.txt; chmod 600 ~/private.txt; ls -l ~/private.txt
+<span class="o">-rw------- 1 agent agent 20 Sep 21 21:17 /home/agent/private.txt</span></code></pre>
+<pre class="term"><code><span class="p">$</span> docker exec -u 1000 lt-07-box cat /home/agent/private.txt    <span class="c"># from the Mac, as user ubuntu</span>
+<span class="o">cat: /home/agent/private.txt: Permission denied</span>
+<span class="p">$</span> docker exec -u 0 lt-07-box cat /home/agent/private.txt       <span class="c"># as root</span>
+<span class="o">agent private notes</span></code></pre>
+    <p>
+      The mode <code>600</code> means "owner only", and root is not the owner. Root simply is not
+      subject to the question. The same goes for killing other users' processes, changing any file's
+      owner, installing packages, editing <code>/etc/passwd</code>, and binding low ports.
+    </p>
+    <p>
+      Since Linux 2.2 that all-or-nothing privilege has been split into separate units called
+      <span class="term" data-g="capability">capabilities</span>, such as "bypass file permission
+      checks" or "change file
+      ownership".<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), DESCRIPTION: 'Starting with Linux 2.2, Linux divides the privileges traditionally associated with superuser into distinct units'">[capabilities(7)]</a>
+      Root is powerful because a root process normally holds them. Take them away and UID 0 is just
+      another number:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --user 0 --cap-drop ALL wordfreq-bench:hardened \
+    bash -c 'id; cat /home/agent/.bashrc | head -n 1; ls /home/agent'
+<span class="o">uid=0(root) gid=0(root) groups=0(root)
+cat: /home/agent/.bashrc: Permission denied
+ls: cannot open directory '/home/agent': Permission denied</span></code></pre>
+    <p>
+      Depth triage: at this point you need only <em>recognize</em> the word "capabilities" and the
+      idea that root's power is itemised and removable.
+      <a href="21-cgroups-capabilities-seccomp.html">Page 21</a> teaches how to read and set them.
+      Docker gives a container's root a reduced default set of 14, which still includes the
+      file-permission bypass
+      (<code>DAC_OVERRIDE</code>),<a class="cite" href="https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities" title="Docker Docs, Running containers: Runtime privilege and Linux capabilities (default capability table)">[Docker: run]</a>
+      so inside an ordinary container, root reads everything, as the <code>docker exec -u 0</code>
+      above showed.
+    </p>
+
+    <h3 id="service-accounts">Accounts that are not people</h3>
+    <p>
+      Most lines in <code>/etc/passwd</code> belong to nobody you could meet:
+    </p>
+<pre class="term"><code><span class="p">$</span> grep -c nologin /etc/passwd
+<span class="o">16</span>
+<span class="p">$</span> getent passwd www-data
+<span class="o">www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin</span></code></pre>
+    <p>
+      These are <span class="term" data-g="service-account">service accounts</span>: identities
+      created so that a piece of software (a web server, the package downloader <code>_apt</code>)
+      can run as something other than root and own only its own files. Their shell is
+      <code>/usr/sbin/nologin</code>, a program that refuses interactive logins. This is
+      <span class="term" data-g="least-privilege">least privilege</span> as ordinary practice: a bug
+      in the web server can then damage only what <code>www-data</code> may touch. An eval
+      environment's <code>agent</code> user is the same idea applied to a model.
+    </p>
+
+    <h2 id="managing-users">Creating users, becoming users</h2>
+    <p>Account management is root's job. The four commands that cover what eval images need:</p>
+<pre class="term"><code><span class="p">#</span> useradd -m -s /bin/bash reviewer      <span class="c"># -m: create /home/reviewer   -s: login shell</span>
+<span class="p">#</span> id reviewer
+<span class="o">uid=1002(reviewer) gid=1002(reviewer) groups=1002(reviewer)</span>
+<span class="p">#</span> groupadd graders
+<span class="p">#</span> usermod -aG graders reviewer          <span class="c"># -aG: append to supplementary groups</span>
+<span class="p">#</span> id reviewer
+<span class="o">uid=1002(reviewer) gid=1002(reviewer) groups=1002(reviewer),<span class="hl">1003(graders)</span></span>
+<span class="p">#</span> passwd -l reviewer                    <span class="c"># lock: no password login</span>
+<span class="o">passwd: password changed.</span>
+<span class="p">#</span> su - reviewer -c 'whoami; pwd; id'
+<span class="o">reviewer
+/home/reviewer
+uid=1002(reviewer) gid=1002(reviewer) groups=1002(reviewer),1003(graders)</span></code></pre>
+    <p>
+      <code>useradd</code> edited <code>/etc/passwd</code>, <code>/etc/shadow</code> and
+      <code>/etc/group</code> for you (here it also created a group named after the user). Forgetting the <code>-a</code> in <code>usermod -aG</code> <em>replaces</em>
+      the user's supplementary groups instead of adding one. <code>su - USER</code> ("substitute
+      user") starts a login shell as that user: the dash gives you their home directory and
+      environment, where plain <code>su USER</code> keeps your current directory. Root may
+      <code>su</code> to anyone without a password; anyone else is asked for the target's password,
+      which, as you saw, these accounts do not have. In an unprivileged account the same commands
+      fail, and the error messages are worth recognising in a
+      <span class="term" data-g="transcript">transcript</span>:
+    </p>
+<pre class="term"><code><span class="p">$</span> useradd eve; echo "exit status: $?"
+<span class="o">useradd: Permission denied.
+useradd: cannot lock /etc/passwd; try again later.
+exit status: 1</span>
+<span class="p">$</span> apt-get install -y sudo 2&gt;&amp;1 | tail -n 1
+<span class="o">E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?</span></code></pre>
+
+    <h3 id="sudo">sudo: borrowed root, by policy</h3>
+    <p>
+      <span class="term" data-g="sudo">sudo</span> "allows a permitted user to execute a command as
+      the superuser or another user, as specified by the security
+      policy";<a class="cite" href="https://www.sudo.ws/docs/man/sudo.man/" title="sudo(8), DESCRIPTION">[sudo(8)]</a>
+      the policy lives in <code>/etc/sudoers</code> and <code>/etc/sudoers.d/</code>. On your Mac or a
+      cloud VM it is how you become root. In a minimal container image it usually does not exist:
+    </p>
+<pre class="term"><code><span class="p">$</span> sudo -l; echo "exit status: $?"
+<span class="o">bash: sudo: command not found
+exit status: 127</span></code></pre>
+    <p>
+      None of the course's three base images ships <code>sudo</code>; their default user is already
+      root.<a class="cite" href="https://www.sudo.ws/docs/man/sudo.man/" title="sudo source note: absence verified by running ubuntu:24.04, debian:bookworm-slim and alpine:3.20">[sudo(8)]</a>
+      So <code>sudo: command not found</code> in a transcript is a fact about the environment, not a
+      mistake by the model (although an agent that keeps retrying it is telling you something).
+      When an image builder does install it, the question is what the policy grants. Here root has
+      installed sudo and written one rule for <code>agent</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> echo 'agent ALL=(ALL) NOPASSWD: /usr/bin/apt-get' &gt; /etc/sudoers.d/agent &amp;&amp; chmod 440 /etc/sudoers.d/agent</code></pre>
+<pre class="term"><code><span class="p">$</span> sudo -l
+<span class="o">…
+User agent may run the following commands on 5a3a9ce9e54f:
+    (ALL) NOPASSWD: /usr/bin/apt-get</span>
+<span class="p">$</span> sudo apt-get --version | head -n 1
+<span class="o">apt 2.8.3 (arm64)</span>
+<span class="p">$</span> sudo -n cat /etc/shadow; echo "exit status: $?"
+<span class="o">sudo: a password is required
+exit status: 1</span></code></pre>
+    <p>
+      <code>sudo -l</code> lists what the invoking user may run: the audit command. <code>NOPASSWD</code>
+      removes the authentication step for the listed
+      commands;<a class="cite" href="https://www.sudo.ws/docs/man/sudoers.man/" title="sudoers(5), Tag_Spec: PASSWD and NOPASSWD">[sudo(8)]</a>
+      anything else demands a password the account does not have. <code>-n</code>
+      (non-interactive) makes sudo fail at once instead of prompting, which is what you want in any
+      script or agent tool. With the rule widened to <code>NOPASSWD: ALL</code>, which is what
+      image builders write when they want the agent to "be able to install things", the account is
+      root in all but name:
+    </p>
+<pre class="term"><code><span class="p">$</span> sudo id
+<span class="o">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="p">$</span> sudo cat /etc/shadow | head -n 1
+<span class="o">root:*:20707:0:99999:7:::</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall — a narrow-looking sudo rule is rarely narrow</span>
+      <p>A rule that allows only a package manager, an editor, or an interpreter as root allows
+      running arbitrary code as root, because those programs run other programs. Treat any
+      <code>NOPASSWD</code> line in an agent's <code>sudo -l</code> output as "the agent is root"
+      unless you can argue otherwise for that specific command. If the agent needs a package, install
+      it when the image is built.</p>
+    </div>
+    <p>
+      How does <code>sudo</code> do it? It is an ordinary program file with a special mode bit,
+      <span class="term" data-g="setuid">setuid</span>, that makes it start with its owner's UID
+      (root) rather than the caller's; page 8 covers the bit. That has a useful consequence. Linux has
+      a per-process flag, <span class="term" data-g="no-new-privileges">no_new_privs</span>, under
+      which executing a file can no longer grant privileges: setuid bits are ignored, and the flag is
+      inherited by all children and cannot be
+      unset.<a class="cite" href="https://docs.kernel.org/userspace-api/no_new_privs.html" title="Linux kernel documentation, No New Privileges Flag">[seccomp(2)]</a>
+      Docker sets it with <code>--security-opt no-new-privileges</code>. Same image, same blanket
+      sudo rule, one extra flag:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --user agent --security-opt no-new-privileges lt-07-sudo-img \
+    bash -c 'sudo id; echo "exit status: $?"; grep NoNewPrivs /proc/self/status'
+<span class="o">sudo: The "no new privileges" flag is set, which prevents sudo from running as root.
+sudo: If sudo is running in a container, you may need to adjust the container configuration to disable the flag.
+exit status: 1
+NoNewPrivs:	1</span></code></pre>
+    <p>
+      The sudo manual names this exact situation as the likely cause of that
+      message.<a class="cite" href="https://www.sudo.ws/docs/man/sudo.man/" title="sudo(8), DIAGNOSTICS: 'no new privileges' flag">[sudo(8)]</a>
+      The course's <code>run-hardened.sh</code> sets the flag
+      (<a href="23-hardening-containers.html#rung-nnp">page 23</a>), so even a sloppy sudoers file
+      in the image could not hand the agent root.
+    </p>
+
+    <h2 id="inheritance">Identity is inherited, and Docker's default is root</h2>
+    <p>
+      A new process gets copies of its parent's user and group
+      IDs.<a class="cite" href="https://man7.org/linux/man-pages/man7/credentials.7.html" title="credentials(7); fork(2): the child inherits copies of the parent's user and group IDs">[credentials(7)]</a>
+      Everything the agent's shell starts is <code>agent</code>, all the way down:
+    </p>
+<pre class="term"><code><span class="p">$</span> id -u; bash -c 'id -u; sh -c "id -u"'
+<span class="o">1001
+1001
+1001</span></code></pre>
+    <p>
+      So the identity of a whole <span class="term" data-g="rollout">rollout</span> is decided once,
+      by whoever starts the first process. In a <span class="term" data-g="container">container</span>
+      that is Docker, and "the default user within a container is <code>root</code> (uid = 0)"; an
+      image can change the default with a <code>USER</code> line in its Dockerfile, and
+      <code>--user</code> overrides both at run
+      time.<a class="cite" href="https://docs.docker.com/engine/containers/run/#user" title="Docker Docs, Running containers: User">[Docker: run]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 id
+<span class="o">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="p">$</span> docker run --rm wordfreq-bench:hardened id                <span class="c"># Dockerfile says USER agent</span>
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span>
+<span class="p">$</span> docker run --rm --user 0 wordfreq-bench:hardened id       <span class="c"># …and the caller can still override it</span>
+<span class="o">uid=0(root) gid=0(root) groups=0(root)</span>
+<span class="p">$</span> docker inspect -f '{{.Config.User}}' wordfreq-bench:hardened
+<span class="o">agent</span>
+<span class="p">$</span> docker inspect -f '{{.Config.User}}' wordfreq-bench:sloppy
+<span class="o"></span></code></pre>
+    <p>
+      An empty <code>Config.User</code> means root. That one-line <code>docker inspect</code> is the
+      fastest identity check you can run on a <span class="term" data-g="task-image">task image</span>
+      without starting it. Notice also that <code>USER</code> is a default, not a lock: anyone who
+      controls the <code>docker run</code> or <code>docker exec</code> command line chooses the UID.
+      That is a feature, as the next box explains. <code>--user</code> accepts raw numbers, which
+      produces a process whose UID has no name:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --user 12345 ubuntu:24.04 bash -c 'id; whoami; echo "HOME=$HOME"'
+<span class="o">uid=12345 <span class="hl">gid=0(root)</span> groups=0(root)
+whoami: cannot find name for user ID 12345
+HOME=/</span></code></pre>
+    <p>
+      Everything works, since the kernel never needed the name, but tools that want a home
+      directory or a username may misbehave. Look at the highlighted part: a bare
+      <code>--user UID</code> left the <em>group</em> as 0. Group root owns a lot of files. Write
+      <code>--user 12345:12345</code> (which printed <code>uid=12345 gid=12345 groups=12345</code>).
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — design</span>
+      <p><strong>If the agent is root, every file-permission protection in the box is void</strong>:
+      hidden tests, an answer key, the grader's scripts, other users' files, all readable and
+      writable regardless of their mode bits. Yet tasks routinely require installing software, which
+      needs root. The standard resolutions, in order of preference: (1) install everything at image
+      build time, where <code>RUN</code> lines execute as root, then drop to a non-root
+      <code>USER</code> — Docker's own guidance is to use <code>USER</code> when a service can run
+      without privileges and to avoid installing <code>sudo</code> in
+      images;<a class="cite" href="https://docs.docker.com/build/building/best-practices/#user" title="Docker Docs, Building best practices: USER">[Docker: Dockerfile]</a>
+      (2) if the task genuinely is system administration, let the agent be root, and move everything
+      you need to protect <em>out of the box</em>: grade from outside
+      (<a href="26-environment-integrity.html">page 26</a>). What does not work is root agent plus
+      in-box secrets plus hope.</p>
+      <p>The harness can also use two identities in one box. Inspect's <code>bash()</code> tool and
+      its sandbox <code>exec()</code> both take a <code>user</code> parameter ("User to execute
+      commands as"),<a class="cite" href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash" title="Inspect AI reference, inspect_ai.tool: bash(timeout, user, sandbox)">[Inspect]</a>
+      so agent commands can run as <code>agent</code> while setup and scoring commands run as root:
+      the equivalent of the <code>docker exec -u 0</code> used on this page. Terminal-Bench's current
+      harness has the same pair of settings, <code>agent.user</code> and <code>verifier.user</code>,
+      and if they are not set it uses the container's default, "typically
+      root".<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Terminal-Bench source note: Harbor docs, task.toml configuration (agent.user / verifier.user)">[Terminal-Bench]</a>
+      When you read a benchmark's config, find these settings first.</p>
+    </div>
+
+    <h2 id="uids-across-boundaries">UIDs across boundaries: same number, different name</h2>
+    <p>
+      Each container image brings its own <code>/etc/passwd</code>, but files store only numbers.
+      When storage is shared between boxes — a Docker <span class="term" data-g="volume">volume</span>,
+      a <span class="term" data-g="bind-mount">bind mount</span> of a host directory, files copied
+      out with <code>docker cp</code> — the numbers travel and the names do not. Here the agent
+      writes a file to a volume, and two other containers look at it:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -v lt-07-shared:/work wordfreq-bench:hardened \
+    bash -c 'id -un; echo "patched" &gt; /work/notes.txt; ls -l /work/notes.txt'
+<span class="o">agent
+-rw-r--r-- 1 <span class="hl">agent agent</span> 8 Sep 21 21:17 /work/notes.txt</span>
+<span class="p">$</span> docker run --rm -v lt-07-shared:/work alpine:3.20 ls -l /work/notes.txt
+<span class="o">-rw-r--r--    1 <span class="hl">1001     1001</span>             8 Sep 21 21:17 /work/notes.txt</span>
+<span class="p">$</span> docker run --rm -v lt-07-shared:/work debian:bookworm-slim \
+    bash -c 'useradd -u 1001 mallory; ls -l /work/notes.txt; ls -ln /work/notes.txt'
+<span class="o">-rw-r--r-- 1 <span class="hl">mallory mallory</span> 8 Sep 21 21:17 /work/notes.txt
+-rw-r--r-- 1 1001 1001 8 Sep 21 21:17 /work/notes.txt</span></code></pre>
+    <p>
+      One file, three answers to "who owns this?": <code>agent</code>, nobody, and
+      <code>mallory</code>. Only <code>ls -n</code> is stable. And ownership is not cosmetic: in the
+      third container, <code>mallory</code> really does have the owner's rights over that file,
+      because the kernel compares numbers. (The volume's root directory had to be
+      <code>chown</code>ed to <code>agent</code> first, as root; a fresh volume belongs to root and
+      the agent's write failed with <code>Permission denied</code> until then.)
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — your Mac is not a Linux host</span>
+      <p>The brief for this experiment would normally use a bind mount of a host directory. On Docker
+      Desktop for Mac there is a file-sharing layer between macOS and the Linux VM that rewrites
+      ownership: on the authoring machine a file owned by Mac UID 501 appeared inside the container as
+      owned by <code>0 0</code>. Use a volume, as above, to see the real Linux behaviour, and
+      expect the numeric-UID rule to apply in full when your harness runs on a Linux server.</p>
+    </div>
+    <div class="evals">
+      <span class="label">In eval work — navigate</span>
+      <p>A recurring <span class="term" data-g="infrastructure-failure">infrastructure failure</span>:
+      the harness bind-mounts a results directory created by the host user (say UID 1000 on a Linux
+      CI runner), the agent runs as UID 1001, and every attempt to write its output fails with
+      <code>Permission denied</code>. Every rollout scores zero, identically for every model.
+      <strong>Observed:</strong> a permission error on a mounted path.
+      <strong>Hypothesis:</strong> UID mismatch across the mount. <strong>Discriminating test:</strong>
+      <code>id -u</code> and <code>ls -ldn</code> on the mount point from inside the box; if the
+      numbers differ and the mode has no write bit for "other", that is the cause. Record such
+      rollouts as infrastructure failures, not model failures: they belong in
+      <em>completed / scheduled</em>, and should not silently drag down <em>correct / scheduled</em>.
+      The reverse failure is quieter: the mounted directory <em>is</em> writable by the agent, and it
+      contains something the agent should not be able to change.</p>
+    </div>
+
+    <h2 id="audit-commands">The identity audit, in six commands</h2>
+    <table>
+      <thead><tr><th>Question</th><th>Command</th><th>What to look for</th></tr></thead>
+      <tbody>
+        <tr><td>Who am I, really?</td><td><code>id</code></td><td><code>uid=0</code>; membership of <code>sudo</code>, <code>docker</code>, <code>root</code> groups; a bare number with no name</td></tr>
+        <tr><td>Who will the agent be?</td><td><code>docker inspect -f '{{.Config.User}}' IMAGE</code></td><td>empty = root; then check the harness's own <code>user</code> setting</td></tr>
+        <tr><td>Can I become root?</td><td><code>sudo -n -l</code></td><td>any <code>NOPASSWD</code> line; "command not found" is the good answer</td></tr>
+        <tr><td>Would setuid work at all?</td><td><code>grep NoNewPrivs /proc/self/status</code></td><td><code>1</code> means sudo and every other setuid program are disarmed</td></tr>
+        <tr><td>Which accounts can log in?</td><td><code>getent passwd | grep -v nologin</code></td><td>unexpected accounts with real shells</td></tr>
+        <tr><td>Who owns this, really?</td><td><code>ls -ln PATH</code></td><td>numbers, compared with <code>id -u</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A benchmark paper says: "hidden tests are stored in <code>/opt/tests</code> with mode 700,
+      owned by root, so the agent cannot access them." You are reviewing it. The released
+      Dockerfile has no <code>USER</code> line, and the harness config does not mention a user. The
+      authors add that they searched all transcripts for <code>/opt/tests</code> and found nothing.
+      What is established, what is not, and what do you ask for?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Established:</strong> the mode bits are as described. <strong>Not
+        established:</strong> that they constrain the agent. With no <code>USER</code> line and no
+        harness-level user, Docker's default applies and the agent's commands run as UID 0, for
+        which mode 700 is no barrier. The protection claimed in the paper is void as described.</p>
+        <p><strong>The transcript search is weak evidence.</strong> It shows no agent typed that
+        literal path in a logged command. It does not cover <code>find / -name 'test_*'</code>,
+        <code>grep -r</code> over the filesystem, a Python script that walks directories, or output
+        truncated by the harness. Absence of a string is not absence of access.</p>
+        <p><strong>Ask for:</strong> the output of <code>id</code> from inside a live rollout (one
+        command settles who the agent is); whether the harness sets a user at exec time; whether
+        no-new-privileges is set; and, better than any of these, a rerun of a sample of tasks with
+        the tests absent from the box and grading done outside. If scores drop materially when the
+        tests are removed, some passes depended on seeing them. Until then the reported score is an
+        upper bound on capability, and the paper should say so.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> Exercises 1–3 work in your <code>lt-lab</code> container
+      (root shell via <code>docker exec -it lt-lab bash</code>; <code>learner</code> from page 1
+      plays the part of <code>agent</code>, and has the same UID, 1001). Exercises 4–5 run
+      <code>docker</code> commands from your Mac's terminal.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> As <code>learner</code>, run <code>id</code>,
+        <code>getent passwd learner</code>, and <code>grep -E '^(Uid|Gid):' /proc/self/status</code>.
+        Then try <code>cat /etc/shadow</code>. As root, read the <code>learner</code> line of
+        <code>/etc/shadow</code>: can this account log in with a password?
+          <details class="solution"><summary>Solution</summary>
+          <p><code>id</code> prints <code>uid=1001(learner) gid=1001(learner) groups=1001(learner)</code>;
+          <code>cat /etc/shadow</code> fails with <code>Permission denied</code> (the file is
+          <code>-rw-r----- root shadow</code>). As root,
+          <code>grep '^learner:' /etc/shadow</code> shows <code>learner:!:…</code>: the
+          <code>!</code> is not a valid hash, so no password login is possible.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> As root: <code>touch /srv/orphan &amp;&amp; chown
+        4242:4242 /srv/orphan</code>. Before running <code>ls -l /srv/orphan</code>, write down what
+        the owner column will show. Then run <code>useradd -u 4242 ghost</code> and look again.
+          <details class="solution"><summary>Solution</summary>
+          <p>First <code>4242 4242</code> (no name to look up); after the <code>useradd</code>, the
+          owner column reads <code>ghost</code> and the group column <code>ghost</code>, because
+          <code>useradd</code> also created group 4242. The file did not change. Only the lookup
+          table did. <code>ls -ln</code> shows <code>4242 4242</code> both times. (Verified form of
+          this on the page: <code>mallory</code> in the volume demo.) Clean up with
+          <code>userdel ghost</code>.</p>
+          </details></li>
+        <li><strong>Groups.</strong> As root, create a group <code>graders</code> and a user
+        <code>reviewer</code> who belongs to it as a supplementary group. Show the membership two
+        ways. Then remove both.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> useradd -m -s /bin/bash reviewer; groupadd graders; usermod -aG graders reviewer
+<span class="p">#</span> id reviewer
+<span class="o">uid=1002(reviewer) gid=1002(reviewer) groups=1002(reviewer),1003(graders)</span>
+<span class="p">#</span> grep -E '^(graders|reviewer):' /etc/group
+<span class="o">reviewer:x:1002:
+graders:x:1003:reviewer</span>
+<span class="p">#</span> userdel -r reviewer; groupdel graders; id reviewer
+<span class="o">userdel: reviewer mail spool (/var/mail/reviewer) not found
+id: 'reviewer': no such user</span></code></pre>
+          <p>Note the primary group appears in <code>/etc/passwd</code> (field 4), not in the member
+          list of <code>/etc/group</code>.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> From your Mac: what will
+        <code>docker run --rm --user 1000 ubuntu:24.04 id</code> print? What about the same command
+        with <code>debian:bookworm-slim</code>?
+          <details class="solution"><summary>Solution</summary>
+          <p>On Ubuntu:
+          <code>uid=1000(ubuntu) gid=1000(ubuntu) groups=1000(ubuntu),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev)</code>.
+          Docker looked UID 1000 up in the image's own files and found the preinstalled
+          <code>ubuntu</code> account with all its groups, including <code>sudo</code>. Debian's slim
+          image has no UID-1000 entry, so you get a nameless <code>uid=1000</code> with
+          <code>gid=0(root)</code>, like the <code>--user 12345</code> example above. Same harness
+          setting, different identity.</p>
+          </details></li>
+        <li><strong>Eval task: who is the agent?</strong> You are handed two task images,
+        <code>wordfreq-bench:sloppy</code> and <code>wordfreq-bench:hardened</code> (build them from
+        <code>research/wordfreq-bench/</code>; the README says how). Without reading the
+        Dockerfiles, determine for each the identity agent commands would get by default, and
+        whether the agent could become root. State which check would change if the harness ran
+        containers with <code>--security-opt no-new-privileges</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker inspect -f '{{.Config.User}}' wordfreq-bench:hardened
+<span class="o">agent</span>
+<span class="p">$</span> docker inspect -f '{{.Config.User}}' wordfreq-bench:sloppy
+<span class="o"></span>
+<span class="p">$</span> docker run --rm wordfreq-bench:hardened bash -c 'id; sudo -n -l; echo "exit status: $?"'
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)
+bash: line 1: sudo: command not found
+exit status: 127</span></code></pre>
+          <p>Sloppy: empty user, so the agent is root already and nothing in the box is protected
+          from it. Hardened: <code>agent</code>, no sudo, locked passwords, so no route to root via
+          these mechanisms; the remaining check is setuid programs
+          (<a href="08-permissions.html#setuid">page 8</a>). Under no-new-privileges,
+          <code>grep NoNewPrivs /proc/self/status</code> prints 1 and setuid-based routes
+          (including any sudo an image might contain) stop working, but it does nothing for the
+          sloppy image, where the agent does not need to <em>gain</em> anything.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>credentials(7), passwd(5), group(5), Linux man-pages project; shadow(5), shadow-utils. <a href="https://man7.org/linux/man-pages/man7/credentials.7.html">man7.org/…/credentials.7.html</a> · <a href="https://man7.org/linux/man-pages/man5/passwd.5.html">passwd.5.html</a> · <a href="https://man7.org/linux/man-pages/man5/shadow.5.html">shadow.5.html</a></li>
+        <li>capabilities(7), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html">man7.org/…/capabilities.7.html</a></li>
+        <li>Todd C. Miller. sudo(8) and sudoers(5) manual pages. <a href="https://www.sudo.ws/docs/man/sudo.man/">sudo.ws/docs/man/sudo.man</a> · <a href="https://www.sudo.ws/docs/man/sudoers.man/">sudoers.man</a></li>
+        <li>Linux kernel documentation, "No New Privileges Flag" (with seccomp(2)). <a href="https://docs.kernel.org/userspace-api/no_new_privs.html">docs.kernel.org/userspace-api/no_new_privs.html</a></li>
+        <li>Docker Docs, "Running containers": User; Runtime privilege and Linux capabilities. <a href="https://docs.docker.com/engine/containers/run/#user">docs.docker.com/engine/containers/run/#user</a></li>
+        <li>Docker Docs, "Building best practices": USER. <a href="https://docs.docker.com/build/building/best-practices/#user">docs.docker.com/build/building/best-practices/#user</a></li>
+        <li>UK AI Security Institute. Inspect AI reference, <code>inspect_ai.tool</code>: <code>bash()</code>. <a href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash">inspect.aisi.org.uk/reference/inspect_ai.tool.html</a></li>
+        <li>Mike A. Merrill et al. "Terminal-Bench." arXiv:2601.11868, 2026; Harbor framework docs (task configuration). <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

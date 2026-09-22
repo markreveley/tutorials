@@ -1,0 +1,192 @@
+{
+ "id": "pip-repro",
+ "tag": "[pip]",
+ "citation": {
+  "authors": "The pip developers; G. Thomas et al. (PEP 668); Python Software Foundation",
+  "title": "pip documentation: Repeatable Installs, Secure installs; PEP 668 - Marking Python base environments as \"externally managed\"; venv - Creation of virtual environments",
+  "venue": "pip.pypa.io (pip v26.2.1 docs); peps.python.org; docs.python.org",
+  "year": "2021-2026",
+  "url": "https://pip.pypa.io/en/stable/topics/repeatable-installs/"
+ },
+ "fetched_urls": [
+  "https://pip.pypa.io/en/stable/topics/repeatable-installs/",
+  "https://pip.pypa.io/en/stable/topics/secure-installs/",
+  "https://peps.python.org/pep-0668/",
+  "https://docs.python.org/3/library/venv.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Pinning with == and hash-checking mode (--require-hashes) for repeatable installs; pins must cover transitive dependencies",
+   "verdict": "confirmed",
+   "finding": "Pinning = using == . `pip freeze` output pins top-level AND transitive dependencies; --no-deps is suggested as 'an extra dose of insurance'. Hash-checking mode: --hash=sha256:... per requirement; it is all-or-nothing (any --hash turns it on for every requirement), requires hashes for all dependencies, and requires == pins (or URL/path). --require-hashes forces the mode. NEW in pip 26.2: a --no-require-hashes flag can disable the automatic all-or-nothing enforcement.",
+   "quote": "A requirements file, containing pinned package versions can be generated using pip freeze. This would pin not only the top-level packages, but also all of their transitive dependencies. Performing the installation using --no-deps would provide an extra dose of insurance against installing anything not explicitly listed.",
+   "location": "pip docs > Repeatable Installs > Pinning the package versions",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/repeatable-installs/#pinning-the-package-versions"
+  },
+  {
+   "planned": "PEP 668: distro Pythons marked EXTERNALLY-MANAGED make `pip install` fail with 'externally-managed-environment' on Debian 12/Ubuntu 23.04+; remedy is a venv (or --break-system-packages) - a very common agent stumbling block",
+   "verdict": "confirmed",
+   "finding": "Mechanism confirmed from PEP 668 (Status: Final): an installer checks (1) not in a virtual environment (sys.prefix == sys.base_prefix) and (2) an EXTERNALLY-MANAGED file exists in the stdlib directory; if both, it 'should exit with an error message'; override flag named in the PEP is --break-system-packages, which 'should carry some connotation that its use is risky'. Behaviour verified by EXECUTION in ubuntu:24.04 (Python 3.12.3, pip 24.0): `pip install requests` prints 'error: externally-managed-environment', exit status 1; marker file is /usr/lib/python3.12/EXTERNALLY-MANAGED; a venv works; --break-system-packages works (with a root warning). The specific release claim 'Debian 12 / Ubuntu 23.04+' is NOT in the PEP or pip docs (unverifiable from these sources); only Ubuntu 24.04 was tested here - say 'Ubuntu 24.04 (and other recent Debian-family releases)' unless another source is added.",
+   "quote": "If both of these conditions are true, the installer should exit with an error message indicating that package installation into this Python interpreter's directory are disabled outside of a virtual environment. The installer should have a way for the user to override these rules, such as a command-line flag --break-system-packages.",
+   "location": "PEP 668 > Specification > Marking an interpreter as using an external package manager",
+   "cite_url": "https://peps.python.org/pep-0668/#marking-an-interpreter-as-using-an-external-package-manager"
+  },
+  {
+   "planned": "venv creates an isolated environment with its own site-packages; activation just edits PATH",
+   "verdict": "confirmed",
+   "finding": "Confirmed: a venv 'by default is isolated from the packages in the base environment'; it gets its own lib/pythonX.Y/site-packages and a pyvenv.cfg; activation 'will prepend that directory to your PATH'; activation is not required - call <venv>/bin/python or <venv>/bin/pip directly. Small addition: activation also sets VIRTUAL_ENV (and changes the prompt), so 'just edits PATH' is slightly simplified. Executed output shows PATH before/after.",
+   "quote": "A virtual environment may be \"activated\" using a script in its binary directory (bin on POSIX; Scripts on Windows). This will prepend that directory to your PATH, so that running python will invoke the environment's Python interpreter and you can run installed scripts without having to use their full path.",
+   "location": "venv docs > How venvs work",
+   "cite_url": "https://docs.python.org/3/library/venv.html#how-venvs-work"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Definition of pinning.",
+   "quote": "Pinning refers to using the == operator to require the package to be a specific version.",
+   "location": "pip docs > Repeatable Installs > Pinning the package versions (Note)",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/repeatable-installs/#pinning-the-package-versions"
+  },
+  {
+   "finding": "Limits of pinning alone: trusts the index and TLS; relies on index immutability.",
+   "quote": "However, it trusts the locations you're fetching the packages from (like PyPI) and the certificate authority chain. It also relies on those locations not allowing packages to change without a version increase. (PyPI does protect against this.)",
+   "location": "pip docs > Repeatable Installs > Pinning the package versions",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/repeatable-installs/#pinning-the-package-versions"
+  },
+  {
+   "finding": "Hash-checking syntax and what it protects against.",
+   "quote": "FooProject == 1.2 --hash=sha256:2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824 This protects against a compromise of PyPI or the HTTPS certificate chain. It also guards against a package changing without its version number changing (on indexes that allow this).",
+   "location": "pip docs > Repeatable Installs > Hash-checking",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/repeatable-installs/#hash-checking"
+  },
+  {
+   "finding": "Hash mode is all-or-nothing.",
+   "quote": "Note that hash-checking is an all-or-nothing proposition. Specifying --hash against any requirement will activate this mode globally.",
+   "location": "pip docs > Secure installs > Hash-checking Mode",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/secure-installs/#hash-checking-mode"
+  },
+  {
+   "finding": "Hash mode restrictions.",
+   "quote": "Hashes are required for all dependencies. If there is a dependency that is not spelled out and hashed in the requirements file, it will result in an error. Requirements must be pinned (either to a URL, filesystem path or using ==).",
+   "location": "pip docs > Secure installs > Additional restrictions",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/secure-installs/#additional-restrictions"
+  },
+  {
+   "finding": "--require-hashes purpose.",
+   "quote": "It is possible to force the hash checking mode to be enabled, by passing --require-hashes command-line option. This can be useful in deploy scripts, to ensure that the author of the requirements file provided hashes.",
+   "location": "pip docs > Secure installs > Forcing Hash-checking mode",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/secure-installs/#forcing-hash-checking-mode"
+  },
+  {
+   "finding": "New in pip 26.2: --no-require-hashes.",
+   "quote": "Added in version 26.2. By default, when at least one requirement has hashes, hashes become required for all requirements. [...] a --no-require-hashes flag is available to disable this mechanism.",
+   "location": "pip docs > Secure installs > Disabling automatic enforcement of hash checking mode",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/secure-installs/"
+  },
+  {
+   "finding": "pip's default security posture (useful for sandbox threat model: pip install runs arbitrary code).",
+   "quote": "By default, pip does not perform any checks to protect against remote tampering and involves running arbitrary code from distributions.",
+   "location": "pip docs > Secure installs (intro)",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/secure-installs/"
+  },
+  {
+   "finding": "Allowed hash algorithms.",
+   "quote": "The recommended hash algorithm at the moment is sha256, but stronger ones are allowed [...] However, weaker ones such as md5, sha1, and sha224 are excluded to avoid giving a false sense of security.",
+   "location": "pip docs > Secure installs > Hash algorithms",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/secure-installs/#hash-algorithms"
+  },
+  {
+   "finding": "Wheelhouse for offline/no-network installs (pip wheel ... then pip install --no-index --no-deps); wheels are OS/arch specific.",
+   "quote": "This archive then allows installation when index servers are unavailable and avoids time-consuming recompilation. [...] Note that such a wheelhouse contains compiled packages, which are typically OS and architecture-specific, so these archives are not necessarily portable across machines.",
+   "location": "pip docs > Repeatable Installs > Using a wheelhouse",
+   "cite_url": "https://pip.pypa.io/en/stable/topics/repeatable-installs/#using-a-wheelhouse-aka-installation-bundles"
+  },
+  {
+   "finding": "PEP 668 abstract: the intent.",
+   "quote": "It specifies that Python-specific package management tools should neither install nor remove packages into the interpreter's global context, by default, and should instead guide the end user towards using a virtual environment.",
+   "location": "PEP 668 > Abstract",
+   "cite_url": "https://peps.python.org/pep-0668/#abstract"
+  },
+  {
+   "finding": "PEP 668 detection rule.",
+   "quote": "Is it running outside of a virtual environment? It can determine this by whether sys.prefix == sys.base_prefix [...] Is there an EXTERNALLY-MANAGED file in the directory identified by sysconfig.get_path(\"stdlib\", sysconfig.get_default_scheme())?",
+   "location": "PEP 668 > Specification",
+   "cite_url": "https://peps.python.org/pep-0668/#marking-an-interpreter-as-using-an-external-package-manager"
+  },
+  {
+   "finding": "EXTERNALLY-MANAGED is an INI file with [externally-managed] Error= text that the installer prints - which is why the message mentions apt/python3-xyz on Ubuntu.",
+   "quote": "The EXTERNALLY-MANAGED file is an INI-style metadata file intended to be parsable by the standard library configparser module. [...] the installer should look for an error message specified in the file and output it as part of its error.",
+   "location": "PEP 668 > Specification",
+   "cite_url": "https://peps.python.org/pep-0668/#marking-an-interpreter-as-using-an-external-package-manager"
+  },
+  {
+   "finding": "PEP 668 explicitly allows container images to omit the marker (so python:3.x Docker Hub images typically don't hit this, distro images do - the second half is the course's inference).",
+   "quote": "In certain contexts, such as single-application container images that aren't updated after creation, a distributor may choose not to ship an EXTERNALLY-MANAGED file, so that users can install whatever they like (as they can today) without having to manually override this rule.",
+   "location": "PEP 668 > Specification",
+   "cite_url": "https://peps.python.org/pep-0668/#marking-an-interpreter-as-using-an-external-package-manager"
+  },
+  {
+   "finding": "venv properties: disposable, not movable, not checked in.",
+   "quote": "Considered as disposable - it should be simple to delete and recreate it from scratch. [...] Not considered as movable or copyable - you just recreate the same environment in the target location.",
+   "location": "venv docs (intro list)",
+   "cite_url": "https://docs.python.org/3/library/venv.html"
+  },
+  {
+   "finding": "Activation not needed.",
+   "quote": "You don't specifically need to activate a virtual environment, as you can just specify the full path to that environment's Python interpreter when invoking Python. Furthermore, all scripts installed in the environment should be runnable without activating it.",
+   "location": "venv docs > How venvs work",
+   "cite_url": "https://docs.python.org/3/library/venv.html#how-venvs-work"
+  },
+  {
+   "finding": "How to detect a venv; VIRTUAL_ENV unreliable.",
+   "quote": "It is sufficient to check sys.prefix != sys.base_prefix to determine if the current interpreter is running from a virtual environment. [...] VIRTUAL_ENV cannot be relied upon to determine whether a virtual environment is being used.",
+   "location": "venv docs > How venvs work",
+   "cite_url": "https://docs.python.org/3/library/venv.html#how-venvs-work"
+  },
+  {
+   "finding": "Shebangs hold absolute paths -> venvs are non-portable (don't COPY a venv between images/paths).",
+   "quote": "their shebang lines contain the absolute paths to their environment's interpreters. Because of this, environments are inherently non-portable, in the general case.",
+   "location": "venv docs > How venvs work (Warning)",
+   "cite_url": "https://docs.python.org/3/library/venv.html#how-venvs-work"
+  },
+  {
+   "finding": "pip inside a venv installs into the venv automatically.",
+   "quote": "When used from within a virtual environment, common installation tools such as pip will install Python packages into a virtual environment without needing to be told to do so explicitly.",
+   "location": "venv docs (intro)",
+   "cite_url": "https://docs.python.org/3/library/venv.html"
+  },
+  {
+   "finding": "EXECUTED: exact PEP 668 error on Ubuntu 24.04 (python3-pip from apt; Python 3.12.3, pip 24.0). Exit status 1.",
+   "quote": "$ pip install requests\nerror: externally-managed-environment\n\n× This environment is externally managed\n╰─> To install Python packages system-wide, try apt install\n    python3-xyz, where xyz is the package you are trying to\n    install.\n    \n    If you wish to install a non-Debian-packaged Python package,\n    create a virtual environment using python3 -m venv path/to/venv.\n    Then use path/to/venv/bin/python and path/to/venv/bin/pip. Make\n    sure you have python3-full installed.\n    [...pipx paragraph...]\n    See /usr/share/doc/python3.12/README.venv for more information.\n\nnote: If you believe this is a mistake, please contact your Python installation or OS distribution provider. You can override this, at the risk of breaking your Python installation or OS, by passing --break-system-packages.\nhint: See PEP 668 for the detailed specification.\nexit=1",
+   "location": "executed ubuntu:24.04 (after apt-get install -y --no-install-recommends python3-pip python3-venv)"
+  },
+  {
+   "finding": "EXECUTED: the elided pipx paragraph of the same error, verbatim.",
+   "quote": "    If you wish to install a non-Debian packaged Python application,\n    it may be easiest to use pipx install xyz, which will manage a\n    virtual environment for you. Make sure you have pipx installed.",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "finding": "EXECUTED: the marker file.",
+   "quote": "$ ls -l /usr/lib/python3*/EXTERNALLY-MANAGED\n-rw-r--r-- 1 root root 645 Aug 31 10:18 /usr/lib/python3.12/EXTERNALLY-MANAGED\n$ head -2 /usr/lib/python3.12/EXTERNALLY-MANAGED\n[externally-managed]\nError=To install Python packages system-wide, try apt install",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "finding": "EXECUTED: venv remedy; sys.prefix differs from sys.base_prefix. (On Ubuntu the venv module needs the python3-venv package.)",
+   "quote": "$ python3 -m venv /tmp/v && /tmp/v/bin/pip install -q requests; echo \"venv exit=$?\"\nvenv exit=0\n$ /tmp/v/bin/python -c 'import requests,sys; print(requests.__version__, sys.prefix, sys.base_prefix)'\n2.34.2 /tmp/v /usr",
+   "location": "executed ubuntu:24.04 (requests version is whatever PyPI served on 2026-09-20 - do not present it as a stable fact)"
+  },
+  {
+   "finding": "EXECUTED: activation prepends the venv's bin to PATH and sets VIRTUAL_ENV.",
+   "quote": "before: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n$ . /tmp/v/bin/activate\nafter: /tmp/v/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nVIRTUAL_ENV=/tmp/v\n$ which python pip\n/tmp/v/bin/python\n/tmp/v/bin/pip",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "finding": "EXECUTED: --break-system-packages succeeds (exit 0) and, as root, pip prints this warning.",
+   "quote": "$ pip install --break-system-packages -q requests; echo \"exit=$?\"\nWARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv\nexit=0",
+   "location": "executed ubuntu:24.04 (pip 24.0)"
+  }
+ ],
+ "teaching_notes": "The exact Ubuntu 24.04 error text is captured for pages that show an agent tripping on it; note the helpful text comes from the distro's EXTERNALLY-MANAGED file, not from pip. Unverified detail to avoid: 'Debian 12 / Ubuntu 23.04+' as the starting releases is not in PEP 668 or the pip docs - only ubuntu:24.04 was tested. Points authors may miss: pip docs were v26.2.1 at fetch time while Ubuntu 24.04 ships pip 24.0 (so --no-require-hashes is not available there); hash-checking is all-or-nothing and needs every transitive dependency pinned with ==; pip by default 'involves running arbitrary code from distributions' (relevant to sandbox threat models); venvs are non-portable because of absolute shebangs; PEP 668 itself says single-application container images may omit the marker."
+}

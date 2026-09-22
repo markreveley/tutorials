@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mounts and Filesystems · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 4 · Storage &amp; Software</p>
+    <h1>Mounts and filesystems</h1>
+    <p class="lede">
+      The directory tree you see in a Linux box is stitched together from many separate filesystems,
+      and the list of stitches — the mount table — says which parts are on disk, which are in RAM,
+      which come from the host, and which can be written. This page teaches you to read that table,
+      because "what is mounted, and is it read-only?" is audit question 2, and a read-only mount is
+      the strongest protection against test tampering you can give a sandbox from the inside.
+    </p>
+
+    <h2 id="one-tree">One tree, many filesystems</h2>
+    <p>
+      <a href="03-files-and-the-tree.html">Page 3</a> showed a single tree rooted at <code>/</code>.
+      What it did not say is that the tree is a composite. A
+      <span class="term" data-g="filesystem">filesystem</span> is one self-contained store of files
+      and directories — a formatted disk partition, a chunk of RAM, a view into the kernel. To
+      <span class="term" data-g="mount">mount</span> a filesystem is to attach it to the tree at
+      some existing directory, the <span class="term" data-g="mount-point">mount point</span>. From
+      then on, paths below that directory lead into the attached filesystem. mount(8) opens with
+      exactly this picture: "All files accessible in a Unix system are arranged in one big tree, the
+      file hierarchy, rooted at /. These files can be spread out over several devices. The mount
+      command serves to attach the filesystem found on some device to the big file
+      tree."<a class="cite" href="https://man7.org/linux/man-pages/man8/mount.8.html" title="mount(8), util-linux / Linux man-pages">[mount(8)]</a>
+    </p>
+    <div class="diagram">  what you see: one tree           what it is made of
+  /                                overlay   image layers + a scratch layer
+  ├── app/        ◀── graft ────── ext4      a Docker volume (disk)
+  ├── tmp/        ◀── graft ────── tmpfs     RAM
+  ├── tests/      ◀── graft ────── (host)    a host directory, read-only
+  ├── proc/       ◀── graft ────── proc      the kernel, pretending to be files
+  ├── sys/        ◀── graft ────── sysfs     the kernel again
+  ├── dev/        ◀── graft ────── tmpfs     device files
+  └── etc/
+      └── hosts   ◀── graft ────── ext4      a single file from the host
+
+  the mount table = the list of grafts: (where, what, type, options)</div>
+    <p>
+      Two properties of grafting explain most surprises later. First, a mount <em>covers</em>
+      whatever the directory held before: "The previous contents (if any) and owner and mode of dir
+      become invisible."<a class="cite" href="https://man7.org/linux/man-pages/man8/mount.8.html" title="mount(8), util-linux / Linux man-pages">[mount(8)]</a>
+      Nothing is deleted; it is hidden until the mount is removed. Second, every mount carries its
+      own <em>options</em>, so "can I write here?" has a different answer in different parts of the
+      same tree.
+    </p>
+    <p>
+      The mount table is not global. Each
+      <span class="term" data-g="mount-namespace">mount namespace</span>
+      (<a href="20-namespaces.html">page 20</a>) has its own, which is how a container gets a
+      different <code>/</code> from its host: the kernel file <code>/proc/<em>pid</em>/mountinfo</code>
+      "contains information about mounts in the process's mount
+      namespace".<a class="cite" href="https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html" title="proc_pid_mountinfo(5), Linux man-pages">[proc_pid_mountinfo(5)]</a>
+      That file is the ground truth; every tool below is a reader of it.
+    </p>
+
+    <h2 id="reading">Reading the mount table</h2>
+    <p>
+      The tool to learn is <code>findmnt</code>. With no arguments it "prints all mounted filesystems
+      in the tree-like format", reading from the kernel by
+      default.<a class="cite" href="https://man7.org/linux/man-pages/man8/findmnt.8.html" title="findmnt(8), util-linux / Linux man-pages">[findmnt(8)]</a>
+      Here is the whole mount table of a default <code>ubuntu:24.04</code> container, with the columns
+      chosen explicitly (long values trimmed with …):
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS
+<span class="o">TARGET                  SOURCE                 FSTYPE  OPTIONS
+<span class="hl">/                       overlay                overlay rw,relatime,lowerdir=/var/lib/desktop-containerd/…</span>
+|-/proc                 proc                   proc    rw,nosuid,nodev,noexec,relatime
+| |-/proc/bus           proc[/bus]             proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/sys           proc[/sys]             proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/sysrq-trigger proc[/sysrq-trigger]   proc    ro,nosuid,nodev,noexec,relatime
+| |-/proc/kcore         tmpfs[/null]           tmpfs   rw,nosuid,size=65536k,mode=755
+| |-/proc/keys          tmpfs[/null]           tmpfs   rw,nosuid,size=65536k,mode=755
+| …
+|-/dev                  tmpfs                  tmpfs   rw,nosuid,size=65536k,mode=755
+| |-/dev/pts            devpts                 devpts  rw,nosuid,noexec,relatime,gid=5,mode=620,…
+| |-/dev/mqueue         mqueue                 mqueue  rw,nosuid,nodev,noexec,relatime
+| `-/dev/shm            shm                    tmpfs   rw,nosuid,nodev,noexec,relatime,size=65536k
+|-/sys                  sysfs                  sysfs   ro,nosuid,nodev,noexec,relatime
+| |-/sys/firmware       tmpfs                  tmpfs   ro,relatime
+| `-/sys/fs/cgroup      cgroup                 cgroup2 ro,nosuid,nodev,noexec,relatime
+|-/etc/resolv.conf      /dev/vda1[/docker/containers/b8d4…/resolv.conf] ext4 rw,relatime,discard
+|-/etc/hostname         /dev/vda1[/docker/containers/b8d4…/hostname]    ext4 rw,relatime,discard
+`-/etc/hosts            /dev/vda1[/docker/containers/b8d4…/hosts]       ext4 rw,relatime,discard</span></code></pre>
+    <p>Read it as four groups.</p>
+    <table>
+      <thead><tr><th>Lines</th><th>What they are</th><th>What to notice</th></tr></thead>
+      <tbody>
+        <tr><td><code>/</code> — <code>overlay</code></td>
+            <td>The container's root: the image's layers plus a private scratch layer, merged by
+            <span class="term" data-g="overlayfs">overlayfs</span> (<a href="#overlay">below</a>).</td>
+            <td><code>rw</code>: by default a container can write anywhere in its own root.</td></tr>
+        <tr><td><code>/proc</code>, <code>/sys</code>, <code>/sys/fs/cgroup</code></td>
+            <td>Pseudo-filesystems: no disk behind them, the kernel answers reads directly — the
+            <span class="term" data-g="proc-filesystem">proc filesystem</span>,
+            <span class="term" data-g="sysfs">sysfs</span>, and the cgroup tree.</td>
+            <td>Docker mounts the dangerous parts <code>ro</code> (<code>/proc/sys</code>,
+            <code>/sys</code>) and hides others by mounting <code>/dev/null</code> or an empty tmpfs
+            over them (<code>/proc/kcore</code>, <code>/proc/keys</code>). Covering, used as a safety device.</td></tr>
+        <tr><td><code>/dev</code>, <code>/dev/shm</code></td>
+            <td><span class="term" data-g="tmpfs">tmpfs</span>: filesystems held in memory.</td>
+            <td><code>/dev/shm</code> is writable, world-accessible and 64 MB here — remember it when you think you have made a container read-only.</td></tr>
+        <tr><td><code>/etc/resolv.conf</code>, <code>/etc/hostname</code>, <code>/etc/hosts</code></td>
+            <td>Three single <em>files</em> mounted from the host's ext4 disk — <span class="term" data-g="bind-mount">bind mounts</span>.</td>
+            <td>The <code>SOURCE</code> column's <code>device[/path]</code> form means "this sub-path of that filesystem". It is how Docker injects per-container DNS and host names.</td></tr>
+      </tbody>
+    </table>
+    <p>The three invocations worth memorising:</p>
+<pre class="term"><code><span class="p">#</span> findmnt -T /usr/bin/env -o TARGET,FSTYPE     <span class="c"># which filesystem holds this path?</span>
+<span class="o">TARGET FSTYPE
+/      overlay</span>
+<span class="p">#</span> findmnt -n -o FSTYPE -T /etc/hostname
+<span class="o">ext4</span>
+<span class="p">#</span> findmnt -O ro -o TARGET,FSTYPE               <span class="c"># every mount that has the ro option</span>
+<span class="o">TARGET              FSTYPE
+/proc/bus           proc
+…
+/sys                sysfs
+|-/sys/firmware     tmpfs
+`-/sys/fs/cgroup    cgroup2</span></code></pre>
+    <p>
+      <code>-T <em>path</em></code> walks up from a path to the mount that contains it — the right
+      question when you care about one file ("is <code>expected.json</code> on a read-only mount?").
+      <code>-O ro</code> filters by option. In scripts always name your columns with <code>-o</code>:
+      the default output "is subject to change".<a class="cite" href="https://man7.org/linux/man-pages/man8/findmnt.8.html" title="findmnt(8), util-linux / Linux man-pages">[findmnt(8)]</a>
+    </p>
+    <p>
+      You will meet three older readers in transcripts. <code>mount</code> with no arguments prints
+      the same table as <code>source on target type fstype (options)</code>; its man page says this
+      mode "is maintained for backward compatibility only" and points to
+      findmnt.<a class="cite" href="https://man7.org/linux/man-pages/man8/mount.8.html" title="mount(8), util-linux / Linux man-pages">[mount(8)]</a>
+      <code>df -hT</code> answers a different question — how full is each filesystem
+      (<a href="12-resources-and-limits.html">page 12</a>) — and omits the pseudo-filesystems.
+      <code>lsblk</code> lists <span class="term" data-g="block-device">block devices</span> (disks
+      and partitions); inside a container it shows the host's disks, which is rarely what you want.
+      And if <code>findmnt</code> is missing (minimal images), <code>cat /proc/self/mountinfo</code>
+      always works:
+    </p>
+<pre class="term"><code><span class="p">#</span> head -2 /proc/self/mountinfo
+<span class="o">388 258 0:82 / / rw,relatime - overlay overlay rw,lowerdir=/var/lib/desktop-containerd/…
+390 388 0:149 / /proc rw,nosuid,nodev,noexec,relatime - proc proc rw</span></code></pre>
+    <p>
+      Field 5 is the mount point, field 6 the per-mount options, and after the lone <code>-</code>
+      come the filesystem type, the source, and the filesystem-wide
+      options.<a class="cite" href="https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html" title="proc_pid_mountinfo(5), Linux man-pages">[proc_pid_mountinfo(5)]</a>
+      "Read-only" can differ between field 6 and the last field: one <em>mount</em> of a filesystem
+      can be read-only while the filesystem itself is writable. That distinction returns
+      <a href="#bind">below</a>. <code>findmnt</code>'s <code>VFS-OPTIONS</code> column shows the
+      per-mount half.
+    </p>
+
+    <h3 id="options">The four options that matter</h3>
+    <table>
+      <thead><tr><th>Option</th><th>mount(8) says</th><th>Why you care</th></tr></thead>
+      <tbody>
+        <tr><td><code>ro</code></td><td>"Mount the filesystem read-only."</td><td>Nothing under this mount can be created, changed, deleted, chmod-ed or chown-ed — by anyone.</td></tr>
+        <tr><td><code>nosuid</code></td><td>"Do not honor set-user-ID and set-group-ID bits or file capabilities when executing programs from this filesystem."</td><td>Closes the setuid route to <span class="term" data-g="privilege-escalation">privilege escalation</span> (<a href="08-permissions.html">page 8</a>) on writable scratch space.</td></tr>
+        <tr><td><code>nodev</code></td><td>"Do not interpret character or block special devices on the filesystem."</td><td>A device file created here does nothing.</td></tr>
+        <tr><td><code>noexec</code></td><td>"Do not permit direct execution of any binaries on the mounted filesystem."</td><td>Note the word <em>direct</em>: <code>sh script.sh</code> and <code>python3 x.py</code> still run, because the program being executed is the interpreter, which lives elsewhere.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      All four wordings are from mount(8).<a class="cite" href="https://man7.org/linux/man-pages/man8/mount.8.html" title="mount(8), FILESYSTEM-INDEPENDENT MOUNT OPTIONS">[mount(8)]</a>
+      The <code>noexec</code> line matters in transcripts: Docker's <code>--tmpfs</code> applies
+      <code>nosuid,nodev,noexec</code> by default, so an agent that writes a script into such a
+      <code>/tmp</code> and runs it as <code>/tmp/s.sh</code> gets
+      <code>Permission denied</code> with <span class="term" data-g="exit-status">exit status</span>
+      126, while <code>sh /tmp/s.sh</code> works (both executed in the lab below). The mode bits are
+      fine; the mount said no.
+    </p>
+
+    <h2 id="tmpfs">tmpfs: files that are really memory</h2>
+    <p>
+      A tmpfs keeps its files in virtual memory. It "consumes only as much physical memory and swap
+      space as is required to store the current contents", its contents vanish when it is unmounted,
+      and if you give no size, "the default… is size=50%" of physical
+      RAM.<a class="cite" href="https://man7.org/linux/man-pages/man5/tmpfs.5.html" title="tmpfs(5), Linux man-pages">[tmpfs(5)]</a>
+      Docker's <code>--tmpfs</code> inherits that default — "50% of the host's total
+      RAM".<a class="cite" href="https://docs.docker.com/engine/storage/tmpfs/" title="Docker Docs, tmpfs mounts">[Docker: storage]</a>
+      It is the natural choice for a sandbox's <code>/tmp</code>: fast, private, and gone at
+      <span class="term" data-g="reset">reset</span>. Two caveats. It is not strictly "memory only":
+      tmpfs "can employ swap space", so Docker warns the data "may be written to a swap file, and
+      thereby persisted". And the size option is not the limit that bites. The kernel charges tmpfs
+      pages to the memory <span class="term" data-g="cgroup">cgroup</span> of whoever wrote
+      them,<a class="cite" href="https://docs.kernel.org/admin-guide/cgroup-v2.html" title="Kernel docs, Control Group v2: memory.stat">[Kernel: cgroup-v2]</a>
+      and Docker says so plainly: "that usage counts against the container's memory cgroup limit…
+      filling the mount can still OOM the
+      container."<a class="cite" href="https://docs.docker.com/engine/storage/tmpfs/" title="Docker Docs, tmpfs mounts">[Docker: storage]</a>
+    </p>
+    <p>So which failure do you get when a tmpfs fills — "disk full" or the
+      <span class="term" data-g="oom-killer">OOM killer</span>? It depends on which limit is smaller. Tmpfs smaller than the memory limit:</p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --memory 256m --tmpfs /scratch:size=32m ubuntu:24.04 \
+    bash -c 'dd if=/dev/zero of=/scratch/big bs=1M count=100; echo exit=$?'
+<span class="o"><span class="hl">dd: error writing '/scratch/big': No space left on device</span>
+33+0 records in
+32+0 records out
+33554432 bytes (34 MB, 32 MiB) copied, 0.0370601 s, 905 MB/s
+exit=1</span></code></pre>
+    <p>Tmpfs (200 MB) larger than the memory limit (64 MB), same write:</p>
+<pre class="term"><code><span class="p">$</span> docker run --name lt-14-oom --memory 64m --memory-swap 64m --tmpfs /scratch:size=200m \
+    ubuntu:24.04 bash -c 'dd if=/dev/zero of=/scratch/big bs=1M count=100; echo exit=$?'
+<span class="p">$</span> echo $?
+<span class="o">137</span>
+<span class="p">$</span> docker inspect --format 'OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}}' lt-14-oom
+<span class="o">OOMKilled=true ExitCode=137</span></code></pre>
+    <p>
+      No output at all: not even <code>exit=</code>. The kernel killed the container's main
+      <code>bash</code>, and with <span class="term" data-g="pid-1">PID 1</span> gone the container
+      ended with 137 (128 + 9, <a href="10-signals-exit-codes.html">page 10</a>). When the same
+      command ran under the much smaller <code>sh</code>, <code>dd</code> was the victim instead:
+      the script printed <code>Killed</code>, <code>exit=137</code>, <code>shmem 64823296</code> and
+      <code>oom_kill 1</code>, then finished — and the container's own exit code was 0 with
+      <code>OOMKilled=true</code>. That much is observed. A likely explanation — tmpfs pages belong
+      to no process, so the killer chooses among processes by their own size — is a hypothesis this
+      page has not tested. The practical rule does not depend on it: <strong>the victim of a
+      tmpfs-driven OOM need not be the process that wrote the files</strong>, and the container's
+      exit code alone will not tell you an OOM happened.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — navigate, then account</span>
+      <p>An agent that unpacks a dataset into a tmpfs <code>/tmp</code> can get its test runner
+      killed minutes later, with a transcript that shows only <code>Killed</code> or a tool call that
+      never returns. Evidence to collect before blaming anyone: <code>docker inspect</code>'s
+      <code>OOMKilled</code>, <code>oom_kill</code> in <code>/sys/fs/cgroup/memory.events</code>,
+      <code>shmem</code> in <code>memory.stat</code>, and <code>df -h /tmp</code>
+      (<a href="12-resources-and-limits.html">page 12</a>). If those show the box ran out of room,
+      the outcome is an <span class="term" data-g="infrastructure-failure">infrastructure
+      failure</span>: a fact about the run. Record it as its own status (<code>oom</code>,
+      <code>enospc</code>), keep it in the scheduled count, and report <code>correct / scheduled</code>,
+      <code>correct / completed</code> and <code>completed / scheduled</code> separately. Quietly
+      re-running only the killed samples, or dropping them, changes the denominator after you have
+      seen the results. And if one model hits the limit far more than another, that is a finding
+      about how the environment's budget interacts with behaviour — report it, don't average it away.</p>
+    </div>
+
+    <h2 id="bind">Bind mounts: one directory, two places</h2>
+    <p>
+      A bind mount attaches something already in the tree at a second location: "the same contents
+      are accessible in two places", and the man page stresses that nothing marks it as special —
+      "The 'bind' is just another operation to attach a
+      filesystem."<a class="cite" href="https://man7.org/linux/man-pages/man8/mount.8.html" title="mount(8), Bind mount operation">[mount(8)]</a>
+      It works for single files too, which is what the three <code>/etc</code> lines above were.
+      This is the mechanism behind <code>docker run -v /host/dir:/ctr/dir</code>: "a file or
+      directory on the host machine is mounted from the host into a container." A Docker
+      <span class="term" data-g="volume">volume</span> is the same thing with Docker choosing and
+      managing the host directory.<a class="cite" href="https://docs.docker.com/engine/storage/bind-mounts/" title="Docker Docs, Bind mounts">[Docker: storage]</a>
+    </p>
+    <p>
+      Mounting needs privilege — <code>mount(2)</code> is one of the operations gated by
+      <code>CAP_SYS_ADMIN</code>,<a class="cite" href="https://man7.org/linux/man-pages/man7/capabilities.7.html" title="capabilities(7), Linux man-pages">[capabilities(7)]</a>
+      which Docker does not grant by default (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>)
+      — so this demo runs in a throwaway container started with <code>--cap-add SYS_ADMIN</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> mkdir -p /srv/tests /mnt/view; echo secret-test &gt; /srv/tests/t.py
+<span class="p">#</span> mount --bind /srv/tests /mnt/view
+<span class="p">#</span> mount -o remount,bind,ro /mnt/view
+<span class="p">#</span> findmnt -n -o TARGET,SOURCE,VFS-OPTIONS /mnt/view
+<span class="o">/mnt/view overlay[/srv/tests] ro,relatime</span>
+<span class="p">#</span> echo tamper &gt;&gt; /mnt/view/t.py
+<span class="o">bash: line 8: /mnt/view/t.py: <span class="hl">Read-only file system</span></span>
+<span class="p">#</span> echo tamper &gt;&gt; /srv/tests/t.py; echo "exit=$?"
+<span class="o">exit=0</span>
+<span class="p">#</span> cat /mnt/view/t.py
+<span class="o">secret-test
+tamper</span></code></pre>
+    <p>
+      The read-only view refused the write; the original path accepted it, and the change showed up
+      through the "read-only" view. The man page warns of exactly this: "the olddir will be writable,
+      but the newdir will be read-only." (The one-step form <code>mount -o bind,ro olddir newdir</code>
+      also works on current systems; it is implemented as the same two calls and "is not atomic".
+      Either way, mounts <em>nested under</em> the bound directory are not made read-only by the
+      classic call.)<a class="cite" href="https://man7.org/linux/man-pages/man8/mount.8.html" title="mount(8), Bind mount operation">[mount(8)]</a>
+    </p>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Read-only is a property of a <em>mount</em> — one path into the data — not of the data.
+      Auditing "are the tests read-only?" means checking <em>every</em> path by which the box can
+      reach them.</p>
+    </div>
+
+    <h2 id="overlay">Overlayfs: why a container can scribble on an image</h2>
+    <p>
+      The <code>overlay</code> line for <code>/</code> is how one read-only
+      <span class="term" data-g="image">image</span> serves a thousand containers. Overlayfs merges
+      directory trees: one or more read-only <em>lower</em> directories (the image's
+      <span class="term" data-g="layer">layers</span>, colon-separated in <code>lowerdir=</code>) and
+      one writable <em>upper</em> directory (the container's scratch layer). "When a name exists in
+      both filesystems, the object in the 'upper' filesystem is visible"; writing to a lower file
+      first copies the whole file up; deleting one leaves a marker, a
+      <em>whiteout</em>, in the upper directory.<a class="cite" href="https://docs.kernel.org/filesystems/overlayfs.html" title="Kernel docs, Overlay Filesystem">[Kernel: overlayfs]</a>
+      Built by hand, after <code>echo changed &gt;&gt; merged/a.txt; rm merged/b.txt; echo new &gt; merged/c.txt</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> ls -l upper
+<span class="o">total 8
+-rw-r--r-- 1 root root   17 Sep 21 16:18 a.txt     <span class="c"># copied up, then appended to</span>
+c--------- 2 root root 0, 0 Sep 21 16:18 b.txt     <span class="c"># whiteout: "b.txt is deleted"</span>
+-rw-r--r-- 1 root root    4 Sep 21 16:18 c.txt     <span class="c"># new file</span></span>
+<span class="p">#</span> ls merged; cat lower/a.txt lower/b.txt
+<span class="o">a.txt
+c.txt
+original
+keep</span></code></pre>
+    <p>
+      The lower directory never changed. That is the whole consequence you need: <strong>deleting a
+      file hides it; the layer underneath still has it</strong>. At image-build level the same rule
+      means a solution removed by a later Dockerfile instruction is still inside the image
+      (<a href="22-docker-for-evals.html#layers-remember">page 22</a>,
+      <a href="26-environment-integrity.html">page 26</a>). Depth triage: <em>learn to use</em>
+      <code>findmnt</code> and recognise the <code>overlay</code> line; <em>recognise</em> lower,
+      upper, copy-up and whiteout; <em>leave</em> the rest (opaque directories, <code>metacopy</code>,
+      snapshotter internals) to whoever maintains the container runtime. One dated detail to
+      recognise: older material says Docker's storage driver is <code>overlay2</code> with layers
+      under <code>/var/lib/docker/overlay2</code>; Docker's docs now make the containerd image store
+      the default for fresh installs of Engine 29.0 and later, and the paths above
+      (<code>…/io.containerd.snapshotter.v1.overlayfs/snapshots/…</code>) are what that looks
+      like.<a class="cite" href="https://docs.docker.com/engine/storage/containerd/" title="Docker Docs, containerd image store with Docker Engine">[Kernel: overlayfs]</a>
+      Same kernel mechanism either way.
+    </p>
+    <div class="callout">
+      <span class="label">Background — what about chroot?</span>
+      <p><span class="term" data-g="chroot">chroot</span> changes what <code>/</code> means for a
+      process, and old tutorials call it a jail. Its own man page says it "is not intended to be used
+      for any kind of security purpose, neither to fully sandbox a process nor to restrict filesystem
+      system calls."<a class="cite" href="https://man7.org/linux/man-pages/man2/chroot.2.html" title="chroot(2), Linux man-pages">[chroot(2)]</a>
+      Containers get their root from a mount namespace instead (<a href="20-namespaces.html">page 20</a>).</p>
+    </div>
+
+    <h2 id="is-it-read-only">Audit question 2: is it read-only?</h2>
+    <p>
+      Here is a sandbox with the typical eval layout — root filesystem read-only, a writable volume
+      for the task repo, a tmpfs <code>/tmp</code>, hidden tests bind-mounted read-only — using the
+      course's <code>wordfreq-bench:hardened</code> image:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-14-box --read-only --tmpfs /tmp:size=64m \
+    --mount type=volume,dst=/app \
+    --mount type=bind,src="$PWD/tests",dst=/tests,readonly wordfreq-bench:hardened
+<span class="p">$</span> for t in / /app /tmp /tests; do docker exec lt-14-box findmnt -n -o TARGET,FSTYPE,VFS-OPTIONS $t; done
+<span class="o">/      overlay ro,relatime
+/app   ext4   rw,relatime
+/tmp   tmpfs  rw,nosuid,nodev,noexec,relatime
+/tests fakeowner ro,nosuid,nodev,relatime</span></code></pre>
+    <p>
+      (<code>fakeowner</code> is Docker Desktop's Mac file-sharing layer; on a Linux host you would
+      see the host disk's type, such as <code>ext4</code>.) The table says what should be writable.
+      Never stop at the table — try it, first as the agent's user, then as root:
+    </p>
+<pre class="term"><code><span class="p">$</span> touch /etc/x; touch /tests/x; touch /app/x; echo "exit=$?"
+<span class="o">touch: cannot touch '/etc/x': Read-only file system
+touch: cannot touch '/tests/x': Read-only file system
+exit=0</span>
+<span class="p">#</span> touch /tests/x
+<span class="o">touch: cannot touch '/tests/x': Read-only file system</span>
+<span class="p">#</span> chmod 777 /tests
+<span class="o">chmod: changing permissions of '/tests': Read-only file system</span>
+<span class="p">#</span> mount -o remount,rw /tests; echo "exit=$?"
+<span class="o">mount: /tests: permission denied.
+       dmesg(1) may have more information after failed mount system call.
+exit=32</span>
+<span class="p">#</span> cat /tests/expected.json
+<span class="o">{"the": 3}</span></code></pre>
+    <p>
+      Root could not write, could not <code>chmod</code> its way in, and could not remount, because
+      remounting is a <code>mount(2)</code> call and the container's root lacks
+      <code>CAP_SYS_ADMIN</code>. This is why a read-only mount beats mode bits
+      (<a href="08-permissions.html">page 8</a>) as tamper protection: mode bits are waived for root;
+      mount options are not. The last command is the limit of the technique — root read the answer
+      key without difficulty.
+    </p>
+    <p>The error text tells you which layer refused:</p>
+    <table>
+      <thead><tr><th>You see</th><th>errno</th><th>Layer that said no</th><th>Next check</th></tr></thead>
+      <tbody>
+        <tr><td><code>Read-only file system</code></td><td>EROFS</td><td>The mount is <code>ro</code>. Applies to root too.</td><td><code>findmnt -T <em>path</em></code></td></tr>
+        <tr><td><code>Permission denied</code> on a write</td><td>EACCES</td><td>Mode bits / ownership (<code>touch /etc/x</code> as a non-root user on a writable root printed this).</td><td><code>id</code>; <code>ls -ld</code></td></tr>
+        <tr><td><code>Permission denied</code> running a file that has <code>x</code> set, exit 126</td><td>EACCES</td><td>The mount is <code>noexec</code>.</td><td><code>findmnt -T <em>file</em></code></td></tr>
+        <tr><td><code>mount: … permission denied</code>, exit 32</td><td>EPERM</td><td>Missing <span class="term" data-g="capability">capability</span> (<code>CAP_SYS_ADMIN</code>).</td><td><code>grep Cap /proc/self/status</code> (<a href="21-cgroups-capabilities-seccomp.html">page 21</a>)</td></tr>
+        <tr><td><code>No space left on device</code></td><td>ENOSPC</td><td>That filesystem is full (or out of inodes) — possibly a small tmpfs.</td><td><code>df -h <em>path</em></code>; <code>df -i</code></td></tr>
+      </tbody>
+    </table>
+
+    <div class="evals">
+      <span class="label">In eval work — design</span>
+      <p><strong>Read-only protects against tampering, not reading.</strong> Mounting the hidden tests
+      <code>ro</code> stops <span class="term" data-g="test-tampering">test tampering</span> — an
+      agent rewriting <code>test_hidden.py</code> to <code>assert True</code> — even if the agent is
+      root. It does nothing about <span class="term" data-g="solution-leakage">solution
+      leakage</span>: <code>cat /tests/expected.json</code> worked. Answer keys need
+      <em>absence</em>: keep them out of the box and grade from outside, as
+      <code>wordfreq-bench</code>'s <code>grade.sh</code> does
+      (<a href="23-hardening-containers.html">page 23</a>,
+      <a href="26-environment-integrity.html">page 26</a>). The usual layout is therefore: reference
+      data the task legitimately needs mounted <code>ro</code>; the work directory writable; scratch
+      on a sized tmpfs; everything else read-only; graders and answers not mounted at all.</p>
+    </div>
+    <div class="pitfall">
+      <span class="label">Pitfall — the writable host mount</span>
+      <p>Docker's default is the dangerous one: "Bind mounts have write access to files on the host
+      by default."<a class="cite" href="https://docs.docker.com/engine/storage/bind-mounts/" title="Docker Docs, Bind mounts">[Docker: storage]</a>
+      A harness that runs <code>-v "$PWD":/workspace</code> for convenience has cut a hole in the
+      sandbox wall: a root agent can rewrite the harness's own files, results included. Add
+      <code>:ro</code> (or <code>readonly</code>) unless the agent must write there, and check from
+      outside with <code>docker inspect --format '{{range .Mounts}}{{.Destination}} RW={{.RW}}{{"\n"}}{{end}}'</code>.
+      Note that <code>--tmpfs</code> mounts are listed separately, under <code>.HostConfig.Tmpfs</code>.</p>
+    </div>
+    <div class="pitfall">
+      <span class="label">Pitfall — volumes outlive rollouts</span>
+      <p>A named volume survives <code>--rm</code> and container deletion; Docker removes only
+      anonymous ones.<a class="cite" href="https://docs.docker.com/engine/storage/volumes/#remove-anonymous-volumes" title="Docker Docs, Volumes: remove anonymous volumes">[Docker: storage]</a>
+      Executed: rollout 1 ran <code>docker run --rm -v lt-14-work:/work … 'echo answer-from-rollout-1 &gt; /work/notes.txt'</code>;
+      a fresh container with the same <code>-v</code> then printed <code>answer-from-rollout-1</code>.
+      Epoch 2 starting with epoch 1's files is cross-contamination, and two <em>concurrent</em>
+      rollouts sharing a volume can overwrite each other's work. One volume per rollout, removed at
+      reset — <code>run-hardened.sh</code> uses an anonymous volume for exactly this reason.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A benchmark maintainer says: "Hidden tests are bind-mounted read-only at <code>/tests</code>,
+      so agents can't game them." The harness copies the tests into the container's
+      <code>/opt/grader</code> at start-up as well, "for speed", and runs them from there after the
+      agent finishes. Two models' pass rates differ by six points. What would you establish before
+      trusting the comparison?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>What to establish.</strong> Read-only is per mount, so the question is which path
+        the grader actually uses and whether <em>that</em> path is writable by the agent.
+        <code>findmnt -T /opt/grader</code> will almost certainly answer <code>/ overlay rw</code>:
+        an ordinary copy in the writable layer. Then who owns it and with what mode, and what user
+        the agent runs as — root ignores mode bits. Separately: both locations are
+        <em>readable</em>, so the tests and any expected outputs can be read regardless.</p>
+        <p><strong>Discriminating evidence.</strong> The claim "agents can't game them" is a
+        hypothesis; test it. From the agent's identity, <code>touch /opt/grader/x</code> and
+        <code>cat</code> a test file. Then search transcripts for commands touching
+        <code>/opt/grader</code> or <code>/tests</code>, and compare checksums of
+        <code>/opt/grader</code> at grading time against the originals for every rollout. Modified
+        files are proof of tampering; reads are evidence of leakage; neither appearing is evidence,
+        not proof, that it did not happen.</p>
+        <p><strong>Bearing on the score.</strong> If one model edits or reads the grader more often,
+        part of the six points measures willingness to exploit the environment, not task skill.
+        Report tampered rollouts as their own category rather than as passes, fix the layout (grade
+        from outside, or at least from the <code>ro</code> mount), and re-run before comparing.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> Most exercises are <code>docker run</code> lines typed in
+      your Mac's terminal, because mounts are decided when a container starts.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Print the mount table of a default
+          <code>ubuntu:24.04</code> container. Which filesystem type holds <code>/etc/hostname</code>?
+          List only the read-only mounts.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 findmnt -n -o FSTYPE -T /etc/hostname
+<span class="o">ext4</span>
+<span class="p">$</span> docker run --rm ubuntu:24.04 findmnt -O ro -o TARGET,FSTYPE
+<span class="o">TARGET              FSTYPE
+/proc/bus           proc
+/proc/fs            proc
+/proc/irq           proc
+/proc/sys           proc
+/proc/sysrq-trigger proc
+/proc/scsi          tmpfs
+/sys                sysfs
+|-/sys/firmware     tmpfs
+`-/sys/fs/cgroup    cgroup2</span></code></pre>
+          <p>Not the overlay you might have guessed: <code>/etc/hostname</code> is a single-file bind
+          mount from the Docker host's disk. Everything read-only in a default container is kernel
+          interface; the root itself is writable.</p></details></li>
+        <li><strong>Predict, then verify.</strong> Start a container with
+          <code>--read-only --tmpfs /tmp</code>. Before running anything, write down which of
+          <code>touch /x</code>, <code>/tmp/x</code>, <code>/dev/shm/x</code>,
+          <code>/var/tmp/x</code> succeed. Then write a two-line script to <code>/tmp/s.sh</code>,
+          <code>chmod +x</code> it, and predict what <code>/tmp/s.sh</code> and
+          <code>sh /tmp/s.sh</code> do.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm --read-only --tmpfs /tmp ubuntu:24.04 bash -c 'for p in /x /tmp/x /dev/shm/x /var/tmp/x; do touch $p 2&gt;&amp;1; echo "$p exit=$?"; done
+printf "#!/bin/sh\necho ran\n" &gt; /tmp/s.sh; chmod +x /tmp/s.sh; /tmp/s.sh; echo "exit=$?"; sh /tmp/s.sh'
+<span class="o">touch: cannot touch '/x': Read-only file system
+/x exit=1
+/tmp/x exit=0
+/dev/shm/x exit=0
+touch: cannot touch '/var/tmp/x': Read-only file system
+/var/tmp/x exit=1
+bash: line 2: /tmp/s.sh: Permission denied
+exit=126
+ran</span></code></pre>
+          <p><code>/dev/shm</code> is a second writable tmpfs you did not ask for. The
+          <code>Permission denied</code> is <code>noexec</code>, not mode bits:
+          <code>findmnt /tmp</code> shows <code>rw,nosuid,nodev,noexec,relatime</code>.</p></details></li>
+        <li><strong>Predict, then verify.</strong> A container has <code>--memory 256m</code> and
+          <code>--tmpfs /scratch:size=32m</code>. A process writes 100 MB to
+          <code>/scratch</code>. ENOSPC or OOM kill? What single change flips the answer?
+          <details class="solution"><summary>Solution</summary>
+          <p>ENOSPC — the tmpfs limit (32 MB) is reached before the memory limit:
+          <code>dd: error writing '/scratch/big': No space left on device</code>, exit 1, 32 MiB
+          copied (full output in the tmpfs section). Make the tmpfs larger than the memory limit
+          (<code>--memory 64m --memory-swap 64m --tmpfs /scratch:size=200m</code>) and the same write
+          ends in an OOM kill: <code>docker inspect</code> reports <code>OOMKilled=true</code>. Always
+          pass <code>--memory</code> when trying this.</p></details></li>
+        <li><strong>Reproduce.</strong> In <code>docker run --rm -it --cap-add SYS_ADMIN ubuntu:24.04 bash</code>,
+          make a read-only bind mount of <code>/srv/tests</code> at <code>/mnt/view</code> and show
+          that the data can still be changed.
+          <details class="solution"><summary>Solution</summary>
+          <p>The commands and output are the session in <a href="#bind">Bind mounts</a>:
+          <code>mount --bind</code>, then <code>mount -o remount,bind,ro /mnt/view</code>; a write via
+          <code>/mnt/view</code> fails with <code>Read-only file system</code>, the same write via
+          <code>/srv/tests</code> exits 0 and is visible through <code>/mnt/view</code>.
+          <code>mount -o bind,ro /srv/tests /mnt/two</code> gives the same result in one step
+          (<code>findmnt -n -o TARGET,VFS-OPTIONS /mnt/two</code> → <code>/mnt/two ro,relatime</code>).</p></details></li>
+        <li><strong>Eval task.</strong> A harness starts task containers with
+          <code>-v "$PWD/tests":/tests</code>. Make a <code>tests/test_hidden.py</code> containing one
+          assertion, show that a container can neutralise it, then fix the flag and bring three
+          independent pieces of evidence that the fix holds.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> mkdir tests; echo 'assert count("The the") == {"the": 2}' &gt; tests/test_hidden.py
+<span class="p">$</span> docker run --rm -v "$PWD/tests":/tests ubuntu:24.04 bash -c 'echo "assert True" &gt; /tests/test_hidden.py'
+<span class="p">$</span> cat tests/test_hidden.py
+<span class="o">assert True</span>
+<span class="p">$</span> echo 'assert count("The the") == {"the": 2}' &gt; tests/test_hidden.py
+<span class="p">$</span> docker run --rm -v "$PWD/tests":/tests:ro ubuntu:24.04 bash -c \
+    'echo "assert True" &gt; /tests/test_hidden.py; echo "exit=$?"; findmnt -n -o TARGET,VFS-OPTIONS /tests'
+<span class="o">bash: line 1: /tests/test_hidden.py: Read-only file system
+exit=1
+/tests ro,nosuid,nodev,relatime</span>
+<span class="p">$</span> docker inspect --format '{{range .Mounts}}{{.Destination}} RW={{.RW}}{{"\n"}}{{end}}' <em>container</em>
+<span class="o">/tests RW=false</span></code></pre>
+          <p>Evidence: the write attempt fails with EROFS as root; the mount table says
+          <code>ro</code>; the runtime's record says <code>RW=false</code>; and the host file is
+          unchanged. The file on your Mac really was rewritten in the first run — that is the hole.
+          The tests are still <em>readable</em>; this fix addresses tampering only.</p></details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>mount(8), util-linux / Linux man-pages project (description, mount options, bind mount operation, listing mode). <a href="https://man7.org/linux/man-pages/man8/mount.8.html">man7.org/…/mount.8.html</a></li>
+        <li>findmnt(8), util-linux. <a href="https://man7.org/linux/man-pages/man8/findmnt.8.html">man7.org/…/findmnt.8.html</a></li>
+        <li>proc_pid_mountinfo(5), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man5/proc_pid_mountinfo.5.html">man7.org/…/proc_pid_mountinfo.5.html</a></li>
+        <li>tmpfs(5), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man5/tmpfs.5.html">man7.org/…/tmpfs.5.html</a></li>
+        <li>chroot(2), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/chroot.2.html">man7.org/…/chroot.2.html</a></li>
+        <li>capabilities(7), Linux man-pages project (CAP_SYS_ADMIN). <a href="https://man7.org/linux/man-pages/man7/capabilities.7.html">man7.org/…/capabilities.7.html</a></li>
+        <li>Control Group v2, Linux kernel admin guide (memory.stat: tmpfs counted in <code>file</code>/<code>shmem</code>). <a href="https://docs.kernel.org/admin-guide/cgroup-v2.html">docs.kernel.org/admin-guide/cgroup-v2.html</a></li>
+        <li>Overlay Filesystem, Linux kernel documentation. <a href="https://docs.kernel.org/filesystems/overlayfs.html">docs.kernel.org/filesystems/overlayfs.html</a></li>
+        <li>Docker Docs: containerd image store with Docker Engine. <a href="https://docs.docker.com/engine/storage/containerd/">docs.docker.com/engine/storage/containerd/</a></li>
+        <li>Docker Docs: Bind mounts. <a href="https://docs.docker.com/engine/storage/bind-mounts/">docs.docker.com/engine/storage/bind-mounts/</a></li>
+        <li>Docker Docs: tmpfs mounts. <a href="https://docs.docker.com/engine/storage/tmpfs/">docs.docker.com/engine/storage/tmpfs/</a></li>
+        <li>Docker Docs: Volumes. <a href="https://docs.docker.com/engine/storage/volumes/">docs.docker.com/engine/storage/volumes/</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

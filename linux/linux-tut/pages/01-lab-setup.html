@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab Setup: A Linux Box You Can Break · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Start</p>
+    <h1>Lab setup: a Linux box you can break</h1>
+    <p class="lede">
+      Two places to type, from a Mac: a disposable Ubuntu container for almost every page, and a
+      small real virtual machine for the few pages that need a kernel of their own. The loop you
+      learn here — start a box, look around as root, wreck it, throw it away — is the same loop you
+      will use to debug a benchmark's task image.
+    </p>
+
+    <h2 id="two-labs">Two labs, and which pages need which</h2>
+    <table>
+      <tr><th></th><th>Container lab</th><th>VM lab</th></tr>
+      <tr><td>What it is</td><td>An Ubuntu 24.04 container run by Docker on your Mac</td><td>An Ubuntu 24.04 virtual machine: a cheap cloud server, or a local VM</td></tr>
+      <tr><td>You reach it with</td><td><code>docker run</code> / <code>docker exec</code></td><td><code>ssh</code></td></tr>
+      <tr><td>Good for</td><td>Shell, files, permissions, processes, packages, most networking, Docker itself</td><td>Anything that needs to be the machine: systemd services and the journal (<a href="13-services-and-logs.html">page 13</a>), host firewall rules (<a href="19-firewalls-and-egress.html">page 19</a>), and seeing containers from the host's side (<a href="20-namespaces.html">page 20</a>)</td></tr>
+      <tr><td>Cost to rebuild</td><td>Seconds</td><td>Minutes</td></tr>
+    </table>
+    <p>
+      Build the container lab now. The VM lab can wait until page 13; this page tells you what to
+      get and how to connect to it.
+    </p>
+
+    <h2 id="docker-on-a-mac">What Docker on a Mac really is</h2>
+    <p>
+      A <span class="term" data-g="container">container</span> is a Linux process that the Linux
+      <span class="term" data-g="kernel">kernel</span> has been told to isolate
+      (<a href="20-namespaces.html">page 20</a> takes that sentence apart). macOS is not Linux and
+      has no such kernel. So <span class="term" data-g="docker">Docker</span> on a Mac quietly runs
+      a small Linux <span class="term" data-g="virtual-machine">virtual machine</span>, and your
+      containers live inside it. Docker's documentation says so in passing: "For Docker Desktop,
+      the daemon runs inside a Linux VM, not directly on the native
+      host."<a class="cite" href="https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints" title="Docker Docs, Bind mounts: Considerations and constraints">[Docker: storage]</a>
+    </p>
+    <div class="diagram">┌─ your Mac · macOS (Darwin kernel) ─────────────────────────────┐
+│                                                                │
+│  Terminal ── docker CLI ──┐                                    │
+│                           │ talks to the daemon                │
+│  ┌─ Linux VM (one Linux kernel) ─────────────────────────────┐ │
+│  │                        ▼                                  │ │
+│  │   Docker daemon ── creates ──▶ ┌─ container: lt-lab ────┐  │ │
+│  │                                │ Ubuntu 24.04 files     │  │ │
+│  │                                │ bash, your commands    │  │ │
+│  │                                └────────────────────────┘  │ │
+│  │                                ┌─ container: another ───┐  │ │
+│  │                                │ Alpine files …         │  │ │
+│  │                                └────────────────────────┘  │ │
+│  └───────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────┘</div>
+    <p>You can see the seams from your Mac's terminal:</p>
+<pre class="term"><code><span class="p">$</span> uname -sm
+<span class="o">Darwin arm64</span>
+<span class="p">$</span> docker run --rm ubuntu:24.04 uname -srm
+<span class="o">Linux <span class="hl">6.10.14-linuxkit</span> aarch64</span>
+<span class="p">$</span> docker run --rm alpine:3.20 uname -srm
+<span class="o">Linux <span class="hl">6.10.14-linuxkit</span> aarch64</span></code></pre>
+    <p>
+      <code>uname</code> reports the kernel. The Mac's is Darwin. Inside a container it is Linux —
+      and the <em>same</em> Linux, release and all, whether the container's files are Ubuntu or
+      Alpine. An <span class="term" data-g="image">image</span> supplies files (programs, libraries,
+      configuration); it does not supply a kernel. Every container borrows the kernel of whatever
+      machine runs it, which here is the hidden VM. (<code>aarch64</code> is Linux's name for what
+      Apple calls <code>arm64</code>; on an Intel Mac you will see <code>x86_64</code>. Your kernel
+      version will differ from this page's.)
+    </p>
+    <p>The VM also sets the ceiling on resources. On the 10-core, 16 GB Mac this page was written on:</p>
+<pre class="term"><code><span class="p">#</span> nproc
+<span class="o">10</span>
+<span class="p">#</span> free -h | head -2
+<span class="o">               total        used        free      shared  buff/cache   available
+Mem:           <span class="hl">7.7Gi</span>       738Mi       5.1Gi       924Ki       2.1Gi       6.9Gi</span></code></pre>
+    <p>
+      The container sees 7.7 GiB because that is what the VM was given in Docker Desktop's settings,
+      not what the Mac has.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>A Mac is a fine place to <em>learn</em> and to debug one task; it is a different
+      instrument from the Linux server a benchmark was validated on. The kernel is the VM's, memory
+      is the VM's allotment shared by every container, and on Apple Silicon the images are
+      <code>arm64</code>. SWE-bench's maintainers recommend an <code>x86_64</code> machine with at
+      least 120 GB of free storage, 16 GB of RAM and 8 cores, and call arm64 support
+      experimental.<a class="cite" href="https://github.com/SWE-bench/SWE-bench#-set-up" title="SWE-bench README, Set Up (resource guidance)">[SWE-bench]</a>
+      If you report a score, report what it ran on — architecture, kernel, memory and CPU per
+      sandbox, concurrency — and do not compare numbers across machines that differ in those
+      (<a href="12-resources-and-limits.html">page 12</a>).</p>
+    </div>
+
+    <h2 id="container-lab">The container lab</h2>
+
+    <h3 id="install-docker">1. Get Docker</h3>
+    <p>
+      Install <a href="https://docs.docker.com/desktop/setup/install/mac-install/">Docker Desktop
+      for Mac</a> and start it. (<a href="https://orbstack.dev/">OrbStack</a> and
+      <a href="https://github.com/abiosoft/colima">Colima</a> are alternatives some people prefer;
+      the course assumes only that the <code>docker</code> command works.) Check it from Terminal:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker version --format 'client {{.Client.Os}}/{{.Client.Arch}} · server {{.Server.Os}}/{{.Server.Arch}}'
+<span class="o">client darwin/arm64 · server linux/arm64</span></code></pre>
+    <p>
+      Two halves, two operating systems: the <code>docker</code> command is a Mac program, and the
+      <span class="term" data-g="docker-daemon">daemon</span> it talks to — the thing that actually
+      creates containers — is a Linux program in the VM. If the server half is missing, Docker
+      Desktop is not running.
+    </p>
+
+    <h3 id="first-run">2. Start the box</h3>
+<pre class="term"><code><span class="p">$</span> docker run -it --name lt-lab ubuntu:24.04 bash
+<span class="o">root@3b1f0c2d9a7e:/#</span></code></pre>
+    <p>
+      Read the command left to right. <code>docker run</code> creates a new container from an image
+      and starts it. <code>ubuntu:24.04</code> is the image (downloaded the first time).
+      <code>bash</code> is the program to run inside. <code>--name lt-lab</code> gives the container
+      a name you can refer to later. <code>-i</code> keeps your keyboard connected to the program's
+      input and <code>-t</code> allocates a pseudo-TTY, so that
+      bash behaves as it would in a real terminal
+      window.<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#options" title="Docker Docs, docker container run: options">[Docker: run]</a>
+      The prompt changed: you are <code>root</code>, on a machine that calls itself by a random hex
+      name, in the directory <code>/</code>, and the trailing <code>#</code> is the traditional sign
+      for root. You did not type a password, because the default user within a container is root
+      (uid 0).<a class="cite" href="https://docs.docker.com/engine/containers/run/#user" title="Docker Docs, Running containers: User">[Docker: run]</a>
+      Convenient in a lab; a problem in an eval, as <a href="07-users-groups-root.html">page 7</a>
+      explains.
+    </p>
+
+    <h3 id="install-tools">3. Install the course's tools</h3>
+    <p>
+      The Ubuntu image is deliberately minimal. Software comes from Ubuntu's
+      <span class="term" data-g="package-manager">package manager</span>,
+      <span class="term" data-g="apt">apt</span>. Try the obvious thing first, because its failure
+      is one you will meet in agent transcripts:
+    </p>
+<pre class="term"><code><span class="p">#</span> apt-get install -y curl
+<span class="o">Reading package lists...
+Building dependency tree...
+Reading state information...
+<span class="hl">E: Unable to locate package curl</span></span>
+<span class="p">#</span> echo $?
+<span class="o">100</span></code></pre>
+    <p>
+      Nothing is wrong with the name. apt installs from a local index of what exists, the image
+      ships with that index emptied to save space, and <code>apt-get update</code> is the command
+      that "resynchronize[s] the package index files from their
+      sources".<a class="cite" href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html" title="apt-get(8), Debian manpages: update">[apt-get(8)]</a>
+      So the working sequence is always update, then install:
+    </p>
+<pre class="term"><code><span class="p">#</span> apt-get update
+<span class="o">…
+Reading package lists...</span>
+<span class="p">#</span> apt-get install -y --no-install-recommends procps iproute2 curl ca-certificates \
+    dnsutils jq less man-db file tree psmisc libcap2-bin util-linux findutils
+<span class="o">…
+0 upgraded, 50 newly installed, 0 to remove and 1 not upgraded.
+Need to get 21.6 MB of archives.
+After this operation, 78.7 MB of additional disk space will be used.
+…</span></code></pre>
+    <p>
+      <code>-y</code> answers "yes" to the confirmation prompt, and
+      <code>--no-install-recommends</code> skips packages that are merely suggested alongside the
+      ones you asked
+      for.<a class="cite" href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html" title="apt-get(8), Debian manpages: options -y and --no-install-recommends">[apt-get(8)]</a>
+      The package names rarely match the commands they provide, which is its own small source of
+      "command not found":
+    </p>
+    <table>
+      <tr><th>Package</th><th>Commands you get</th><th>First used</th></tr>
+      <tr><td><code>procps</code>, <code>psmisc</code></td><td><code>ps</code>, <code>top</code>, <code>free</code>, <code>pgrep</code>; <code>pstree</code>, <code>killall</code></td><td><a href="09-processes.html">page 9</a></td></tr>
+      <tr><td><code>iproute2</code></td><td><code>ip</code>, <code>ss</code></td><td><a href="16-addresses-and-routes.html">page 16</a></td></tr>
+      <tr><td><code>curl</code>, <code>ca-certificates</code>, <code>dnsutils</code></td><td><code>curl</code> (and the certificates HTTPS needs); <code>dig</code></td><td><a href="18-dns-http-tls.html">page 18</a></td></tr>
+      <tr><td><code>jq</code>, <code>less</code>, <code>file</code>, <code>tree</code></td><td>the same names</td><td><a href="03-files-and-the-tree.html">pages 3</a>–<a href="05-text-fu.html">5</a></td></tr>
+      <tr><td><code>libcap2-bin</code></td><td><code>capsh</code>, <code>getcap</code></td><td><a href="21-cgroups-capabilities-seccomp.html">page 21</a></td></tr>
+      <tr><td><code>util-linux</code>, <code>findutils</code></td><td><code>findmnt</code>, <code>lsns</code>, <code>unshare</code>; <code>find</code>, <code>xargs</code> (already present; listed so the set is complete)</td><td><a href="14-mounts-and-filesystems.html">page 14</a></td></tr>
+      <tr><td><code>man-db</code></td><td><code>man</code></td><td><a href="../appendices/f-getting-help.html">Appendix F</a></td></tr>
+    </table>
+
+    <h3 id="man-pages">4. Notice that the manual is missing</h3>
+<pre class="term"><code><span class="p">#</span> man ls
+<span class="o">This system has been minimized by removing packages and content that are
+not required on a system that users do not log into.
+
+To restore this content, including manpages, you can run the 'unminimize'
+command. You will still need to ensure the 'man-db' package is installed.</span></code></pre>
+    <p>
+      Even with <code>man-db</code> installed you get this message. The image was built with a rule
+      that tells the package system to discard every file under <code>/usr/share/man</code>, so the
+      <span class="term" data-g="man-page">man pages</span> of the packages you just installed were
+      thrown away on arrival (the rule is in <code>/etc/dpkg/dpkg.cfg.d/excludes</code>; go and
+      read it). Task images built on this base inherit the rule, so an agent that runs
+      <code>man</code> inside one gets the same message. You have two choices: read manuals online at
+      <a href="https://man7.org/linux/man-pages/">man7.org</a>, which is what the course's citations
+      link to, or restore them. The <code>unminimize</code> script asks for confirmation twice,
+      so feed it answers:
+    </p>
+<pre class="term"><code><span class="p">#</span> yes | unminimize
+<span class="o">…
+Documentation has been restored successfully.</span>
+<span class="p">#</span> man -w ls
+<span class="o">/usr/share/man/man1/ls.1.gz</span></code></pre>
+    <p>
+      On a slow connection this takes several minutes: it reinstalls every package that lost files.
+      <code>yes</code> prints <code>y</code> forever and the pipe delivers it to each prompt — a
+      first sighting of the problem that a program waiting for a keypress is a program that hangs
+      when no human is there (<a href="27-reading-terminal-transcripts.html">page 27</a>).
+    </p>
+
+    <h3 id="learner-user">5. Create an ordinary user</h3>
+    <p>
+      Root bypasses permission checks, so anything the course teaches about permissions has to be
+      tried as somebody else. Make that somebody:
+    </p>
+<pre class="term"><code><span class="p">#</span> useradd -m -s /bin/bash learner
+<span class="p">#</span> id learner
+<span class="o">uid=<span class="hl">1001</span>(learner) gid=1001(learner) groups=1001(learner)</span>
+<span class="p">#</span> getent passwd 1000
+<span class="o">ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash</span></code></pre>
+    <p>
+      <code>-m</code> creates the home directory <code>/home/learner</code>; <code>-s</code> sets the
+      login shell. The new user got
+      <span class="term" data-g="uid">uid</span> 1001, not the 1000 that most tutorials promise,
+      because the Ubuntu 24.04 image already contains a user called <code>ubuntu</code> at 1000.
+      The kernel only ever sees the number; this matters as soon as files cross between containers
+      and hosts (<a href="07-users-groups-root.html">page 7</a>). Become <code>learner</code> with
+      <code>su - learner</code> and try to overstep:
+    </p>
+<pre class="term"><code><span class="p">#</span> su - learner
+<span class="p">$</span> whoami
+<span class="o">learner</span>
+<span class="p">$</span> touch /etc/oops
+<span class="o">touch: cannot touch '/etc/oops': Permission denied</span>
+<span class="p">$</span> apt-get install -y cowsay
+<span class="o">E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?</span>
+<span class="p">$</span> which sudo; echo $?
+<span class="o">1</span>
+<span class="p">$</span> exit</code></pre>
+    <p>
+      The prompt's last character changed to <code>$</code>; the course uses the same convention.
+      There is no <span class="term" data-g="sudo">sudo</span> in the image, so <code>learner</code>
+      has no route back to <span class="term" data-g="root-user">root</span> from inside. You do not
+      need one: root is a <code>docker exec</code> away.
+    </p>
+
+    <h3 id="lifecycle">6. Leave, come back, throw away</h3>
+    <p>
+      Type <code>exit</code> (or <kbd>Ctrl</kbd>+<kbd>D</kbd>) at the root prompt. Bash was the
+      container's main program, so when it ends the container stops — but it is not gone:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker ps -a --filter name=lt-lab
+<span class="o">NAMES    IMAGE          STATUS
+lt-lab   ubuntu:24.04   Exited (0) 1 second ago</span>
+<span class="p">$</span> docker run -it --name lt-lab ubuntu:24.04 bash
+<span class="o">docker: Error response from daemon: Conflict. The container name "/lt-lab" is already in use by container "5c68345b7dc1…". You have to remove (or rename) that container to be able to reuse that name.</span>
+<span class="p">$</span> echo $?
+<span class="o">125</span></code></pre>
+    <p>
+      <code>docker run</code> always means "make a <em>new</em> container", and the name is taken.
+      (Status 125 is Docker's code for "the error is with Docker itself", as opposed to the program
+      you asked it to
+      run.<a class="cite" href="https://docs.docker.com/engine/containers/run/#exit-status" title="Docker Docs, Running containers: Exit status">[Docker: run]</a>)
+      To return to the box you already have, with your installed tools and files intact:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker start lt-lab                     <span class="c"># wake it up</span>
+<span class="o">lt-lab</span>
+<span class="p">$</span> docker exec -it lt-lab bash             <span class="c"># a root shell inside it</span>
+<span class="p">$</span> docker exec -it -u learner lt-lab bash  <span class="c"># or a shell as learner</span></code></pre>
+    <p>
+      <code>docker exec</code> runs an additional program inside a running container. Open two
+      Terminal tabs and exec into the same container twice: one as root, one as
+      <code>learner</code>. Most labs use exactly that arrangement. When you are done for the day,
+      or have broken something beyond repair:
+    </p>
+<pre class="term"><code><span class="p">$</span> time docker stop lt-lab
+<span class="o">lt-lab
+docker stop lt-lab  0.01s user 0.01s system 0% cpu <span class="hl">10.362 total</span></span>
+<span class="p">$</span> docker ps -a --filter name=lt-lab
+<span class="o">NAMES    IMAGE          STATUS
+lt-lab   ubuntu:24.04   Exited (<span class="hl">137</span>) Less than a second ago</span>
+<span class="p">$</span> docker rm lt-lab
+<span class="o">lt-lab</span></code></pre>
+    <p>
+      Two details here are previews, not problems. <code>docker stop</code> took ten seconds and the
+      container's exit status was 137, the "killed" number from
+      <a href="00-orientation.html#box-failed">page 0</a>. Docker asks the main process to finish
+      with a polite signal and, after a grace period — 10 seconds by default — kills
+      it.<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/stop/" title="Docker Docs, docker container stop">[Docker: run]</a>
+      Bash, running as the first process in a container, never reacted to the polite signal.
+      <a href="10-signals-exit-codes.html">Page 10</a> explains why, and why a harness that tears
+      down a thousand sandboxes this way, one after another, spends nearly three hours waiting.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><code>docker rm</code> deletes the container's filesystem: every tool you installed, every
+      file you made. That is the feature. But it means a lab container is not a place to keep
+      anything. Notes and scripts you care about live on your Mac; rebuilding the lab should be one
+      command. The next step makes it so.</p>
+    </div>
+
+    <h3 id="lab-image">7. Make rebuilding one command</h3>
+    <p>
+      Put the setup in a Dockerfile — a recipe for
+      building your own image on top of Ubuntu's (<a href="22-docker-for-evals.html">page 22</a>
+      covers the format). In an empty folder on your Mac, save this as <code>Dockerfile</code>:
+    </p>
+<pre><code>FROM ubuntu:24.04
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+ &amp;&amp; apt-get install -y --no-install-recommends \
+      procps iproute2 curl ca-certificates dnsutils jq less man-db manpages \
+      file tree psmisc libcap2-bin util-linux findutils \
+ &amp;&amp; yes | unminimize
+RUN useradd -m -s /bin/bash learner
+CMD ["bash"]</code></pre>
+    <p>Then build it once, and start the lab from it whenever you like:</p>
+<pre class="term"><code><span class="p">$</span> docker build -t lt-lab .
+<span class="o">…
+#6 369.8 Documentation has been restored successfully.
+#6 DONE 370.0s
+…
+#8 naming to docker.io/library/lt-lab:latest done</span>
+<span class="p">$</span> docker rm -f lt-lab                      <span class="c"># discard the hand-built container, if any</span>
+<span class="p">$</span> docker run -dit --name lt-lab lt-lab
+<span class="o">b3f56181d276…</span>
+<span class="p">$</span> docker ps --filter name=lt-lab
+<span class="o">NAMES    IMAGE    STATUS
+lt-lab   lt-lab   Up Less than a second</span>
+<span class="p">$</span> docker exec -it -u learner lt-lab bash</code></pre>
+    <p>
+      The build took six minutes on the slow connection this page was written on, nearly all of it
+      downloads, and produced a 387 MB image; it is paid once. <code>-d</code> starts the container
+      in the background, so it keeps running with no terminal attached and you enter and leave it
+      with <code>docker exec</code> as often as you like.
+      <code>ARG DEBIAN_FRONTEND=noninteractive</code> tells package installation never to stop and
+      ask a question during the build (<a href="15-packages-reproducibility.html">page 15</a>).
+    </p>
+    <p>
+      From now on, "reset the lab" is <code>docker rm -f lt-lab</code> followed by that
+      <code>docker run</code>. Break things freely: delete <code>/usr</code>, fill the disk,
+      <code>chmod</code> everything to nothing. The worst outcome is thirty seconds of rebuilding,
+      and the Mac outside is untouched.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>This is the loop for debugging a benchmark's
+      <span class="term" data-g="task-image">task image</span>: start a shell in the same image the
+      agent gets, as the same user, and look. With the course's running example:</p>
+<pre class="term"><code><span class="p">$</span> docker run --rm -it wordfreq-bench:hardened bash
+<span class="p">$</span> id
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span>
+<span class="p">$</span> pwd; ls
+<span class="o">/app
+README.md  data  tests  wordfreq.py</span></code></pre>
+      <p>When a transcript shows a task failing at <code>command not found</code> or
+      <code>Permission denied</code>, thirty seconds in that shell tells you whether the agent
+      erred or the image is missing something the task needs. That is the <em>navigate</em> ability
+      from page 0: reproduce from inside the environment and bring what you observed, not what you
+      suppose. <code>--rm</code> removes the container when you
+      exit,<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#options" title="Docker Docs, docker container run: options (--rm)">[Docker: run]</a>
+      so your poking cannot leak into a later run.</p>
+    </div>
+
+    <h2 id="vm-lab">The VM lab</h2>
+    <p>
+      A container borrows a kernel and usually runs one program. Some pages need the whole machine:
+      a real <span class="term" data-g="systemd">systemd</span> as process 1 managing services and
+      logs, firewall rules you are free to get wrong, and a host's-eye view of containers. Docker
+      Desktop's hidden VM is not that machine: it is managed by Docker Desktop, not by you.
+      Get an Ubuntu 24.04 VM of your own, one of two ways:
+    </p>
+    <ul>
+      <li><strong>A small cloud server.</strong> Any provider's cheapest Ubuntu 24.04 instance is
+        enough (1 CPU, 1–2 GB of memory). This is closest to where evals really run, and it has a
+        real network position, which pages 16–19 use. Delete it when you are not using it.</li>
+      <li><strong>A local VM on the Mac.</strong> <a href="https://lima-vm.io/">Lima</a>,
+        <a href="https://canonical.com/multipass">Multipass</a> and
+        <a href="https://mac.getutm.app/">UTM</a> each run Linux VMs on macOS; follow the tool's own
+        instructions to create an Ubuntu 24.04 machine.</li>
+    </ul>
+    <p>
+      Either way you reach it with <span class="term" data-g="ssh">SSH</span>, the standard way to
+      get a shell on a remote Linux machine:
+    </p>
+<pre><code>ssh ubuntu@203.0.113.10        # user@address — your provider tells you both</code></pre>
+    <p>
+      SSH can check a password, but servers are normally set up to accept a <em>key pair</em>
+      instead: a private key file that never leaves your Mac and a public key you hand to the
+      server (cloud providers ask for it when you create the instance). Anyone may see the public
+      half; holding the private half is what proves you are you. Create a pair once:
+    </p>
+<pre class="term"><code><span class="p">$</span> ssh-keygen -t ed25519 -C "lt-lab"
+<span class="o">Generating public/private ed25519 key pair.
+…
+Your identification has been saved in /Users/you/.ssh/id_ed25519
+Your public key has been saved in /Users/you/.ssh/id_ed25519.pub</span>
+<span class="p">$</span> ls -l ~/.ssh/id_ed25519 ~/.ssh/id_ed25519.pub
+<span class="o"><span class="hl">-rw-------</span>  1 you  staff  399 Sep 21 09:21 /Users/you/.ssh/id_ed25519
+-rw-r--r--  1 you  staff   89 Sep 21 09:21 /Users/you/.ssh/id_ed25519.pub</span></code></pre>
+    <p>
+      The <code>.pub</code> file is the one you paste into a provider's form. Look at the left-hand
+      column: the private key is readable by you alone, the public key by everyone. That is the
+      permission system of <a href="08-permissions.html">page 8</a> doing real work, and the same
+      notation exists on macOS and Linux. Once logged in, two commands confirm you have a whole
+      machine rather than a container: ask what process 1 is with
+      <code>ps -p 1 -o comm=</code>. In the container lab the answer is <code>bash</code>; on an
+      Ubuntu VM it should be <code>systemd</code>
+      (<a href="13-services-and-logs.html">page 13</a>).
+    </p>
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>A cloud VM is on the internet. Use key login only, keep nothing on it you would mind
+      losing, and delete it when the module is done. The systemd and firewall pages quote
+      documentation rather than showing this course's own runs where a container cannot reproduce
+      them; your VM is where you check those for yourself.</p>
+    </div>
+
+    <h2 id="why-not-the-mac">Why not just use the Mac's terminal?</h2>
+    <p>
+      macOS looks like Linux from a distance — a shell, <code>ls</code>, <code>grep</code>,
+      <code>ssh</code> — and that resemblance wastes more beginner hours than any real difference.
+      Its command-line tools come from the BSD family, not the GNU family Linux uses, so the same
+      command name takes different options. And the things this course is about are absent:
+    </p>
+<pre class="term"><code><span class="p">$</span> ls /proc
+<span class="o">ls: /proc: No such file or directory</span>
+<span class="p">$</span> sed --version
+<span class="o">sed: illegal option -- -
+usage: sed script [-EHalnru] [-i extension] [file ...]</span>
+<span class="p">$</span> which ip ss timeout
+<span class="o">ip not found
+ss not found
+timeout not found</span></code></pre>
+    <p>
+      No <code>/proc</code>, so no way to inspect processes the way Linux does; no <code>ip</code> or
+      <code>ss</code>; no <code>timeout</code>; and no namespaces or cgroups underneath, which is why
+      Docker needed a VM in the first place. Use the Mac's terminal to run <code>docker</code> and
+      <code>ssh</code>. Run everything else inside the lab.
+      <a href="../appendices/e-macos-vs-linux.html">Appendix E</a> lists the differences that bite.
+    </p>
+
+    <div class="card">
+      <h3 id="hygiene">Lab hygiene</h3>
+      <ul>
+        <li><strong>Name things.</strong> <code>--name lt-lab</code>, not whatever Docker invents.
+          A name is what lets you find, re-enter, and delete a container a week later.</li>
+        <li><strong>Clean up.</strong> <code>docker ps -a</code> shows stopped containers too; they
+          hold disk until removed. Remove your own by name. Avoid sweeping commands such as
+          <code>docker system prune</code> on any machine you share — evals in progress are other
+          people's containers.</li>
+        <li><strong>Never paste secrets.</strong> No API keys, tokens or passwords into a lab box,
+          a Dockerfile, or a <code>docker run -e</code> line. They end up in shell history, image
+          layers and <code>docker inspect</code> output
+          (<a href="11-environment-and-secrets.html">page 11</a> shows each leak for real).</li>
+        <li><strong>Keep your work outside.</strong> Scripts and notes live in a folder on the Mac;
+          containers are for running things, not for keeping them.</li>
+      </ul>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A teammate validates a new benchmark's forty task images on an M-series MacBook with Docker
+      Desktop: the reference solution passes every task. On the x86 Linux cluster, five tasks fail
+      during setup before the agent does anything, and the teammate proposes dropping those five
+      "flaky" tasks from the score. What would you establish first?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Observed:</strong> the same task definitions behave differently in two
+        environments, and the failures happen before the model acts — so they are observations
+        about the run, not about any model. <strong>Not yet known:</strong> which difference
+        matters. The laptop and the cluster differ in at least four ways this page showed you how
+        to read: CPU architecture (<code>uname -m</code>: <code>aarch64</code> vs
+        <code>x86_64</code>, so the images and every compiled package differ), kernel
+        (<code>uname -r</code>), memory and CPU available per container (<code>nproc</code>,
+        <code>free</code>, and the limits the cluster applies), and when each image was built
+        (package versions drift; <a href="15-packages-reproducibility.html">page 15</a>).</p>
+        <p>The discriminating step is to open a shell in one failing task's image <em>on the
+        cluster</em>, run its setup by hand, and read the actual error and exit status. "Validated
+        on my Mac" is evidence about a different instrument. As for dropping tasks: removing
+        failures after seeing results changes the denominator in the score's favour. Record the
+        five as infrastructure failures, report <code>completed / scheduled</code> alongside
+        <code>correct / completed</code>, fix the images, and rerun the reference solution where
+        the eval will really run.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Where:</strong> your Mac's terminal and the container lab you are building. Output
+      will differ from the page in hostnames, dates, kernel version and — on an Intel Mac —
+      architecture. The checklist in exercise 2 tells you what <em>shape</em> to expect.</p>
+
+      <p><strong>1. Build it.</strong> Follow steps 1–7 above, typing the commands rather than
+      pasting them. End with a running container named <code>lt-lab</code> made from your own
+      <code>lt-lab</code> image.</p>
+      <details class="solution"><summary>Solution</summary>
+        <p>The whole sequence, from the Mac, once the <code>Dockerfile</code> from step 7 is saved
+        in the current folder:</p>
+<pre class="term"><code><span class="p">$</span> docker build -t lt-lab .
+<span class="p">$</span> docker run -dit --name lt-lab lt-lab
+<span class="p">$</span> docker ps --filter name=lt-lab
+<span class="o">NAMES    IMAGE    STATUS
+lt-lab   lt-lab   Up Less than a second</span></code></pre>
+        <p>If <code>docker run</code> reports a name conflict, an earlier <code>lt-lab</code> still
+        exists: <code>docker rm -f lt-lab</code>, then run again.</p>
+      </details>
+
+      <p><strong>2. Verify it.</strong> Open a second Terminal tab and get a <code>learner</code>
+      shell with <code>docker exec -it -u learner lt-lab bash</code>. Run each command; compare with
+      the expected shape.</p>
+      <table>
+        <tr><th>Command</th><th>Expected shape</th><th>If not</th></tr>
+        <tr><td><code>head -1 /etc/os-release</code></td><td><code>PRETTY_NAME="Ubuntu 24.04.… LTS"</code></td><td>wrong image tag</td></tr>
+        <tr><td><code>id</code></td><td><code>uid=1001(learner) …</code></td><td>forgot <code>-u learner</code>, or the <code>useradd</code> step</td></tr>
+        <tr><td><code>uname -sm</code></td><td><code>Linux aarch64</code> (or <code>Linux x86_64</code>)</td><td>if it says <code>Darwin</code> you are on the Mac, not in the box</td></tr>
+        <tr><td><code>command -v ps ip ss curl dig jq tree capsh findmnt</code></td><td>nine paths, one per line</td><td>a missing line names the tool whose package did not install</td></tr>
+        <tr><td><code>man -w signal</code></td><td><code>/usr/share/man/man7/signal.7.gz</code></td><td><code>unminimize</code> did not run; man7.org still works</td></tr>
+        <tr><td><code>curl -sS -o /dev/null -w '%{http_code}\n' https://example.com</code></td><td><code>200</code></td><td>no network from the VM, or <code>ca-certificates</code> missing</td></tr>
+      </table>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> head -1 /etc/os-release
+<span class="o">PRETTY_NAME="Ubuntu 24.04.5 LTS"</span>
+<span class="p">$</span> id
+<span class="o">uid=1001(learner) gid=1001(learner) groups=1001(learner)</span>
+<span class="p">$</span> uname -sm
+<span class="o">Linux aarch64</span>
+<span class="p">$</span> command -v ps ip ss curl dig jq tree capsh findmnt
+<span class="o">/usr/bin/ps
+/usr/sbin/ip
+/usr/bin/ss
+/usr/bin/curl
+/usr/bin/dig
+/usr/bin/jq
+/usr/bin/tree
+/usr/sbin/capsh
+/usr/bin/findmnt</span>
+<span class="p">$</span> man -w signal
+<span class="o">/usr/share/man/man7/signal.7.gz</span>
+<span class="p">$</span> curl -sS -o /dev/null -w '%{http_code}\n' https://example.com
+<span class="o">200</span></code></pre>
+        <p><code>command -v</code> prints where the shell would find each program and prints
+        nothing for one it cannot find, which makes it a quick inventory of a box. It is the first
+        thing to run in an unfamiliar task image.</p>
+      </details>
+
+      <p><strong>3. Predict, then verify.</strong> In the <code>learner</code> shell, create a file:
+      <code>echo draft &gt; ~/notes.txt</code>. Now, from the Mac, run <code>docker stop lt-lab</code>
+      then <code>docker start lt-lab</code>, and look for the file. Then run
+      <code>docker rm -f lt-lab</code>, start a new <code>lt-lab</code> from your image, and look
+      again. Before each look, write down whether you expect the file to be there.</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker stop lt-lab; docker start lt-lab
+<span class="o">lt-lab
+lt-lab</span>
+<span class="p">$</span> docker exec -u learner lt-lab cat /home/learner/notes.txt
+<span class="o">draft</span>
+<span class="p">$</span> docker rm -f lt-lab; docker run -dit --name lt-lab lt-lab
+<span class="o">lt-lab
+0527dbc58087…</span>
+<span class="p">$</span> docker exec -u learner lt-lab cat /home/learner/notes.txt
+<span class="o">cat: /home/learner/notes.txt: No such file or directory</span></code></pre>
+        <p>Stop/start keeps the container's filesystem: a stopped container is a paused
+        <em>thing</em>, with your changes in it. Remove/run makes a new container from the image,
+        which never contained the file. Hold on to the distinction — it is the difference between
+        a harness that <em>reuses</em> a sandbox for the next attempt (leftover files are visible
+        to it) and one that starts fresh.</p>
+      </details>
+
+      <p><strong>4. Break it on purpose.</strong> As root in the container, run
+      <code>rm /usr/bin/ls</code>. Confirm <code>ls</code> is gone, note the exact error and the
+      value of <code>$?</code>, then restore the lab to working order in the cheapest way you
+      can.</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> rm /usr/bin/ls
+<span class="p">#</span> ls
+<span class="o">bash: ls: command not found</span>
+<span class="p">#</span> echo $?
+<span class="o">127</span>
+<span class="p">#</span> exit
+<span class="p">$</span> docker run --rm ubuntu:24.04 ls /usr/bin/ls
+<span class="o">/usr/bin/ls</span></code></pre>
+        <p>Exit status 127 again: the shell looked through the directories on its search path and
+        found no file called <code>ls</code>. You could repair it
+        (<code>apt-get install --reinstall coreutils</code>), but the cheapest fix is the
+        disposable one: <code>docker rm -f lt-lab</code> and run a new container. Nothing you do
+        inside a container changes the image it came from.</p>
+      </details>
+
+      <p><strong>5. An eval-flavoured one.</strong> A benchmark you have been asked to review ships
+      its tasks as Docker images. Using <code>alpine:3.20</code> as a stand-in, start a shell in it
+      and answer from inside: which user would the agent be, is <code>bash</code> available, is
+      <code>curl</code>, and what would an agent's <code>apt-get install curl</code> produce? (There
+      is no bash, so ask for <code>sh</code>.)</p>
+      <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm -it alpine:3.20 sh
+<span class="p">#</span> whoami
+<span class="o">root</span>
+<span class="p">#</span> bash --version
+<span class="o">sh: bash: not found</span>
+<span class="p">#</span> curl --version
+<span class="o">sh: curl: not found</span>
+<span class="p">#</span> apt-get install curl
+<span class="o">sh: apt-get: not found</span>
+<span class="p">#</span> echo $?
+<span class="o">127</span>
+<span class="p">#</span> exit
+<span class="p">$</span> docker run --rm alpine:3.20 bash -c id
+<span class="o">docker: Error response from daemon: failed to create task for container: … exec: "bash": executable file not found in $PATH: unknown</span>
+<span class="p">$</span> echo $?
+<span class="o">127</span></code></pre>
+        <p>Root; no bash; no curl; and <code>apt-get</code> does not exist because Alpine is not
+        a Debian-family system — its package manager is <code>apk</code>. An agent that assumes
+        Ubuntu will burn steps here, and a harness that launches <code>bash -c …</code> in this
+        image fails before the model has done anything. Whether that is "the model's Linux
+        fluency" or "an environment defect" depends on what the task promised; either way you
+        found it in a minute with the loop from this page.</p>
+      </details>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Docker Docs, "docker container run" (CLI reference: options) and "Running containers" (User; Exit status); "docker container stop". <a href="https://docs.docker.com/reference/cli/docker/container/run/">docs.docker.com/reference/cli/docker/container/run</a> · <a href="https://docs.docker.com/engine/containers/run/">docs.docker.com/engine/containers/run</a> · <a href="https://docs.docker.com/reference/cli/docker/container/stop/">docs.docker.com/reference/cli/docker/container/stop</a></li>
+        <li>Docker Docs, "Bind mounts: Considerations and constraints" (Docker Desktop's daemon runs inside a Linux VM). <a href="https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints">docs.docker.com/engine/storage/bind-mounts</a></li>
+        <li>apt-get(8), APT, Debian manpages (bookworm). <a href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html">manpages.debian.org/bookworm/apt/apt-get.8</a></li>
+        <li>SWE-bench README, "Set Up" (hardware guidance; arm64 support experimental). <a href="https://github.com/SWE-bench/SWE-bench#-set-up">github.com/SWE-bench/SWE-bench</a></li>
+        <li>Everything else on this page is executed mechanics: run on macOS 15.4 (Apple Silicon) with Docker Desktop 28.1.1 and the <code>ubuntu:24.04</code>, <code>alpine:3.20</code> and <code>wordfreq-bench:hardened</code> images, 21 September 2026.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

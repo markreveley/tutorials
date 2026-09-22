@@ -1,0 +1,79 @@
+{
+  "id": "evals-book",
+  "citation": {
+    "authors": "Shreya Shankar, Hamel Husain",
+    "title": "Evals for AI Engineers: Systematically Measuring and Improving AI Applications",
+    "venue": "O'Reilly Media, Inc. (Early Release; final publication October 2026; ISBN 9798341660717 online / 9798341660724 print)",
+    "year": "2026",
+    "url": "https://www.oreilly.com/library/view/evals-for-ai/9798341660717/"
+  },
+  "fetched_urls": [
+    "https://www.oreilly.com/library/view/evals-for-ai/9798341660717/",
+    "https://www.oreilly.com/library/view/evals-for-ai/9798341660717/ch01.html",
+    "https://www.oreilly.com/library/view/evals-for-ai/9798341660717/colophon01.html"
+  ],
+  "access": "full",
+  "access_note": "Product page, full table of contents, Introduction chapter preview, and About the Authors page all fetched directly from oreilly.com. Full chapter body text is behind the O'Reilly subscription, but everything needed for the planned claims was openly accessible. The planned URL https://www.oreilly.com/library/view/evals-for-ai-engineers/ returns HTTP 404; canonical slug is 'evals-for-ai' + ISBN.",
+  "claims": [
+    {
+      "planned": "The book exists and covers a systematic process for testing and improving LLM applications",
+      "verdict": "confirmed",
+      "finding": "The book exists on O'Reilly (ISBN 9798341660717, 12 chapters, listed at 225 pages / 4h 39m, Intermediate to Advanced). Publisher description explicitly frames it as a systematic process for testing, measuring, and improving AI/LLM applications.",
+      "quote": "Stop using guesswork to find out how your AI applications are performing. Evals for AI Engineers equips you with the proven tools and processes required to systematically test, measure, and enhance the reliability of AI applications, especially those using LLMs.",
+      "location": "O'Reilly product page, publisher description"
+    },
+    {
+      "planned": "Confirm table of contents / chapter structure to cite as the canonical process: error analysis, building evaluators, judges, CI integration",
+      "verdict": "corrected",
+      "finding": "TOC confirmed, but chapter names differ from the planned shorthand. The 12 chapters are: 1. Introduction; 2. LLMs and Evaluation Basics; 3. Error Analysis; 4. Collaborative Evaluation Practices; 5. Implementing Automated Evaluators; 6. Evaluating Multi-Turn Conversations; 7. Evaluating Retrieval-Augmented Generation; 8. Evaluating Tool Use and Complex Agents; 9. Continuous Integration and Deployment for LLM Agents; 10. Interfaces for Human Review; 11. Data Analysis for Traces; 12. Improving LLM Agents. There is NO chapter titled 'judges' — LLM-as-judge is covered as a methodology (the Introduction references 'LLM-as-judge approaches with validation techniques') under automated evaluators (Ch. 5). The book's canonical process framing is the LLM Evaluation Lifecycle — Analyze, Measure, Improve — presented in Chapter 1, not the four-step list in the planned claim.",
+      "quote": "3. Error Analysis ... 5. Implementing Automated Evaluators ... 9. Continuous Integration and Deployment for LLM Agents",
+      "location": "O'Reilly product page table of contents; Chapter 1 (Introduction) section headers"
+    },
+    {
+      "planned": "Confirm publication status and date",
+      "verdict": "corrected",
+      "finding": "As of 2026-06-09 the book is an Early Release (in-progress) edition on the O'Reilly platform; the final publication date shown is October 2026. It is not yet a final published edition. Print edition (ISBN 9798341660724) is listed on Amazon and Foyles.",
+      "quote": "This is an Early Release version. The book shows 'October 2026' as the publication date.",
+      "location": "O'Reilly product page (publication metadata)"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The book's organizing framework is the 'Three Gulfs of LLM Application Development' — the gaps evaluation must bridge between developer, data, and pipeline.",
+      "quote": "The Gulf of Comprehension (Between the Developer and Data) ... The Gulf of Specification (Between the Developer and the LLM Pipeline) ... The Gulf of Generalization (Between the Data and the LLM Pipeline)",
+      "numbers": "3 gulfs: comprehension, specification, generalization"
+    },
+    {
+      "point": "The canonical process is the LLM Evaluation Lifecycle with three phases: Analyze (understand failure modes via error analysis), Measure (implement metrics and automated evaluators), Improve (optimize the agent based on findings).",
+      "quote": "Analyze ... Measure ... Improve (Chapter 1 section headers, 'The LLM Evaluation Lifecycle')",
+      "numbers": "3 phases"
+    },
+    {
+      "point": "The book deliberately uses 'agent' broadly, so its methods apply from a single prompt to complex agentic systems.",
+      "quote": "We use 'agent' broadly throughout the book. It covers the full range from a single LLM call with no tools (the simplest case) to a system that runs in a loop, calls many tools, and makes many decisions per request.",
+      "numbers": ""
+    },
+    {
+      "point": "The book distinguishes the LLM agent (decision-making component) from the LLM application (the complete product), because failures can originate in either — a useful debugging taxonomy for a course.",
+      "quote": "Chapter 1 distinguishes between the LLM agent (the decision-making component) and the broader LLM application (the complete product), noting that failures originate from either component.",
+      "numbers": ""
+    },
+    {
+      "point": "Specialized evaluation contexts each get a dedicated chapter — multi-turn conversations (Ch. 6), RAG (Ch. 7), tool use and complex agents (Ch. 8), CI/CD (Ch. 9), human review interfaces (Ch. 10), trace data analysis (Ch. 11) — useful as a course module map.",
+      "quote": "6. Evaluating Multi-Turn Conversations; 7. Evaluating Retrieval-Augmented Generation; 8. Evaluating Tool Use and Complex Agents; 9. Continuous Integration and Deployment for LLM Agents; 10. Interfaces for Human Review; 11. Data Analysis for Traces",
+      "numbers": "12 chapters total; ~225 pages (Early Release)"
+    },
+    {
+      "point": "Author credibility: Hamel Husain has helped 35+ companies build and evaluate real-world AI products as an independent consultant (ex-Airbnb, ex-GitHub); Shreya Shankar is a UC Berkeley PhD (DocETL creator, VLDB/SIGMOD/UIST publications, Best Paper award). Both teach the live 'AI Evals For Engineers & PMs' course based on the book's material.",
+      "quote": "extensive hands-on experience helping numerous companies (35+ implementations cited) build and evaluate real-world AI products",
+      "numbers": "35+ AI product implementations; 20 years ML engineering experience (Husain)"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not cite a chapter called 'judges' or 'LLM-as-judge' — no such chapter exists; LLM-as-judge is a technique covered under Chapter 5, 'Implementing Automated Evaluators'.",
+    "Do not present the book as finally published — as of June 2026 it is an O'Reilly Early Release; final publication is listed as October 2026. Chapter numbering/content may still change.",
+    "Do not use the URL https://www.oreilly.com/library/view/evals-for-ai-engineers/ — it 404s. Canonical: https://www.oreilly.com/library/view/evals-for-ai/9798341660717/",
+    "Do not reduce the book's process to 'error analysis -> evaluators -> judges -> CI'; the book's own framing is the Analyze/Measure/Improve lifecycle bridging the Three Gulfs."
+  ],
+  "notes_for_authors": "Cite as Early Release (O'Reilly, expected October 2026) and date-stamp the citation since content may change before final publication. Use the Three Gulfs and the Analyze-Measure-Improve lifecycle as the canonical process language, and map course modules to the verified 12-chapter TOC rather than an invented four-step structure. The companion live course 'AI Evals For Engineers & PMs' (Maven, parlance-labs) is a distinct artifact from the book — do not conflate them. The 'reached 3,000+ professionals from 500+ companies' figure appears in O'Reilly's marketing copy for the course, not the book text; attribute accordingly if used."
+}

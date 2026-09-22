@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reproducibility · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 5 · Statistics for Evals</p>
+    <h1>Reproducibility</h1>
+    <p class="lede">
+      Error bars handle the randomness <em>inside</em> one evaluation. This page handles the variation
+      <em>between</em> evaluations — why two teams measuring "the same benchmark" get different numbers,
+      and the practices that make a result something another team can actually reproduce. The spine
+      source is EleutherAI's "Lessons from the Trenches," written by maintainers of the field's most
+      used harness.
+    </p>
+
+    <h2 id="why-hard">The root cause, stated once</h2>
+    <p>
+      EleutherAI's diagnosis of why language model evaluation resists standardization: many
+      syntactically different strings mean the same thing, and "our best automated tools for determining
+      whether two sentences are semantically equivalent are the very models we are seeking to
+      evaluate."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Biderman, Schoelkopf, Sutawika et al., Lessons from the Trenches, §2.1">[Eleuther]</a>
+      Every evaluation method is therefore a workaround — multiple choice, exact match after
+      normalization, model grading — and every workaround embeds choices that other implementers will
+      make differently. <a href="02-anatomy-of-an-eval.html">Page 2</a> showed the magnitudes: prompt
+      style swinging a score by ~46 points and reversing model rankings; three independent MMLU
+      implementations producing "widely different scores" that "even change the ranking order of
+      models."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §3.1, §4.1">[Eleuther]</a>
+      Here the question is what to <em>do</em> about it.
+    </p>
+
+    <h2 id="failure-catalogue">The failure catalogue, by layer</h2>
+    <p>
+      The paper's catalogue of reproducibility hazards maps neatly onto the harness anatomy:
+    </p>
+    <table>
+      <tr><th>Layer</th><th>Hazard (verified)</th></tr>
+      <tr><td>Prompt</td><td>Format/wording sensitivity "even down to whitespace usage"; which format wins varies by model<a class="cite" href="https://arxiv.org/abs/2405.14782" title="§3.1">[Eleuther]</a></td></tr>
+      <tr><td>Tokenization</td><td>Tokenizing prompt and target separately then concatenating "is not always valid, and most widely-used language model tokenizers provide no such guarantees"<a class="cite" href="https://arxiv.org/abs/2405.14782" title="App. B.2">[Eleuther]</a></td></tr>
+      <tr><td>Scoring method</td><td>Log-likelihood-scored and generatively-scored versions of the same multiple-choice benchmarks "do not even agree"; APIs that hide probabilities force the generative route<a class="cite" href="https://arxiv.org/abs/2405.14782" title="§4.1, App. B.5">[Eleuther]</a></td></tr>
+      <tr><td>Answer extraction</td><td>Regex extraction is "a highly imperfect solution" that conflates format compliance with correctness<a class="cite" href="https://arxiv.org/abs/2405.14782" title="App. B.4">[Eleuther]</a></td></tr>
+      <tr><td>Aggregation</td><td>MMLU micro vs macro averaging moves results "by several percentage points," usually unreported<a class="cite" href="https://arxiv.org/abs/2405.14782" title="§3.1">[Eleuther]</a></td></tr>
+      <tr><td>Dataset itself</td><td>Quirks accumulate: an ARC question with five options instead of four; three HumanEval problems missing example tests — which different agent papers then patched in three different ways<a class="cite" href="https://arxiv.org/abs/2405.14782" title="§3.1">[Eleuther]</a><a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §6">[Agents That Matter]</a></td></tr>
+    </table>
+    <p>
+      Agentic evaluation adds its own layer: the Princeton reproducibility audit found eval scripts that
+      assume particular agent designs, environment statefulness (the WebArena rate-limit ordering effect
+      from <a href="11-evaluating-agents.html">page 11</a>), and scoring bugs — two leaderboard agents
+      "marked some incorrectly completed tasks as correct" and quietly removed benchmark tasks (one
+      removed 1 task, the other 8).<a class="cite" href="https://arxiv.org/abs/2407.01502" title="Kapoor, Stroebl et al. 2024, §6">[Agents That Matter]</a>
+    </p>
+
+    <h2 id="gaming">When divergence becomes strategy</h2>
+    <p>
+      Implementation sensitivity isn't always an accident to fix; once scores carry stakes, it becomes a
+      surface to exploit. The verified example: on the Open LLM Leaderboard, "practitioners have been
+      observed fine-tuning their models specifically to match the evaluation format used by the
+      leaderboard, such as targeting separator tokens used in particular versions of lm-eval, rather
+      than improving the underlying capabilities being
+      measured."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §4.1">[Eleuther]</a>
+      The harness quirk becomes the optimization target — a small-scale preview of
+      <span class="term" data-g="overfitting">overfitting</span>-to-the-instrument dynamics that
+      <a href="23-leaderboard-illusion.html">Module 6</a> meets at industrial scale. The paper's blunt
+      summary of where this leaves the field: the popularity of informal "vibes tests" and crowdsourced
+      arenas over benchmarks is "a powerful indictment of the current state of
+      benchmarking."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §4">[Eleuther]</a>
+    </p>
+
+    <h2 id="practices">The practices that fix it</h2>
+    <p>
+      The paper's best-practices checklist is short enough to adopt verbatim:<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §3.2, Appendix D">[Eleuther]</a>
+    </p>
+    <div class="card">
+      <ul style="margin-bottom:0">
+        <li><strong>"Always share your exact prompts"</strong> — and the full eval code; disclose how
+          much prompt engineering was done, and don't tune prompts to favor one model.</li>
+        <li><strong>"Avoid copying results from other implementations"</strong> — cross-paper numbers
+          differ by prompts, sample size, and metric calculation; rerun, don't transcribe.</li>
+        <li><strong>"Always provide model outputs"</strong> — raw generations let others re-grade
+          without re-running, separating scoring disputes from sampling noise.</li>
+        <li><strong>"Perform qualitative analyses"</strong> — read a sample of outputs before trusting a
+          score (Module 2's error-analysis discipline, at benchmark scale).</li>
+        <li><strong>"Perform statistical significance testing"</strong> and report variance — Module 5's
+          whole argument.</li>
+        <li><strong>Use a standardized harness</strong> (lm-eval or HELM) and report its version —
+          naming the lm-eval task and version "has become a de facto reporting standard."</li>
+      </ul>
+    </div>
+    <p>
+      A standardized harness doesn't make the arbitrary choices go away — it makes them <em>shared and
+      versioned</em>, so a number travels with its exact recipe. lm-eval also operationalizes the
+      statistics: bootstrapped standard errors are reported by default, making error bars "nearly as
+      simple as copy-pasting an additional number into one's
+      paper."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §3.3, §4.3">[Eleuther]</a>
+      One precision the paper adds and most people miss: bootstrap-over-questions and
+      variance-over-reruns measure <em>different</em> uncertainties — which questions you asked versus
+      which samples you drew — and a careful report distinguishes them.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §4.3">[Eleuther]</a>
+    </p>
+
+    <div class="warn">
+      <span class="label">Caveat on scope</span>
+      <p>The paper's authors scope their evidence mostly to multiple-choice-style evaluation ("the
+      approach we have the most experience with") and urge caution generalizing; and the verified text
+      here is the v3 revision (May 2026), which includes material absent from the 2024
+      original.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches (v3)">[Eleuther]</a>
+      Apply the meta-lesson to the source itself: reproducibility claims are also version-stamped.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>A reproducible eval result is a bundle: number + prompts + code + harness version + raw outputs
+      + uncertainty. Strip any element and what remains isn't a smaller result — it's a rumor with
+      decimals. The checklist above is the minimum bundle, and none of it is expensive; what it costs is
+      admitting the number alone was never the result.</p>
+    </div>
+
+    <p>
+      Module 5 gave you the tools for honest uncertainty. <a href="20-validity.html">Module 6</a> turns
+      to the harder failure: a score that is precise, reproducible — and measuring the wrong thing.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Stella Biderman, Hailey Schoelkopf, Lintang Sutawika et al. (EleutherAI), "Lessons from the Trenches on Reproducible Evaluation of Language Models," arXiv:2405.14782 (v3). <a href="https://arxiv.org/abs/2405.14782">arxiv.org/abs/2405.14782</a></li>
+        <li>Sayash Kapoor, Benedikt Stroebl et al., "AI Agents That Matter," arXiv:2407.01502, 2024. <a href="https://arxiv.org/abs/2407.01502">arxiv.org/abs/2407.01502</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

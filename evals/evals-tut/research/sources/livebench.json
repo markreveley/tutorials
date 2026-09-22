@@ -1,0 +1,83 @@
+{
+  "id": "livebench",
+  "citation": {
+    "authors": "Colin White, Samuel Dooley, Manley Roberts, Arka Pal, Benjamin Feuer, Siddhartha Jain, Ravid Shwartz-Ziv, Neel Jain, Khalid Saifullah, Sreemanti Dey, Shubh-Agrawal, Sandeep Singh Sandha, Siddartha Naidu, Chinmay Hegde, Yann LeCun, Tom Goldstein, Willie Neiswanger, Micah Goldblum",
+    "title": "LiveBench: A Challenging, Contamination-Limited LLM Benchmark",
+    "venue": "ICLR 2025 (Spotlight)",
+    "year": "2025",
+    "url": "https://arxiv.org/abs/2406.19314"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2406.19314",
+    "https://arxiv.org/pdf/2406.19314"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Monthly-updated questions from recent sources (math competitions, arXiv, news); objective ground-truth scoring without LLM judges — confirm design",
+      "verdict": "confirmed",
+      "finding": "Confirmed. LiveBench is 'the first benchmark that (1) contains frequently-updated questions from recent information sources, (2) scores answers automatically according to objective ground-truth values'. Sources are recently-released math competitions (AMC12 2023, SMC 2023, AIME 2024, USAMO 2024, IMO 2024), arXiv abstracts (typos task), news articles from The Guardian (instruction following), recent Kaggle/Socrata datasets (data analysis), and recent IMDb/Wikipedia movie synopses. Questions are added and updated monthly. Note: only objectively-scorable questions are included by design.",
+      "quote": "We release LiveBench, the first benchmark that (1) contains frequently-updated questions from recent information sources, (2) scores answers automatically according to objective ground-truth values, and (3) contains a wide variety of challenging tasks, spanning math, coding, reasoning, language, instruction following, and data analysis. To achieve this, LiveBench contains questions that are based on recently-released math competitions, arXiv papers, news articles, and datasets... Questions are added and updated on a monthly basis.",
+      "location": "Abstract; Section 1 ('LiveBench is scored automatically according to the objective ground truth without the use of an LLM judge'; 'We ensure (2) by only including questions that have an objectively correct answer.')"
+    },
+    {
+      "planned": "Why they avoid LLM judges: error rates on hard questions — confirm reasoning",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with exact numbers. Stated reasons: LLM judges 'are prone to making mistakes and can have several biases', favor their own answers, and favor more verbose answers. Appendix A.2 ablation (judge = gpt-4-turbo-2024-04-09, MT-Bench-style correctness prompt, run June 2024): judging GPT-4-Turbo's answers, error rates were 0.380 (AMC12), 0.214 (AIME 2024), 0.353 (SMC 2023), 0.420 (Zebra Puzzles); judging Claude-3-Opus's answers: 0.388, 0.103, 0.294, 0.460. LLM judging also inflated/distorted scores vs ground truth, e.g. GPT-4-Turbo on AIME 2024: 13.793 (GT) vs 35.714 (LLM-judged). Caveat the paper itself gives: this is 'a preliminary study' and 'the results are not definitive'.",
+      "quote": "Error rate of LLM-as-a-judge scoring on challenging math (AMC, AIME, SMC) and reasoning (Zebra puzzles) tasks. On all tasks, the error rate is surprisingly high, showing that LLMs are not reliable judges for these tasks. ... We find that the error rate for all tasks is far above a reasonable value, indicating that LLM judges are not appropriate for challenging math and logic tasks.",
+      "location": "Section 1 ('they are prone to making mistakes and can have several biases'); Section 3.3; Appendix A.2, Tables 8 and 9"
+    },
+    {
+      "planned": "Question categories and refresh cadence",
+      "verdict": "confirmed",
+      "finding": "Confirmed. 18 tasks across 6 categories: math (Competitions, Olympiad, AMPS_Hard), coding (LCB Generation, Completion), reasoning (Web of Lies v2, Zebra Puzzles, spatial), language comprehension (Connections, Typos, Plot Unscrambling), instruction following (Paraphrase, Simplify, Story Generation, Summarize over Guardian articles), data analysis (CTA, TableJoin, TableReformat over Kaggle/Socrata datasets). Each task has 40-100 questions aiming for 30-70% top-model success. Cadence: monthly updates replacing ~1/6 of questions per update, so 'fully refreshed roughly every 6 months'; new questions are withheld for one month so the public leaderboard always has 1/6 private questions. Benchmark totaled 1000 questions after the first monthly update.",
+      "quote": "LiveBench currently consists of 18 tasks across 6 categories: math, coding, reasoning, language, instruction following, and data analysis. ... In each update, we replace 1/6 of the questions on average, so that the benchmark is fully refreshed roughly every 6 months. ... Each month, we do not release the new questions until one month later, so that the public leaderboard always has 1/6 questions that are private.",
+      "location": "Section 1 'Overview of tasks'; Section 2; Section 2.7 'LiveBench Updates and Maintenance Plan'"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "LiveBench is deliberately hard: no model exceeds 70% accuracy, leaving headroom so the benchmark can discriminate among frontier models for years.",
+      "quote": "LiveBench is difficult, with top models achieving below 70% accuracy. ... LiveBench questions are difficult: no current model achieves higher than 70% accuracy.",
+      "numbers": "Best model at paper time: o1-preview-2024-09-12 at 64.7 overall (Table 1); next: claude-3-5-sonnet-20241022 at 58.5; o1-preview was 6% better than all others"
+    },
+    {
+      "point": "Ground-truth scoring exposes judge bias in other benchmarks: GPT-4 models score substantially better on Arena-Hard (which uses GPT-4 as judge) than their LiveBench scores predict — a concrete self-preference bias example.",
+      "quote": "gpt-4-0125-preview and gpt-4-turbo-2024-04-09 perform substantially better on Arena-Hard compared to LiveBench, likely due to the known bias from using gpt-4 itself as the LLM judge.",
+      "numbers": "LiveBench has 0.91 correlation with ChatBot Arena and 0.88 with Arena-Hard (Section 3.3)"
+    },
+    {
+      "point": "LLM judging not only errs but inflates scores on hard math: side-by-side ground-truth vs LLM-judged scores diverge wildly in both directions.",
+      "quote": "Model Performance on math and reasoning tasks with both ground-truth (GT) or LLM judging (LLM-Jdg.)",
+      "numbers": "GPT-4-Turbo AIME 2024: 13.793 GT vs 35.714 LLM-judged; GPT-4-Turbo Zebra Puzzles: 38 GT vs 68 LLM-judged; Claude-3-Opus AMC12: 56 GT vs 42.857 LLM-judged (Table 9)"
+    },
+    {
+      "point": "Monthly refreshes kept rankings stable while making the benchmark harder — evidence that rotating questions need not destroy comparability.",
+      "quote": "The rank correlation between the original and first update, and the first and second update, are both > 0.997, showing that the model rankings have stayed consistent. On the other hand... the median and mean average scores... have both dropped by about 1.2%, showing that the benchmark is becoming harder over time.",
+      "numbers": "Rank correlation > 0.997 across updates; ~1.2% score drop (Section 3.4)"
+    },
+    {
+      "point": "Sustainability engineering for a living benchmark: capped leaderboard size and partial monthly refresh keep compute tractable.",
+      "quote": "We maintain the best (or most popular) 40-50 models on the leaderboard... This ensures that we have a tractable set of at most 50 models to evaluate on 200 questions each month, which is easily within the computational budgets of the authors' institutions.",
+      "numbers": "40-50 models, ~200 new questions/month; first update added 50 spatial + 28 coding-generation + 12 coding-completion questions, bringing total to 1000; second update replaced 132 questions to maintain 1000"
+    },
+    {
+      "point": "Math comp is the single best predictor of overall LiveBench performance — high-quality, diverse, contamination-reduced math questions are the strongest overall capability signal among the 18 tasks.",
+      "quote": "Among tasks, we see that math comp correlates the highest with the average LiveBench performance, suggesting that this task is the greatest indicator of overall model performance.",
+      "numbers": "math_comp task correlation 0.9035 with overall score; math category 0.9477, instruction_following lowest category at 0.8174 (Tables 5-6)"
+    },
+    {
+      "point": "Ground-truth scoring has acknowledged limits: it cannot evaluate open-ended generation, and answer-parsing itself requires some instruction following.",
+      "quote": "while ground truth scoring is beneficial in many ways, it still cannot be used for certain use cases, such as 'write a travel guide to Hawaii' in which it is hard to define a ground truth.",
+      "numbers": "Section 5 Limitations; parsing caveat in Section 2 / Appendix A.4"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "The camera-ready title is 'Contamination-LIMITED', not 'Contamination-Free'. v1 (June 2024) used 'Contamination-Free'; the ICLR 2025 version (arXiv v2, 18 Apr 2025) was retitled, and the paper consistently says 'contamination-limited' — itself a teachable point about honest claims (contamination can be mitigated, not eliminated).",
+    "Do not say the whole benchmark is replaced monthly: only ~1/6 of questions are replaced per monthly update; full refresh takes roughly 6 months.",
+    "Do not overstate the LLM-judge error study: the paper calls it 'a preliminary study' whose 'results are not definitive', run in June 2024 with gpt-4-turbo-2024-04-09 as judge on AMC/AIME/SMC/Zebra tasks only; it also notes exceptions (NP-hard-style problems easy to verify, or judges given ground truth).",
+    "Question sources are broader than 'math competitions, arXiv, news': also recent Kaggle and Socrata datasets, IMDb/Wikipedia movie synopses, LeetCode/AtCoder problems via LiveCodeBench, plus harder contamination-limited versions of Big-Bench Hard, AMPS, and IFEval tasks.",
+    "The 6th category is 'language comprehension' (Connections, Typos, Plot Unscrambling) — not generic 'language modeling'."
+  ],
+  "notes_for_authors": "Strong primary source for the contamination tier. Use the retitling (Free -> Limited) as a meta-lesson in measurement humility. The three design desiderata are quotable verbatim from Section 1. For the anti-LLM-judge argument, cite Table 8 exact error rates (0.103-0.460; e.g., 42% error judging GPT-4-Turbo's own Zebra Puzzle answers, 38% on AMC12) and Table 9's score inflation (AIME: 13.8 GT vs 35.7 judged), but always carry the paper's own 'not definitive' caveat. The refresh mechanics (1/6 monthly, 1-month private holdout, >0.997 rank stability, ~1.2% score decay) are the most distinctive teachable mechanism. Contrast with ChatBot Arena/Arena-Hard correlations (0.91/0.88) to show ground-truth and preference benchmarks mostly agree, with judge-bias outliers."
+}

@@ -1,0 +1,339 @@
+# Verification for pages/01-lab-setup.html — run 2026-09-21, macOS 15.4.1 arm64, Docker Desktop 28.1.1
+# NOTE: my container is named lt-01-lab (authoring convention); the page calls the reader's container lt-lab.
+
+## Mac side
+$ uname -sm
+Darwin arm64
+$ docker version --format ...
+client 28.1.1 darwin/arm64 | server 28.1.1 linux/arm64
+$ docker info --format ...
+Docker Desktop | kernel 6.10.14-linuxkit | cpus 10 | mem 8218034176
+$ ls /proc (on the Mac)
+ls: /proc: No such file or directory
+$ docker run --rm ubuntu:24.04 uname -srm
+Linux 6.10.14-linuxkit aarch64
+$ docker run --rm debian:bookworm-slim uname -srm
+Linux 6.10.14-linuxkit aarch64
+$ docker run --rm alpine:3.20 uname -srm
+Linux 6.10.14-linuxkit aarch64
+
+## Inside a fresh ubuntu:24.04 (root)
+# apt-get install -y curl
+Reading package lists...
+Building dependency tree...
+Reading state information...
+E: Unable to locate package curl
+[exit=100]
+# man ls
+This system has been minimized by removing packages and content that are
+not required on a system that users do not log into.
+
+To restore this content, including manpages, you can run the 'unminimize'
+command. You will still need to ensure the 'man-db' package is installed.
+[exit=0]
+# ls /usr/share/man/man1 | head; ls /usr/share/man/man1 | wc -l
+0
+[exit=0]
+# which unminimize; cat /etc/dpkg/dpkg.cfg.d/excludes
+/usr/bin/unminimize
+# Drop all man pages
+path-exclude=/usr/share/man/*
+
+# Drop all translations
+path-exclude=/usr/share/locale/*/LC_MESSAGES/*.mo
+
+# Drop all documentation ...
+path-exclude=/usr/share/doc/*
+
+# ... except copyright files ...
+path-include=/usr/share/doc/*/copyright
+
+# ... and Debian changelogs for native & non-native packages
+path-include=/usr/share/doc/*/changelog.*
+[exit=0]
+# which ps ip ss curl dig jq less tree file pstree capsh findmnt lsns find
+/usr/bin/ps
+/usr/bin/findmnt
+/usr/bin/lsns
+/usr/bin/find
+[exit=1]
+
+## Install the course tools (root)
+# apt-get update 2>&1 | tail -4
+Get:18 http://ports.ubuntu.com/ubuntu-ports noble-security/multiverse arm64 Packages [89.7 kB]
+Get:19 http://ports.ubuntu.com/ubuntu-ports noble-security/universe arm64 Packages [1631 kB]
+Fetched 34.5 MB in 5min 26s (106 kB/s)
+Reading package lists...
+[exit=0]
+# time (DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends procps iproute2 curl dnsutils jq less man-db file tree psmisc libcap2-bin util-linux findutils ca-certificates 2>&1 | grep -E "^(The following NEW|[0-9]+ upgraded|Need to get|After this)" )
+The following NEW packages will be installed:
+0 upgraded, 50 newly installed, 0 to remove and 1 not upgraded.
+Need to get 21.6 MB of archives.
+After this operation, 78.7 MB of additional disk space will be used.
+
+real	2m27.628s
+user	0m3.829s
+sys	0m2.877s
+[exit=0]
+# which ps ip ss curl dig jq less tree file pstree capsh findmnt lsns find
+/usr/bin/ps
+/usr/sbin/ip
+/usr/bin/ss
+/usr/bin/curl
+/usr/bin/dig
+/usr/bin/jq
+/usr/bin/less
+/usr/bin/tree
+/usr/bin/file
+/usr/bin/pstree
+/usr/sbin/capsh
+/usr/bin/findmnt
+/usr/bin/lsns
+/usr/bin/find
+[exit=0]
+# dpkg -l | grep -c ^ii
+142
+[exit=0]
+# curl -sS -o /dev/null -w "%{http_code}
+" https://example.com
+200
+[exit=0]
+
+## The learner user
+# grep -E "^(ubuntu|learner)" /etc/passwd; useradd -m -s /bin/bash learner; id learner; grep -E "^(ubuntu|learner)" /etc/passwd; ls -ld /home/*
+ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash
+uid=1001(learner) gid=1001(learner) groups=1001(learner)
+ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash
+learner:x:1001:1001::/home/learner:/bin/bash
+drwxr-x--- 2 learner learner 4096 Sep 21 16:18 /home/learner
+drwxr-x--- 2 ubuntu  ubuntu  4096 Sep 11 02:12 /home/ubuntu
+[exit=0]
+# as learner (docker exec -u learner)
+learner
+uid=1001(learner) gid=1001(learner) groups=1001(learner)
+/home/learner
+touch: cannot touch '/etc/oops': Permission denied
+exit=1
+-rw-r--r-- 1 learner learner 0 Sep 21 16:18 /home/learner/mine
+E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?
+exit=1
+# su - learner from root
+learner
+/home/learner
+/home/learner
+
+## Lifecycle (container lt-01-life; page calls it lt-lab)
+$ docker run -it --name lt-01-life ubuntu:24.04 bash
+root@5c68345b7dc1:/# echo hello > /root/notes.txt
+root@5c68345b7dc1:/# exit
+exit
+$ docker ps -a --filter name=lt-01-life
+NAMES        IMAGE          STATUS
+lt-01-life   ubuntu:24.04   Exited (0) 1 second ago
+$ docker run -it --name lt-01-life ubuntu:24.04 bash   (again: name conflict)
+docker: Error response from daemon: Conflict. The container name "/lt-01-life" is already in use by container "5c68345b7dc1e20f316d7deadaaad32bdd7fa5ac690dc5204382c5caadfbdafd". You have to remove (or rename) that container to be able to reuse that name.
+
+Run 'docker run --help' for more information
+[exit=125]
+$ docker start lt-01-life
+lt-01-life
+$ docker ps --filter name=lt-01-life
+NAMES        IMAGE          STATUS
+lt-01-life   ubuntu:24.04   Up Less than a second
+$ docker exec lt-01-life cat /root/notes.txt
+hello
+$ docker exec lt-01-life ps -ef
+UID        PID  PPID  C STIME TTY          TIME CMD
+root         1     0  3 16:20 pts/0    00:00:00 bash
+root        15     0  0 16:20 ?        00:00:00 ps -ef
+$ time docker stop lt-01-life
+lt-01-life
+docker stop lt-01-life  0.01s user 0.01s system 0% cpu 10.362 total
+$ docker ps -a
+NAMES        IMAGE          STATUS
+lt-01-life   ubuntu:24.04   Exited (137) Less than a second ago
+$ docker rm lt-01-life
+lt-01-life
+$ docker start lt-01-life
+Error response from daemon: No such container: lt-01-life
+Error: failed to start containers: lt-01-life
+[exit=1]
+
+## man after installing man-db only (in lt-01-lab)
+This system has been minimized by removing packages and content that are
+not required on a system that users do not log into.
+
+0
+curl 8.5.0 (aarch64-unknown-linux-gnu) libcurl/8.5.0 OpenSSL/3.0.13 zlib/1.3 brotli/1.1.0 zstd/1.5.5 libidn2/2.3.7 libpsl/0.21.2 (+libidn2/2.3.7) libssh/0.10.6/openssl/zlib nghttp2/1.59.0 librtmp/2.3 OpenLDAP/2.6.10
+jq-1.7
+ip utility, iproute2-6.1.0, libbpf 1.3.0
+GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu)
+ls (GNU coreutils) 9.4
+
+## uid mapping check
+ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash
+learner:x:1001:1001::/home/learner:/bin/bash
+
+## Mac side: ssh
+$ ssh -V
+OpenSSH_9.9p1, LibreSSL 3.3.6
+$ ssh-keygen -t ed25519 -f <scratch>/demo_key -N "" -C lt-demo
+Generating public/private ed25519 key pair.
+Your identification has been saved in ~/.ssh/demo_key
+Your public key has been saved in ~/.ssh/demo_key.pub
+The key fingerprint is:
+SHA256:kdhobZQoppVIjUUnfNm3rbZcTv9Eoh3M8/cgjNbcRa4 lt-demo
+The key's randomart image is:
++--[ED25519 256]--+
+| ..B+..+..       |
+|  o Bo+*o..      |
+|   + o+ *. o    .|
+|  .  . . .. .o o |
+|        S  .  * +|
+|          o=o+ O |
+|         oo=*.E +|
+|         .o ...oo|
+|               .o|
++----[SHA256]-----+
+-rw-------@ 1 mark  wheel  399 Sep 21 09:21 ~/.ssh/demo_key
+-rw-r--r--@ 1 mark  wheel   89 Sep 21 09:21 ~/.ssh/demo_key.pub
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJGbSWcQM8WXMEFXjl7BsPHX
+$ sed --version (macOS)
+sed: illegal option -- -
+usage: sed script [-EHalnru] [-i extension] [file ...]
+$ which ip ss timeout
+ip not found
+ss not found
+timeout not found
+
+## Debugging a task image uses the same loop
+$ docker run --rm wordfreq-bench:hardened bash -c "id; pwd; ls -la; ps -p 1 -o pid,user,comm"
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+/app
+total 24
+drwxr-xr-x 4 agent agent 4096 Sep 21 06:08 .
+drwxr-xr-x 1 root  root  4096 Sep 21 16:21 ..
+-rw-r--r-- 1 agent agent  276 Sep 21 06:08 README.md
+drwxr-xr-x 2 agent agent 4096 Sep 21 06:08 data
+drwxr-xr-x 2 agent agent 4096 Sep 21 06:08 tests
+-rw-r--r-- 1 agent agent  765 Sep 21 06:08 wordfreq.py
+  PID USER     COMMAND
+    1 agent    ps
+$ docker run --rm ubuntu:24.04 ps -p 1 -o pid,user,comm
+  PID USER     COMMAND
+    1 root     ps
+$ docker exec lt-01-lab bash -c "nproc; free -h | head -2"
+10
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       738Mi       5.1Gi       924Ki       2.1Gi       6.9Gi
+$ sysctl -n hw.ncpu hw.memsize (Mac)
+10
+17179869184
+
+## Lab 5: alpine
+$ docker run --rm -it alpine:3.20 sh
+/ # whoami
+root
+/ # bash --version
+sh: bash: not found
+/ # echo $?
+127
+/ # curl --version
+sh: curl: not found
+/ # apt-get install curl
+sh: apt-get: not found
+/ # echo $?
+127
+/ # head -2 /etc/os-release
+NAME="Alpine Linux"
+ID=alpine
+/ # exit
+$ docker run --rm alpine:3.20 bash -c id
+docker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "bash": executable file not found in $PATH: unknown
+
+Run 'docker run --help' for more information
+[exit=127]
+
+## Lab 4: break it
+$ docker run --rm -it ubuntu:24.04 bash
+root@91194700c2ea:/# rm /usr/bin/ls
+root@91194700c2ea:/# ls
+bash: ls: command not found
+root@91194700c2ea:/# echo $?
+127
+root@91194700c2ea:/# ps -p 1 -o comm=
+bash
+root@91194700c2ea:/# exit
+exit
+$ docker run --rm ubuntu:24.04 ls /usr/bin/ls
+/usr/bin/ls
+
+$ docker version --format 'client {{.Client.Os}}/{{.Client.Arch}} · server {{.Server.Os}}/{{.Server.Arch}}'
+client darwin/arm64 · server linux/arm64
+
+## Step 7: lab image (built as lt-01-labimg; page calls it lt-lab). docker build took 6:24 on a slow link; image 387MB
+#1 [internal] load build definition from Dockerfile
+#1 DONE 0.0s
+#2 [internal] load metadata for docker.io/library/ubuntu:24.04
+#2 DONE 0.4s
+#3 [internal] load .dockerignore
+#3 DONE 0.0s
+#4 [1/3] FROM docker.io/library/ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+#5 [auth] library/ubuntu:pull token for registry-1.docker.io
+#5 DONE 0.0s
+#4 [1/3] FROM docker.io/library/ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+#4 DONE 5.7s
+#4 [1/3] FROM docker.io/library/ubuntu:24.04@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3
+$ docker images lt-01-labimg
+REPOSITORY     TAG       SIZE
+lt-01-labimg   latest    387MB
+$ docker run -dit --name lt-01-lab lt-01-labimg
+b3f56181d276
+$ docker ps --filter name=lt-01-lab
+NAMES       IMAGE          STATUS
+lt-01-lab   lt-01-labimg   Up Less than a second
+
+## Lab 2 checklist as learner
+$ head -1 /etc/os-release
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+[exit=0]
+$ id
+uid=1001(learner) gid=1001(learner) groups=1001(learner)
+[exit=0]
+$ uname -sm
+Linux aarch64
+[exit=0]
+$ command -v ps ip ss curl dig jq tree capsh findmnt
+/usr/bin/ps
+/usr/sbin/ip
+/usr/bin/ss
+/usr/bin/curl
+/usr/bin/dig
+/usr/bin/jq
+/usr/bin/tree
+/usr/sbin/capsh
+/usr/bin/findmnt
+[exit=0]
+$ man -w signal
+/usr/share/man/man7/signal.7.gz
+[exit=0]
+$ curl -sS -o /dev/null -w '%{http_code}
+' https://example.com
+200
+[exit=0]
+
+## Lab 3: stop/start vs rm/run
+-rw-r--r-- 1 learner learner 6 Sep 21 16:26 /home/learner/notes.txt
+$ docker stop lt-01-lab; docker start lt-01-lab
+lt-01-lab
+lt-01-lab
+$ docker exec -u learner lt-01-lab cat /home/learner/notes.txt
+draft
+[exit=0]
+$ docker rm -f lt-01-lab; docker run -dit --name lt-01-lab lt-01-labimg
+lt-01-lab
+0527dbc58087
+$ docker exec -u learner lt-01-lab cat /home/learner/notes.txt
+cat: /home/learner/notes.txt: No such file or directory
+[exit=1]

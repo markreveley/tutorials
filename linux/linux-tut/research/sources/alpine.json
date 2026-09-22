@@ -1,0 +1,180 @@
+{
+ "id": "alpine",
+ "tag": "[Alpine]",
+ "citation": {
+  "authors": "Alpine Linux Development Team; BusyBox project; musl libc project; T.-P. Chung (PEP 656)",
+  "title": "About Alpine Linux; Alpine wiki: Alpine Package Keeper, BusyBox, Shell management; musl wiki: Functional differences from glibc; About BusyBox; PEP 656 - Platform Tag for Linux Distributions Using Musl",
+  "venue": "alpinelinux.org; wiki.alpinelinux.org; wiki.musl-libc.org; busybox.net; peps.python.org",
+  "year": "2021-2026",
+  "url": "https://alpinelinux.org/about/"
+ },
+ "fetched_urls": [
+  "https://alpinelinux.org/about/",
+  "https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper",
+  "https://wiki.alpinelinux.org/wiki/BusyBox",
+  "https://wiki.alpinelinux.org/wiki/Shell_management",
+  "https://wiki.musl-libc.org/functional-differences-from-glibc.html",
+  "https://wiki.musl-libc.org/faq.html",
+  "https://busybox.net/about.html",
+  "https://peps.python.org/pep-0656/",
+  "https://gitlab.alpinelinux.org/alpine/apk-tools/-/raw/master/doc/apk.8.scd"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Alpine is built around musl libc and BusyBox; default shell is BusyBox ash, bash not installed by default; package manager apk (apk add, apk add --no-cache)",
+   "verdict": "confirmed",
+   "finding": "'Built around musl libc and busybox' is verbatim from alpinelinux.org/about; package manager 'called apk'; init system OpenRC. Default shell: Alpine wiki Shell management page - 'The default shell used by Alpine Linux is the BusyBox variant of the ash shell' and '/bin/sh is linked to Busybox ash by default'; bash is installed with `apk add bash`. 'bash not installed by default' verified by EXECUTION in alpine:3.20 (docker run ... bash -> exit 127). `apk add` semantics from the wiki. CAVEAT on --no-cache: the wiki page only shows `no-cache` as a config option ('no-cache equals cache no') and the current apk(8) source documents `--cache[=BOOL]`: 'When disabled, prevents using any local cache paths' - that is apk-tools v3 wording, while alpine:3.20 ships apk-tools 2.14.4. The practical effect was verified by execution: after `apk add --no-cache bash`, /var/cache/apk is empty.",
+   "quote": "Alpine Linux is built around musl libc and busybox. This makes it small and very resource efficient. A container requires no more than 8 MB and a minimal installation to disk requires around 130 MB of storage.",
+   "location": "alpinelinux.org/about > Small",
+   "cite_url": "https://alpinelinux.org/about/"
+  },
+  {
+   "planned": "BusyBox combines tiny versions of many common UNIX utilities into a single executable, with fewer options than GNU counterparts",
+   "verdict": "confirmed",
+   "finding": "Verbatim from busybox.net. Note the sentence continues: the included options 'provide the expected functionality and behave very much like their GNU counterparts'.",
+   "quote": "BusyBox combines tiny versions of many common UNIX utilities into a single small executable. [...] The utilities in BusyBox generally have fewer options than their full-featured GNU cousins; however, the options that are included provide the expected functionality and behave very much like their GNU counterparts.",
+   "location": "busybox.net > About BusyBox (BusyBox: The Swiss Army Knife of Embedded Linux)",
+   "cite_url": "https://busybox.net/about.html"
+  },
+  {
+   "planned": "glibc-linked binaries / manylinux Python wheels do not run on musl without compatibility layers (musllinux wheels exist: PEP 656)",
+   "verdict": "corrected",
+   "finding": "Split verdict. (a) manylinux wheels unusable on musl + musllinux tag: CONFIRMED by PEP 656 (Status: Final): musl-based distros 'cannot use the existing manylinux platform tags'; new tag musllinux_${MUSLMAJOR}_${MUSLMINOR}_${ARCH}, e.g. musllinux_1_2_aarch64. (b) 'glibc-linked binaries do not run on musl': NOT stated on the fetched musl 'Functional differences' page (it lists behavioural differences, not binary compatibility), so it is unverifiable from the listed sources - but it was demonstrated by EXECUTION: Ubuntu's /usr/bin/ls copied into alpine:3.20 fails with 'sh: /x/ls-glibc: not found', exit 127, because the glibc loader /lib/ld-linux-* is absent (Alpine has only /lib/ld-musl-aarch64.so.1). The confusing 'not found' for a file that exists is the teachable symptom. Do not assert anything about 'compatibility layers' (gcompat etc.) - not verified.",
+   "quote": "With the wide use of containers, distributions such as Alpine Linux, have been gaining more popularity than ever. Many of them based on musl, a different libc implementation from glibc, and therefore cannot use the existing manylinux platform tags. This means that Python package projects cannot deploy binary distributions on PyPI for them.",
+   "location": "PEP 656 > Motivation",
+   "cite_url": "https://peps.python.org/pep-0656/#motivation"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Alpine one-line self-description.",
+   "quote": "Alpine Linux is a security-oriented, lightweight Linux distribution based on musl libc and busybox.",
+   "location": "alpinelinux.org/about (header)",
+   "cite_url": "https://alpinelinux.org/about/"
+  },
+  {
+   "finding": "apk + OpenRC.",
+   "quote": "It uses its own package manager called apk, the OpenRC init system, script driven set-ups and that's it!",
+   "location": "alpinelinux.org/about > Simple",
+   "cite_url": "https://alpinelinux.org/about/"
+  },
+  {
+   "finding": "Security build flags.",
+   "quote": "All userland binaries are compiled as Position Independent Executables (PIE) with stack smashing protection.",
+   "location": "alpinelinux.org/about > Secure",
+   "cite_url": "https://alpinelinux.org/about/"
+  },
+  {
+   "finding": "Default shell (exact).",
+   "quote": "The default shell used by Alpine Linux is the BusyBox variant of the ash shell. [...] Alpine Linux uses Busybox Ash shell for its default shell. It is a standard POSIX shell derived from Debian Ash variant.",
+   "location": "Alpine wiki > Shell management",
+   "cite_url": "https://wiki.alpinelinux.org/wiki/Shell_management"
+  },
+  {
+   "finding": "/bin/sh on Alpine.",
+   "quote": "Most applications expect a POSIX-compliant shell to be present in a standard location, /bin/sh. In Alpine Linux, /bin/sh is linked to Busybox ash by default, but you can change this by installing an alternate *-binsh package.",
+   "location": "Alpine wiki > Shell management > Change default shell",
+   "cite_url": "https://wiki.alpinelinux.org/wiki/Shell_management"
+  },
+  {
+   "finding": "Installing bash.",
+   "quote": "To install any of the above shells, say for eg: bash shell: # apk add bash bash-completion",
+   "location": "Alpine wiki > Shell management",
+   "cite_url": "https://wiki.alpinelinux.org/wiki/Shell_management"
+  },
+  {
+   "finding": "Alpine wiki on BusyBox: symlink farm, fewer options.",
+   "quote": "BusyBox provides replacements for most of the utilities usually found in GNU coreutils, util-linux, etc. [...] BusyBox is set up as an endpoint for numerous symlinks that substitute various utilities. The utilities in BusyBox generally have fewer options than their full-featured GNU counterparts.",
+   "location": "Alpine wiki > BusyBox",
+   "cite_url": "https://wiki.alpinelinux.org/wiki/BusyBox"
+  },
+  {
+   "finding": "BusyBox's own description of multi-call behaviour (from `busybox` output reproduced on the wiki).",
+   "quote": "BusyBox is a multi-call binary that combines many common Unix utilities into a single executable. Most people will create a link to busybox for each function they wish to use and BusyBox will act like whatever it was invoked as.",
+   "location": "Alpine wiki > BusyBox > BusyBox applets",
+   "cite_url": "https://wiki.alpinelinux.org/wiki/BusyBox"
+  },
+  {
+   "finding": "apk add semantics and the world file.",
+   "quote": "Use add to install packages from a repository. Any necessary dependencies are also installed. [...] The commands apk add foo and apk del bar manipulate the desired state by adding or removing packages foo, bar respectively as a dependency constraint in /etc/apk/world.",
+   "location": "Alpine wiki > Alpine Package Keeper",
+   "cite_url": "https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper"
+  },
+  {
+   "finding": "apk file ownership query (analogue of dpkg -S).",
+   "quote": "The info command is also useful to determine which package a file belongs to when used with the --who-owns option, or simply -W.",
+   "location": "Alpine wiki > Alpine Package Keeper > Check file ownership",
+   "cite_url": "https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper"
+  },
+  {
+   "finding": "apk cache option (current apk-tools man source; v3 wording).",
+   "quote": "*--cache*[=_BOOL_] When disabled, prevents using any local cache paths. [...] *--update-cache*, *-U* Alias for '--cache-max-age 0'.",
+   "location": "apk(8) (apk-tools master, doc/apk.8.scd) > GLOBAL OPTIONS",
+   "cite_url": "https://gitlab.alpinelinux.org/alpine/apk-tools/-/raw/master/doc/apk.8.scd"
+  },
+  {
+   "finding": "musl differences that bite real programs: default thread stack is small.",
+   "quote": "The default stack size for new threads on glibc is determined based on the resource limit governing the main thread's stack (RLIMIT_STACK). It generally ends up being 2-10 MB. musl provides a default thread stack size of 128k (80k prior to 1.1.21).",
+   "location": "musl wiki > Functional differences from glibc > Thread stack size",
+   "cite_url": "https://wiki.musl-libc.org/functional-differences-from-glibc.html"
+  },
+  {
+   "finding": "musl DNS resolver differs: queries all nameservers in parallel (max three); search/ndots handling differs from glibc.",
+   "quote": "Traditional resolvers, including glibc's, make use of multiple nameserver lines in resolv.conf by trying each one in sequence and falling to the next after one times out. musl's resolver queries them all in parallel and accepts whichever response arrives first.",
+   "location": "musl wiki > Functional differences from glibc > Name Resolver/DNS",
+   "cite_url": "https://wiki.musl-libc.org/functional-differences-from-glibc.html"
+  },
+  {
+   "finding": "musl: no lazy binding; dlclose is a no-op.",
+   "quote": "dlclose is a no-op.",
+   "location": "musl wiki > Functional differences from glibc > Unloading libraries",
+   "cite_url": "https://wiki.musl-libc.org/functional-differences-from-glibc.html"
+  },
+  {
+   "finding": "musl printf strictness example.",
+   "quote": "glibc supports some alternate incorrect format specifiers, like %Ld as an alias for %lld. musl does not support these, and returns an error upon encountering them.",
+   "location": "musl wiki > Functional differences from glibc > printf behavior",
+   "cite_url": "https://wiki.musl-libc.org/functional-differences-from-glibc.html"
+  },
+  {
+   "finding": "PEP 656 tag format.",
+   "quote": "musllinux_${MUSLMAJOR}_${MUSLMINOR}_${ARCH} [...] musllinux_1_1_x86_64 # musl 1.1 running on x86-64. musllinux_1_2_aarch64 # musl 1.2 running on ARM 64-bit.",
+   "location": "PEP 656 > Specification",
+   "cite_url": "https://peps.python.org/pep-0656/"
+  },
+  {
+   "finding": "PEP 656 abstract.",
+   "quote": "This PEP proposes a new platform tag series musllinux for binary Python package distributions for a Python installation that depends on musl on a Linux distribution.",
+   "location": "PEP 656 > Abstract",
+   "cite_url": "https://peps.python.org/pep-0656/#abstract"
+  },
+  {
+   "finding": "EXECUTED: bash is absent in alpine:3.20 (docker exit 127) and from inside sh.",
+   "quote": "$ docker run --rm alpine:3.20 bash; echo \"exit=$?\"\ndocker: Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: \"bash\": executable file not found in $PATH: unknown\n\nRun 'docker run --help' for more information\nexit=127\n$ docker run --rm alpine:3.20 sh -c 'bash -c true; echo \"inner exit=$?\"'\nsh: bash: not found\ninner exit=127",
+   "location": "executed alpine:3.20"
+  },
+  {
+   "finding": "EXECUTED: /bin/sh, ls and grep are symlinks to /bin/busybox; BusyBox version; musl loader.",
+   "quote": "$ docker run --rm alpine:3.20 sh -c 'ls -l /bin/sh /bin/ls /bin/grep; busybox | head -2; cat /etc/alpine-release; ldd /bin/busybox'\nlrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/grep -> /bin/busybox\nlrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/ls -> /bin/busybox\nlrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/sh -> /bin/busybox\nBusyBox v1.36.1 (2025-11-23 14:32:18 UTC) multi-call binary.\nBusyBox is copyrighted by many authors between 1998-2015.\n3.20.10\n\t/lib/ld-musl-aarch64.so.1 (0xffff83d6c000)\n\tlibc.musl-aarch64.so.1 => /lib/ld-musl-aarch64.so.1 (0xffff83d6c000)",
+   "location": "executed alpine:3.20 (arm64; on amd64 the loader is ld-musl-x86_64.so.1)"
+  },
+  {
+   "finding": "EXECUTED: BusyBox applets reject GNU long options agents habitually use.",
+   "quote": "$ grep --version\ngrep: unrecognized option: version\nBusyBox v1.36.1 (2025-11-23 14:32:18 UTC) multi-call binary.\n$ ps --version\nps: unrecognized option: version\nBusyBox v1.36.1 (2025-11-23 14:32:18 UTC) multi-call binary.",
+   "location": "executed alpine:3.20"
+  },
+  {
+   "finding": "EXECUTED: apk add --no-cache installs bash and leaves no cache behind.",
+   "quote": "$ docker run --rm alpine:3.20 sh -c 'apk add --no-cache bash 2>&1 | tail -4; bash --version | head -1; ls /var/cache/apk | wc -l'\n(4/4) Installing bash (5.2.26-r0)\nExecuting bash-5.2.26-r0.post-install\nExecuting busybox-1.36.1-r31.trigger\nOK: 13 MiB in 18 packages\nGNU bash, version 5.2.26(1)-release (aarch64-alpine-linux-musl)\n0",
+   "location": "executed alpine:3.20 (apk-tools 2.14.4)"
+  },
+  {
+   "finding": "EXECUTED: a glibc-linked binary on Alpine fails with a misleading 'not found' (the missing thing is the ELF interpreter /lib/ld-linux-*.so, not the file).",
+   "quote": "$ docker run --rm -v \"$S\":/out ubuntu:24.04 cp /usr/bin/ls /out/ls-glibc\n$ docker run --rm -v \"$S\":/x:ro alpine:3.20 sh -c '/x/ls-glibc /; echo \"exit=$?\"; ls -l /lib/ld-linux* /lib/ld-musl*'\nsh: /x/ls-glibc: not found\nexit=127\nls: /lib/ld-linux*: No such file or directory\n-rwxr-xr-x    1 root     root        723408 Apr 10 15:38 /lib/ld-musl-aarch64.so.1",
+   "location": "executed alpine:3.20 + ubuntu:24.04 (arm64)"
+  }
+ ],
+ "teaching_notes": "alpinelinux.org/about gives the verbatim 'built around musl libc and busybox' line and the '8 MB container' figure. The default-shell statement is NOT on the three originally listed Alpine URLs; it comes from the Alpine wiki 'Shell management' page (added to fetched_urls). Corrections: (1) the musl 'Functional differences' page does not say glibc binaries won't run on musl - only the executed demo supports that, and the symptom is the confusing 'not found' + exit 127 for an existing file; say nothing about gcompat/compat layers; (2) --no-cache is not defined on the wiki page; the upstream man source describes --cache[=BOOL] (apk v3) whereas alpine:3.20 ships apk-tools 2.14.4 - rely on the executed result; (3) BusyBox's own text stresses that included options 'behave very much like their GNU counterparts' - the problem for agents is missing options (e.g. --version), not different semantics. Extra musl facts useful for 'works on Ubuntu, fails on Alpine' debugging: 128k default thread stack, parallel DNS resolver with different search/ndots behaviour, dlclose no-op. All executed output is arm64."
+}

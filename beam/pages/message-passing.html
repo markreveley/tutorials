@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Message Passing & Copying</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .heap-stage { height: 320px; }
+  .pheap { position:absolute; top:14px; width:210px; border:1px dashed var(--line); border-radius:10px; padding:10px; }
+  .pheap .ph { font-family:var(--mono); font-size:12px; color:var(--accent-2); margin-bottom:8px; }
+  .pheap.A { left:10px; }   .pheap.B { right:10px; }
+  .mblk2 { font-family:var(--mono); font-size:12px; border:1px solid var(--line); border-radius:7px;
+           background:var(--bg-2); padding:7px 10px; margin:6px 0; transition:all .35s; }
+  .mblk2.tuple { border-color:var(--imm); color:var(--imm); }
+  .mblk2.procbin { border-color:var(--boxed); color:var(--boxed); display:flex; justify-content:space-between; gap:8px; }
+  .mblk2.fresh { animation:pop .5s ease; }
+  @keyframes pop { 0%{transform:scale(.6);opacity:0;} 100%{transform:scale(1);opacity:1;} }
+  .shared { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); width:300px;
+            border:1px solid var(--accent); border-radius:9px; background:#14110b; padding:9px 12px; font-family:var(--mono); font-size:12px; }
+  .shared .sh { color:var(--accent); font-size:11px; margin-bottom:5px; }
+  .shared .rc { color:var(--imm); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 9 · the metal</p>
+    <h1>Message Passing &amp; Copying</h1>
+    <p class="lede">
+      The private heaps that make GC cheap (rung 8) and structural sharing safe (rung 4) come with a bill,
+      and this is where it's paid. A process can only safely touch its <em>own</em> heap — so to hand data to
+      another process, the data is <strong>copied</strong>. Understanding that copy (and its one big exception)
+      explains a whole class of BEAM performance surprises.
+    </p>
+
+    <h2>Sending = deep-copying into the receiver's heap</h2>
+    <p>
+      When process P1 sends a message M to a local P2, P1 computes the <strong>flat size</strong> of M,
+      allocates a message buffer (a heap fragment) of that size, and <strong>copies M into it</strong>
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.11</a>. P2 then owns its
+      own independent copy; the original on P1's heap is untouched. This same <em>deep copy</em> is used for I/O,
+      ETS, and <code>binary_to_term</code> <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.11</a>.
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">two isolated heaps · what crosses, and how</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <button class="btn primary" id="sendTup">send {1,2,3} (small term) →</button>
+          <button class="btn primary" id="sendBin">send &lt;&lt;512-byte binary&gt;&gt; →</button>
+          <button class="btn" id="mpRst">reset</button>
+        </div>
+        <div class="heap-stage" id="mpStage"><svg class="wires" id="mpWires"></svg></div>
+        <div class="readout" id="mpOut"></div>
+        <div class="legend">
+          <span class="key"><span class="swatch" style="background:var(--imm)"></span> on-heap term (copied per message)</span>
+          <span class="key"><span class="swatch" style="background:var(--boxed)"></span> ProcBin reference</span>
+          <span class="key"><span class="swatch" style="background:var(--accent)"></span> shared off-heap binary payload</span>
+        </div>
+      </div>
+      <div class="viz-foot">Refc binaries (&gt;64 bytes) live off-heap, reference-counted (Ch.4.5); heap binaries (≤64 bytes) are copied inline with the message.</div>
+    </div>
+
+    <h2>The catch: deep copy doesn't preserve sharing</h2>
+    <p>
+      Inside one heap, a heavily-shared term is compact (rung 4). But a default deep copy <strong>expands that
+      sharing</strong> — each arrow becomes its own full copy on the far side. The BEAM Book's own example shows
+      a term whose shared size is <code>19386</code> words ballooning to a flat size of <code>94110</code>
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.11</a>:
+    </p>
+    <pre><code>&gt; share:size().
+{{size,<span class="tok-num">19386</span>}, {flat_size,<span class="tok-num">94110</span>}}   <span class="tok-com"># ~5× bigger once copied</span></code></pre>
+    <p>
+      So a term that's cheap to hold can be expensive to <em>send</em>, and expanding a highly-shared term
+      across messages can bring a node down. (ERTS can be built with <code>--enable-sharing-preserving</code>,
+      but it's off by default because it slows the common no-sharing case
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.11</a>.)
+    </p>
+
+    <h2>The exception: large binaries are shared, not copied</h2>
+    <p>
+      Binaries over <strong>64 bytes</strong> are <em>refc binaries</em>: the payload lives in a shared,
+      off-heap, reference-counted area, with only a small <strong>ProcBin</strong> reference on the process heap
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.5</a>. Sending such a
+      binary copies only the tiny reference and bumps the <strong>refcount</strong> — the bytes themselves never
+      move. That's why passing a 10&nbsp;MB binary between processes is cheap, while passing a deeply-shared
+      nested term might not be.
+    </p>
+
+    <div class="callout warn">
+      <span class="label">The sub-binary gotcha</span>
+      Matching <code>&lt;&lt;_:32, rest/binary&gt;&gt;</code> makes <code>rest</code> a <em>sub-binary</em> that
+      still references the original large binary — great for avoiding copies, until you've accidentally kept a
+      giant binary alive just to hold a few bytes. <code>:binary.copy/1</code> (Elixir <code>:binary.copy/1</code>)
+      detaches it <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.11</a>.
+    </div>
+
+    <div class="callout aha">
+      <span class="label">The trade, stated plainly</span>
+      Isolation buys you cheap per-process GC and safe sharing — and charges you a copy at every process
+      boundary. The runtime softens the worst case (huge binaries) by sharing them off-heap. Knowing which side
+      of that line your data is on is most of BEAM performance intuition.
+    </div>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.4.5 (binaries / refc binaries), Ch.11 (Message Passing; deep copy; size vs flat_size).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('message-passing');
+
+const stage=document.getElementById('mpStage'), wires=document.getElementById('mpWires'), out=document.getElementById('mpOut');
+let state;
+function seed(){ state={ aTuple:true, bTuple:false, aBin:true, bBin:false, refc:1 }; render();
+  out.innerHTML='Two processes, two private heaps. A holds a small term and a reference to a big off-heap binary (refcount 1). Send each to B and watch what actually crosses.'; }
+
+function heapHTML(side){
+  const isA = side==='A';
+  let blocks='';
+  if(isA ? state.aTuple : state.bTuple)
+    blocks += `<div class="mblk2 tuple" id="${side}_tup">{1, 2, 3}</div>`;
+  if(isA ? state.aBin : state.bBin)
+    blocks += `<div class="mblk2 procbin" id="${side}_bin"><span>ProcBin</span><span class="ptr">→</span></div>`;
+  if(!blocks) blocks = `<div style="color:var(--ink-faint);font-size:11px">empty</div>`;
+  return `<div class="pheap ${side}"><div class="ph">Process ${side} — private heap</div>${blocks}</div>`;
+}
+function render(fresh){
+  [...stage.querySelectorAll('.pheap,.shared')].forEach(n=>n.remove());
+  wires.innerHTML=WIKI.arrowDefs('var(--boxed)');
+  stage.insertAdjacentHTML('beforeend', heapHTML('A'));
+  stage.insertAdjacentHTML('beforeend', heapHTML('B'));
+  stage.insertAdjacentHTML('beforeend',
+    `<div class="shared" id="shpay"><div class="sh">shared off-heap binary area</div>
+       <div>&lt;&lt;512 bytes…&gt;&gt; &nbsp; refcount = <span class="rc" id="rc">${state.refc}</span></div></div>`);
+  if(fresh){ const f=document.getElementById(fresh); if(f) f.classList.add('fresh'); }
+  requestAnimationFrame(()=>{
+    wires.innerHTML=WIKI.arrowDefs('var(--boxed)');
+    if(state.aBin) WIKI.drawArrow(wires, document.getElementById('A_bin'), document.getElementById('shpay'), {color:'var(--boxed)',width:2});
+    if(state.bBin) WIKI.drawArrow(wires, document.getElementById('B_bin'), document.getElementById('shpay'), {color:'var(--accent)',width:2.2});
+  });
+}
+document.getElementById('sendTup').onclick=()=>{
+  if(!state.aTuple){ out.innerHTML='A no longer holds the small term — reset to replay.'; return; }
+  state.bTuple=true; render('B_tup');
+  out.innerHTML='<b style="color:var(--imm)">Small term copied.</b> B now has its <i>own independent</i> <code>{1,2,3}</code>; A\'s copy is unchanged. The bytes were duplicated into B\'s heap (its flat size). Two separate copies now exist.';
+};
+document.getElementById('sendBin').onclick=()=>{
+  if(state.bBin){ out.innerHTML='B already references the binary.'; return; }
+  state.bBin=true; state.refc=2; render('B_bin');
+  out.innerHTML='<b style="color:var(--accent)">Big binary shared, not copied.</b> Only a small <span class="ptr">ProcBin</span> reference was added to B; the 512-byte payload never moved. The shared <b>refcount went 1 → 2</b>. This is why passing huge binaries between processes is cheap.';
+};
+document.getElementById('mpRst').onclick=seed;
+window.addEventListener('resize',()=>render());
+seed();
+</script>
+</body>
+</html>

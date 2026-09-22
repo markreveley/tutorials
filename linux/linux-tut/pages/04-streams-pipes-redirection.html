@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Streams, Pipes, and Redirection · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · The Shell</p>
+    <h1>Streams, pipes, and redirection</h1>
+    <p class="lede">
+      Every program you run has three numbered channels open before its first line executes, and
+      <code>&gt;</code>, <code>2&gt;&amp;1</code> and <code>|</code> are nothing more than the shell
+      re-plugging those channels. A harness reads an agent's commands through the same three
+      channels — so which one an error travelled down decides whether your logs contain the evidence
+      or an empty string.
+    </p>
+
+    <h2 id="three-channels">Three numbered channels</h2>
+    <p>
+      When a <span class="term" data-g="process">process</span> opens a file, the kernel hands back a
+      small integer — a <span class="term" data-g="file-descriptor">file descriptor</span>, or
+      <em>fd</em> — and the process uses that number for every later read and write. Think of a
+      numbered row of sockets on the back of the process, each with a cable plugged into a file, a
+      terminal, or another program. By convention, three are already plugged in when any program
+      starts: fd 0 is <span class="term" data-g="stdin">standard input</span>, fd 1 is
+      <span class="term" data-g="stdout">standard output</span>, fd 2 is
+      <span class="term" data-g="stderr">standard error</span>.<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/unistd.h.html" title="POSIX.1-2024, &lt;unistd.h&gt;: STDIN_FILENO 0, STDOUT_FILENO 1, STDERR_FILENO 2">[POSIX]</a>
+      A well-behaved program writes its <em>results</em> to 1 and its <em>complaints</em> — errors,
+      warnings, progress chatter — to 2. It neither knows nor cares what is on the other end of
+      either cable.
+    </p>
+    <p>
+      You can look at the cables. <code>/proc/self/fd</code> is a directory the kernel fabricates,
+      with one symlink per open descriptor of whichever process reads it (more on
+      <code>/proc</code> on <a href="09-processes.html">page 9</a>). In the container lab, as
+      <code>learner</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> ls -l /proc/self/fd
+<span class="o">total 0
+lrwx------ 1 learner learner 64 Sep 21 16:26 0 -&gt; <span class="hl">/dev/pts/1</span>
+lrwx------ 1 learner learner 64 Sep 21 16:26 1 -&gt; <span class="hl">/dev/pts/1</span>
+lrwx------ 1 learner learner 64 Sep 21 16:26 2 -&gt; <span class="hl">/dev/pts/1</span>
+lr-x------ 1 learner learner 64 Sep 21 16:26 3 -&gt; /proc/483/fd</span></code></pre>
+    <p>
+      All three standard descriptors of that <code>ls</code> process lead to
+      <code>/dev/pts/1</code>: the <span class="term" data-g="tty">terminal</span> you are typing
+      into. That is why output <em>and</em> errors both show up on your screen, and why, looking at a
+      screen, you cannot tell them apart. (fd 3 is <code>ls</code> itself holding the directory open
+      in order to list it.) <code>ls</code> did not choose the terminal. It inherited those three
+      cables from its parent, the shell — a child process starts with copies of its parent's open
+      descriptors, a rule <a href="09-processes.html">page 9</a> returns to.
+    </p>
+
+    <h2 id="redirection">Redirection: the shell re-plugs a cable before the program starts</h2>
+    <p>
+      <span class="term" data-g="redirection">Redirection</span> is the
+      <span class="term" data-g="shell">shell</span> taking one of those cables and plugging it in
+      somewhere else <em>before</em> it starts the program. The program runs unmodified; it just
+      finds a different thing on the end of fd 1.
+    </p>
+<pre class="term"><code><span class="p">$</span> ls -l /proc/self/fd &gt; fds.txt
+<span class="p">$</span> cat fds.txt
+<span class="o">total 0
+lrwx------ 1 learner learner 64 Sep 21 16:26 0 -&gt; /dev/pts/1
+l-wx------ 1 learner learner 64 Sep 21 16:26 1 -&gt; <span class="hl">/home/learner/fds.txt</span>
+lrwx------ 1 learner learner 64 Sep 21 16:26 2 -&gt; /dev/pts/1
+lr-x------ 1 learner learner 64 Sep 21 16:26 3 -&gt; /proc/484/fd</span></code></pre>
+    <p>
+      Nothing appeared on screen, because fd 1 no longer led to the screen. Proof that the shell —
+      not the program — opens the file: try redirecting somewhere you are not allowed to write, and
+      read who complains.
+    </p>
+<pre class="term"><code><span class="p">$</span> echo hi &gt; /etc/motd2
+<span class="o"><span class="hl">-bash</span>: /etc/motd2: Permission denied</span></code></pre>
+    <p>
+      The error comes from <code>bash</code>; <code>echo</code> never ran. The working set of
+      operators is small:
+    </p>
+    <table>
+      <tr><th>You write</th><th>The shell does, before starting the command</th></tr>
+      <tr><td><code>cmd &gt; file</code></td><td>Plug fd 1 into <code>file</code>, emptying it first (creating it if needed).</td></tr>
+      <tr><td><code>cmd &gt;&gt; file</code></td><td>Plug fd 1 into <code>file</code>, appending.</td></tr>
+      <tr><td><code>cmd &lt; file</code></td><td>Plug fd 0 into <code>file</code>: the program "types" the file's contents.</td></tr>
+      <tr><td><code>cmd 2&gt; file</code></td><td>Plug fd 2 into <code>file</code>. The number names the descriptor; with no number, <code>&gt;</code> means 1 and <code>&lt;</code> means 0.</td></tr>
+      <tr><td><code>cmd 2&gt;&amp;1</code></td><td>Plug fd 2 into <em>whatever fd 1 is plugged into right now</em>.</td></tr>
+      <tr><td><code>cmd &amp;&gt; file</code></td><td>Bash shorthand for <code>&gt; file 2&gt;&amp;1</code>.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Redirections" title="GNU Bash Reference Manual, 3.6 Redirections">[Bash Manual]</a></td></tr>
+    </table>
+    <p>
+      To watch them work you need a command that writes to both channels at once. Listing one file
+      that exists and one that doesn't does it:
+    </p>
+<pre class="term"><code><span class="p">$</span> ls /etc/hostname /nope
+<span class="o">ls: cannot access '/nope': No such file or directory
+/etc/hostname</span>
+<span class="p">$</span> ls /etc/hostname /nope &gt; out.txt
+<span class="o">ls: cannot access '/nope': No such file or directory</span>
+<span class="p">$</span> cat out.txt
+<span class="o">/etc/hostname</span>
+<span class="p">$</span> ls /etc/hostname /nope 2&gt; err.txt
+<span class="o">/etc/hostname</span>
+<span class="p">$</span> cat err.txt
+<span class="o">ls: cannot access '/nope': No such file or directory</span></code></pre>
+    <p>
+      The second command is the one that surprises people: you redirected "the output" to a file and
+      an error still hit the screen. It was never on fd 1.
+    </p>
+
+    <h3 id="order-matters">Why the order of redirections matters</h3>
+    <p>
+      Bash processes redirections left to right,<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Redirections" title="GNU Bash Reference Manual, 3.6 Redirections">[Bash Manual]</a>
+      and <code>2&gt;&amp;1</code> means "copy where fd 1 points <em>at this moment</em>" — not "tie
+      2 to 1 forever". Run both orders:
+    </p>
+<pre class="term"><code><span class="p">$</span> ls /etc/hostname /nope &gt; both.txt 2&gt;&amp;1
+<span class="p">$</span> cat both.txt
+<span class="o">ls: cannot access '/nope': No such file or directory
+/etc/hostname</span>
+<span class="p">$</span> ls /etc/hostname /nope 2&gt;&amp;1 &gt; wrong.txt
+<span class="o">ls: cannot access '/nope': No such file or directory</span>
+<span class="p">$</span> cat wrong.txt
+<span class="o">/etc/hostname</span></code></pre>
+    <div class="diagram">  &gt; both.txt 2&gt;&amp;1                     2&gt;&amp;1 &gt; wrong.txt
+
+  start:   1 ─▶ terminal                start:   1 ─▶ terminal
+           2 ─▶ terminal                         2 ─▶ terminal
+  step 1:  1 ─▶ both.txt                step 1:  2 ─▶ (where 1 points:)
+  step 2:  2 ─▶ (where 1 points:)                     terminal
+                both.txt                step 2:  1 ─▶ wrong.txt
+
+  result:  both streams in the file     result:  errors still on screen</div>
+    <p>
+      You don't need to memorise "put <code>2&gt;&amp;1</code> last". Walk the cables left to right
+      and the answer falls out — including for combinations you have never seen, like
+      <code>2&gt;&amp;1 &gt;/dev/null</code> in the lab below.
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><code>&gt;</code> empties the target file before the command runs — the manual's wording is
+      "if it does exist it is truncated to zero size".<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Redirections" title="GNU Bash Reference Manual, 3.6.2 Redirecting Output">[Bash Manual]</a>
+      So reading and writing the same file in one command destroys it:</p>
+<pre class="term"><code><span class="p">$</span> printf 'b\na\n' &gt; names.txt; sort names.txt &gt; names.txt; wc -c names.txt
+<span class="o">0 names.txt</span></code></pre>
+      <p>By the time <code>sort</code> opened its input, the shell had already emptied it. Agents do
+      this to task files (<code>jq . data.json &gt; data.json</code>) and then spend ten turns
+      confused by an empty file. Write to a temporary name and <code>mv</code> it into place.</p>
+    </div>
+
+    <h3 id="dev-null">/dev/null: the cable to nowhere</h3>
+    <p>
+      <span class="term" data-g="dev-null"><code>/dev/null</code></span> is a device file that
+      discards whatever is written to it and is always empty when read.
+      <code>cmd 2&gt; /dev/null</code> therefore means "throw the complaints away":
+    </p>
+<pre class="term"><code><span class="p">$</span> ls /etc/hostname /nope 2&gt; /dev/null
+<span class="o">/etc/hostname</span></code></pre>
+    <p>
+      It is legitimate when you have decided the errors are noise — <code>find /</code> run as a
+      normal user prints a <code>Permission denied</code> for every directory it cannot enter. It is
+      a bad reflex everywhere else, because stderr is where a program explains why it failed.
+    </p>
+
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p><strong>Harnesses keep the two channels separate, and logs often don't keep both.</strong>
+      Inspect's <code>exec()</code> returns an <code>ExecResult</code> with exactly four fields:
+      <code>success</code>, <code>returncode</code>, <code>stdout</code>,
+      <code>stderr</code>.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect AI docs, Sandboxing: exec() and ExecResult">[Inspect]</a>
+      Python's <code>subprocess</code> has the same shape. Here is a six-line model of a
+      <span class="term" data-g="harness">harness</span> running an agent's test command in a box
+      where pytest isn't installed:</p>
+<pre class="term"><code><span class="p">$</span> cat harness.py
+<span class="o">import subprocess
+r = subprocess.run(["bash", "-c", "python3 -m pytest tests/"],
+                   capture_output=True, text=True)
+print("returncode:", r.returncode)
+print("stdout:", repr(r.stdout))
+print("stderr:", repr(r.stderr))</span>
+<span class="p">$</span> python3 harness.py
+<span class="o">returncode: 1
+stdout: <span class="hl">''</span>
+stderr: '/usr/bin/python3: No module named pytest\n'</span></code></pre>
+      <p>A <span class="term" data-g="scorer">scorer</span> or log line that records only
+      <code>r.stdout</code> stores an empty string, and a missing package — an environment defect —
+      is filed as "the model's tests failed". And if the agent itself wrote
+      <code>python3 -m pytest tests/ 2&gt;/dev/null</code>, the same run gives
+      <code>stderr: ''</code> too: the agent has hidden the evidence from itself, from you, and from
+      anyone doing <span class="term" data-g="error-analysis">error analysis</span> later. When you
+      audit a harness, find the line that stores tool output and check that <em>both</em> streams
+      and the return code reach the <span class="term" data-g="transcript">transcript</span>.
+      (Inspect's own <code>bash()</code> tool hands the model stderr followed by stdout, as one
+      string.<a class="cite" href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash" title="Inspect AI reference, inspect_ai.tool: bash()">[Inspect]</a>)</p>
+    </div>
+
+    <h2 id="pipes">Pipes: stdout of one program into stdin of the next</h2>
+    <p>
+      A <span class="term" data-g="pipe">pipe</span>, written <code>|</code>, is a small in-kernel
+      buffer with a write end and a read end. <code>a | b</code> makes the shell create one, plug
+      <code>a</code>'s fd 1 into the write end and <code>b</code>'s fd 0 into the read end, and start
+      both programs at the same time. You can see it in the fd table:
+    </p>
+<pre class="term"><code><span class="p">$</span> ls -l /proc/self/fd 2&gt; /dev/null &lt; /etc/hostname | cat
+<span class="o">total 0
+lr-x------ 1 learner learner 64 Sep 21 16:26 0 -&gt; /etc/hostname
+l-wx------ 1 learner learner 64 Sep 21 16:26 1 -&gt; <span class="hl">pipe:[145335]</span>
+l-wx------ 1 learner learner 64 Sep 21 16:26 2 -&gt; /dev/null
+lr-x------ 1 learner learner 64 Sep 21 16:26 3 -&gt; /proc/486/fd</span></code></pre>
+    <p>
+      Every cable re-plugged at once: stdin from a file, stdout into a pipe, stderr to nowhere. Notice
+      what a pipe does <em>not</em> touch: fd 2. Errors bypass the pipeline and go wherever stderr
+      already pointed.
+    </p>
+<pre class="term"><code><span class="p">$</span> ls /etc/hostname /nope | wc -l
+<span class="o">ls: cannot access '/nope': No such file or directory
+1</span>
+<span class="p">$</span> ls /etc/hostname /nope 2&gt;&amp;1 | wc -l
+<span class="o">2</span></code></pre>
+    <p>
+      In the first command <code>wc</code> counted one line; the error went round it, straight to the
+      screen. In the second, <code>2&gt;&amp;1</code> was applied after the pipe was set up, so
+      "where fd 1 points" was the pipe, and both lines were counted. This is why
+      <code>cmd | grep error</code> so often finds nothing: the errors were never in the pipe.
+      <a href="05-text-fu.html">Page 5</a> builds long pipelines on exactly this plumbing.
+    </p>
+
+    <h3 id="pipefail">A pipeline's exit status is its last command's</h3>
+    <p>
+      <a href="02-shell-and-commands.html#exit-status">Page 2</a> introduced the
+      <span class="term" data-g="exit-status">exit status</span>. A pipeline runs several commands
+      but reports one number, and by default it is the status of the <em>last</em> command
+      only.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Pipelines" title="GNU Bash Reference Manual, 3.2.3 Pipelines">[Bash Manual]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> false | true; echo $?
+<span class="o">0</span>
+<span class="p">$</span> false | true; echo "${PIPESTATUS[*]}"
+<span class="o">1 0</span>
+<span class="p">$</span> set -o pipefail; false | true; echo $?; set +o pipefail
+<span class="o">1</span></code></pre>
+    <p>
+      Bash keeps every stage's status in the array <code>PIPESTATUS</code>. With
+      <code>set -o pipefail</code>, the pipeline instead reports the last (rightmost) command that
+      failed, or zero if none did.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Pipelines" title="GNU Bash Reference Manual, 3.2.3 Pipelines">[Bash Manual]</a>
+      It is off by default. It entered the POSIX standard only in the 2024 edition, and
+      <code>/bin/sh</code> on Ubuntu 24.04 (which is <code>dash</code>, not bash) still rejects it
+      with <code>Illegal option -o pipefail</code> — so a script that needs it should start
+      <code>#!/bin/bash</code>.<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#set" title="POSIX.1-2024, XCU 2.15 set: -o pipefail added in Issue 8">[POSIX]</a>
+    </p>
+    <p>
+      The everyday way this goes wrong involves <code>tee</code>, which copies its stdin both to
+      stdout and to a file<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html" title="GNU Coreutils manual, 17.1 tee">[Coreutils]</a>
+      — the natural way to watch a test run and keep a log:
+    </p>
+<pre class="term"><code><span class="p">$</span> python3 -m pytest tests/ | tee test.log; echo "exit=$?"
+<span class="o">/usr/bin/python3: No module named pytest
+exit=<span class="hl">0</span></span>
+<span class="p">$</span> cat test.log
+<span class="p">$</span> set -o pipefail; python3 -m pytest tests/ 2&gt;&amp;1 | tee test.log; echo "exit=$?"
+<span class="o">/usr/bin/python3: No module named pytest
+exit=<span class="hl">1</span></span></code></pre>
+    <p>
+      First version: pytest never started, the log file is empty (the error went round the pipe),
+      and the status is 0 because <code>tee</code> was happy. Second version: both streams are in the
+      log and the failure propagates.
+    </p>
+
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p><strong>"Tests passed" with an empty log.</strong> A task's test script that ends in
+      <code>pytest … | tee /logs/test.log</code> without <code>pipefail</code> exits 0 whether the
+      tests pass, fail, or never start. A grader keyed on that exit status then passes every
+      <span class="term" data-g="rollout">rollout</span>. The signature in your results is a pass with
+      no test output — and it is a harness defect, not a model success, so those passes cannot be
+      counted as correct. When you read a benchmark's <code>run-tests.sh</code>
+      (<a href="06-shell-scripting.html">page 6</a> dissects the course's), look for a pipe on the
+      test command and ask what the script's final status really reflects.</p>
+    </div>
+
+    <h2 id="here-docs">Here-documents, here-strings, and $(…)</h2>
+    <p>
+      Three more ways to plug text into a command. A
+      <span class="term" data-g="here-document">here-document</span> feeds the following lines, up to
+      a delimiter word, to the command's stdin. Combined with <code>cat &gt; file</code> it is how
+      setup scripts — and agents, which have no text editor — write files:
+    </p>
+<pre class="term"><code><span class="p">$</span> cat &gt; greet.sh &lt;&lt;EOF
+<span class="p">&gt;</span> echo "home is $HOME"
+<span class="p">&gt;</span> EOF
+<span class="p">$</span> cat greet.sh
+<span class="o">echo "home is <span class="hl">/home/learner</span>"</span>
+<span class="p">$</span> cat &gt; greet.sh &lt;&lt;'EOF'
+<span class="p">&gt;</span> echo "home is $HOME"
+<span class="p">&gt;</span> EOF
+<span class="p">$</span> cat greet.sh
+<span class="o">echo "home is <span class="hl">$HOME</span>"</span></code></pre>
+    <p>
+      The difference is one pair of quotes. With a bare delimiter the shell expands
+      <code>$variables</code> and <code>$(commands)</code> inside the body <em>as it writes</em>; with
+      a quoted delimiter the body is literal.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Redirections" title="GNU Bash Reference Manual, 3.6.6 Here Documents">[Bash Manual]</a>
+      A model that writes a Python or shell file through an unquoted <code>&lt;&lt;EOF</code> gets
+      every <code>$</code> silently rewritten, and the file on disk is not the file in the transcript.
+      <a href="27-reading-terminal-transcripts.html">Page 27</a> treats this as a recurring
+      <span class="term" data-g="failure-mode">failure mode</span>. A <em>here-string</em> is the
+      one-line version: <code>wc -w &lt;&lt;&lt; "three little words"</code> prints <code>3</code>.
+    </p>
+    <p>
+      <span class="term" data-g="command-substitution">Command substitution</span>,
+      <code>$(cmd)</code>, goes the other way: the shell runs <code>cmd</code> with its fd 1 plugged
+      into a pipe, reads everything, and pastes the text into the command line. Only fd 1:
+    </p>
+<pre class="term"><code><span class="p">$</span> echo "today is $(date +%F), kernel $(uname -r)"
+<span class="o">today is 2026-09-21, kernel 6.10.14-linuxkit</span>
+<span class="p">$</span> out=$(ls /nope); echo "captured: [$out]"
+<span class="o">ls: cannot access '/nope': No such file or directory
+captured: []</span>
+<span class="p">$</span> out=$(ls /nope 2&gt;&amp;1); echo "captured: [$out]"
+<span class="o">captured: [ls: cannot access '/nope': No such file or directory]</span></code></pre>
+
+    <h2 id="buffering">Two caveats about what arrives, and in what order</h2>
+    <h3 id="ordering">Captured output can be reordered</h3>
+    <p>
+      Programs usually collect output in a memory buffer and write it in batches. The C library's
+      rule: stdout is fully buffered whenever it is <em>not</em> a terminal, while stderr is never
+      fully buffered.<a class="cite" href="https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/unistd.h.html" title="POSIX.1-2024, XSH stdin/stdout/stderr: buffering at start-up">[POSIX]</a>
+      Python behaves the same way. So the moment output is captured — which is always, under a
+      harness — the two streams stop being in time order:
+    </p>
+<pre class="term"><code><span class="p">$</span> cat chatty.py
+<span class="o">import sys
+print("out: collected 3 tests")
+print("err: warning, slow disk", file=sys.stderr)
+print("out: 3 passed")</span>
+<span class="p">$</span> python3 chatty.py &gt; run.log 2&gt;&amp;1; cat run.log
+<span class="o"><span class="hl">err: warning, slow disk</span>
+out: collected 3 tests
+out: 3 passed</span>
+<span class="p">$</span> python3 -u chatty.py &gt; run.log 2&gt;&amp;1; cat run.log
+<span class="o">out: collected 3 tests
+err: warning, slow disk
+out: 3 passed</span></code></pre>
+    <p>
+      The warning was printed second and logged first. <code>python3 -u</code> (or
+      <code>PYTHONUNBUFFERED=1</code> in the environment — same result when we ran it) turns the
+      buffering off. GNU's <code>stdbuf -oL</code> adjusts C-library buffering for programs that use
+      it; on Python it changed nothing in our run. The consequence for reading transcripts: a
+      traceback appearing <em>before</em> the line that caused it is an artefact of capture, not a
+      clue. And when a process is killed, whatever sat unflushed in its stdout buffer is gone —
+      "the last line of output" understates how far the program got.
+    </p>
+
+    <h3 id="output-limits">Harnesses cap output — and may cut the front</h3>
+    <p>
+      Inspect limits the output of one <code>exec()</code> to 10 MiB. Past that, its built-in
+      sandbox providers do not raise an error: they keep only the <em>trailing</em> part and return
+      a normal, successful-looking
+      result.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect AI docs, Sandboxing: Sandbox Limits">[Inspect]</a>
+      Ten mebibytes is less than it sounds:
+    </p>
+<pre class="term"><code><span class="p">$</span> seq 1 2000000 | wc -c
+<span class="o">14888896</span>
+<span class="p">$</span> seq 1 2000000 | tail -n 2
+<span class="o">1999999
+2000000</span></code></pre>
+    <p>
+      A scorer that runs a command and parses JSON from its stdout can therefore receive a document
+      with its head missing and no exception to say so. The docs' own advice is to have the command
+      write to a file and fetch that with <code>read_file()</code>, which <em>does</em> raise when
+      its limit is exceeded.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect AI docs, Sandboxing: Sandbox Limits">[Inspect]</a>
+      For an agent the same limit is a skill test: a model that ends noisy commands in
+      <code>| tail -n 50</code> or <code>| head</code> keeps its context window and its evidence; one
+      that <code>cat</code>s a build log loses both.
+    </p>
+    <p>
+      <code>head</code> raises a last question: what happens to the program on the left when the
+      reader on the right stops reading?
+    </p>
+<pre class="term"><code><span class="p">$</span> yes | head -n 2; echo "${PIPESTATUS[*]}"
+<span class="o">y
+y
+141 0</span></code></pre>
+    <p>
+      <code>yes</code> prints <code>y</code> forever. When <code>head</code> exits, the read end of the
+      pipe closes, and the kernel sends the writer a
+      <span class="term" data-g="signal">signal</span>, SIGPIPE, whose default action is to terminate
+      it.<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7), Linux man-pages: SIGPIPE, default action Term; mechanism in pipe(7)">[signal(7)]</a>
+      141 is 128 + 13, SIGPIPE's number. It is how pipelines shut down cleanly, and it is a preview
+      of <a href="10-signals-exit-codes.html">page 10</a>, where every exit code above 128 gets
+      decoded this way. It is also a reason <code>pipefail</code> needs care: under it,
+      <code>yes | head</code> "fails".
+    </p>
+
+    <h2 id="symptoms">Symptom → mechanism</h2>
+    <table>
+      <tr><th>What you see in a log or transcript</th><th>Mechanism</th><th>Whose defect</th></tr>
+      <tr><td>Non-zero return code, empty output</td><td>The message went to fd 2 and only fd 1 was recorded — or the command discarded it with <code>2&gt;/dev/null</code></td><td>Harness logging, or the agent's own habit</td></tr>
+      <tr><td>Exit 0 and "passed", empty test log</td><td><code>test-cmd | tee</code> without <code>pipefail</code></td><td>Task's test script</td></tr>
+      <tr><td>Error text appears before the line that caused it</td><td>stdout buffered, stderr not</td><td>Nobody's; don't reason from the order</td></tr>
+      <tr><td>Scorer fails to parse output that "looks fine" by hand</td><td>Output over the harness limit, front cut off</td><td>Scorer design: read a file instead</td></tr>
+      <tr><td>A file the agent wrote is missing every <code>$name</code></td><td>Unquoted here-document delimiter</td><td>Model's shell fluency</td></tr>
+      <tr><td>A data file is suddenly 0 bytes</td><td><code>cmd file &gt; file</code></td><td>Model's shell fluency</td></tr>
+    </table>
+    <p>
+      The first two rows are failures of the <em>run</em>, not observations about the model. Record
+      them as harness or environment defects, keep them in the count of scheduled rollouts, and
+      report them beside the pass rate: <code>correct / scheduled</code> and
+      <code>correct / completed</code> are different quantities, and a rollout whose evidence was
+      thrown away was never validly completed.
+      <a href="27-reading-terminal-transcripts.html">Page 27</a> turns this into a coding scheme.
+    </p>
+    <p>
+      <strong>Depth triage.</strong> Learn to use: the six operators in the table above,
+      <code>|</code>, <code>pipefail</code> and <code>PIPESTATUS</code>, quoted here-documents,
+      <code>$(…)</code>. Recognise when you meet them: <code>exec 3&gt;file</code> and other
+      descriptors above 2, process substitution <code>&lt;(cmd)</code>, named pipes. Leave alone:
+      anything that needs those in a script longer than thirty lines — that is Python's job
+      (<a href="06-shell-scripting.html">page 6</a>).
+    </p>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A colleague's new runner shows model B at 71% on a terminal benchmark, up from 58% under the
+      old runner. The diff is small: the agent's tool now runs each command as
+      <code>bash -c "$cmd" 2&gt;&amp;1 | tail -c 4000</code> "so the model sees errors and we save
+      tokens". What do you ask in review before anyone quotes the 71%?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Observed:</strong> one change to the tool wrapper; a 13-point rise.
+      <strong>Hypotheses:</strong> (a) the model genuinely does better because it now sees stderr —
+      under the old runner it may have been shown stdout only and was flying blind; (b) the wrapper
+      changed what the <em>harness</em> sees: the pipeline's status is now <code>tail</code>'s, so
+      every tool call "succeeds", and anything keyed on return codes — including a grader that runs
+      the test command through the same wrapper — has started passing failures; (c) both.</p>
+      <p><strong>Discriminating evidence:</strong> where does the pass/fail decision read its exit
+      status — through this wrapper or through a separate path? Re-score a sample of new passes with
+      the grader invoked directly. Count tool calls with non-zero return code before and after: if
+      the count fell to zero, (b) is proven for the tool path. Check for <code>pipefail</code>, or a
+      wrapper that captures <code>${PIPESTATUS[0]}</code>. Then compare old and new transcripts of
+      the same task to see whether the model's behaviour changed after error text appeared.</p>
+      <p><strong>Bearing on the score:</strong> if grading goes through the wrapper, 71% is not a
+      measurement. If only the agent's view changed, 71% may be the better number and 58% was
+      depressed by a harness defect — which is worth saying in the report, because it changes what
+      the old results mean. Note also that merging the streams before <code>tail -c</code> truncates
+      by bytes from the front: long outputs lose their first lines, where compilers put the first,
+      most useful error.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong>, as <code>learner</code> (<code>su - learner</code>), with
+      <code>python3</code> installed (<code>apt-get install -y python3</code> as root). Do not install
+      pytest: its absence is the point.</p>
+      <ol>
+        <li>
+          <p>Run <code>ls -l /proc/self/fd</code>. Then run it as
+          <code>ls -l /proc/self/fd 2&gt; err.txt | cat</code>. Before pressing Enter, write down
+          where 1 and 2 will point.</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> ls -l /proc/self/fd 2&gt; err.txt | cat
+<span class="o">total 0
+lrwx------ 1 learner learner 64 Sep 21 16:29 0 -&gt; /dev/pts/0
+l-wx------ 1 learner learner 64 Sep 21 16:29 1 -&gt; pipe:[193889]
+l-wx------ 1 learner learner 64 Sep 21 16:29 2 -&gt; /home/learner/err.txt
+lr-x------ 1 learner learner 64 Sep 21 16:29 3 -&gt; /proc/553/fd</span></code></pre>
+          <p>fd 1 is the pipe to <code>cat</code>; fd 2 is the file. The pipe number will differ on
+          your machine. (If you run this through <code>docker exec</code> without <code>-it</code>,
+          fd 0 shows <code>/dev/null</code> or a pipe instead of a terminal — which is what an
+          agent's commands see.)</p>
+          </details>
+        </li>
+        <li>
+          <p>Predict the number printed by
+          <code>ls /etc/hostname /nope 2&gt;&amp;1 &gt;/dev/null | wc -l</code>, by walking the
+          cables left to right. Then run it.</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> ls /etc/hostname /nope 2&gt;&amp;1 &gt;/dev/null | wc -l
+<span class="o">1</span></code></pre>
+          <p>The pipe is set up first, so fd 1 starts at the pipe. <code>2&gt;&amp;1</code> points
+          fd 2 at the pipe; then <code>&gt;/dev/null</code> moves fd 1 away. Only the error line
+          reaches <code>wc</code>. This is the idiom for "pipe the errors, drop the output".</p>
+          </details>
+        </li>
+        <li>
+          <p>Predict both numbers, then run:
+          <code>ls /nope | tee l.txt; echo "${PIPESTATUS[*]}"</code>. What would
+          <code>echo $?</code> have printed in place of the second command?</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> ls /nope | tee l.txt; echo "${PIPESTATUS[*]}"
+<span class="o">ls: cannot access '/nope': No such file or directory
+2 0</span></code></pre>
+          <p><code>ls</code> failed with 2, <code>tee</code> succeeded with 0, and <code>$?</code>
+          would have been 0 — the last command's. <code>l.txt</code> is empty: the error never
+          entered the pipe.</p>
+          </details>
+        </li>
+        <li>
+          <p>Write a file <code>greet.sh</code> containing the literal text
+          <code>echo "home is $HOME"</code> using <code>cat</code> and a here-document. Check with
+          <code>cat greet.sh</code> that the <code>$HOME</code> survived.</p>
+          <details class="solution"><summary>Solution</summary>
+          <p>Quote the delimiter: <code>cat &gt; greet.sh &lt;&lt;'EOF'</code>, then the line, then
+          <code>EOF</code> on its own line. With a bare <code>EOF</code> the file contains
+          <code>echo "home is /home/learner"</code> instead (both shown in the
+          <a href="#here-docs">here-documents section</a>).</p>
+          </details>
+        </li>
+        <li>
+          <p><strong>Eval task.</strong> A benchmark reports every rollout of one task as passed,
+          with empty test logs. Its test script is below. Create it, run it, and confirm it exits 0
+          although no test ran. Name the two separate mechanisms that hide the failure, then fix the
+          script so the log holds the error and the exit status is the tests' status.</p>
+<pre><code>#!/bin/bash
+python3 -m pytest tests/ 2&gt;/dev/null | tee /tmp/test.log
+echo "tests finished"</code></pre>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> chmod +x run-tests.sh; ./run-tests.sh; echo "exit=$?"
+<span class="o">tests finished
+exit=0</span></code></pre>
+          <p>Mechanism one: <code>2&gt;/dev/null</code> discards the only message
+          (<code>No module named pytest</code>). Mechanism two: the script's status is that of its
+          last command, <code>echo</code> — and even without the <code>echo</code> it would be
+          <code>tee</code>'s, not pytest's. The fix (shellcheck-clean):</p>
+<pre><code>#!/bin/bash
+set -o pipefail
+python3 -m pytest tests/ 2&gt;&amp;1 | tee /tmp/test.log
+status=$?
+echo "tests finished with status $status"
+exit "$status"</code></pre>
+<pre class="term"><code><span class="p">$</span> ./run-tests-fixed.sh; echo "exit=$?"
+<span class="o">/usr/bin/python3: No module named pytest
+tests finished with status 1
+exit=1</span></code></pre>
+          <p>For the write-up: those "passes" were never measurements of the model. They are
+          environment defects (pytest missing from the image) masked by a test-script defect, and
+          the task's results should be withdrawn, not averaged in.</p>
+          </details>
+        </li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Chet Ramey and Brian Fox, <em>GNU Bash Reference Manual</em> (Edition 5.3), §3.6 Redirections and §3.2.3 Pipelines. <a href="https://www.gnu.org/software/bash/manual/bash.html#Redirections">gnu.org/software/bash/manual/bash.html</a>. Ubuntu 24.04 runs bash 5.2.21; every behaviour cited was also executed there.</li>
+        <li>The Open Group, <em>Base Specifications Issue 8 (IEEE Std 1003.1-2024)</em>: <code>&lt;unistd.h&gt;</code> (descriptor numbers), standard-stream buffering, and <code>set -o pipefail</code>. <a href="https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/unistd.h.html">pubs.opengroup.org/…/unistd.h.html</a>, <a href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#set">…/V3_chap02.html#set</a></li>
+        <li>Free Software Foundation, <em>GNU Coreutils manual</em>, §17.1 tee. <a href="https://www.gnu.org/software/coreutils/manual/coreutils.html">gnu.org/software/coreutils/manual/coreutils.html</a></li>
+        <li>UK AI Security Institute, <em>Inspect AI documentation</em>: Sandboxing (exec, ExecResult, sandbox limits) and the <code>inspect_ai.tool</code> reference (<code>bash()</code>). <a href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits">inspect.aisi.org.uk/sandboxing.html</a>, <a href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash">inspect.aisi.org.uk/reference/inspect_ai.tool.html</a></li>
+        <li>Linux man-pages project, signal(7) and pipe(7) (SIGPIPE). <a href="https://man7.org/linux/man-pages/man7/signal.7.html">man7.org/…/signal.7.html</a>, <a href="https://man7.org/linux/man-pages/man7/pipe.7.html">man7.org/…/pipe.7.html</a></li>
+        <li>All terminal output on this page was produced in an <code>ubuntu:24.04</code> container as a non-root user; the record is in <code>research/verify/04-streams-pipes-redirection.txt</code>.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

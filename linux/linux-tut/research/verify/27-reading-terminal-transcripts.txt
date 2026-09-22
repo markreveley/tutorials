@@ -1,0 +1,318 @@
++ docker run --rm ubuntu:24.04 bash -c 'rg --version; echo "exit=$?"'
+bash: line 1: rg: command not found
+exit=127
++ docker run --rm ubuntu:24.04 bash -c 'ps aux; echo "exit=$?"'
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1 15.3  0.0   4032  2848 ?        Ss   23:10   0:00 bash -c ps aux; echo "exit=$?"
+root         7 75.0  0.0   7628  3456 ?        R    23:10   0:00 ps aux
+exit=0
++ docker run --rm -u 1001 lt-27-tools bash -c 'printf "#!/bin/sh\necho hi\n" > /tmp/run.sh; /tmp/run.sh; echo "exit=$?"; cat /etc/shadow; echo "exit=$?"'
+bash: line 1: /tmp/run.sh: Permission denied
+exit=126
+cat: /etc/shadow: Permission denied
+exit=1
++ docker run --rm -u 1001 lt-27-tools bash -c 'mkdir /tmp/d && touch /tmp/d/f && chattr +i /tmp/d/f 2>&1; echo "exit=$?"; kill -9 1; echo "exit=$?"; chown root /tmp/d/f; echo "exit=$?"'
+chattr: Operation not permitted while setting flags on /tmp/d/f
+exit=1
+exit=0
+chown: changing ownership of '/tmp/d/f': Operation not permitted
+exit=1
++ docker run --rm lt-27-tools bash -c 'mount -t tmpfs none /mnt; echo "exit=$?"; date -s "2020-01-01"; echo "exit=$?"'
+mount: /mnt: permission denied.
+       dmesg(1) may have more information after failed mount system call.
+exit=32
+date: cannot set date: Operation not permitted
+Wed Jan  1 00:00:00 UTC 2020
+exit=1
++ docker run --rm ubuntu:24.04 bash -c 'echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.bashrc; mkdir -p ~/.local/bin; printf "#!/bin/sh\necho mytool ok\n" > ~/.local/bin/mytool; chmod +x ~/.local/bin/mytool; bash -c mytool; echo "exit=$?"; bash -lc mytool; echo "exit=$?"; bash -ic mytool 2>/dev/null; echo "exit=$?"'
+bash: line 1: mytool: command not found
+exit=127
+bash: line 1: mytool: command not found
+exit=127
+mytool ok
+exit=0
++ docker run --rm alpine:3.20 sh -c 'bash -c true; echo "exit=$?"'
+sh: exit=127
+bash: not found
++ docker run --rm ubuntu:24.04 bash -c 'echo "int main(){return 0;}" >/dev/null; cp /bin/true /tmp/t'
+(eval):7: command not found: timeout
++ docker run --rm --network none ubuntu:24.04 bash -c 'apt-get update 2>&1 | tail -3; echo "update exit=${PIPESTATUS[0]}"; apt-get install -y curl; echo "install exit=$?"'
+W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-backports/InRelease  Temporary failure resolving 'ports.ubuntu.com'
+W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-security/InRelease  Temporary failure resolving 'ports.ubuntu.com'
+W: Some index files failed to download. They have been ignored, or old ones used instead.
+update exit=0
+Reading package lists...
+Building dependency tree...
+Reading state information...
+E: Unable to locate package curl
+install exit=100
++ docker run --rm ubuntu:24.04 bash -c 'apt-get update -qq && apt-get install -y -qq --no-install-recommends curl >/dev/null 2>&1; curl -sS https://example.com -o /dev/null; echo "exit=$?"'
+curl: (77) error setting certificate file: /etc/ssl/certs/ca-certificates.crt
+exit=77
++ docker run --rm ubuntu:24.04 bash -c 'printf "run 12\nrun d\n" | grep -E "run \d+"; echo "exit=$?"; printf "run 12\nrun d\n" | grep -P "run \d+"'
+run d
+exit=0
+run 12
++ docker run --rm -v /private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/p27/bin:/b alpine:3.20 sh -c '/b/hello; echo "exit=$?"; ls -l /b/hello'
+sh: /b/hello: not found
+exit=127
+-rwxr-xr-x    1 root     root         67944 Sep 21 23:12 /b/hello
++ docker run -d --name lt-27-box lt-27-tools sleep 600
+5a22a0222d8971840de391a6d82961c7749644e5db2c0bb4fb32c86af0bcc85e
++ docker exec lt-27-box bash -c 'echo "from exec"; echo "err from exec" >&2'
+err from exec
+from exec
++ docker logs lt-27-box
+++ docker logs lt-27-box
+++ wc -l
++ echo 'logs lines=       0'
+logs lines=       0
++ docker run -d --name lt-27-ro --read-only lt-27-tools sleep 600
+63143277c173ed8675b81f507d24c4c7d7bc0c577dbe7b52370da9e02c65569e
++ echo hi
++ docker cp note.txt lt-27-ro:/root/note.txt
+Error response from daemon: container rootfs is marked read-only
++ echo 'cp exit=1'
+cp exit=1
++ docker exec lt-27-ro bash -c 'touch /root/x; echo "exit=$?"'
+touch: cannot touch '/root/x': Read-only file system
+exit=1
++ docker exec lt-27-box bash -c 'cd /tmp && export FOO=1 && python3 -m venv /tmp/v && . /tmp/v/bin/activate && pwd && echo "FOO=$FOO" && which python3'
+The virtual environment was not created successfully because ensurepip is not
+available.  On Debian/Ubuntu systems, you need to install the python3-venv
+package using the following command.
+
+    apt install python3.12-venv
+
+You may need to use sudo with that command.  After installing the python3-venv
+package, recreate your virtual environment.
+
+Failing command: /tmp/v/bin/python3
+
++ docker exec lt-27-box bash -c 'pwd; echo "FOO=${FOO:-unset}"; which python3'
+/
+FOO=unset
+/usr/bin/python3
++ docker exec lt-27-box bash -c 'pip install requests 2>&1 | head -3; echo "exit=${PIPESTATUS[0]}"'
+error: externally-managed-environment
+
+× This environment is externally managed
+exit=1
++ docker exec lt-27-box bash -c 'curl -sS http://no-such-host.invalid; echo "exit=$?"; curl -sS http://127.0.0.1:9; echo "exit=$?"; curl -sS -m 3 http://10.255.255.1; echo "exit=$?"'
+curl: (6) Could not resolve host: no-such-host.invalid
+exit=6
+curl: (7) Failed to connect to 127.0.0.1 port 9 after 0 ms: Couldn't connect to server
+exit=7
+curl: (28) Connection timed out after 3002 milliseconds
+exit=28
++ docker exec lt-27-box bash -c 'python3 -m http.server 8000 >/dev/null 2>&1 & sleep 1; curl -s -o /dev/null -w "%{http_code}\n" localhost:8000'
+200
++ docker exec lt-27-box bash -c 'curl -s -o /dev/null -w "%{http_code}\n" localhost:8000; echo "exit=$?"; ps -e -o pid,args | grep [h]ttp'
+200
+exit=0
+   51 python3 -m http.server 8000
+   54 bash -c curl -s -o /dev/null -w "%{http_code}\n" localhost:8000; echo "exit=$?"; ps -e -o pid,args | grep [h]ttp
++ docker exec lt-27-box bash -c 'cd /tmp && export FOO=1 && pwd && echo "FOO=$FOO"'
+/tmp
+FOO=1
++ docker exec lt-27-box bash -c 'pwd; echo "FOO=${FOO:-unset}"'
+/
+FOO=unset
++ docker exec lt-27-box bash -c 'timeout 3 bash -c "python3 -m http.server 8001 & echo started"; echo "exit=$?"; sleep 1; curl -sS localhost:8001 -o /dev/null; echo "curl exit=$?"'
+started
+exit=0
+127.0.0.1 - - [21/Sep/2026 23:13:26] "GET / HTTP/1.1" 200 -
+curl exit=0
++ docker exec lt-27-box bash -c 'python3 -m http.server 8002 & echo started'
++ sleep 4
+started
++ docker exec lt-27-box bash -c 'ps -e -o pid,ppid,args | grep "[h]ttp.server 8002"'
+   94     1 python3 -m http.server 8002
++ docker exec lt-27-box bash -c 'timeout 3 bash -c "python3 -m http.server 8003 >/dev/null 2>&1 & echo started; sleep 30"; echo "exit=$?"; sleep 1; curl -sS localhost:8003 -o /dev/null; echo "curl exit=$?"'
+started
+exit=124
+curl: (7) Failed to connect to localhost port 8003 after 0 ms: Couldn't connect to server
+curl exit=7
++ script -q /dev/null docker exec -it lt-27-box bash -c 'python3 -m http.server 8004 >/dev/null 2>&1 & echo started'
+^Dstarted
++ sleep 2
++ docker exec lt-27-box bash -c 'curl -sS localhost:8004 -o /dev/null; echo "curl exit=$?"'
+curl: (7) Failed to connect to localhost port 8004 after 2 ms: Couldn't connect to server
+curl exit=7
++ docker exec -u agent -w /home/agent lt-27-box bash -c 'git init -q r && cd r && git config user.email a@b && git config user.name a && for i in $(seq 60); do echo $i >> f; git add f; git commit -qm "c$i"; done; echo made'
+made
++ docker exec -u agent -w /home/agent/r lt-27-box bash -c 'timeout 5 git log --oneline | wc -l; echo "exit=${PIPESTATUS[0]}"'
+60
+exit=0
++ docker exec -u agent -w /home/agent/r lt-27-box bash -c 'script -qec "timeout 5 git log --oneline" /dev/null | tail -c 120 | cat -v; echo; echo "exit=${PIPESTATUS[0]}"'
+
+exit=0
++ docker exec -u agent -w /home/agent/r lt-27-box bash -c 'script -qec "GIT_PAGER=cat timeout 5 git log --oneline" /dev/null | tail -2; echo "exit=${PIPESTATUS[0]}"'
+ca1fca3 c2
+3a442bd c1
+exit=0
++ docker exec -u agent -w /home/agent/r lt-27-box bash -c 'echo x >> f; git add f; timeout 5 git commit; echo "exit=$?"'
+error: Terminal is dumb, but EDITOR unset
+Please supply the message using either -m or -F option.
+exit=1
++ docker exec -u agent -w /home/agent/r lt-27-box bash -c 'EDITOR=cat script -qec "timeout 5 git commit" /dev/null | tail -3; echo "exit=${PIPESTATUS[0]}"'
+#	modified:   f
+#
+Aborting commit due to empty commit message.
+exit=1
++ docker exec -u agent lt-27-box bash -c 'timeout 5 sudo -n true; echo "exit=$?"; timeout 5 sudo true; echo "exit=$?"'
+sudo: a password is required
+exit=1
+sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper
+sudo: a password is required
+exit=1
++ docker exec -u agent -w /tmp lt-27-box bash -c 'touch z; timeout 5 rm -i z; echo "exit=$?"; ls z'
+rm: remove regular empty file 'z'? exit=0
+z
++ docker exec -u agent -w /tmp lt-27-box bash -c 'touch z; script -qec "timeout 5 rm -i z" /dev/null; echo; echo "exit=$?"'
+rm: remove regular empty file 'z'? 
+exit=0
++ docker exec -u agent lt-27-box bash -c 'timeout 8 ssh -o BatchMode=yes git@github.com 2>&1 | tail -2; echo "exit=${PIPESTATUS[0]}"'
+Pseudo-terminal will not be allocated because stdin is not a terminal.
+Host key verification failed.
+exit=255
++ docker exec -u agent lt-27-box bash -c 'script -qec "timeout 8 ssh git@github.com" /dev/null | tail -3; echo; echo "exit=${PIPESTATUS[0]}"'
+
+exit=0
++ sleep 7
++ docker exec -i -u agent -w /home/agent/r lt-27-box bash -c 'script -qec "timeout 5 git log --oneline" /dev/null | tail -c 200 | cat -v; echo; echo "exit=${PIPESTATUS[0]}"'
+
+exit=0
++ sleep 7
++ docker exec -i -u agent -w /tmp lt-27-box bash -c 'touch z; script -qec "timeout 5 rm -i z" /dev/null; echo " exit=$?"'
+rm: remove regular empty file 'z'?  exit=124
++ sleep 10
++ docker exec -i -u agent lt-27-box bash -c 'script -qec "timeout 8 ssh git@github.com" /dev/null | tail -4; echo " exit=${PIPESTATUS[0]}"'
+ exit=124
++ sleep 7
++ docker exec -i -u agent lt-27-box bash -c 'script -qec "timeout 5 sudo true" /dev/null; echo " exit=$?"'
+[sudo] password for agent: 
+[sudo] password for agent: 
++ docker run --rm --tmpfs /work:size=1m ubuntu:24.04 bash -c 'head -c 2M /dev/zero > /work/big; echo "exit=$?"; df -h /work | tail -1'
+exit=1
+head: error writing 'standard output': No space left on device
+tmpfs           1.0M  1.0M     0 100% /work
++ docker exec -i lt-27-box bash
+import re, sys
+words = re.findall(r"[a-z']+", open(sys.argv[1]).read().lower())
+print(f"usage: bash FILE -> {len(words)} words, cost $5, home /root")
+----
+print(f"usage: $0 FILE, home $HOME")
++ docker exec lt-27-box bash -c 'ls /usr; echo ---; ls /usr | head -3'
+bin
+games
+include
+lib
+libexec
+local
+sbin
+share
+src
+---
+bin
+games
+include
++ docker exec lt-27-box bash -c 'date; TZ=America/New_York date; echo "LANG=${LANG:-unset}"; python3 -c "import sys; print(sys.stdout.encoding)"; printf "b\nB\na\nA\n" | sort | tr "\n" " "; echo; printf "b\nB\na\nA\n" | LC_ALL=C.UTF-8 sort | tr "\n" " "; echo'
+Mon Sep 21 23:16:19 UTC 2026
+Mon Sep 21 19:16:19 EDT 2026
+LANG=unset
+utf-8
+A B a b 
+A B a b 
++ docker run --rm ubuntu:24.04 bash -c 'apt-get update -qq; apt-get install -y -qq python3 >/dev/null 2>&1 & sleep 3; apt-get install -y jq; echo "exit=$?"; wait'
+E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 132 (apt-get)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), is another process using it?
+exit=100
++ docker run --rm --memory 64m --memory-swap 64m ubuntu:24.04 bash -c 'python3 -c 1 2>/dev/null; tail /dev/zero; echo "exit=$?"'
+exit=137
+bash: line 1:     8 Killed                  tail /dev/zero
++ docker exec lt-27-box bash -c $'python3 -c "\nimport sys\nprint(\\"FAILED test_counts - AssertionError\\", file=sys.stderr)\nfor i in range(5000): print(f\\"progress line {i}\\")\n" 2>&1 | tail -c 300'
+ress line 4984
+progress line 4985
+progress line 4986
+progress line 4987
+progress line 4988
+progress line 4989
+progress line 4990
+progress line 4991
+progress line 4992
+progress line 4993
+progress line 4994
+progress line 4995
+progress line 4996
+progress line 4997
+progress line 4998
+progress line 4999
+
+Session terminated, killing shell... ...killed.
++ docker run -d --name lt-27-t1 --user agent --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp:size=64m --mount type=volume,dst=/app --network none --memory 512m --cpus 1 --pids-limit 128 --init wordfreq-bench:hardened
+0ccc0e2542b475ef5d3166f8582cc1be866ee6dd88e600aef5c6bfd0dffff404
++ docker exec lt-27-t1 bash -c 'cd /app && pytest'
+bash: line 1: pytest: command not found
++ echo exit=127
+exit=127
++ docker exec lt-27-t1 bash -c 'pip install pytest'
+bash: line 1: pip: command not found
++ echo exit=127
+exit=127
++ docker exec lt-27-t1 bash -c 'cd /app && python3 -m pytest'
+/usr/bin/python3: No module named pytest
++ echo exit=1
+exit=1
++ docker exec lt-27-t1 bash -c 'cd /app && python3 -m unittest discover -s tests 2>&1 | tail -4'
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+OK
++ echo exit=0
+exit=0
++ docker run -d --name lt-27-t2 --user agent --read-only --tmpfs /tmp:size=64m --mount type=volume,dst=/app --network none --pids-limit 3 --init wordfreq-bench:hardened
+96b598d15c735db3591af026f17220d879ec662005695413d6b8299af42cc12f
++ docker exec lt-27-t2 bash -c 'cd /app && python3 -m unittest discover -s tests 2>&1 | tail -3'
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: Resource temporarily unavailable
++ echo exit=254
+exit=254
++ docker exec lt-27-t2 bash -c 'ls /app | wc -l'
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: Resource temporarily unavailable
++ echo exit=254
+exit=254
++ docker run -d --name lt-27-t3 wordfreq-bench:sloppy
+a2fdf7926afcc3e12046764490b528c6f0d72285305d690611710d49c21529c5
++ docker exec lt-27-t3 bash -c 'git log --all --oneline | head -5'
+bb4b24a wordfreq: initial import
+6301071 count words case-insensitively, ignore punctuation (fixes #12)
++ echo exit=0
+exit=0
++ docker exec lt-27-t3 bash -c 'git show upstream-fix:wordfreq.py > wordfreq.py && git status --short'
+ M wordfreq.py
++ echo exit=0
+exit=0
++ docker exec lt-27-t3 bash -c 'python3 -m unittest discover -s tests 2>&1 | tail -3'
+Ran 1 test in 0.001s
+
+OK
++ echo exit=0
+exit=0
+/tmp
+/
+FOO=unset
+run d
+run 12
+rm: remove regular empty file '/tmp/z'? exit=0
+/tmp/z
+update=0
+E: Unable to locate package curl
+install=100

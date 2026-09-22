@@ -1,0 +1,34 @@
+{
+  "id": "linux-journey",
+  "tag": "[Linux Journey]",
+  "citation": {
+    "authors": "Cindy Quach (original author, 2015); maintained by LabEx",
+    "title": "Linux Journey — 'Learn Linux the Linux-fu way, for free.'",
+    "venue": "labex.io/linuxjourney (formerly linuxjourney.com); source at github.com/labex-labs/linuxjourney",
+    "year": "2015– (live Sept 2026)",
+    "url": "https://labex.io/linuxjourney"
+  },
+  "fetched_urls": [
+    "https://linuxjourney.com/ (HTTP 301 -> https://labex.io/linuxjourney)",
+    "https://labex.io/linuxjourney (curl: HTTP 403 Cloudflare JS challenge; content read via WebFetch, which returns a model-summarised rendering)",
+    "GitHub API: repos/labex-labs/linuxjourney; repos/cindyq/linuxjourney (redirects to labex-labs/linuxjourney)"
+  ],
+  "fetched_on": "2026-09-21",
+  "access": "partial",
+  "claims": [
+    {
+      "planned": "Confirm the site is live (Sept 2026), its current URL/ownership (it was reported to have moved under LabEx), and the names of its lesson tracks so pages can point at matching lessons",
+      "verdict": "confirmed",
+      "finding": "Live. linuxjourney.com now 301-redirects to https://labex.io/linuxjourney — link to the LabEx URL. Ownership: maintained by LabEx; GitHub repo labex-labs/linuxjourney ('The official Linux Journey (formerly linuxjourney.com) source repository is maintained by LabEx', ~1.5k stars, last push 2026-09-02); the original cindyq/linuxjourney repo path redirects there (repo transferred). Tracks as listed on the page — GRASSHOPPER: Getting Started, Command Line, Text-Fu, Advanced Text-Fu, User Management, Permissions, Processes, Packages. JOURNEYMAN: Devices, The Filesystem, Boot the System, Kernel, Init, Process Utilization, Logging. NETWORKING NOMAD: Network Sharing, Network Basics, Subnetting, Routing, Network Config, Troubleshooting, DNS. All planned track names are present. Course URL pattern reported: /linuxjourney/courses/<course-name> (e.g. /linuxjourney/courses/getting-started) — not independently verified because raw HTML was blocked; link to the landing page rather than deep links unless an author checks them in a browser. Caveat: page text was obtained through WebFetch's summarising model (bot challenge blocked curl), so treat the quotes as near-verbatim.",
+      "quote": "Linux Journey is maintained by LabEx as a free, open-source, community-driven Linux learning project.",
+      "location": "labex.io/linuxjourney landing page (as rendered by WebFetch); HTTP headers of linuxjourney.com; GitHub repo description",
+      "cite_url": "https://labex.io/linuxjourney"
+    }
+  ],
+  "extra_findings": [
+    "Attribution line on the page: 'Linux Journey was originally created by Cindy Quach in 2015 to help beginners learn Linux.' (via WebFetch rendering)",
+    "Free/no sign-up: 'No cost, no sign-up required. Open to everyone, forever.' and 'Linux Journey remains free to use, just as it has since its creation.' LabEx adds: 'LabEx continues to preserve the original learning philosophy while expanding the platform with practical Linux labs and exercises.' (LabEx's own labs are a commercial product; the Linux Journey lessons themselves are stated to be free.)",
+    "Suggested mapping for 'further practice' pointers: shell pages -> Command Line; text processing -> Text-Fu / Advanced Text-Fu; users & permissions -> User Management, Permissions; processes/signals -> Processes; resources -> Process Utilization; logs -> Logging; mounts/FHS -> The Filesystem, Devices; packages -> Packages; systemd -> Init; networking -> Network Basics, Subnetting, Routing, DNS, Troubleshooting. (Mapping is the verifier's suggestion from track names only; lesson contents were not reviewed.)"
+  ],
+  "teaching_notes": "Pointer only, as planned. Use https://labex.io/linuxjourney (the old domain redirects). Site is behind a Cloudflare bot challenge, so automated link checkers will report 403 — that is not a dead link. Do not cite it as evidence for any technical fact."
+}

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E. Agreement &amp; Classification Metrics · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix E · Math &amp; Stats</p>
+    <h1>Agreement &amp; Classification Metrics</h1>
+    <p class="lede">When you check an LLM judge against human expert labels, you are evaluating a classifier. This appendix builds the full toolkit for that job — confusion matrices, precision/recall, TPR/TNR, Cohen's kappa, and rank correlation — with every number recomputable by hand.</p>
+
+    <h2 id="the-setup">The setup: a judge is a classifier</h2>
+
+    <p>Throughout the course — especially <a href="../pages/06-validating-the-grader.html">Validating the Grader</a> and <a href="../pages/10-aligning-judges.html">Aligning Judges with Human Experts</a> — we validate an <span class="term" data-g="llm-as-judge">LLM-as-judge</span> the same way: collect a set of outputs, have a human expert label each one <em>pass</em> or <em>fail</em> (the truth), have the judge label the same outputs, and compare. The judge is a classifier; the human labels are the answer key. Every metric in this appendix is a different way of summarizing how the two sets of labels line up.</p>
+
+    <p>One convention before we start. In a judge-validation setting, the interesting class is usually <strong>fail</strong> — the bad outputs you built the judge to catch. So we'll treat "fail" as the <em>positive</em> class. This trips people up ("positive" sounds like a good thing), but "positive" just means "the class the detector is hunting for," the same way a positive medical test means the disease was found.</p>
+
+    <h2 id="confusion-matrix">The confusion matrix</h2>
+
+    <p>Cross two binary labels — what the judge said, what the human said — and every output lands in exactly one of four cells. That 2×2 grid is the <span class="term" data-g="confusion-matrix">confusion matrix</span>:</p>
+
+    <ul>
+      <li><strong>True positive (TP):</strong> human says fail, judge says fail. The judge correctly caught a bad output.</li>
+      <li><strong>False negative (FN):</strong> human says fail, judge says pass. A bad output slipped through.</li>
+      <li><strong>False positive (FP):</strong> human says pass, judge says fail. The judge falsely flagged a good output.</li>
+      <li><strong>True negative (TN):</strong> human says pass, judge says pass. Correctly cleared.</li>
+    </ul>
+
+    <div class="card">
+      <p><strong>Running example.</strong> You collect 200 outputs. The human expert labels 80 of them truly bad (fail) and 120 truly good (pass). Your judge catches 64 of the 80 bad ones, and falsely flags 12 of the 120 good ones. Every cell follows:</p>
+      <ul>
+        <li>TP = 64 (bad, caught)</li>
+        <li>FN = 80 − 64 = 16 (bad, missed)</li>
+        <li>FP = 12 (good, falsely flagged)</li>
+        <li>TN = 120 − 12 = 108 (good, cleared)</li>
+      </ul>
+      <table>
+        <thead>
+          <tr><th></th><th>Human: fail (80)</th><th>Human: pass (120)</th><th>Judge total</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Judge: fail</strong></td><td>TP = 64</td><td>FP = 12</td><td>76</td></tr>
+          <tr><td><strong>Judge: pass</strong></td><td>FN = 16</td><td>TN = 108</td><td>124</td></tr>
+          <tr><td><strong>Human total</strong></td><td>80</td><td>120</td><td>200</td></tr>
+        </tbody>
+      </table>
+      <p>Check the margins: rows sum to what the judge said (76 fail, 124 pass), columns to what the human said (80 fail, 120 pass), and everything sums to 200. We'll reuse this exact matrix for the rest of the appendix.</p>
+    </div>
+
+    <div class="keyidea"><span class="label">Key idea</span> Every agreement metric in this appendix is just arithmetic on these four cells. If you can fill in the matrix, you can compute everything else with a pencil.</div>
+
+    <h2 id="accuracy">Accuracy, and why it misleads</h2>
+
+    <p>Accuracy is the fraction of all labels the judge got right:</p>
+
+    <div class="math">accuracy = (TP + TN) / (TP + FP + FN + TN) = (64 + 108) / 200 = 0.86</div>
+
+    <p>In words: the judge agreed with the human on 86% of outputs. Sounds healthy. The problem is that accuracy rewards agreeing with the <em>majority class</em>, and in real systems the classes are rarely balanced.</p>
+
+    <p>Rework the example with a more realistic failure rate. Same 200 outputs, but now only 10% are truly bad: 20 fail, 180 pass. Consider a "judge" that does literally nothing — it stamps <em>pass</em> on everything. Its matrix: TP = 0, FN = 20, FP = 0, TN = 180. Its accuracy:</p>
+
+    <div class="math">accuracy = (0 + 180) / 200 = 0.90</div>
+
+    <p>A do-nothing judge scores <strong>90%</strong> — higher than our real judge's 86% — while catching exactly zero of the failures it exists to catch. Whenever one class dominates, accuracy mostly measures the class balance, not the judge. This is why none of the serious metrics below use accuracy as their headline number.</p>
+
+    <h2 id="precision-recall">Precision and recall</h2>
+
+    <p>The fix is to ask questions about one class at a time. Two questions matter, and they are not the same question:</p>
+
+    <p><span class="term" data-g="precision">Precision</span>: <em>of the outputs the judge flagged as fail, how many really were?</em></p>
+
+    <div class="math">precision = TP / (TP + FP) = 64 / (64 + 12) = 64 / 76 ≈ 0.842</div>
+
+    <p>In words: when this judge cries "fail," it's right about 84% of the time. Low precision means false alarms — engineers chasing flagged outputs that were actually fine.</p>
+
+    <p><span class="term" data-g="recall">Recall</span>: <em>of the outputs that really were failures, how many did the judge catch?</em></p>
+
+    <div class="math">recall = TP / (TP + FN) = 64 / (64 + 16) = 64 / 80 = 0.80</div>
+
+    <p>In words: the judge catches 80% of true failures. Low recall means bad outputs slipping through undetected.</p>
+
+    <p>Notice that both definitions named a class — we asked them of the <em>fail</em> class. You can ask the same two questions of the <em>pass</em> class, and you get different numbers from the same matrix:</p>
+
+    <div class="math">precision<sub>pass</sub> = TN / (TN + FN) = 108 / 124 ≈ 0.871&ensp;&ensp;recall<sub>pass</sub> = TN / (TN + FP) = 108 / 120 = 0.90</div>
+
+    <p>In words: when the judge says "pass" it's right 87% of the time, and it clears 90% of the genuinely good outputs. Whenever someone quotes you a precision or recall, your first question should be: <em>of which class?</em> For a failure-catching judge, the fail-class numbers are usually the ones that matter.</p>
+
+    <h3 id="f1">F1: the harmonic-mean compromise</h3>
+
+    <p>Precision and recall trade off against each other — a stricter judge flags more, raising recall and lowering precision. The <span class="term" data-g="f1-score">F1 score</span> compresses the pair into one number using the harmonic mean:</p>
+
+    <div class="math">F1 = 2 × (precision × recall) / (precision + recall) = 2 × (0.842 × 0.80) / (0.842 + 0.80) ≈ 1.347 / 1.642 ≈ 0.821</div>
+
+    <p>In words: a balanced single-number summary of the fail-class performance. Why harmonic rather than ordinary mean? The harmonic mean punishes imbalance: it is dragged toward the <em>smaller</em> of the two numbers. A judge with precision 1.0 and recall 0.1 has an ordinary average of 0.55 but an F1 of 2 × (1.0 × 0.1) / 1.1 ≈ 0.18. You can't buy a good F1 by maxing one metric and abandoning the other — which is exactly the behavior you want a summary score to forbid.</p>
+
+    <h2 id="tpr-tnr">TPR and TNR: the pair that travels</h2>
+
+    <p>Eval practitioners validating judges often skip past precision/recall and quote a different pair. The <span class="term" data-g="true-positive-rate">true positive rate</span> (TPR, also called sensitivity) is just recall of the fail class; the <span class="term" data-g="true-negative-rate">true negative rate</span> (TNR, also called specificity) is recall of the pass class:</p>
+
+    <div class="math">TPR = TP / (TP + FN) = 64 / 80 = 0.80&ensp;&ensp;TNR = TN / (TN + FP) = 108 / 120 = 0.90</div>
+
+    <p>In words: of truly bad outputs, the judge catches 80%; of truly good outputs, it clears 90%. Look closely at the denominators: each is a <em>column total</em> of the confusion matrix — a count fixed by the human labels, not by the judge. That makes the pair conditional on the truth: "given that an output is bad, how does the judge behave?" and "given that it's good, how does the judge behave?"</p>
+
+    <p>Why does that matter? Because those two conditional behaviors are properties of the <em>judge alone</em>. They don't depend on how many bad outputs happen to be in your sample — the prevalence. Precision does depend on prevalence (its denominator, TP + FP, mixes both columns). So if your production failure rate drifts from 40% to 5%, the judge's TPR and TNR stay put, while its precision can swing wildly. A (TPR, TNR) pair measured on a curated validation set transfers to production; a precision number does not. This is why <a href="../pages/10-aligning-judges.html">the judge-alignment page</a> reports judges as TPR/TNR pairs.</p>
+
+    <div class="pitfall"><span class="label">Pitfall</span>
+    <p><strong>Validating on a balanced set, deploying into an imbalanced world.</strong> You curate a 50/50 validation set (sensible — it gives both classes enough examples to measure). Your judge scores TPR = 0.80, TNR = 0.90, fail-class precision ≈ 0.89 on that set. You ship it as a production <a href="../pages/07-evals-in-the-lifecycle.html">guardrail</a>, where only 2% of outputs actually fail. Per 1,000 outputs: 20 are bad and the judge flags TPR × 20 = 16 of them; 980 are good and it falsely flags (1 − TNR) × 980 = 98 of them. Production precision = 16 / (16 + 98) = 16 / 114 ≈ <strong>0.14</strong>. Same judge, same TPR and TNR — but now 86% of its alarms are false, and your team learns to ignore it. The fix is not a better judge; it's to recompute precision at the prevalence you'll actually face before you ship.</p>
+    </div>
+
+    <h2 id="kappa">Cohen's kappa: correcting for chance</h2>
+
+    <p>Raw percent agreement — accuracy by another name — has a second flaw beyond class imbalance: some agreement happens by dumb luck. Two annotators who each flip a fair coin agree on half of all items (heads–heads a quarter of the time, tails–tails another quarter) despite reading nothing. Quoting "we agree 50%" for two coin-flippers flatters them; the right score is zero. The same applies to a lazy judge that says "pass" 90% of the time in a world where 90% of outputs pass — it racks up agreement without judging anything. This is the central problem of <span class="term" data-g="inter-annotator-agreement">inter-annotator agreement</span>: how much agreement is <em>real</em>, beyond what chance hands out for free?</p>
+
+    <p><span class="term" data-g="cohens-kappa">Cohen's kappa</span> answers by measuring agreement on a scale where chance scores zero:</p>
+
+    <div class="math">κ = (p<sub>o</sub> − p<sub>e</sub>) / (1 − p<sub>e</sub>)</div>
+
+    <p>In words: of the agreement headroom above chance (1 − p<sub>e</sub>), what fraction did the raters actually achieve? Here p<sub>o</sub> is the observed agreement rate and p<sub>e</sub> is the agreement you'd expect if both raters labeled independently at their own observed rates.</p>
+
+    <div class="card">
+      <p><strong>Worked example</strong> — our 200-output matrix again. Observed agreement is the diagonal:</p>
+      <div class="math">p<sub>o</sub> = (64 + 108) / 200 = 0.86</div>
+      <p>Expected agreement comes from the marginals. The judge said "fail" on 76/200 = 0.38 of outputs; the human on 80/200 = 0.40. If the two were independent, they'd agree on "fail" with probability 0.38 × 0.40 = 0.152. The judge said "pass" on 124/200 = 0.62; the human on 120/200 = 0.60; chance agreement on "pass" is 0.62 × 0.60 = 0.372. So:</p>
+      <div class="math">p<sub>e</sub> = 0.38 × 0.40 + 0.62 × 0.60 = 0.152 + 0.372 = 0.524</div>
+      <div class="math">κ = (0.86 − 0.524) / (1 − 0.524) = 0.336 / 0.476 ≈ 0.71</div>
+      <p>In words: chance alone would produce 52.4% agreement here, so the raw 86% is less impressive than it looks — the judge achieved about 71% of the possible above-chance agreement.</p>
+    </div>
+
+    <p>Rough interpretation bands you'll see quoted: below 0.20 slight, 0.21–0.40 fair, 0.41–0.60 moderate, 0.61–0.80 substantial, above 0.80 near-perfect agreement. By that convention our judge's κ ≈ 0.71 is "substantial."</p>
+
+    <div class="warn"><span class="label">Caveat</span> Those bands are conventions, not laws — labels someone once attached to ranges of a number, later repeated until they hardened into folklore. Whether κ = 0.71 is good enough depends entirely on the stakes: it might be fine for triaging which traces a human reviews first, and nowhere near enough for a judge that auto-blocks customer-facing responses. Decide the threshold from consequences, not from a table.</div>
+
+    <h2 id="correlation">Correlation for graded scores</h2>
+
+    <p>Everything above assumed binary labels. Some judges instead emit graded scores — a 1–5 rubric rating, say — and you want to know whether the judge's scores move with the human's. The classic measure is Pearson correlation, which captures <em>linear</em> association: it is near +1 when a scatterplot of (human score, judge score) hugs a straight line. Pearson is the right tool when the numbers behave like real measurements — when the gap between 2 and 3 means the same amount as the gap between 4 and 5.</p>
+
+    <p>Likert-ish judge scores rarely behave that way: the scale is ordinal (5 beats 4 beats 3) but the spacing is arbitrary, judges bunch scores at the top of the scale, and a single weird outlier can drag Pearson around. <span class="term" data-g="spearman-correlation">Spearman correlation</span> sidesteps all of this: convert each rater's scores to ranks (their best-rated output gets rank 1, and so on), then compute Pearson on the ranks. It asks a weaker, more robust question — <em>do the two raters put the outputs in roughly the same order?</em> — which is usually the question you actually care about with rubric scores. If your judge outputs grades rather than pass/fail, quote Spearman against the human's grades; if it outputs labels, use the machinery from the rest of this appendix. (The course's advice to <a href="../pages/05-from-failures-to-evals.html">prefer binary judgments</a> exists partly so you can stay in confusion-matrix land.)</p>
+
+    <h2 id="which-metric">Which metric when</h2>
+
+    <p>A field guide, matching the situations that come up in judge validation:</p>
+
+    <table>
+      <thead>
+        <tr><th>Situation</th><th>Use</th><th>Why</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Binary judge vs. human expert labels</td>
+          <td>TPR + TNR, plus κ</td>
+          <td>TPR/TNR is prevalence-immune, so it transfers when the failure rate changes; κ confirms agreement beats chance.</td>
+        </tr>
+        <tr>
+          <td>Comparing two human annotators</td>
+          <td>Cohen's kappa</td>
+          <td>Raw percent agreement flatters; κ subtracts the chance agreement implied by each annotator's label rates.</td>
+        </tr>
+        <tr>
+          <td>Judge outputs graded scores (1–5, rubric points)</td>
+          <td>Spearman correlation</td>
+          <td>Ordinal scales have arbitrary spacing; rank correlation only assumes the ordering is meaningful.</td>
+        </tr>
+        <tr>
+          <td>Imbalanced guardrail (rare failure class)</td>
+          <td>Precision + recall of the rare class</td>
+          <td>Accuracy is dominated by the majority class; you need to know both the false-alarm rate and the miss rate at deployment prevalence.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p>Whichever you quote, report the confusion matrix (or score pairs) alongside it. Any single number throws information away; the matrix lets a reader recompute whatever summary their situation demands.</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

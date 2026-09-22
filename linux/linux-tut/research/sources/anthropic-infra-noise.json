@@ -1,0 +1,44 @@
+{
+  "id": "anthropic-infra-noise",
+  "tag": "[Anthropic: Infra Noise]",
+  "citation": {
+    "authors": "Gian Segato (Anthropic), with thanks to Nicholas Carlini, Jeremy Hadfield, Mike Merrill, Alex Shaw",
+    "title": "Quantifying infrastructure noise in agentic coding evals",
+    "venue": "anthropic.com/engineering",
+    "year": "2026 (Published Feb 05, 2026)",
+    "url": "https://www.anthropic.com/engineering/infrastructure-noise"
+  },
+  "fetched_urls": [
+    "https://www.anthropic.com/engineering/infrastructure-noise"
+  ],
+  "fetched_on": "2026-09-21",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "(Added by R7 — not in sources.json) Anthropic's statements on infrastructure noise: resource configuration alone moves agentic benchmark scores",
+      "verdict": "confirmed",
+      "finding": "On Terminal-Bench 2.0 (run on a Google Kubernetes Engine cluster, same Claude model, harness and tasks), six resource configurations from strict per-task specs (1x, spec used as both floor and hard ceiling) to uncapped: infra error rate fell monotonically from 5.8% (1x) to 2.1% (3x; p < 0.001) to 0.5% (uncapped); success 1x->3x changed within noise (p = 0.40); from 3x to uncapped infra errors fell a further 1.6 points while success rose almost 4 points; total uncapped-vs-1x lift +6 percentage points (p < 0.01). Before calibration 'as many as 6% of tasks were failing because of pod errors'. SWE-bench crossover: RAM up to 5x baseline over 227 problems x 10 samples gave +1.54 points at 5x vs 1x. Conclusion: 'leaderboard differences below 3 percentage points deserve skepticism until the eval configuration is documented and matched.'",
+      "quote": "In internal experiments, the gap between the most- and least-resourced setups on Terminal-Bench 2.0 was 6 percentage points (p < 0.01).",
+      "location": "Opening paragraph; 'How we got here'; 'How this affects measurement'; 'Why we care'",
+      "cite_url": "https://www.anthropic.com/engineering/infrastructure-noise"
+    },
+    {
+      "planned": "(Added by R7) Mechanism: how container runtimes enforce resources, and why limit == request causes spurious OOM kills",
+      "verdict": "confirmed",
+      "finding": "Container runtimes have two parameters: a guaranteed allocation (reserved up front) and a hard limit at which the container is killed. Setting both to the task's spec leaves 'zero headroom for transient spikes: a momentary memory fluctuation can OOM-kill a container that would otherwise have succeeded.' Terminal-Bench's own leaderboard used a provider that allows temporary overallocation. Recommendation: specify BOTH parameters per task, with the band calibrated so scores at floor and ceiling are within noise (for TB 2.0, a 3x ceiling).",
+      "quote": "Container runtimes enforce resources via two separate parameters: a guaranteed allocation—the resources reserved up front—and a hard limit at which the container is killed. When these are set to the same value, there's zero headroom for transient spikes: a momentary memory fluctuation can OOM-kill a container that would otherwise have succeeded.",
+      "location": "'How we got here', second paragraph; 'What we recommend'",
+      "cite_url": "https://www.anthropic.com/engineering/infrastructure-noise"
+    }
+  ],
+  "extra_findings": [
+    "Why the runtime matters for agentic evals: 'The runtime is no longer a passive container, but an integral component of the problem-solving process. Two agents with different resource budgets and time limits aren't taking the same test.' (intro)",
+    "Limits change WHAT is measured, not just noise: 'Tight limits inadvertently reward very efficient strategies, while generous limits are more forgiving and reward agents that can better exploit all available resources.' Example: on bn-fit-modify 'some models' first move is to install the standard Python data science stack: pandas, networkx, scikit-learn... Under tight ones, the pod runs out of memory during installation, before the agent writes a single line of solution code.' Tasks named as memory-sensitive: rstan-to-pystan, compile-compcert. ('How this affects measurement')",
+    "Most 1x crashes were not lost solves: 'Most of the tasks that were crashing at 1x would have failed regardless... The agent explores, hits a resource wall, and gets preempted, but it was never on a path to a correct solution.'",
+    "Other confounders: 'every element of the evaluation setup can influence the final score, from the cluster health to the hardware specs, from the concurrency level to even egress bandwidth'; 'pass rates fluctuate with time of day, likely because API latency varies with traffic patterns and incidents' (anecdotal, 'not formally quantified'). ('Other sources of variance')",
+    "'The observed spread across the moderate range of resource configurations in Terminal-Bench is just below 2 percentage points. Naive binomial confidence intervals already span 1-2 percentage points; the infrastructure confounders we document here stack on top of that, not within it.' Closing line: 'A few-point lead might signal a real capability gap—or it might just be a bigger VM.'",
+    "Recommendation for labs: 'resource configuration for agentic evals should be treated as a first-class experimental variable, documented and controlled with the same rigor as prompt format or sampling temperature.' For maintainers: publish resource specs AND 'enforcement methodology'.",
+    "Downstream adoption: Terminal-Bench 4.0 (28 Aug 2026) says it calibrated task resources 'following the methodology outlined in Quantifying infrastructure noise in agentic coding evals' (see terminal-bench note); Harbor exposes the same distinction as enforcement policies limit / request / guarantee."
+  ],
+  "teaching_notes": "Added by the R7 agent because the brief asked for Anthropic's statements on infrastructure noise and the Jan 2026 post has no numbers. This is the best primary source for the cgroups/resources page: it ties memory limit vs reservation (Docker --memory vs --memory-reservation; Kubernetes limits vs requests) directly to benchmark scores: 5.8% -> 0.5% infra errors and +6 points on Terminal-Bench 2.0, +1.54 on SWE-bench. The post speaks of 'guaranteed allocation' and 'hard limit'/'kill threshold' and of Kubernetes pods; it does not use the words cgroup, requests or limits — mapping to those terms is the course's job and should be cited to kernel/Docker/K8s docs, not to this post. Anthropic-internal experiments, models unnamed ('same Claude model')."
+}

@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signals, Exit Codes, and Timeouts · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 3 · Processes</p>
+    <h1>Signals, exit codes, and timeouts</h1>
+    <p class="lede">
+      Every command in an agent's transcript ends with a small number, and every rollout ends because
+      something stopped it. This page teaches you to decode both: how processes are told to stop, how
+      they report the way they ended, and why the most famous number of all — 137 — does not mean what
+      most people think it means.
+    </p>
+
+    <h2 id="two-endings">A process ends in one of two ways</h2>
+    <p>
+      Either it <em>exits</em>, handing its parent an
+      <span class="term" data-g="exit-status">exit status</span>, or it is <em>killed by a
+      signal</em>. The kernel records these as different outcomes — the parent's
+      <code>wait</code> (<a href="09-processes.html#fork-exec-wait">page 9</a>) can ask "did it exit,
+      and with what status?" or "was it signalled, and by which
+      signal?".<a class="cite" href="https://man7.org/linux/man-pages/man2/wait.2.html" title="wait(2): WIFEXITED/WEXITSTATUS, WIFSIGNALED/WTERMSIG">[wait(2)]</a>
+      The shell then flattens both into the single number you see in <code>$?</code> and in harness
+      logs. Decoding that number means un-flattening it, so we take the two halves in turn.
+    </p>
+
+    <h2 id="signals">Signals: the kernel's tap on the shoulder</h2>
+    <p>
+      A <span class="term" data-g="signal">signal</span> is a tiny asynchronous message delivered to a
+      process: no payload, just a number. A process chooses, per signal, one of three behaviours:
+      take the default action, ignore it, or <em>catch</em> it with a handler
+      function.<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7): Signal dispositions">[signal(7)]</a>
+      The exceptions are the point of the design: "The signals SIGKILL and SIGSTOP cannot be caught,
+      blocked, or ignored."<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7): Standard signals">[signal(7)]</a>
+      The working set, with numbers as they are on x86 and ARM (a few other architectures number them
+      differently):<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7): Signal numbering for standard signals; Standard signals table">[signal(7)]</a>
+    </p>
+    <table>
+      <tr><th>Signal</th><th>No.</th><th>Default</th><th>Who sends it, and why</th></tr>
+      <tr><td><span class="term" data-g="sighup">SIGHUP</span></td><td>1</td><td>terminate</td><td>The terminal went away (<a href="09-processes.html#job-control">page 9</a>)</td></tr>
+      <tr><td><span class="term" data-g="sigint">SIGINT</span></td><td>2</td><td>terminate</td><td><kbd>Ctrl</kbd>+<kbd>C</kbd>: "interrupt from keyboard"</td></tr>
+      <tr><td>SIGQUIT</td><td>3</td><td>core dump</td><td>"Quit from keyboard"; like INT but dumps core</td></tr>
+      <tr><td><span class="term" data-g="sigkill">SIGKILL</span></td><td>9</td><td>terminate</td><td>The last resort. Cannot be caught: the process gets no chance to clean up</td></tr>
+      <tr><td>SIGSEGV</td><td>11</td><td>core dump</td><td>The kernel: "invalid memory reference" — a crash in native code</td></tr>
+      <tr><td>SIGPIPE</td><td>13</td><td>terminate</td><td>The kernel: you wrote to a pipe nobody is reading (<code>yes | head</code>, <a href="04-streams-pipes-redirection.html">page 4</a>)</td></tr>
+      <tr><td><span class="term" data-g="sigterm">SIGTERM</span></td><td>15</td><td>terminate</td><td>The polite request to stop. What <code>kill</code>, <code>docker stop</code>, <code>timeout</code> and systemd send first</td></tr>
+      <tr><td>SIGCHLD</td><td>17</td><td>ignore</td><td>The kernel, to a parent: one of your children changed state (time to <code>wait</code>)</td></tr>
+      <tr><td>SIGCONT / SIGSTOP</td><td>18 / 19</td><td>continue / stop</td><td>Resume or freeze a process. SIGSTOP cannot be caught; <kbd>Ctrl</kbd>+<kbd>Z</kbd> sends its catchable cousin SIGTSTP (20)</td></tr>
+    </table>
+    <p>
+      "Core dump" means terminate and, if allowed, write a memory image for debugging; for reading
+      transcripts, treat it as "terminate". You send signals with <code>kill</code>, which despite its
+      name sends any signal and sends TERM unless told
+      otherwise.<a class="cite" href="https://man7.org/linux/man-pages/man1/kill.1.html" title="kill(1): DESCRIPTION, default signal TERM">[kill(1)]</a>
+      In the container lab, as <code>learner</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> sleep 300 &amp;
+<span class="o">[1] 25</span>
+<span class="p">$</span> kill %1; wait %1; echo "status=$?"       <span class="c"># %1 = job 1; a PID works too</span>
+<span class="o">[1]+  Terminated              sleep 300
+status=<span class="hl">143</span></span>
+<span class="p">$</span> sleep 300 &amp;
+<span class="o">[1] 26</span>
+<span class="p">$</span> kill -KILL %1; wait %1; echo "status=$?"  <span class="c"># same as kill -9</span>
+<span class="o">[1]+  Killed                  sleep 300
+status=<span class="hl">137</span></span>
+<span class="p">$</span> sleep 300 &amp;
+<span class="o">[1] 27</span>
+<span class="p">$</span> kill -STOP %1; ps -o pid,stat,args -C sleep
+<span class="o">  PID STAT COMMAND
+   27 T    sleep 300</span>
+<span class="p">$</span> kill -CONT %1; ps -o pid,stat,args -C sleep
+<span class="o">  PID STAT COMMAND
+   27 S    sleep 300</span>
+<span class="p">$</span> kill -0 27; echo "rc=$?"                  <span class="c"># signal 0: send nothing, just check</span>
+<span class="o">rc=0</span></code></pre>
+    <p>
+      Remember the words bash prints — <code>Terminated</code>, <code>Killed</code>,
+      <code>Segmentation fault</code>, <code>Stopped</code> — because they turn up in transcripts'
+      stderr and each names a signal. <code>pkill</code> is <code>kill</code> by name
+      (<a href="09-processes.html#reading-ps">page 9</a>). You may signal only your own processes
+      unless you are privileged: as <code>learner</code>, <code>kill -TERM 1</code> against root's
+      PID 1 prints <code>Operation not permitted</code>.<a class="cite" href="https://man7.org/linux/man-pages/man2/kill.2.html" title="kill(2): DESCRIPTION, permission to send a signal">[kill(2)]</a>
+    </p>
+
+    <h2 id="graceful-shutdown">Catching signals, and the TERM → wait → KILL protocol</h2>
+    <p>
+      Because TERM can be caught, a well-behaved program uses it to finish up: flush buffers, remove
+      temporary files, write its results. In bash the handler is installed with <code>trap</code>:
+    </p>
+<pre><code>#!/bin/bash
+# A worker that cleans up when asked politely.
+workdir=$(mktemp -d)
+cleanup() { rm -rf "$workdir"; echo "cleaned up $workdir"; }
+trap cleanup EXIT
+trap 'echo "got SIGTERM, finishing"; exit 0' TERM
+echo "working in $workdir (pid $$)"
+sleep 300 &amp;
+wait $!</code></pre>
+<pre class="term"><code><span class="p">$</span> /tmp/graceful.sh &amp;
+<span class="o">[1] 30
+working in /tmp/tmp.SbI72fGeHE (pid 30)</span>
+<span class="p">$</span> kill -TERM 30; sleep 1; ls -d /tmp/tmp.*
+<span class="o">got SIGTERM, finishing
+cleaned up /tmp/tmp.SbI72fGeHE
+[1]+  Done                    /tmp/graceful.sh
+ls: cannot access '/tmp/tmp.*': No such file or directory</span>
+<span class="p">$</span> /tmp/graceful.sh &amp;
+<span class="o">[1] 37
+working in /tmp/tmp.HDTxiUmqGS (pid 37)</span>
+<span class="p">$</span> kill -KILL 37; sleep 1; ls -d /tmp/tmp.*
+<span class="o">[1]+  Killed                  /tmp/graceful.sh
+<span class="hl">/tmp/tmp.HDTxiUmqGS</span></span></code></pre>
+    <p>
+      With TERM the script cleaned up and exited 0. With KILL nothing ran: the directory is still
+      there, and anything the process held only in memory — unflushed log lines, a half-written result
+      file — is gone. (The script runs <code>sleep</code> in the background and <code>wait</code>s
+      because bash delays a trap until the current foreground command
+      finishes.<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Signals" title="GNU Bash Reference Manual, 3.7.6 Signals">[Bash Manual]</a>)
+    </p>
+    <p>
+      Every supervisor on Linux therefore stops things the same way: send TERM, wait a grace period,
+      then send KILL. <code>kill(1)</code> itself recommends the
+      order.<a class="cite" href="https://man7.org/linux/man-pages/man1/kill.1.html" title="kill(1): DESCRIPTION, TERM in preference to KILL">[kill(1)]</a>
+      Only the grace period differs:
+    </p>
+    <table>
+      <tr><th>Supervisor</th><th>First signal</th><th>Grace period</th><th>Then</th></tr>
+      <tr><td><code>timeout -k 5 60 cmd</code></td><td>TERM at 60 s</td><td>5 s (the <code>-k</code> value, counted from the first signal)<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation" title="GNU Coreutils manual, 23.6 timeout: --kill-after">[Coreutils]</a></td><td>KILL. Without <code>-k</code>, never</td></tr>
+      <tr><td><code>docker stop</code></td><td>TERM (or the image's <code>STOPSIGNAL</code>) to the container's main process</td><td>10 s by default for Linux containers; <code>-t</code> changes it<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/stop/" title="Docker Docs, docker container stop">[Docker: run]</a></td><td>KILL</td></tr>
+      <tr><td>systemd stopping a service</td><td>TERM to the unit's processes</td><td><code>TimeoutStopSec</code>, whose default comes from <code>DefaultTimeoutStopSec</code>: 90 s<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemd-system.conf.html" title="systemd-system.conf(5): DefaultTimeoutStopSec= defaults to 90 s; stop sequence in systemd.kill(5)">[systemd]</a></td><td>KILL</td></tr>
+    </table>
+
+    <h2 id="exit-status">The exit status, decoded</h2>
+    <p>
+      A program that exits hands back an integer of which only the low 8 bits reach the parent, so the
+      range is 0–255.<a class="cite" href="https://man7.org/linux/man-pages/man3/exit.3.html" title="exit(3): status &amp; 0xFF">[exit(3)]</a>
+      Zero is success and everything else is failure, so that there is "one well-defined way to
+      indicate success and a variety of ways to indicate various failure
+      modes".<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a>
+      What 1, 2 or 3 mean is up to each program (its man page has an EXIT STATUS section):
+    </p>
+<pre class="term"><code><span class="p">$</span> grep -q root /etc/passwd; echo $?          <span class="c"># found</span>
+<span class="o">0</span>
+<span class="p">$</span> grep -q nosuchuser /etc/passwd; echo $?    <span class="c"># ran fine, found nothing</span>
+<span class="o">1</span>
+<span class="p">$</span> grep -q root /etc/nofile; echo $?          <span class="c"># could not do the job</span>
+<span class="o">grep: /etc/nofile: No such file or directory
+2</span>
+<span class="p">$</span> bash -c 'exit 256'; echo $?                <span class="c"># only 8 bits survive</span>
+<span class="o">0</span></code></pre>
+    <p>
+      Above 125 the <em>shell</em> reserves values for things that happened around the program rather
+      than in it. If a command is not found the status is 127; if it is found but cannot be executed,
+      126; and "when a command terminates on a fatal signal whose number is N, Bash uses the value
+      128+N as the exit status".<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> nosuchcmd; echo $?
+<span class="o">bash: nosuchcmd: command not found
+127</span>
+<span class="p">$</span> touch /tmp/notexec; /tmp/notexec; echo $?
+<span class="o">bash: /tmp/notexec: Permission denied
+126</span>
+<span class="p">$</span> python3 -c 'import ctypes; ctypes.string_at(0)'; echo $?    <span class="c"># read address 0</span>
+<span class="o">Segmentation fault
+139</span></code></pre>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Don't memorise 130, 137, 139, 143. Subtract 128 and look up the signal: 2 is INT, 9 is KILL,
+      11 is SEGV, 15 is TERM. The number tells you <em>which signal</em>. It never tells you
+      <em>who sent it or why</em> — that takes other evidence.</p>
+    </div>
+    <p>
+      128+N is a shell convention, not a kernel fact, so other layers spell the same death
+      differently. Python's <code>subprocess</code> reports a signalled child as a negative number
+      (we got <code>-9</code> from <code>Popen.kill()</code> and <code>-15</code> from
+      <code>terminate()</code>), but <code>137</code> when a shell sat in between. Docker reports
+      137 and 143. <a href="../appendices/b-exit-codes-signals.html">Appendix B</a> has the full
+      tables.
+    </p>
+
+    <h2 id="timeout">timeout: a deadline for one command</h2>
+    <p>
+      <code>timeout DURATION cmd</code> runs a command and signals it if it is still going at the
+      deadline. It is the simplest <span class="term" data-g="timeout">timeout</span> there is, and its
+      exit statuses are documented: 124 if the command timed out, 125 if <code>timeout</code> itself
+      failed, 126/127 as in the shell, 137 if KILL was sent, and otherwise the command's own
+      status.<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation" title="GNU Coreutils manual, 23.6 timeout: Exit status">[Coreutils]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> timeout 2 sleep 10; echo "status=$?"
+<span class="o">status=124</span>
+<span class="p">$</span> timeout 2 bash -c 'exit 42'; echo "status=$?"
+<span class="o">status=42</span>
+<span class="p">$</span> timeout -s KILL 2 sleep 10; echo "status=$?"
+<span class="o">Killed
+status=137</span>
+<span class="p">$</span> timeout --preserve-status 2 sleep 10; echo "status=$?"
+<span class="o">status=143</span></code></pre>
+    <p>
+      Now a command that ignores TERM (<code>stubborn.sh</code> is <code>trap '' TERM</code>, then
+      four seconds of work), first without and then with a kill-after:
+    </p>
+<pre class="term"><code><span class="p">$</span> time timeout 2 /tmp/stubborn.sh; echo "status=$?"
+<span class="o">stubborn: started
+stubborn: finished anyway
+
+real	0m<span class="hl">4.016s</span>
+status=124</span>
+<span class="p">$</span> time timeout -k 1 2 /tmp/stubborn.sh; echo "status=$?"
+<span class="o">stubborn: started
+Killed
+
+real	0m3.024s
+status=137</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall — three ways a timeout check lies</span>
+      <p><strong>A timeout without <code>-k</code> is a suggestion.</strong> The first run above
+      overran its two-second limit, completed its work, and was still reported as 124.
+      <strong>124 is GNU-only.</strong> Alpine's BusyBox <code>timeout</code> returned 143 for
+      <code>timeout 1 sleep 3</code> when we ran it, so a harness that detects timeouts with
+      <code>== 124</code> misses every one on an Alpine task image. <strong>And 137 from
+      <code>timeout</code> is ambiguous by its own manual:</strong> it is returned whether KILL went to
+      the command or to <code>timeout</code> itself, and in the latter case the command may still be
+      running.<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation" title="GNU Coreutils manual, 23.6 timeout">[Coreutils]</a>
+      The running example's <code>run-tests.sh</code> (<a href="06-shell-scripting.html">page 6</a>)
+      uses <code>timeout</code> for exactly this reason: a hung test must become a recorded outcome,
+      not a hung grader.</p>
+    </div>
+
+    <h2 id="pid-1">The PID 1 problem</h2>
+    <p>
+      The kernel protects <span class="term" data-g="pid-1">PID 1</span>, because a machine whose
+      <span class="term" data-g="init">init</span> dies is a dead machine. Inside a PID namespace, "only
+      signals for which the 'init' process has established a signal handler can be sent to the 'init'
+      process by other members of the PID namespace. This restriction applies even to privileged
+      processes".<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7): The namespace init process">[pid_namespaces(7)]</a>
+      In a container, PID 1 is your application, and most applications install no handlers. Watch what
+      that does — as <em>root</em>, inside a container whose PID 1 is a plain <code>sleep</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-pid1 ubuntu:24.04 sleep 300
+<span class="p">$</span> docker exec lt-pid1 sh -c 'id -u; grep SigCgt /proc/1/status; kill -TERM 1; echo "rc=$?"; kill -KILL 1; echo "rc=$?"; sleep 1; ps -o pid,stat,args -p 1'
+<span class="o">0
+SigCgt:	0000000000000000
+rc=0
+rc=0
+  PID STAT COMMAND
+    1 Ss   sleep 300</span></code></pre>
+    <p>
+      <code>SigCgt</code> is the mask of caught signals: all zeros, no handlers. Both kills report
+      success and neither does anything — even <code>kill -9</code>, even as root. From
+      <em>outside</em> the namespace the rule is slightly different: unhandled signals are still
+      dropped, except that KILL and STOP are forcibly
+      delivered.<a class="cite" href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html" title="pid_namespaces(7): signals from an ancestor namespace">[pid_namespaces(7)]</a>
+      So <code>docker stop</code>'s TERM vanishes, the daemon waits out its grace period, and only the
+      KILL lands:
+    </p>
+<pre class="term"><code><span class="p">$</span> time docker stop lt-pid1
+<span class="o">lt-pid1
+… <span class="hl">10.211 total</span></span>
+<span class="p">$</span> docker inspect lt-pid1 --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+<span class="o">ExitCode=<span class="hl">137</span> OOMKilled=false</span></code></pre>
+    <p>
+      Ten seconds per teardown, a 137 on every container, and no cleanup ever runs. There are two
+      fixes. <code>docker run --init</code> puts a minimal init at PID 1 that "forwards signals and
+      reaps processes";<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#init" title="Docker Docs, docker container run: --init">[Docker: run]</a>
+      your application becomes an ordinary PID 7, where TERM's default action applies:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --init --name lt-init ubuntu:24.04 sleep 300
+<span class="p">$</span> docker exec lt-init ps -eo pid,ppid,stat,args
+<span class="o">  PID  PPID STAT COMMAND
+    1     0 Ss   /sbin/docker-init -- sleep 300
+    7     1 S    sleep 300
+    8     0 Rs   ps -eo pid,ppid,stat,args</span>
+<span class="p">$</span> time docker stop lt-init
+<span class="o">lt-init
+… <span class="hl">0.090 total</span></span>
+<span class="p">$</span> docker inspect lt-init --format 'ExitCode={{.State.ExitCode}}'
+<span class="o">ExitCode=<span class="hl">143</span></span></code></pre>
+    <p>
+      The other fix is an application that handles TERM <em>and actually is PID 1</em>. Run
+      <code>graceful.sh</code> directly as the container's command and <code>docker stop</code> took
+      0.12 s, exit code 0, with <code>cleaned up</code> in the logs. Wrap the same script in a shell —
+      <code>/bin/sh -c '/graceful.sh'</code>, which is what a Dockerfile's shell-form
+      <code>CMD /graceful.sh</code> produces (<a href="22-docker-for-evals.html">page 22</a>) — and
+      PID 1 is <code>sh</code>, the script is PID 7, the TERM goes to a shell with no handler, and we
+      were back to 10.2 s and 137. Exec-form <code>CMD ["/graceful.sh"]</code> avoids the wrapper.
+    </p>
+
+    <h2 id="one-thirty-seven">137: one number, four stories</h2>
+    <p>
+      137 means exactly one thing: <em>this process died of SIGKILL</em>. Folklore says "137 = out of
+      memory", because the kernel's <span class="term" data-g="oom-killer">OOM killer</span> uses
+      SIGKILL. But so does everything else that gives up on being polite. Three containers, run for
+      real; the first two with a 64 MB memory limit and a command that eats memory:
+    </p>
+<pre class="term"><code><span class="c"># (1) the OOM victim is a child; PID 1 (sh) carries on</span>
+<span class="p">$</span> docker run --name lt-oom1 --memory 64m --memory-swap 64m ubuntu:24.04 \
+    sh -c 'tail /dev/zero; echo "tail exit=$?"; grep oom_kill /sys/fs/cgroup/memory.events'
+<span class="o">Killed
+tail exit=137
+oom_kill 1</span>
+<span class="p">$</span> docker inspect lt-oom1 --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+<span class="o">ExitCode=<span class="hl">0</span> OOMKilled=<span class="hl">true</span></span>
+
+<span class="c"># (2) the OOM victim is PID 1</span>
+<span class="p">$</span> docker run --name lt-oom2 --memory 64m --memory-swap 64m ubuntu:24.04 tail /dev/zero
+<span class="p">$</span> docker inspect lt-oom2 --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+<span class="o">ExitCode=137 OOMKilled=true</span>
+
+<span class="c"># (3) no memory problem at all: a supervisor ran out of patience</span>
+<span class="p">$</span> docker run -d --name lt-to ubuntu:24.04 sleep 300; sleep 2; docker kill lt-to
+<span class="p">$</span> docker inspect lt-to --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+<span class="o">ExitCode=<span class="hl">137</span> OOMKilled=<span class="hl">false</span></span></code></pre>
+    <p>
+      Case 1 is the one that catches people, and it is the common shape in agentic evals: the agent's
+      test run or compiler is OOM-killed, the agent's shell sees <code>Killed</code> and 137 for that
+      one command, the shell carries on, and <em>the container exits 0</em>. Case 3 is byte-for-byte
+      what the PID 1 teardown above produced. A fourth source needs no container at all:
+      <code>ulimit -t 1</code> sets a CPU-time <span class="term" data-g="rlimit">rlimit</span>, and
+      because bash sets the soft and hard limits together, the process gets SIGKILL at the hard limit —
+      137 again. Set only the soft limit (<code>ulimit -St 1</code>) and it dies of SIGXCPU
+      instead:<a class="cite" href="https://man7.org/linux/man-pages/man2/getrlimit.2.html" title="getrlimit(2): RLIMIT_CPU, SIGXCPU at the soft limit, SIGKILL at the hard limit">[getrlimit(2)]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> (ulimit -t 1; while :; do :; done); echo "status=$?"
+<span class="o">Killed
+status=137</span>
+<span class="p">$</span> (ulimit -St 1; while :; do :; done); echo "status=$?"
+<span class="o">CPU time limit exceeded
+status=152</span></code></pre>
+    <div class="evals">
+      <span class="label">In eval work — navigate</span>
+      <p><strong>Observed: 137. Hypotheses: OOM kill, harness timeout, normal teardown, CPU rlimit.
+      Each has a discriminating test, and each means something different for scoring.</strong></p>
+      <table>
+        <tr><th>Cause</th><th>Evidence that discriminates</th><th>What it is, for the score</th></tr>
+        <tr><td>OOM kill</td><td><code>oom_kill</code> &gt; 0 in the sandbox's <code>memory.events</code>; <code>State.OOMKilled=true</code>; duration well short of any limit (<a href="12-resources-and-limits.html">page 12</a>)</td><td><span class="term" data-g="infrastructure-failure">Infrastructure failure</span> — unless the task is <em>about</em> memory-efficient code</td></tr>
+        <tr><td>Harness or tool timeout</td><td><code>OOMKilled=false</code>; duration equals the configured limit to within a second; the harness log has a timeout event</td><td>A run outcome: "did not finish in the budget". Report it as its own category</td></tr>
+        <tr><td>Teardown of a PID 1 that ignores TERM</td><td>Happens <em>after</em> scoring; <code>FinishedAt − stop request</code> ≈ 10 s</td><td>Nothing — but if your harness records the container's exit code as the rollout's, every rollout "fails"</td></tr>
+        <tr><td>CPU rlimit</td><td><code>ulimit -t</code> in the entrypoint or <code>--ulimit cpu=</code> on the container; <code>TIME</code> in <code>ps</code> ≈ the limit</td><td>Infrastructure policy; treat like a timeout</td></tr>
+      </table>
+      <p>Exit code plus <em>timing</em> plus <em>one counter from outside the transcript</em> is
+      usually enough. None of the three alone is.</p>
+    </div>
+
+    <h2 id="decoder">The decoder table</h2>
+    <table>
+      <tr><th>Code</th><th>What happened</th><th>Where to look next</th></tr>
+      <tr><td>0</td><td>The last command succeeded — by its own lights</td><td>Was it the command that mattered? A script ending in <code>echo done</code> exits 0 (<a href="06-shell-scripting.html">page 6</a>); a pipeline reports its last stage (<a href="04-streams-pipes-redirection.html">page 4</a>)</td></tr>
+      <tr><td>1</td><td>Generic failure: a failed test run, an uncaught Python exception, <code>grep</code> finding nothing</td><td>The last lines of stderr</td></tr>
+      <tr><td>2</td><td>Often misuse or "could not do the job": bad options, missing file; bash builtins use 2 for incorrect usage<a class="cite" href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status" title="GNU Bash Reference Manual, 3.7.5 Exit Status">[Bash Manual]</a></td><td>stderr; the program's man page</td></tr>
+      <tr><td>124</td><td>GNU <code>timeout</code> fired</td><td>Duration = the limit? Was the command hung on a prompt (<a href="27-reading-terminal-transcripts.html">page 27</a>) or just slow (CPU throttling, <a href="12-resources-and-limits.html">page 12</a>)?</td></tr>
+      <tr><td>125</td><td><code>docker run</code> itself failed (bad flag, daemon error), or <code>timeout</code> itself failed<a class="cite" href="https://docs.docker.com/engine/containers/run/#exit-status" title="Docker Docs, Running containers: Exit status">[Docker: run]</a></td><td>The harness's own logs: the sandbox never started</td></tr>
+      <tr><td>126</td><td>Found but not executable: missing <code>x</code> bit, a directory, <code>noexec</code> mount</td><td><code>ls -l</code> on the file (<a href="08-permissions.html">page 8</a>)</td></tr>
+      <tr><td>127</td><td>Command not found</td><td><code>PATH</code> and shell mode (<a href="02-shell-and-commands.html">page 2</a>); is the tool installed in this image at all?</td></tr>
+      <tr><td>130</td><td>128+2: SIGINT. Someone or something pressed <kbd>Ctrl</kbd>+<kbd>C</kbd></td><td>Whoever was driving the terminal interrupted the command: a harness, or a human aborting the run</td></tr>
+      <tr><td>137</td><td>128+9: SIGKILL</td><td>The table above: OOM counters, timing, teardown</td></tr>
+      <tr><td>139</td><td>128+11: SIGSEGV. Native code crashed</td><td>Which binary or native library crashed; an ordinary Python exception would have been exit 1</td></tr>
+      <tr><td>143</td><td>128+15: SIGTERM, not handled</td><td>A polite stop: <code>docker stop</code> with an init, a supervisor's first warning, BusyBox <code>timeout</code></td></tr>
+    </table>
+
+    <h2 id="failure-accounting">Failure accounting: a kill is an observation about the run</h2>
+    <p>
+      An exit code of 1 from the test suite is a statement about the agent's answer. A 124 or a 137 is
+      a statement about the <em>run</em>: it did not finish, and you do not know what the answer would
+      have been. Scoring both as "failed" mixes two quantities. Here is the running example's
+      <code>results.jsonl</code> (<a href="05-text-fu.html">page 5</a>), first by exit code, then
+      through a twenty-line script that keeps the run outcomes separate:
+    </p>
+<pre class="term"><code><span class="p">$</span> grep -o '"exit_code": [0-9]*' results.jsonl | sort | uniq -c | sort -rn
+<span class="o">    106 "exit_code": 0
+     56 "exit_code": 1
+      9 "exit_code": 127
+      8 "exit_code": 124
+      5 "exit_code": 137
+      4 "exit_code": 2
+      4 "exit_code": 126</span>
+<span class="p">$</span> python3 account.py results.jsonl
+<span class="o">scheduled 192  completed 179  correct 106
+  timeout (124): 8
+  killed (137): 5
+correct/scheduled   = 0.552
+correct/completed   = 0.592
+completed/scheduled = 0.932</span></code></pre>
+<pre><code>import json, sys
+
+rows = [json.loads(line) for line in open(sys.argv[1])]
+RUN_OUTCOMES = {124: "timeout", 137: "killed"}   # about the run, not the answer
+
+scheduled = len(rows)
+not_completed = [r for r in rows if r["exit_code"] in RUN_OUTCOMES]
+completed = scheduled - len(not_completed)
+correct = sum(r["passed"] for r in rows)
+
+print(f"scheduled {scheduled}  completed {completed}  correct {correct}")
+for code, name in RUN_OUTCOMES.items():
+    print(f"  {name} ({code}): {sum(r['exit_code'] == code for r in rows)}")
+print(f"correct/scheduled   = {correct / scheduled:.3f}")
+print(f"correct/completed   = {correct / completed:.3f}")
+print(f"completed/scheduled = {completed / scheduled:.3f}")</code></pre>
+    <div class="evals">
+      <span class="label">In eval work — discuss and design</span>
+      <p><strong>Three ratios, three meanings.</strong> <code>correct/scheduled</code> (55.2%) is
+      what a user of this whole system would experience. <code>correct/completed</code> (59.2%) is
+      closer to the model's ability when the infrastructure holds.
+      <code>completed/scheduled</code> (93.2%) is the health of the instrument. Per model the gap
+      matters more: model-c completed 58 of 64 and model-a 62 of 64, so part of their difference is
+      infrastructure, and if kills cluster on particular tasks the affected trials are not
+      independent.<a class="cite" href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents" title="Anthropic, Demystifying evals for AI agents, Step 4">[Anthropic: Agent Evals]</a>
+      Rules that follow: choose the primary metric <em>before</em> looking at results; publish all
+      three numbers with the timeout and kill counts; never drop non-completed rollouts silently,
+      because a runner that discards its timeouts will always look more accurate; and treat a timeout
+      as a finding to investigate (slow model? throttled CPU? a command waiting on a prompt?), not as
+      a wrong answer. Inspect draws a related line inside the harness: a tool-call
+      <code>TimeoutError</code> is an "expected" error that is reported to the model, which may try
+      something else, while unexpected errors (a failure talking to the container runtime, say)
+      fail the sample with an error.<a class="cite" href="https://inspect.aisi.org.uk/tools-custom.html" title="Inspect docs, Custom Tools: Tool Errors, Default Handling">[Inspect]</a>
+      Its <code>bash()</code> tool has no timeout unless you set one, and its docs suggest setting one
+      so that "a single wayward bash command doesn't consume the entire
+      time_limit".<a class="cite" href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash" title="Inspect reference, inspect_ai.tool: bash(timeout=None); Setting Limits">[Inspect]</a>
+      The concept of timeouts and retries across a whole system is the subject of
+      <a href="../../../networking/networking-tut/pages/11-timeouts-and-retries.html">Networking for
+      LLM Evals, lesson 11</a>.</p>
+    </div>
+    <p>
+      Depth triage: <em>learn to use</em> <code>kill</code>, <code>timeout -k</code>,
+      <code>trap</code>, the 128+N arithmetic and <code>docker inspect</code>'s <code>State</code>.
+      <em>Recognise</em> SIGPIPE's 141, SIGXCPU's 152, process groups, and the word "subreaper".
+      <em>Leave to specialists</em> real-time signals, signal masks, and writing async-signal-safe
+      handlers in C.
+    </p>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A new runner is proposed for your team's agentic benchmark. Its summary says: "Accuracy
+      improves from 61% to 68%. We also fixed flakiness: samples whose container exits 137 are now
+      automatically retried, up to three times, and samples that still fail to complete are excluded
+      from the denominator." What would you ask in review?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>What is observed vs supposed.</strong> Observed: containers exit 137. Supposed: that
+        137 means a transient infrastructure fault. 137 only says SIGKILL. Ask for the breakdown:
+        how many had <code>OOMKilled=true</code> or <code>oom_kill</code> &gt; 0, how many died at
+        exactly the time limit, how many were teardown artefacts.</p>
+        <p><strong>Why it matters which.</strong> If they are timeouts, a retry gives a slow agent a
+        second draw: the metric has silently become "best of up to three", which is a pass@k-style
+        quantity, not the accuracy it is being compared against. If they are OOM kills that recur on
+        the same tasks, they are deterministic properties of task × memory limit; retrying will not
+        help, and excluding them removes the memory-hungry (probably harder) tasks from the
+        denominator — accuracy rises because the test got easier. And case 1 on this page says some
+        OOM-affected samples never show 137 at all: the container exits 0 and the sample is scored as
+        an ordinary wrong answer, so the rule is also applied unevenly.</p>
+        <p><strong>What to require.</strong> The old and new runs reported as
+        <code>correct/scheduled</code>, <code>correct/completed</code> and
+        <code>completed/scheduled</code>, with counts by cause; the 61% and 68% recomputed on the same
+        denominator; retries, if kept, only for causes shown to be independent of the agent's
+        behaviour, and counted. Until then the honest summary is "the denominator changed", not
+        "accuracy improved".</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p>Container lab (<a href="01-lab-setup.html">page 1</a>) as <code>learner</code> for exercises
+      1–3; exercises 4–5 are run from your Mac's terminal with <code>docker</code>. Save
+      <code>graceful.sh</code> from this page to <code>/tmp</code> and <code>chmod +x</code> it.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Start <code>sleep 300 &amp;</code>, end it with plain
+          <code>kill</code>, and read its status with <code>wait</code>. Repeat with
+          <code>kill -9</code>, and with <code>fg</code> followed by <kbd>Ctrl</kbd>+<kbd>C</kbd>.
+          Subtract 128 from each.
+          <details class="solution"><summary>Solution</summary>
+            <p>143 (TERM, 15), 137 (KILL, 9), 130 (INT, 2) — the sessions on this page and on
+            <a href="09-processes.html#job-control">page 9</a>.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Create <code>/tmp/stubborn.sh</code>:
+<pre><code>#!/bin/bash
+# Ignores SIGTERM, the way a badly behaved test runner might.
+trap '' TERM
+echo "stubborn: started"
+sleep 4
+echo "stubborn: finished anyway"</code></pre>
+          Before running each, write down the exit status <em>and</em> the elapsed time:
+          <code>time timeout 2 /tmp/stubborn.sh</code> and
+          <code>time timeout -k 1 2 /tmp/stubborn.sh</code>.
+          <details class="solution"><summary>Solution</summary>
+            <p>First: 124 after about 4 s — TERM at 2 s was ignored (by the script and by the
+            <code>sleep</code> it started, since ignored signals stay ignored across
+            exec<a class="cite" href="https://man7.org/linux/man-pages/man7/signal.7.html" title="signal(7): Signal dispositions, execve">[signal(7)]</a>),
+            the script finished its work, and <code>timeout</code> still reports 124. Second: 137
+            after about 3 s — TERM at 2 s, KILL one second later. Real output is in the
+            <a href="#timeout">timeout section</a>. A grader that reads 124 as "no work was done"
+            is wrong in the first case.</p>
+          </details></li>
+        <li><strong>Cleanup or not?</strong> Run <code>/tmp/graceful.sh &amp;</code> twice; end one
+          with <code>kill</code> and one with <code>kill -9</code>. Which leaves a directory in
+          <code>/tmp</code>? What exit status does each report via <code>wait</code>?
+          <details class="solution"><summary>Solution</summary>
+            <p>TERM: the handler runs, the EXIT trap removes the directory, status 0 (the handler
+            says <code>exit 0</code>, so no 143 — a handled signal is not a death by signal). KILL:
+            no handler runs, the directory remains, status 137.</p>
+          </details></li>
+        <li><strong>The ten-second stop.</strong> From your Mac:
+          <code>docker run -d --name lt-s1 ubuntu:24.04 sleep 300</code> and
+          <code>docker run -d --init --name lt-s2 ubuntu:24.04 sleep 300</code>. Predict, then measure
+          <code>time docker stop</code> for each, and read both exit codes with
+          <code>docker inspect --format '{{.State.ExitCode}} {{.State.OOMKilled}}'</code>. Before
+          stopping <code>lt-s1</code>, try <code>docker exec lt-s1 kill -9 1</code>. Remove both.
+          <details class="solution"><summary>Solution</summary>
+            <p>We measured 10.2 s and <code>137 false</code> without <code>--init</code>; 0.09 s and
+            <code>143 false</code> with it. The <code>kill -9 1</code> returns 0 and does nothing:
+            inside its namespace, PID 1 receives only signals it has handlers for. Full output is in
+            the <a href="#pid-1">PID 1 section</a>.</p>
+          </details></li>
+        <li><strong>Eval task: three 137s.</strong> A results file shows three rollouts of the same
+          task, all "exit 137, failed". The harness's time limit is 300 s and the memory limit is
+          64 MB. The evidence you can pull: rollout A, duration 94 s,
+          <code>OOMKilled=true</code>; rollout B, duration 300.0 s, <code>OOMKilled=false</code>;
+          rollout C, duration 41 s, <code>OOMKilled=false</code>, tests passed in the transcript, and
+          the container's <code>FinishedAt</code> is 10 s after the harness logged "stopping
+          sandbox". Classify each, say how it should be recorded, and recreate A and C's signatures
+          with the commands from this page.
+          <details class="solution"><summary>Solution</summary>
+            <p><strong>A</strong>: OOM kill — infrastructure outcome (unless the task specifies a
+            memory budget); not completed. Recreate with case 2 of the 137 section
+            (<code>ExitCode=137 OOMKilled=true</code>). <strong>B</strong>: killed at the time limit
+            — a timeout; not completed; then look at the transcript's last command for a hang.
+            <strong>C</strong>: the agent succeeded; the 137 is the teardown of a PID 1 with no TERM
+            handler, recorded by a harness that confused the <em>container's</em> exit code with
+            the <em>rollout's</em> result. That is a harness defect, and the rollout should be
+            scored from its tests. Recreate with the first <code>docker stop</code> in the PID 1
+            section (<code>ExitCode=137 OOMKilled=false</code> after 10.2 s). One "failure rate" of
+            3/3 was hiding one environment problem, one budget problem and one bug in the runner.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>signal(7), kill(1), kill(2), wait(2), exit(3), Linux man-pages project / util-linux (man-pages 6.19). <a href="https://man7.org/linux/man-pages/man7/signal.7.html">man7.org/…/signal.7.html</a>, <a href="https://man7.org/linux/man-pages/man1/kill.1.html">kill.1.html</a>, <a href="https://man7.org/linux/man-pages/man2/kill.2.html">kill.2.html</a>, <a href="https://man7.org/linux/man-pages/man2/wait.2.html">wait.2.html</a>, <a href="https://man7.org/linux/man-pages/man3/exit.3.html">exit.3.html</a></li>
+        <li>pid_namespaces(7), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man7/pid_namespaces.7.html">man7.org/…/pid_namespaces.7.html</a></li>
+        <li>getrlimit(2), Linux man-pages project. <a href="https://man7.org/linux/man-pages/man2/getrlimit.2.html">man7.org/…/getrlimit.2.html</a></li>
+        <li>Chet Ramey and Brian Fox, <em>GNU Bash Reference Manual</em>, §3.7.5 Exit Status and §3.7.6 Signals. <a href="https://www.gnu.org/software/bash/manual/bash.html#Exit-Status">gnu.org/software/bash/manual/bash.html</a></li>
+        <li>Free Software Foundation, <em>GNU Coreutils manual</em>, §23.6 "timeout: Run a command with a time limit". <a href="https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation">gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation</a></li>
+        <li>Docker Inc., "docker container stop" and "docker container run" CLI references; "Running containers: Exit status". <a href="https://docs.docker.com/reference/cli/docker/container/stop/">docs.docker.com/…/container/stop/</a>, <a href="https://docs.docker.com/reference/cli/docker/container/run/#init">…/container/run/</a>, <a href="https://docs.docker.com/engine/containers/run/#exit-status">docs.docker.com/engine/containers/run/#exit-status</a></li>
+        <li>systemd project, systemd-system.conf(5) and systemd.kill(5). <a href="https://www.freedesktop.org/software/systemd/man/latest/systemd-system.conf.html">freedesktop.org/…/systemd-system.conf.html</a>, <a href="https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html">systemd.kill.html</a></li>
+        <li>UK AI Security Institute, Inspect AI documentation: Custom Tools (tool errors), <code>inspect_ai.tool</code> reference, Setting Limits. <a href="https://inspect.aisi.org.uk/tools-custom.html">inspect.aisi.org.uk/tools-custom.html</a>, <a href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash">…/reference/inspect_ai.tool.html</a></li>
+        <li>Anthropic, "Demystifying evals for AI agents," Engineering at Anthropic, 9 January 2026. <a href="https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents">anthropic.com/engineering/demystifying-evals-for-ai-agents</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

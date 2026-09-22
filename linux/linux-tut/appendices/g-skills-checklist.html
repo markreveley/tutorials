@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skills Checklist and Portfolio Labs · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix G</p>
+    <h1>Skills checklist and portfolio labs</h1>
+    <p class="lede">
+      The finish line, stated as things you can demonstrate. Use the checklists to find your next gap,
+      the questions to rehearse explaining out loud, and the portfolio labs to turn the course into
+      work someone else can inspect.
+    </p>
+
+    <div class="callout">
+      <span class="label">An honest finish line</span>
+      <p>This is the Linux component of preparing for evaluation work, not a promise of employment, and
+      the checklists below are an original self-assessment, not an industry certification. What they
+      give you is a way to tell "I read about it" from "I can do it with someone watching". Every item
+      is phrased so that a second person could check it.</p>
+    </div>
+
+    <h2 id="how-to-use">How to use this page</h2>
+    <p>
+      Work through a module's checklist <em>in a fresh lab container</em> (<a href="../pages/01-lab-setup.html">page 1</a>),
+      without the course open. An item counts when you can do it from memory or find the answer with
+      <code>man</code> and <code>--help</code> inside two minutes (<a href="f-getting-help.html">Appendix F</a>)
+      — looking things up is a skill, guessing is not. Each module ends with its "deep enough when"
+      test: a single task that needs the whole module at once.
+    </p>
+    <p>
+      The three abilities from the <a href="../index.html#what-you-will-learn">course home</a> run through
+      every list: <strong>discuss</strong> (explain the mechanism and what it does to a score),
+      <strong>navigate</strong> (investigate from inside the box and bring evidence),
+      <strong>design</strong> (choose and defend an environment policy).
+    </p>
+
+    <h2 id="module-1">Module 1 · The shell</h2>
+    <ul class="checklist">
+      <li>Explain what happens between pressing Enter and seeing output: the shell parses the line, finds the program on <code>PATH</code> (or runs a builtin), starts a process, waits, and records an exit status.</li>
+      <li>Say why a command that works in your interactive terminal can be "not found" when a harness runs it, and name the dependable fix.</li>
+      <li>Find every file under <code>/app</code> changed since a marker moment, and say why a timestamp-based answer can be fooled.</li>
+      <li>Draw the three standard streams as numbered file descriptors and predict the difference between <code>cmd &gt;out 2&gt;&amp;1</code> and <code>cmd 2&gt;&amp;1 &gt;out</code> before running them.</li>
+      <li>From a JSONL results log, produce the pass rate per model, the most common exit codes among failures, and the tasks that never pass — using only <code>jq</code>, <code>sort</code>, <code>uniq -c</code>, and <code>grep</code>.</li>
+      <li>Read a 25-line bash script and say what its exit status will be when the third command fails, with and without <code>set -euo pipefail</code>.</li>
+      <li>Run <code>shellcheck</code> on a script, and explain the unquoted-variable warning with a filename that contains a space.</li>
+    </ul>
+    <div class="card">
+      <p><strong>Deep enough when:</strong> handed <a href="../pages/05-text-fu.html">page 5's</a> <code>results.jsonl</code>
+      cold, within fifteen minutes you can say which model is ahead, which task is broken rather than hard,
+      and what fraction of failures are not test verdicts at all — and show the pipelines that say so.</p>
+    </div>
+
+    <h2 id="module-2">Module 2 · Identity &amp; permissions</h2>
+    <ul class="checklist">
+      <li>Show who a process is (<code>id</code>, <code>/proc/PID/status</code>) and explain why the kernel cares about the number, not the name.</li>
+      <li>Read <code>-rwxr-x---</code> aloud, convert it to octal, and predict who can read the file — including the case where the owner is denied and everyone else is not.</li>
+      <li>Explain why deleting a file is a question about the <em>directory's</em> permissions.</li>
+      <li>Protect a grader directory from a non-root agent with ownership and mode bits, prove it from the agent's shell, then name three ways that protection silently fails.</li>
+      <li>Find every setuid binary on a box and say why the list is an audit item.</li>
+      <li>Tell <code>Permission denied</code> from <code>Operation not permitted</code> and say which layer produced each.</li>
+    </ul>
+    <div class="card">
+      <p><strong>Deep enough when:</strong> you can look at a task image and answer "could the agent have read or
+      rewritten the tests?" with commands run <em>as the agent's uid</em>, not by reading the Dockerfile.</p>
+    </div>
+
+    <h2 id="module-3">Module 3 · Processes</h2>
+    <ul class="checklist">
+      <li>Print the process tree and point to PID 1, to anything left running from an earlier step, and to any process that is not the agent's.</li>
+      <li>Decode exit statuses 0, 1, 2, 124, 126, 127, 130, 137, 139, 143 without notes, and do the 128+N arithmetic for a signal you have not memorised (<a href="b-exit-codes-signals.html">Appendix B</a>).</li>
+      <li>Explain why exit 137 is <em>not</em> proof of an out-of-memory kill, and list the evidence that would settle it either way.</li>
+      <li>Explain why an application running as PID 1 in a container can take ten seconds to stop, and two ways to fix it.</li>
+      <li>List every place a secret passed as an environment variable can be read, from inside the box and from outside it.</li>
+      <li>Read a cgroup's memory, CPU, and PID limits from inside a container, and show that <code>free</code> and <code>nproc</code> do not reflect them.</li>
+      <li>Produce, for real, the symptom of each exhaustion — memory, CPU cap, disk, inodes, PIDs — and say how each should be recorded in a results file.</li>
+      <li>Say where logs live on a VM with systemd versus in a container, and why <code>docker logs</code> can be empty for a rollout driven through <code>docker exec</code>.</li>
+    </ul>
+    <div class="card">
+      <p><strong>Deep enough when:</strong> given a rollout that "failed", you can classify it as a test verdict,
+      a timeout, a resource kill, or an environment defect from the exit code, the last lines of stderr, the
+      duration, and the cgroup counters — and you report it in the right row of the accounting table
+      (<a href="../pages/10-signals-exit-codes.html">page 10</a>).</p>
+    </div>
+
+    <h2 id="module-4">Module 4 · Storage &amp; software</h2>
+    <ul class="checklist">
+      <li>Print the mount table as a tree, find what backs a given path, and list what is mounted read-only.</li>
+      <li>Distinguish three refusals to write: mode bits, a read-only mount, and a missing capability — by their error messages.</li>
+      <li>Explain why a read-only mount protects tests from tampering but does nothing about them being read.</li>
+      <li>Explain why a file deleted in a later image layer is still in the image, and show how you would check.</li>
+      <li>Pin a base image by digest and say what is still free to drift after you have.</li>
+      <li>Recognise in a transcript: a missing <code>apt-get update</code>, an interactive prompt hang, the dpkg lock, <code>externally-managed-environment</code>, and an install attempted with no network.</li>
+      <li>Fingerprint an environment (packages and versions) and diff two builds.</li>
+    </ul>
+    <div class="card">
+      <p><strong>Deep enough when:</strong> you can explain to a teammate why "we used the same Dockerfile" does not
+      establish "we ran the same environment", and what you would publish alongside results so that someone
+      else can tell.</p>
+    </div>
+
+    <h2 id="module-5">Module 5 · Networking for sandboxes</h2>
+    <ul class="checklist">
+      <li>From inside a box, state its addresses, its default route, and what is adjacent: the gateway, neighbouring containers, a metadata address.</li>
+      <li>List what is listening, on which address, owned by which process — and explain why <code>127.0.0.1:8000</code> and <code>0.0.0.0:8000</code> are different exposures.</li>
+      <li>Tell refused from timed out from unresolvable, say which layer each points at, and say why "refused" cannot distinguish a closed port from a rejecting firewall.</li>
+      <li>Use <code>curl</code>'s exit code and <code>-v</code> output to name the last stage that worked: name resolution, connection, TLS, HTTP.</li>
+      <li>Explain why HTTPS can fail in a minimal image for a reason that has nothing to do with the network.</li>
+      <li>Run the reachability probe (<a href="../pages/19-firewalls-and-egress.html">page 19</a>) under no network, an internal network, and the default bridge, and explain each verdict.</li>
+      <li>Explain why supplying your own compose file to a harness can silently turn a no-network sandbox into an open one.</li>
+    </ul>
+    <div class="card">
+      <p><strong>Deep enough when:</strong> you can write five commands, run from inside a sandbox, that show whether it
+      can reach the internet, a neighbouring sandbox, and services on its host — always with timeouts, and you
+      can say what each result does and does not establish. For the concepts underneath, the sibling course
+      <a href="../../../networking/networking-tut/index.html">Networking for LLM Evals</a> is the companion.</p>
+    </div>
+
+    <h2 id="module-6">Module 6 · Containers &amp; isolation</h2>
+    <ul class="checklist">
+      <li>Explain a container as an ordinary process with a restricted view (namespaces), a restricted budget (cgroups), its own root filesystem, and reduced privileges — and show each with a command.</li>
+      <li>Show that two containers and their host share one kernel, and say why that fact organises the whole isolation discussion.</li>
+      <li>Read a process's effective capabilities and decode them; explain why root in a default container still cannot mount a filesystem.</li>
+      <li>Write a Dockerfile for a task environment: pinned base, packages installed in one layer, non-root user, exec-form command — and justify each line.</li>
+      <li>Take a default <code>docker run</code> to a locked-down one knob by knob, saying for each knob what it blocks, how to verify it from inside, and what legitimate task behaviour it can break.</li>
+      <li>Re-validate the oracle solution under the hardened policy, and explain why that step is not optional.</li>
+      <li>Place containers, gVisor, microVMs, and full VMs on the isolation ladder and say what goes up with each rung: isolation, cost, startup time, compatibility risk.</li>
+      <li>Name the four boundaries — isolation, egress, tenancy, secrets — and one check per boundary that would show it failing.</li>
+    </ul>
+    <div class="card">
+      <p><strong>Deep enough when:</strong> the running example runs in a locked-down container you configured by hand,
+      an inside-out verification script passes, the oracle still passes, and you can state which threats the
+      setup does <em>not</em> address.</p>
+    </div>
+
+    <h2 id="module-7">Module 7 · Linux in eval harnesses</h2>
+    <ul class="checklist">
+      <li>In an unfamiliar benchmark's repository, find five things: the image definition, the exec path, the timeouts and limits, the network policy, and where grading runs.</li>
+      <li>Map harness features to Linux mechanisms: exec-per-call to a non-interactive shell, the stdout/stderr split, timeouts to signals, a <code>user</code> parameter to a uid, limits to cgroups.</li>
+      <li>Walk the seven integrity surfaces (<a href="../pages/26-environment-integrity.html">page 26</a>) against a task image and report what you checked, what you found, and what you could not check.</li>
+      <li>Read a terminal transcript and code each failed rollout as model capability, model Linux fluency, environment defect, harness defect, or integrity violation — separating what you observed from what you suppose.</li>
+      <li>Report one run three ways — correct/scheduled, correct/completed, completed/scheduled — and say which one was the primary metric <em>before</em> you looked.</li>
+      <li>Perform the ten-minute audit on a box you have not seen, and write it up as findings, validity impact, fix, residual risk.</li>
+    </ul>
+    <div class="card">
+      <p><strong>Deep enough when:</strong> someone hands you shell access to a task environment and asks "can we trust
+      scores from this?", and ten minutes later you have an answer with evidence attached.</p>
+    </div>
+
+    <h2 id="questions">Questions to answer out loud</h2>
+    <p>
+      Say your answer before opening the reasoning. These are judgment questions: a good answer names
+      what you would establish first, what evidence would discriminate between causes, and how the
+      outcome bears on the reported number.
+    </p>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A benchmark's pass rate drops six points after the team moves rollouts from one large machine to many
+      small ones. Nothing about the model changed. What do you establish before anyone says "regression"?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>Whether the <em>same tasks</em> completed. Compare, per task, exit codes, durations against the timeout,
+        and the resource counters: <code>memory.events</code> for <code>oom_kill</code>, <code>cpu.stat</code>
+        for throttling, disk and PID limits. A smaller machine or higher packing changes per-sandbox memory
+        and CPU, which converts some capable rollouts into kills and timeouts. Then check the environment
+        itself: same image digest, same network policy, same harness version. Report completed/scheduled next
+        to the pass rate for both configurations. If the drop lives entirely in rollouts that did not complete,
+        it is an observation about the infrastructure, and the honest headline is that the two numbers are
+        not comparable yet.</p>
+      </details>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>An agent's final message says "All tests pass." The harness recorded exit code 0 for the test command
+      and an empty stdout. Do you believe it?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>Not yet; the message is testimony and the exit code is only as good as the command that produced it.
+        Look at the exact command: a pipeline such as <code>run-tests | tee log</code> reports the status of
+        <code>tee</code> unless <code>pipefail</code> is set, and a script whose last line is <code>echo done</code>
+        exits 0 whatever happened above it. Empty stdout with a test runner that normally prints a summary is
+        itself evidence — check stderr, which the harness captures separately, and check whether output was
+        truncated. The discriminating test is to re-run the tests yourself, as the same user, against the
+        final state of the box — or better, against a copy of it in a fresh container the agent never touched.</p>
+      </details>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A colleague proposes hiding the expected answers inside the task container at
+      <code>/opt/grader</code>, owned by root with mode 700, and running the agent as a non-root user.
+      Is that enough?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>It is a real protection with known ways to fail, so the answer depends on checks rather than on the
+        design's intent. Verify as the agent's uid that the directory cannot be listed or traversed. Then look
+        for the bypasses: is the agent actually non-root in every exec path the harness uses, including setup
+        and tool calls with a <code>user</code> override; is there <code>sudo</code>, a setuid binary, or an
+        added capability; was the same material also left in an earlier image layer, in git history, in an
+        environment variable, or in a process the agent can inspect? And consider the stronger design: answers
+        that are never in the box cannot be read from it. Grade outside, after the agent exits, on a copy of
+        the artifacts. Permissions then become defence in depth instead of the only wall.</p>
+      </details>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A rollout log shows <code>curl: (6) Could not resolve host: pypi.org</code>, after which the agent
+      gave up installing a dependency and the task failed. Whose failure is it?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>First establish the intended policy. If the task is specified as no-network, the environment behaved
+        as designed and the question becomes whether the task is solvable without that dependency — which the
+        oracle solution, run under the same policy, answers. If the oracle needs the network too, this is an
+        environment defect and every rollout on that task is uninformative about the model. If the policy was
+        supposed to allow the package index, then resolution failing is an infrastructure fault: check the
+        resolver configuration inside the sandbox and whether the failure is constant or intermittent across
+        rollouts. In no case is "the model failed the task" established by this log alone. Record the outcome
+        in its own category, keep it in the scheduled denominator, and fix the environment before re-running.</p>
+      </details>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>Your team wants stronger isolation and proposes switching every sandbox from containers to microVMs.
+      What do you ask?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>What threat the change is meant to address. A shared kernel is the container's structural weakness,
+        so if the concern is code-execution escape by an adversarial guest, moving up the ladder is a relevant
+        answer. If the concern is agents reaching the internet, reading answer keys, or seeing each other's
+        state, the isolation technology is not the control that matters: egress policy, where grading runs,
+        and per-rollout freshness are. Then ask what it costs: hosts with hardware virtualisation available,
+        startup time and memory per rollout, and — for measurement — whether task outcomes change under the new
+        runtime, which you check by re-validating oracle solutions and comparing a fixed model across both.
+        Change one thing at a time, or call the comparison what it is: two deployment bundles.</p>
+      </details>
+    </div>
+
+    <h2 id="portfolio">Portfolio labs</h2>
+    <p>
+      Five projects, each small enough for a few evenings and each leaving behind something a reviewer
+      can read in ten minutes. Write every one up the same way: what you set out to establish, what you
+      ran, what you observed, what you concluded and what you could not conclude. Publish the commands.
+    </p>
+
+    <div class="card">
+      <h3 id="lab-audit">1 · Audit a public benchmark's task environment</h3>
+      <p>Pick one task from an open agentic benchmark whose environment you can build locally. Run the
+      <a href="../pages/28-ten-minute-audit.html">ten-minute audit</a> inside it and the outside-the-box half
+      (<code>docker inspect</code>, image history) around it. Write up findings in the capstone's template:
+      finding, validity impact, fix, residual risk. If you find a real defect, report it to the maintainers
+      privately or through their issue tracker as they prefer, and say so in the write-up.</p>
+      <p><strong>Shows:</strong> navigate, and the judgment to separate "this is unusual" from "this affects scores".</p>
+    </div>
+
+    <div class="card">
+      <h3 id="lab-hardened">2 · A hardened sandbox with an inside-out self-test</h3>
+      <p>Take a small task of your own (or the course's running example) and produce: a Dockerfile pinned by
+      digest, a locked-down run configuration, a script that verifies every hardening property from inside the
+      box and prints PASS/FAIL per line, and evidence that the oracle solution still passes under the policy.
+      Include a table of each knob, what it blocks, and what it could break.</p>
+      <p><strong>Shows:</strong> design, and that you test your environment the way you would test your code.</p>
+    </div>
+
+    <div class="card">
+      <h3 id="lab-probe">3 · A reachability probe as an environment check</h3>
+      <p>Turn <a href="../pages/19-firewalls-and-egress.html">page 19's</a> probe into a check that runs before
+      every eval: it starts a sandbox under the intended network policy, probes the internet, a neighbour, the
+      host gateway, and the metadata address with timeouts, and fails the run if any verdict differs from the
+      declared policy. Demonstrate it catching a deliberately misconfigured compose file.</p>
+      <p><strong>Shows:</strong> that you treat the network policy as part of the experiment's configuration.</p>
+    </div>
+
+    <div class="card">
+      <h3 id="lab-git">4 · A history-leak detector for task repositories</h3>
+      <p>Write a short tool (Python, calling <code>git</code>) that, given a task repository and the commit a
+      task is supposed to start from, reports anything reachable or recoverable beyond it: other refs, tags,
+      reflog entries, dangling objects. Test it on a repository you construct with a known leak and on the same
+      repository after cleaning, and document what "clean" means (<a href="../pages/26-environment-integrity.html">page 26</a>).</p>
+      <p><strong>Shows:</strong> you can turn a published incident into a repeatable check.</p>
+    </div>
+
+    <div class="card">
+      <h3 id="lab-transcripts">5 · Failure coding over real transcripts</h3>
+      <p>Take a set of publicly available agent rollout logs for terminal or coding tasks. Code each failure
+      with the scheme from <a href="../pages/27-reading-terminal-transcripts.html">page 27</a>, using
+      <a href="../pages/05-text-fu.html">page 5's</a> tools for the first pass and reading for the rest.
+      Report the distribution, the three accounting ratios, examples of each category with the evidence that
+      placed them there, and the cases you could not classify. If you are new to error analysis, the sibling
+      course's <a href="../../../evals/evals-tut/pages/04-error-analysis.html">page on it</a> is the method.</p>
+      <p><strong>Shows:</strong> the core applied-evals skill, on the kind of data the job actually has.</p>
+    </div>
+
+    <h2 id="rubric">A readiness rubric</h2>
+    <table>
+      <tr><th>Skill</th><th>Ready enough to build on</th><th>Practice more if…</th></tr>
+      <tr><td>Explain</td><td>You can describe a mechanism in ordinary language and say what it does to a score.</td><td>You reach for "the environment was flaky" for every kind of failure.</td></tr>
+      <tr><td>Diagnose</td><td>You name the last thing that worked, state a hypothesis as a hypothesis, and pick a test that would discriminate between causes.</td><td>Your strategies are a longer timeout, a rerun, or a rebuild.</td></tr>
+      <tr><td>Design</td><td>You specify user, mounts, limits, capabilities, network, isolation, and where grading runs — and what each costs the task.</td><td>The policy is "whatever the default is" and you cannot say what the default is.</td></tr>
+      <tr><td>Measure</td><td>Every scheduled rollout has exactly one recorded outcome, and infrastructure failures are visible in the report.</td><td>Failures leave the denominator without a sentence explaining why.</td></tr>
+      <tr><td>Communicate</td><td>You state evidence, uncertainty, and who owns the fix.</td><td>You present a plausible cause as proven.</td></tr>
+    </table>
+
+    <h2 id="next">Choosing what to learn next</h2>
+    <p>
+      If the shell still feels slow, repeat the labs of Module 1 until the pipelines come without thought;
+      everything else rests on them. If exit codes and signals are vague, redo
+      <a href="../pages/10-signals-exit-codes.html">page 10's</a> lab and keep
+      <a href="b-exit-codes-signals.html">Appendix B</a> open while reading real transcripts. If containers
+      still feel like magic, rebuild one by hand with <code>unshare</code>
+      (<a href="../pages/20-namespaces.html">page 20</a>). When the Linux side is steady, the measurement side is
+      in <a href="../../../evals/evals-tut/index.html">Understanding LLM Evals</a>, the infrastructure side in
+      <a href="../../../networking/networking-tut/index.html">Networking for LLM Evals</a>, and the harness itself
+      in the documentation that <a href="../pages/25-how-harnesses-use-linux.html">page 25</a> cites.
+    </p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

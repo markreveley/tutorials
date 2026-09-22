@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Working Set of Commands · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix A</p>
+    <h1>The working set of commands</h1>
+    <p class="lede">
+      The course's roughly seventy commands on one page, grouped by the five audit questions, each
+      with its typical forms, the page that teaches it, and — because task images
+      are minimal — whether a stock <code>ubuntu:24.04</code> container has it and which package
+      provides it if not.
+    </p>
+
+    <h2 id="how-to-read">How to read the tables</h2>
+    <p>
+      The <strong>Package</strong> column was produced, not remembered: every command was looked up
+      in a fresh <code>ubuntu:24.04</code> container with <code>command -v</code>, and its owning
+      package found with <code>dpkg -S</code> on the resolved path — before installing anything for
+      commands the image already has, and after <code>apt-get install --no-install-recommends</code>
+      for the rest (raw output in <code>research/verify/a-command-reference.txt</code>). A package
+      name in <strong>bold</strong> means <em>not in the stock image</em>: an agent that calls it
+      gets 127 (<a href="../pages/27-reading-terminal-transcripts.html#fg-invocation">page 27</a>).
+      "builtin" means the shell itself implements it, so it exists wherever bash does
+      (<a href="../pages/02-shell-and-commands.html#why-cd-is-a-builtin">page 2</a>).
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — design</span>
+      <p><strong>The bold rows are a task-design decision.</strong> Calling a tool that isn't
+      installed was the most common failed-command category in Terminal-Bench's analysis, at
+      24.1% of sampled failures.<a class="cite" href="https://arxiv.org/abs/2601.11868" title="Merrill, Shaw, Carlini et al., Terminal-Bench, arXiv:2601.11868, §4.5">[Terminal-Bench]</a>
+      If your task instructions say "use <code>jq</code>" or your grader calls <code>curl</code>,
+      the image must contain it; if the task is meant to test whether the agent can cope without
+      it, say so in the task's documentation, so a reviewer codes those failures as the model's
+      and not the environment's.</p>
+    </div>
+    <p>
+      To answer "which package gives me X?" yourself, inside any Debian or Ubuntu box:
+    </p>
+<pre class="term"><code><span class="p">#</span> dpkg -S "$(readlink -f "$(command -v ps)")"
+<span class="o">procps: /usr/bin/ps</span>
+<span class="p">#</span> dpkg -S /usr/bin/ip
+<span class="o">dpkg-query: no path found matching pattern /usr/bin/ip</span>
+<span class="p">#</span> dpkg -S /bin/ip
+<span class="o">iproute2: /bin/ip</span></code></pre>
+    <p>
+      The middle line is a trap worth knowing. Ubuntu merged <code>/bin</code> into
+      <code>/usr/bin</code>, but some packages still register their files under the old
+      <code>/bin</code> path, so <code>dpkg -S</code> on the <code>/usr</code> path finds nothing.
+      Try both before concluding a file is unowned. <code>dpkg -S</code> only searches
+      <em>installed</em> packages; for a tool not yet installed, <code>apt-cache search</code> or the
+      Ubuntu package website is the route (<a href="../pages/15-packages-reproducibility.html#asking-dpkg">page 15</a>).
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — <code>man</code> exists but doesn't work</span>
+      <p><code>ubuntu:24.04</code> has a <code>/usr/bin/man</code>, but it is a stub installed by a
+      dpkg diversion; running it prints <em>This system has been minimized by removing packages
+      and content that are not required on a system that users do not log into.</em> Read man
+      pages on man7.org instead (<a href="f-getting-help.html">Appendix F</a>). Similarly,
+      <code>dnsutils</code> still installs, but it is now a transitional package that depends on
+      <code>bind9-dnsutils</code>, which is where <code>dig</code> and <code>nslookup</code> live.</p>
+    </div>
+
+    <h2 id="shell">The shell and getting help</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>bash</code></td><td>The shell; run a script or one command string</td><td><code>bash -c '…'</code>, <code>bash -lc</code>, <code>bash -s &lt; script</code>, <code>bash -x</code></td><td>bash</td><td><a href="../pages/02-shell-and-commands.html">2</a>, <a href="../pages/06-shell-scripting.html">6</a></td></tr>
+      <tr><td><code>type</code></td><td>What a name is: builtin, alias, file</td><td><code>type -a python3</code></td><td>builtin</td><td><a href="../pages/02-shell-and-commands.html#finding-programs">2</a></td></tr>
+      <tr><td><code>command -v</code></td><td>Is it installed / on <code>PATH</code>? (portable)</td><td><code>command -v jq || echo missing</code></td><td>builtin</td><td><a href="../pages/02-shell-and-commands.html#finding-programs">2</a></td></tr>
+      <tr><td><code>which</code></td><td>Path of a program on <code>PATH</code></td><td><code>which -a python3</code></td><td>debianutils</td><td><a href="../pages/02-shell-and-commands.html">2</a></td></tr>
+      <tr><td><code>man</code></td><td>Manual pages</td><td><code>man 7 signal</code></td><td>stub in the image; real one from <strong>man-db</strong></td><td><a href="f-getting-help.html">F</a></td></tr>
+      <tr><td><code>echo</code>, <code>printf</code></td><td>Print text; <code>printf</code> for anything exact</td><td><code>printf '%s\n' "$x"</code></td><td>builtin (also coreutils)</td><td><a href="../pages/04-streams-pipes-redirection.html">4</a></td></tr>
+      <tr><td><code>env</code></td><td>Show or set a process's environment</td><td><code>env | sort</code>, <code>env -i PATH=… cmd</code></td><td>coreutils</td><td><a href="../pages/11-environment-and-secrets.html">11</a></td></tr>
+      <tr><td><code>export</code></td><td>Put a variable into children's environment</td><td><code>export DEBIAN_FRONTEND=noninteractive</code></td><td>builtin</td><td><a href="../pages/11-environment-and-secrets.html">11</a></td></tr>
+      <tr><td><code>trap</code></td><td>Run code on a signal or at exit</td><td><code>trap 'rm -rf "$work"' EXIT</code></td><td>builtin</td><td><a href="../pages/06-shell-scripting.html">6</a>, <a href="../pages/10-signals-exit-codes.html">10</a></td></tr>
+    </table>
+
+    <h2 id="files-text">Files and text</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>ls</code></td><td>List a directory</td><td><code>ls -la</code>, <code>ls -ld /opt/grader</code></td><td>coreutils</td><td><a href="../pages/03-files-and-the-tree.html">3</a></td></tr>
+      <tr><td><code>cd</code>, <code>pwd</code></td><td>Change / print working directory</td><td><code>cd /app</code></td><td>builtin</td><td><a href="../pages/02-shell-and-commands.html#why-cd-is-a-builtin">2</a></td></tr>
+      <tr><td><code>cat</code></td><td>Print files</td><td><code>cat /proc/1/cgroup</code></td><td>coreutils</td><td><a href="../pages/03-files-and-the-tree.html">3</a></td></tr>
+      <tr><td><code>less</code></td><td>Pager: scroll a file</td><td><code>less +G log</code></td><td><strong>less</strong></td><td><a href="../pages/27-reading-terminal-transcripts.html#fg-hangs">27</a></td></tr>
+      <tr><td><code>head</code>, <code>tail</code></td><td>First / last lines</td><td><code>tail -n 20</code>, <code>tail -f</code>, <code>head -c 2M</code></td><td>coreutils</td><td><a href="../pages/05-text-fu.html">5</a></td></tr>
+      <tr><td><code>cp</code>, <code>mv</code>, <code>rm</code>, <code>mkdir</code>, <code>touch</code></td><td>Copy, move, delete, create</td><td><code>rm -rf "$work"</code>, <code>mkdir -p</code></td><td>coreutils</td><td><a href="../pages/03-files-and-the-tree.html">3</a></td></tr>
+      <tr><td><code>ln</code></td><td>Make a link</td><td><code>ln -s target name</code></td><td>coreutils</td><td><a href="../pages/03-files-and-the-tree.html">3</a></td></tr>
+      <tr><td><code>stat</code></td><td>Inode metadata: owner, mode, times</td><td><code>stat -c '%U %a %n' f</code></td><td>coreutils</td><td><a href="../pages/03-files-and-the-tree.html">3</a>, <a href="../pages/08-permissions.html">8</a></td></tr>
+      <tr><td><code>find</code></td><td>Walk the tree by name, type, permission</td><td><code>find / -xdev -perm -4000</code>, <code>-writable</code>, <code>-readable</code></td><td>findutils</td><td><a href="../pages/03-files-and-the-tree.html">3</a>, <a href="../pages/26-environment-integrity.html">26</a></td></tr>
+      <tr><td><code>file</code></td><td>Guess a file's type</td><td><code>file /b/hello</code></td><td><strong>file</strong></td><td><a href="../pages/03-files-and-the-tree.html">3</a></td></tr>
+      <tr><td><code>readlink</code></td><td>Resolve symlinks</td><td><code>readlink -f "$(command -v python3)"</code></td><td>coreutils</td><td><a href="../pages/03-files-and-the-tree.html">3</a></td></tr>
+      <tr><td><code>grep</code></td><td>Lines matching a pattern</td><td><code>grep -E</code>, <code>-c</code>, <code>-o</code>, <code>-v</code>, <code>-r</code></td><td>grep</td><td><a href="../pages/05-text-fu.html">5</a>, <a href="d-regex.html">D</a></td></tr>
+      <tr><td><code>sed</code></td><td>Stream edit</td><td><code>sed -n 's/^X=//p'</code></td><td>sed</td><td><a href="../pages/05-text-fu.html">5</a></td></tr>
+      <tr><td><code>awk</code></td><td>Field-based processing</td><td><code>awk '$1 == k { print $2 }'</code></td><td>mawk (Ubuntu's default awk)</td><td><a href="../pages/05-text-fu.html">5</a></td></tr>
+      <tr><td><code>sort</code>, <code>uniq</code></td><td>Order, then count duplicates</td><td><code>sort | uniq -c | sort -rn</code></td><td>coreutils</td><td><a href="../pages/05-text-fu.html">5</a></td></tr>
+      <tr><td><code>cut</code>, <code>tr</code>, <code>wc</code></td><td>Columns, characters, counts</td><td><code>cut -d: -f1</code>, <code>tr '\0' ' '</code>, <code>wc -l</code></td><td>coreutils</td><td><a href="../pages/05-text-fu.html">5</a></td></tr>
+      <tr><td><code>tee</code></td><td>Copy a stream to a file too</td><td><code>cmd 2&gt;&amp;1 | tee log</code></td><td>coreutils</td><td><a href="../pages/04-streams-pipes-redirection.html">4</a></td></tr>
+      <tr><td><code>xargs</code></td><td>Turn lines into arguments</td><td><code>xargs -0</code></td><td>findutils</td><td><a href="../pages/05-text-fu.html">5</a></td></tr>
+      <tr><td><code>jq</code></td><td>Query JSON / JSONL</td><td><code>jq -r 'select(.passed == false) | .task'</code></td><td><strong>jq</strong></td><td><a href="../pages/05-text-fu.html">5</a></td></tr>
+      <tr><td><code>diff</code></td><td>Compare files</td><td><code>diff &lt;(…) &lt;(…)</code></td><td>diffutils</td><td><a href="../pages/15-packages-reproducibility.html#fingerprint">15</a></td></tr>
+    </table>
+
+    <h2 id="q1-running">Audit question 1: what is running?</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>ps</code></td><td>Process snapshot</td><td><code>ps -ef --forest</code>, <code>ps -o pid,ppid,stat,args</code></td><td>procps</td><td><a href="../pages/09-processes.html">9</a></td></tr>
+      <tr><td><code>top</code></td><td>Live process view</td><td><code>top -b -n1</code></td><td>procps</td><td><a href="../pages/09-processes.html">9</a></td></tr>
+      <tr><td><code>pgrep</code>, <code>pkill</code></td><td>Find / signal by name</td><td><code>pgrep -a python</code></td><td>procps</td><td><a href="../pages/09-processes.html">9</a></td></tr>
+      <tr><td><code>kill</code></td><td>Send a signal</td><td><code>kill -TERM PID</code>, <code>kill -9</code>, <code>kill -l</code></td><td>builtin (also procps)</td><td><a href="../pages/10-signals-exit-codes.html">10</a></td></tr>
+      <tr><td><code>timeout</code></td><td>Deadline for one command</td><td><code>timeout -k 5 60 cmd</code> → 124</td><td>coreutils</td><td><a href="../pages/10-signals-exit-codes.html#timeout">10</a></td></tr>
+      <tr><td><code>nohup</code></td><td>Survive a hangup</td><td><code>nohup cmd &gt;log 2&gt;&amp;1 &amp;</code></td><td>coreutils</td><td><a href="../pages/09-processes.html#job-control">9</a></td></tr>
+      <tr><td><code>lsof</code></td><td>Open files and sockets per process</td><td><code>lsof -p PID</code></td><td><strong>lsof</strong></td><td><a href="../pages/09-processes.html">9</a></td></tr>
+      <tr><td><code>tmux</code></td><td>Terminal multiplexer; what TTY harnesses drive</td><td><code>tmux new -d -s s</code>, <code>send-keys</code>, <code>capture-pane</code></td><td><strong>tmux</strong></td><td><a href="../pages/09-processes.html">9</a>, <a href="../pages/25-how-harnesses-use-linux.html">25</a></td></tr>
+      <tr><td><code>ss</code></td><td>Sockets: who listens, who's connected</td><td><code>ss -tulpn</code></td><td><strong>iproute2</strong></td><td><a href="../pages/17-ports-and-sockets.html">17</a></td></tr>
+      <tr><td><code>nc</code></td><td>Raw TCP/UDP client or listener</td><td><code>nc -zv -w 3 host port</code></td><td><strong>netcat-openbsd</strong></td><td><a href="../pages/17-ports-and-sockets.html">17</a></td></tr>
+    </table>
+
+    <h2 id="q2-mounted">Audit question 2: what is mounted, and is it read-only?</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>findmnt</code></td><td>The mount table as a tree</td><td><code>findmnt</code>, <code>findmnt -O ro</code>, <code>findmnt -no OPTIONS /</code></td><td>util-linux</td><td><a href="../pages/14-mounts-and-filesystems.html">14</a></td></tr>
+      <tr><td><code>mount</code></td><td>Mount / list mounts</td><td><code>mount -t tmpfs none /mnt</code></td><td>mount</td><td><a href="../pages/14-mounts-and-filesystems.html">14</a></td></tr>
+      <tr><td><code>df</code></td><td>Free space per filesystem</td><td><code>df -hT</code>, <code>df -i</code></td><td>coreutils</td><td><a href="../pages/12-resources-and-limits.html#disk">12</a></td></tr>
+      <tr><td><code>du</code></td><td>Space used under a path</td><td><code>du -sh /* 2&gt;/dev/null | sort -h</code></td><td>coreutils</td><td><a href="../pages/12-resources-and-limits.html#disk">12</a></td></tr>
+      <tr><td><code>lsblk</code></td><td>Block devices</td><td><code>lsblk</code></td><td>util-linux</td><td><a href="../pages/14-mounts-and-filesystems.html">14</a></td></tr>
+    </table>
+
+    <h2 id="q3-owns">Audit question 3: who owns what?</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>id</code></td><td>Who this process is</td><td><code>id</code>, <code>id -u</code></td><td>coreutils</td><td><a href="../pages/07-users-groups-root.html">7</a></td></tr>
+      <tr><td><code>su</code></td><td>Become another user</td><td><code>su - learner</code></td><td>util-linux</td><td><a href="../pages/07-users-groups-root.html">7</a></td></tr>
+      <tr><td><code>sudo</code></td><td>Run one command as root, by policy</td><td><code>sudo -l</code>, <code>sudo -n</code></td><td><strong>sudo</strong></td><td><a href="../pages/07-users-groups-root.html">7</a></td></tr>
+      <tr><td><code>useradd</code></td><td>Create a user</td><td><code>useradd -m -u 1001 agent</code></td><td>passwd</td><td><a href="../pages/07-users-groups-root.html">7</a></td></tr>
+      <tr><td><code>getent</code></td><td>Look up users, groups, hosts via NSS</td><td><code>getent passwd agent</code>, <code>getent hosts example.com</code></td><td>libc-bin</td><td><a href="../pages/07-users-groups-root.html">7</a>, <a href="../pages/18-dns-http-tls.html">18</a></td></tr>
+      <tr><td><code>chmod</code>, <code>chown</code></td><td>Change mode / owner</td><td><code>chmod 700 /opt/grader</code>, <code>chown -R agent: /app</code></td><td>coreutils</td><td><a href="../pages/08-permissions.html">8</a></td></tr>
+      <tr><td><code>umask</code></td><td>Default permission mask</td><td><code>umask</code>, <code>umask 077</code></td><td>builtin</td><td><a href="../pages/08-permissions.html">8</a>, <a href="c-binary-octal-cidr.html">C</a></td></tr>
+      <tr><td><code>capsh</code></td><td>Decode capability sets</td><td><code>capsh --decode=00000000a80425fb</code></td><td><strong>libcap2-bin</strong></td><td><a href="../pages/21-cgroups-capabilities-seccomp.html">21</a></td></tr>
+      <tr><td><code>git</code></td><td>Here: inspect history an agent could mine</td><td><code>git log --all --oneline</code>, <code>git count-objects -v</code></td><td><strong>git</strong></td><td><a href="../pages/26-environment-integrity.html#git-history">26</a></td></tr>
+    </table>
+
+    <h2 id="q4-reach">Audit question 4: what can it reach?</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>ip</code></td><td>Interfaces, addresses, routes</td><td><code>ip -br addr</code>, <code>ip route</code></td><td><strong>iproute2</strong></td><td><a href="../pages/16-addresses-and-routes.html">16</a></td></tr>
+      <tr><td><code>ping</code></td><td>ICMP echo</td><td><code>ping -c 1 -W 2 host</code></td><td><strong>iputils-ping</strong></td><td><a href="../pages/16-addresses-and-routes.html">16</a></td></tr>
+      <tr><td><code>dig</code></td><td>Ask a DNS server directly</td><td><code>dig +short example.com</code></td><td><strong>bind9-dnsutils</strong></td><td><a href="../pages/18-dns-http-tls.html">18</a></td></tr>
+      <tr><td><code>curl</code></td><td>HTTP(S) client; exit codes name the layer</td><td><code>curl -sS -o /dev/null -w '%{http_code}' -m 5</code>, <code>curl -v</code></td><td><strong>curl</strong> (+ <strong>ca-certificates</strong> for HTTPS)</td><td><a href="../pages/18-dns-http-tls.html">18</a>, <a href="../pages/19-firewalls-and-egress.html#probe">19</a></td></tr>
+      <tr><td><code>tcpdump</code></td><td>Capture packets</td><td><code>tcpdump -ni eth0 port 53</code></td><td><strong>tcpdump</strong></td><td><a href="../pages/21-cgroups-capabilities-seccomp.html">21</a></td></tr>
+      <tr><td><code>nft</code></td><td>nftables firewall rules</td><td><code>nft list ruleset</code></td><td><strong>nftables</strong></td><td><a href="../pages/19-firewalls-and-egress.html#host-firewall">19</a></td></tr>
+    </table>
+    <p>
+      With none of these installed, bash's <code>/dev/tcp/HOST/PORT</code> plus
+      <code>timeout</code>, <code>getent hosts</code> and <code>/proc/net/route</code> still answer
+      the question (<a href="../pages/28-ten-minute-audit.html#audit-script">page 28</a>).
+    </p>
+
+    <h2 id="q5-logs-limits">Audit question 5: where are the logs — and the limits?</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>journalctl</code></td><td>Read the systemd journal</td><td><code>journalctl -u svc -p err --since -1h</code></td><td><strong>systemd</strong> (VM lab)</td><td><a href="../pages/13-services-and-logs.html">13</a></td></tr>
+      <tr><td><code>systemctl</code></td><td>Control / inspect units</td><td><code>systemctl status svc</code>, <code>systemctl --failed</code></td><td><strong>systemd</strong> (VM lab)</td><td><a href="../pages/13-services-and-logs.html">13</a></td></tr>
+      <tr><td><code>dmesg</code></td><td>Kernel ring buffer (OOM kills)</td><td><code>dmesg | grep -i oom</code></td><td>util-linux</td><td><a href="../pages/13-services-and-logs.html">13</a></td></tr>
+      <tr><td><code>free</code>, <code>uptime</code>, <code>nproc</code></td><td>Memory, load average, CPUs — of the <em>host</em>, not the cgroup</td><td><code>free -m</code></td><td>procps; <code>nproc</code>: coreutils</td><td><a href="../pages/12-resources-and-limits.html#reading-the-budget">12</a></td></tr>
+      <tr><td><code>ulimit</code></td><td>Per-process rlimits</td><td><code>ulimit -a</code>, <code>ulimit -t 1</code></td><td>builtin</td><td><a href="../pages/12-resources-and-limits.html">12</a></td></tr>
+      <tr><td><code>cat /sys/fs/cgroup/…</code></td><td>The cgroup's real budget and counters</td><td><code>memory.max</code>, <code>cpu.max</code>, <code>pids.max</code>, <code>memory.events</code></td><td>(kernel files)</td><td><a href="../pages/21-cgroups-capabilities-seccomp.html">21</a></td></tr>
+    </table>
+
+    <h2 id="packages">Packages and Python</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>apt-get</code></td><td>Install packages (script-stable CLI)</td><td><code>apt-get update &amp;&amp; DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends X</code></td><td>apt</td><td><a href="../pages/15-packages-reproducibility.html">15</a></td></tr>
+      <tr><td><code>apt-cache</code></td><td>Query available versions</td><td><code>apt-cache madison curl</code></td><td>apt</td><td><a href="../pages/15-packages-reproducibility.html">15</a></td></tr>
+      <tr><td><code>dpkg</code></td><td>Query installed packages</td><td><code>dpkg -l</code>, <code>dpkg -L pkg</code>, <code>dpkg -S path</code></td><td>dpkg</td><td><a href="../pages/15-packages-reproducibility.html#asking-dpkg">15</a></td></tr>
+      <tr><td><code>python3</code></td><td>The interpreter</td><td><code>python3 -m venv</code>, <code>python3 -m unittest</code></td><td><strong>python3</strong> (binary from python3.12-minimal); venvs also need <strong>python3-venv</strong></td><td><a href="../pages/15-packages-reproducibility.html#python-layer">15</a></td></tr>
+      <tr><td><code>pip</code></td><td>Python packages</td><td><code>pip freeze</code>, <code>pip install -r req.txt --require-hashes</code></td><td><strong>python3-pip</strong></td><td><a href="../pages/15-packages-reproducibility.html#python-layer">15</a></td></tr>
+    </table>
+
+    <h2 id="containers">Containers and namespaces</h2>
+    <table>
+      <tr><th>Command</th><th>Purpose</th><th>Typical forms</th><th>Package</th><th>Page</th></tr>
+      <tr><td><code>unshare</code></td><td>Start a process in new namespaces</td><td><code>unshare --pid --fork --mount-proc bash</code></td><td>util-linux</td><td><a href="../pages/20-namespaces.html">20</a></td></tr>
+      <tr><td><code>nsenter</code></td><td>Enter another process's namespaces</td><td><code>nsenter -t PID -n ip addr</code></td><td>util-linux</td><td><a href="../pages/20-namespaces.html">20</a></td></tr>
+      <tr><td><code>lsns</code></td><td>List namespaces</td><td><code>lsns</code></td><td>util-linux</td><td><a href="../pages/20-namespaces.html">20</a></td></tr>
+      <tr><td><code>docker run</code></td><td>Create and start a container</td><td><code>--rm</code>, <code>-d</code>, <code>--user</code>, <code>--read-only</code>, <code>--network none</code>, <code>--memory</code>, <code>--cap-drop ALL</code></td><td>host tool (Docker Desktop)</td><td><a href="../pages/22-docker-for-evals.html">22</a>, <a href="../pages/23-hardening-containers.html">23</a></td></tr>
+      <tr><td><code>docker exec</code></td><td>Run a command in a running container — what harnesses do per tool call</td><td><code>docker exec -i -u agent NAME bash -s &lt; script</code></td><td>host tool</td><td><a href="../pages/25-how-harnesses-use-linux.html">25</a></td></tr>
+      <tr><td><code>docker cp</code></td><td>Copy files in/out (refused into a <code>--read-only</code> rootfs)</td><td><code>docker cp NAME:/app ./out</code></td><td>host tool</td><td><a href="../pages/22-docker-for-evals.html">22</a></td></tr>
+      <tr><td><code>docker logs</code></td><td>PID 1's stdout/stderr — never <code>exec</code> output</td><td><code>docker logs --tail 50 NAME</code></td><td>host tool</td><td><a href="../pages/13-services-and-logs.html">13</a></td></tr>
+      <tr><td><code>docker inspect</code></td><td>The container's config and final state</td><td><code>--format '{{.State.ExitCode}} {{.State.OOMKilled}}'</code></td><td>host tool</td><td><a href="../pages/10-signals-exit-codes.html">10</a>, <a href="../pages/28-ten-minute-audit.html#outside">28</a></td></tr>
+      <tr><td><code>docker history</code></td><td>Image layers, including "deleted" files' layers</td><td><code>docker history --no-trunc IMAGE</code></td><td>host tool</td><td><a href="../pages/22-docker-for-evals.html">22</a>, <a href="../pages/26-environment-integrity.html#image-layers">26</a></td></tr>
+      <tr><td><code>docker build</code>, <code>docker compose</code></td><td>Build images; run multi-container setups</td><td><code>docker build -t name .</code>, <code>docker compose up -d</code></td><td>host tool</td><td><a href="../pages/22-docker-for-evals.html">22</a></td></tr>
+    </table>
+    <div class="warn">
+      <span class="label">Caveat — Alpine and macOS differ</span>
+      <p>The package column is Ubuntu 24.04's. On Alpine most of the base commands are BusyBox
+      applets with fewer options, and package names differ — check with <code>apk</code> in the
+      image rather than assuming (<a href="../pages/15-packages-reproducibility.html#alpine">page 15</a>).
+      On your Mac, many of these commands exist with BSD behaviour or not at all
+      (<a href="e-macos-vs-linux.html">Appendix E</a>); run them in the lab container.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Merrill, Shaw, Carlini et al., "Terminal-Bench", arXiv:2601.11868 (Jan 2026), §4.5. <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a></li>
+        <li>Executed material: <code>research/verify/a-command-reference.txt</code> — <code>command -v</code> and <code>dpkg -S</code> for every command in a fresh <code>ubuntu:24.04</code> (arm64), before and after <code>apt-get install --no-install-recommends</code>, 21 Sept 2026.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

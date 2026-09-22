@@ -1,0 +1,184 @@
+{
+ "id": "bash-manual",
+ "tag": "[Bash Manual]",
+ "citation": {
+  "authors": "Chet Ramey, Brian Fox",
+  "title": "GNU Bash Reference Manual (Edition 5.3, for Bash 5.3)",
+  "venue": "Free Software Foundation / gnu.org",
+  "year": "2025",
+  "url": "https://www.gnu.org/software/bash/manual/bash.html"
+ },
+ "fetched_urls": [
+  "https://www.gnu.org/software/bash/manual/bash.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Exit status: 0 is success, non-zero failure; range 0-255; command not found returns 127; found but not executable returns 126; a command terminated by fatal signal N returns 128+N",
+   "verdict": "confirmed",
+   "finding": "All five parts confirmed verbatim. Extra precision: statuses 'fall between 0 and 255' but 'the shell may use values above 125 specially'; builtins return 2 for incorrect usage; expansion/redirection errors give status >0. Executed: not-found=127, non-executable file=126, running a directory=126, SIGTERM=143, SIGKILL=137, SIGINT=130; `exit 256` wraps to 0, `exit 257` to 1, `exit -1` to 255.",
+   "quote": "When a command terminates on a fatal signal whose number is N, Bash uses the value 128+N as the exit status. If a command is not found, the child process created to execute it returns a status of 127. If a command is found but is not executable, the return status is 126.",
+   "location": "3.7.5 Exit Status",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#Exit-Status"
+  },
+  {
+   "planned": "Pipeline exit status is that of the last command unless pipefail is set; with pipefail it is the last (rightmost) command to exit non-zero",
+   "verdict": "confirmed",
+   "finding": "Confirmed; with pipefail the status is that of the last (rightmost) command to exit non-zero, or zero if all succeed. pipefail is disabled by default. Executed: `false | true` -> 0; with pipefail -> 1; `exit 3 | exit 4 | true` with pipefail -> 4 (rightmost failure, not first); PIPESTATUS=3 4 0.",
+   "quote": "The exit status of a pipeline is the exit status of the last command in the pipeline, unless the pipefail option is enabled (see The Set Builtin). If pipefail is enabled, the pipeline's return status is the value of the last (rightmost) command to exit with a non-zero status, or zero if all commands exit successfully.",
+   "location": "3.2.3 Pipelines",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#Pipelines"
+  },
+  {
+   "planned": "set -e (errexit) semantics and its documented exceptions (conditions in if/while, && || lists, non-final pipeline commands, negated commands)",
+   "verdict": "confirmed",
+   "finding": "Exact exception list: the shell does NOT exit if the failing command is (1) part of the command list immediately following `while` or `until`, (2) part of the test in an `if`, (3) part of any command in a && or || list EXCEPT the command following the final && or ||, (4) any command in a pipeline but the last (subject to pipefail), (5) a command whose status is inverted with `!`. Further: if a compound command or shell FUNCTION runs in a context where -e is ignored, nothing inside it is affected by -e. Command substitution subshells have -e cleared unless in POSIX mode / inherit_errexit. All executed and observed (see extra_findings).",
+   "quote": "The shell does not exit if the command that fails is part of the command list immediately following a while or until reserved word, part of the test in an if statement, part of any command executed in a && or || list except the command following the final && or ||, [continues in extra_findings]",
+   "location": "4.3.1 The Set Builtin, option -e",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin"
+  },
+  {
+   "planned": "set -u (nounset) treats unset variables as an error on expansion",
+   "verdict": "confirmed",
+   "finding": "Confirmed, with exceptions for the special parameters @ and * (and arrays subscripted with @ or *). An error is written to stderr and a NON-INTERACTIVE shell exits. Executed: `bash -c 'set -u; echo $UNSET'` prints 'UNSET_VAR_XYZ: unbound variable' and the shell exits with status 127 (bash 5.2.21); `${UNSET:-default}` is not an error.",
+   "quote": "Treat unset variables and parameters other than the special parameters '@' or '*', or array variables subscripted with '@' or '*', as an error when performing parameter expansion. An error message will be written to the standard error, and a non-interactive shell will exit.",
+   "location": "4.3.1 The Set Builtin, option -u",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin"
+  },
+  {
+   "planned": "Redirection semantics: order matters, `>file 2>&1` vs `2>&1 >file`; `&>` shorthand; here-documents and here-strings; /dev/fd, /dev/tcp special filenames",
+   "verdict": "confirmed",
+   "finding": "Redirections are processed left to right. `ls > dirlist 2>&1` sends both streams to the file; `ls 2>&1 > dirlist` sends only stdout to the file because stderr was made a copy of stdout BEFORE stdout was redirected. `&>word` (preferred) and `>&word` are 'semantically equivalent to >word 2>&1'; `&>>word` appends. Here-doc: quoted delimiter = no expansion; `<<-` strips leading TABs. Here-string `<<< word`: result supplied as a single string with a newline appended. Special filenames handled by bash itself: /dev/fd/fd, /dev/stdin, /dev/stdout, /dev/stderr, /dev/tcp/host/port, /dev/udp/host/port. Executed: /dev/tcp does not exist as a file in ubuntu:24.04.",
+   "quote": "directs only the standard output to file dirlist, because the standard error was made a copy of the standard output before the standard output was redirected to dirlist.",
+   "location": "3.6 Redirections",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#Redirections"
+  },
+  {
+   "planned": "Quoting: single quotes preserve literally; double quotes preserve all but $ ` \\ (and ! with history); word splitting and filename expansion happen on unquoted expansions",
+   "verdict": "confirmed",
+   "finding": "Single quotes preserve every character; a single quote cannot occur between single quotes even with a backslash. Double quotes preserve all except $, `, \\ and (when history expansion is enabled) !. Inside double quotes backslash is special only before $ ` \" \\ or newline. Word splitting applies to results of parameter expansion, command substitution and arithmetic expansion 'that did not occur within double quotes'; default IFS is space, tab, newline. Filename expansion happens after word splitting on words containing unquoted *, ? or [.",
+   "quote": "Enclosing characters in double quotes ('\"') preserves the literal value of all characters within the quotes, with the exception of '$', '`', '\\', and, when history expansion is enabled, '!'.",
+   "location": "3.1.2.2 Single Quotes; 3.1.2.3 Double Quotes; 3.5.7 Word Splitting; 3.5.8 Filename Expansion",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#Double-Quotes"
+  },
+  {
+   "planned": "Builtins such as cd, export, source exist because they must change the shell's own state",
+   "verdict": "corrected",
+   "finding": "The manual's own examples are cd, break, continue and exec, which 'cannot be implemented outside of the shell because they directly manipulate the shell itself'. It does not name export or source in that sentence (they fit the same logic: `.`/source 'reads and execute commands ... in the current shell context'; export marks names for the environment of subsequently executed commands). It also says some builtins (history, getopts, kill, pwd) COULD be separate utilities and are builtin for convenience. Cite the cd/exec wording; describe export/source by their documented effect.",
+   "quote": "For example, cd, break, continue, and exec cannot be implemented outside of the shell because they directly manipulate the shell itself. The history, getopts, kill, or pwd builtins, among others, could be implemented in separate utilities, but they are more convenient to use as builtin commands.",
+   "location": "1.1 What is Bash? / 'What is a shell?'; also 4 Shell Builtin Commands",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#What-is-a-shell_003f"
+  },
+  {
+   "planned": "Startup files: login vs interactive non-login vs non-interactive shells (which of /etc/profile, ~/.bash_profile, ~/.bashrc, BASH_ENV are read) — matters because harness `bash -c` shells read none of the interactive ones",
+   "verdict": "confirmed",
+   "finding": "Login shell (or --login): /etc/profile, then the FIRST that exists and is readable of ~/.bash_profile, ~/.bash_login, ~/.profile. Interactive non-login: ~/.bashrc only. Non-interactive (scripts, `bash -c`): only the file named by $BASH_ENV, if set (PATH is not used to find it). Invoked as `sh`: login reads /etc/profile and ~/.profile; interactive reads $ENV; non-interactive reads nothing. Exception: bash run by sshd/rshd non-interactively reads ~/.bashrc. A shell is interactive only if started without -c/non-option args AND stdin+stderr are terminals, or with -i. Executed: `bash -c` read nothing; `bash -lc` read .bash_profile (or .profile when absent); `bash -ic` read .bashrc; BASH_ENV file was read by `bash -c`.",
+   "quote": "When Bash is started non-interactively, to run a shell script, for example, it looks for the variable BASH_ENV in the environment, expands its value if it appears there, and uses the expanded value as the name of a file to read and execute.",
+   "location": "6.2 Bash Startup Files; 6.1 Invoking Bash (definitions of login/interactive)",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#Bash-Startup-Files"
+  },
+  {
+   "planned": "Command search order: functions, builtins, then PATH lookup; hash table",
+   "verdict": "confirmed",
+   "finding": "For a name with no slashes: shell function first, then builtin, then each element of $PATH; bash remembers full pathnames in a hash table and does a full PATH search only on a hash miss. If not found, bash looks for a function named command_not_found_handle; otherwise prints an error and returns 127. If the name contains a slash, no search happens. If exec fails because the file is not in executable format (and not a directory) it is assumed to be a shell script. Executed: a function named ls beats /usr/bin/ls; a function named cd shadows the builtin; `type ls` -> 'ls is hashed (/usr/bin/ls)'.",
+   "quote": "If there exists a shell function by that name, that function is invoked as described in Shell Functions. If the name does not match a function, the shell searches for it in the list of shell builtins. If a match is found, that builtin is invoked.",
+   "location": "3.7.2 Command Search and Execution",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#Command-Search-and-Execution"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "Remainder of the set -e exception sentence (continues the quote in the claim).",
+   "quote": "any command in a pipeline but the last (subject to the state of the pipefail shell option), or if the command's return status is being inverted with !. If a compound command other than a subshell returns a non-zero status because a command failed while -e was being ignored, the shell does not exit.",
+   "location": "4.3.1 The Set Builtin, option -e"
+  },
+  {
+   "fact": "Manual version fetched is Bash 5.3 (18 May 2025); Ubuntu 24.04 ships bash 5.2.21, Debian 12 ships 5.2.15. Nothing cited here differs between 5.2 and 5.3 as far as tested.",
+   "quote": "This is Edition 5.3, last updated 18 May 2025, of The GNU Bash Reference Manual, for Bash, Version 5.3.",
+   "location": "title page; versions from `bash --version` executed ubuntu:24.04 / debian:bookworm-slim"
+  },
+  {
+   "fact": "Exit statuses are limited to 0-255 and builtins use 2 for usage errors.",
+   "quote": "Exit statuses fall between 0 and 255, though, as explained below, the shell may use values above 125 specially. ... All builtins return an exit status of 2 to indicate incorrect usage, generally invalid options or missing arguments.",
+   "location": "3.7.5 Exit Status"
+  },
+  {
+   "fact": "Why zero means success.",
+   "quote": "This seemingly counter-intuitive scheme is used so there is one well-defined way to indicate success and a variety of ways to indicate various failure modes.",
+   "location": "3.7.5 Exit Status"
+  },
+  {
+   "fact": "A shell FUNCTION called from an if/&&/|| context runs entirely with -e ignored, even if it sets -e itself.",
+   "quote": "If a compound command or shell function executes in a context where -e is being ignored, none of the commands executed within the compound command or function body will be affected by the -e setting, even if -e is set and a command returns a failure status.",
+   "location": "4.3.1 The Set Builtin, option -e"
+  },
+  {
+   "fact": "Command substitution does not inherit -e in normal (non-POSIX) bash; `shopt -s inherit_errexit` changes that.",
+   "quote": "When not in POSIX mode, Bash clears the -e option in such subshells. See the description of the inherit_errexit shell option",
+   "location": "3.7.3 Command Execution Environment"
+  },
+  {
+   "fact": "set -e observed behaviour, all in one run.",
+   "quote": "$ bash -c 'set -e; if false; then :; fi; echo survived' -> survived | 'set -e; false || echo x' -> x | 'set -e; false && true; echo survived' -> survived | 'set -e; false | true; echo survived' -> survived | 'set -e; ! false; ! true; echo survived' -> survived | 'set -e; f(){ false; echo inside; }; if f; then echo ok; fi' -> inside / ok | 'set -e; x=$(false; echo sub-continued); echo $x' -> sub-continued | 'set -e; f(){ local v=$(false); echo survived; }; f' -> survived | 'set -e; echo before; false; echo NOT' -> before, shell status 1 | 'set -e; true && false; echo NOT' -> status 1 | 'set -eo pipefail; false | true; echo NOT' -> status 1",
+   "location": "executed ubuntu:24.04 (bash 5.2.21)"
+  },
+  {
+   "fact": "Redirection order observed.",
+   "quote": "$ ls /nonexistent_zz > a.txt 2>&1   (nothing on terminal; a.txt contains \"ls: cannot access '/nonexistent_zz': No such file or directory\")\n$ ls /nonexistent_zz 2>&1 > b.txt   (error printed on terminal; b.txt is 0 bytes)\n$ ls /nonexistent_zz &> c.txt       (c.txt contains the error)",
+   "location": "executed ubuntu:24.04 (bash 5.2.21)"
+  },
+  {
+   "fact": "Word splitting and globbing observed.",
+   "quote": "$ f=\"a b   c\"; printf '<%s>' $f  -> <a><b><c>\n$ printf '<%s>' \"$f\" -> <a b   c>\n$ v='*'; echo $v -> a.txt b.txt c.txt noexec.sh x y.txt ; echo \"$v\" -> *\n$ echo 'single: $HOME `date` \\n' -> single: $HOME `date` \\n",
+   "location": "executed ubuntu:24.04 (bash 5.2.21)"
+  },
+  {
+   "fact": "Startup files observed (HOME=/root with marker lines in each file).",
+   "quote": "bash -c 'echo ran' -> ran | bash -lc -> [.bash_profile was read] ran | bash -ic -> [.bashrc was read] ran | BASH_ENV=/tmp/benv bash -c -> [BASH_ENV file was read] ran | ENV=/tmp/benv sh -c (dash) -> ran | bash s.sh -> ran-script | bash -lc with no .bash_profile -> [.profile was read] ran",
+   "location": "executed ubuntu:24.04 (bash 5.2.21)"
+  },
+  {
+   "fact": "Each pipeline command runs in its own subshell; subshell changes cannot affect the parent. Builtins in a pipeline (except possibly the last with lastpipe) also run in a subshell — why `cmd | read x` loses x.",
+   "quote": "Each command in a multi-command pipeline, where pipes are created, is executed in its own subshell, which is a separate process ... Changes made to the subshell environment cannot affect the shell's execution environment.",
+   "location": "3.2.3 Pipelines; 3.7.3 Command Execution Environment"
+  },
+  {
+   "fact": "Signals: an interactive bash ignores SIGTERM; all bash ignores SIGQUIT; a trap does not run until the foreground command completes; `wait` returns >128 when interrupted by a trapped signal. Relevant to harness timeouts that send TERM to a shell wrapper.",
+   "quote": "If Bash is waiting for a command to complete and receives a signal for which a trap has been set, it will not execute the trap until the command completes.",
+   "location": "3.7.6 Signals"
+  },
+  {
+   "fact": "Asynchronous commands (&) without job control get /dev/null as stdin and ignore SIGINT and SIGQUIT.",
+   "quote": "If a command is followed by a '&' and job control is not active, the default standard input for the command is the empty file /dev/null.",
+   "location": "3.7.3 Command Execution Environment; 3.7.6 Signals"
+  },
+  {
+   "fact": "Output redirection truncates an existing file to zero size before the command runs; `set -o noclobber` makes `>` fail on an existing regular file and `>|` overrides.",
+   "quote": "If the file does not exist it is created; if it does exist it is truncated to zero size.",
+   "location": "3.6.2 Redirecting Output"
+  },
+  {
+   "fact": "Definition of a builtin.",
+   "quote": "A command that is implemented internally by the shell itself, rather than by an executable program somewhere in the file system.",
+   "location": "2 Definitions"
+  },
+  {
+   "fact": "Bash's own exit status is that of the last command executed; `bash script` with no commands exits 0.",
+   "quote": "Bash itself returns the exit status of the last command executed, unless a syntax error occurs, in which case it exits with a non-zero value.",
+   "location": "3.7.5 Exit Status"
+  },
+  {
+   "fact": "On Ubuntu 24.04 and Debian 12 /bin/sh is dash, not bash: `set -o pipefail`, arrays and [[ ]] all fail there.",
+   "quote": "$ ls -l /bin/sh -> /bin/sh -> dash\n$ sh -c 'set -o pipefail' -> sh: 1: set: Illegal option -o pipefail\n$ sh -c 'a=(1 2)' -> sh: 1: Syntax error: \"(\" unexpected\n$ sh -c '[[ a == a ]]' -> sh: 1: [[: not found",
+   "location": "executed ubuntu:24.04 (bash 5.2.21)"
+  },
+  {
+   "fact": "SIGHUP and background jobs: bash exits on SIGHUP; before exiting an INTERACTIVE shell resends SIGHUP to all jobs (running or stopped, with SIGCONT to stopped ones). `disown` removes a job from the table so it is not sent SIGHUP; `disown -h` keeps it in the table but marks it not to receive SIGHUP. With shopt huponexit, bash also sends SIGHUP to all jobs when an interactive LOGIN shell exits (so a plain typed `exit` does not, by default). Added by the page-09 author 2026-09-21; executed in ubuntu:24.04: after a tmux terminal was killed, the plain `&` job died while the nohup and disowned jobs survived with PPID 1; after a typed `exit`, all background jobs survived.",
+   "quote": "The shell exits by default upon receipt of a SIGHUP. Before exiting, an interactive shell resends the SIGHUP to all jobs, running or stopped. ... To prevent the shell from sending the SIGHUP signal to a particular job, remove it from the jobs table with the disown builtin (see Job Control Builtins) or mark it not to receive SIGHUP using disown -h.",
+   "location": "3.7.6 Signals",
+   "cite_url": "https://www.gnu.org/software/bash/manual/bash.html#Signals"
+  }
+ ],
+ "teaching_notes": "Authoritative for every shell mechanic the course asserts. Folklore it corrects: (1) 'set -e makes scripts stop on any error' — false; the documented exception list is long and includes every command inside a function called from an if/&&/|| context, and command substitutions (errexit cleared in the subshell unless inherit_errexit). (2) 'pipefail returns the first failure' — it returns the LAST (rightmost) non-zero status. (3) 'bash -c reads .bashrc' — a non-interactive shell reads only $BASH_ENV; harness `bash -c`/`docker exec` shells get none of the user's interactive setup, and `bash -lc` reads profile files but still not .bashrc unless the profile sources it. (4) The planned 'cd, export, source' example list is not the manual's: it names cd, break, continue, exec. Observed surprise worth a footnote: under `set -u`, bash 5.2 `-c` exits with status 127 on an unbound variable (the manual only says a non-interactive shell 'will exit'). The manual fetched is 5.3; the reference system runs 5.2.21."
+}

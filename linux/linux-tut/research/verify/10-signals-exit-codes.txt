@@ -1,0 +1,375 @@
+# page 10 verification 2026-09-21: lt-10-lab = ubuntu:24.04 + procps python3, user learner, real pty via expect
+--- graceful.sh (shellcheck-clean):
+#!/bin/bash
+# A worker that cleans up when asked politely.
+workdir=$(mktemp -d)
+cleanup() { rm -rf "$workdir"; echo "cleaned up $workdir"; }
+trap cleanup EXIT
+trap 'echo "got SIGTERM, finishing"; exit 0' TERM
+echo "working in $workdir (pid $$)"
+sleep 300 &
+wait $!
+
+##### session s1
+spawn docker exec -it -u learner -e TERM=dumb lt-10-lab bash
+learner@b842f298476a:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ kill -l | head -4
+ 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP
+ 6) SIGABRT	 7) SIGBUS	 8) SIGFPE	 9) SIGKILL	10) SIGUSR1
+11) SIGSEGV	12) SIGUSR2	13) SIGPIPE	14) SIGALRM	15) SIGTERM
+16) SIGSTKFLT	17) SIGCHLD	18) SIGCONT	19) SIGSTOP	20) SIGTSTP
+$ sleep 300 &
+[1] 25
+$ kill %1; wait %1; echo "status=$?"
+[1]+  Terminated              sleep 300
+status=143
+$ sleep 300 &
+[1] 26
+$ kill -KILL %1; wait %1; echo "status=$?"
+[1]+  Killed                  sleep 300
+status=137
+$ sleep 300 &
+[1] 27
+$ kill -STOP %1; ps -o pid,stat,args -C sleep
+  PID STAT COMMAND
+   27 T    sleep 300
+
+[1]+  Stopped                 sleep 300
+$ kill -CONT %1; ps -o pid,stat,args -C sleep
+  PID STAT COMMAND
+   27 S    sleep 300
+$ kill -0 $!; echo "rc=$?"
+rc=0
+$ kill %1
+$ kill -0 99999; echo "rc=$?"
+bash: kill: (99999) - No such process
+rc=1
+[1]+  Terminated              sleep 300
+$ kill -TERM 1; echo "rc=$?"
+bash: kill: (1) - Operation not permitted
+rc=1
+$ /tmp/graceful.sh &
+[1] 30
+$ sleep 1; kill -TERM $!; sleep 1; ls -d /tmp/tmp.* 2>&1
+working in /tmp/tmp.SbI72fGeHE (pid 30)
+got SIGTERM, finishing
+cleaned up /tmp/tmp.SbI72fGeHE
+[1]+  Done                    /tmp/graceful.sh
+ls: cannot access '/tmp/tmp.*': No such file or directory
+$ /tmp/graceful.sh &
+[1] 37
+$ sleep 1; kill -KILL $!; sleep 1; ls -d /tmp/tmp.*
+working in /tmp/tmp.HDTxiUmqGS (pid 37)
+[1]+  Killed                  /tmp/graceful.sh
+/tmp/tmp.HDTxiUmqGS
+$ rm -rf /tmp/tmp.*; pkill sleep
+$ exit
+exit
+
+##### session s2
+spawn docker exec -it -u learner -e TERM=dumb lt-10-lab bash
+learner@b842f298476a:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ true; echo $?
+0
+$ false; echo $?
+1
+$ ls /nope; echo $?
+ls: cannot access '/nope': No such file or directory
+2
+$ grep -q root /etc/passwd; echo $?
+0
+$ grep -q nosuchuser /etc/passwd; echo $?
+1
+$ grep -q root /etc/nofile; echo $?
+grep: /etc/nofile: No such file or directory
+2
+$ nosuchcmd; echo $?
+bash: nosuchcmd: command not found
+127
+$ touch /tmp/notexec; /tmp/notexec; echo $?
+bash: /tmp/notexec: Permission denied
+126
+$ /tmp; echo $?
+bash: /tmp: Is a directory
+126
+$ bash -c 'exit 3'; echo $?
+3
+$ bash -c 'exit 256'; echo $?
+0
+$ bash -c 'exit 257'; echo $?
+1
+$ bash -c 'exit -1'; echo $?
+255
+$ python3 -c 'import sys; sys.exit(2)'; echo $?
+2
+$ python3 -c 'raise ValueError("boom")' 2>/dev/null; echo $?
+1
+$ python3 -c 'import ctypes; ctypes.string_at(0)'; echo $?
+Segmentation fault
+139
+$ yes | head -1; echo "PIPESTATUS=${PIPESTATUS[*]}"
+y
+PIPESTATUS=141 0
+$ <nt(s.run(["sleep","30"],timeout=1))' 2>&1 | tail -1
+subprocess.TimeoutExpired: Command '['sleep', '30']' timed out after 0.9999906659977569 seconds
+$ <s.Popen(["sleep","30"]); p.kill(); print(p.wait())'
+-9
+$ <en(["sleep","30"]); p.terminate(); print(p.wait())'
+-15
+$ <-c","sleep 30 & kill -9 $!; wait $!"]).returncode)'
+bash: line 1:    79 Killed                  sleep 30
+137
+$ < print(s.run("kill -9 $$", shell=True).returncode)'
+-9
+$ exit
+exit
+
+--- stubborn.sh:
+#!/bin/bash
+# Ignores SIGTERM, the way a badly behaved test runner might.
+trap '' TERM
+echo "stubborn: started"
+sleep 4
+echo "stubborn: finished anyway"
+##### session s3 (timeout, ulimit -t)
+spawn docker exec -it -u learner -e TERM=dumb lt-10-lab bash
+learner@b842f298476a:/$ PS1='\$ '; bind 'set enable-bracketed-paste off'
+$ time timeout 2 sleep 10; echo "status=$?"
+
+real	0m2.003s
+user	0m0.000s
+sys	0m0.003s
+status=124
+$ timeout 2 true; echo "status=$?"
+status=0
+$ timeout 2 bash -c 'exit 42'; echo "status=$?"
+status=42
+$ timeout 2 nosuchcmd; echo "status=$?"
+timeout: failed to run command 'nosuchcmd': No such file or directory
+status=127
+$ timeout -s KILL 2 sleep 10; echo "status=$?"
+Killed
+status=137
+$ timeout --preserve-status 2 sleep 10; echo "status=$?"
+status=143
+$ time timeout 2 /tmp/stubborn.sh; echo "status=$?"
+stubborn: started
+stubborn: finished anyway
+
+real	0m4.016s
+user	0m0.002s
+sys	0m0.004s
+status=124
+$ time timeout -k 1 2 /tmp/stubborn.sh; echo "status=$?"
+stubborn: started
+Killed
+
+real	0m3.024s
+user	0m0.000s
+sys	0m0.004s
+status=137
+$ (ulimit -t 1; while :; do :; done); echo "status=$?"
+Killed
+status=137
+$ (ulimit -St 1; while :; do :; done); echo "status=$?"
+CPU time limit exceeded
+status=152
+$ exit
+exit
+
+##### alpine busybox timeout
+$ docker run --rm alpine:3.20 sh -c 'timeout 1 sleep 3; echo status=$?'
+Terminated
+status=143
+
+##### PID 1 and docker stop (host prompt)
+$ docker run -d --name lt-10-a ubuntu:24.04 sleep 300 >/dev/null
+$ docker exec lt-10-a sh -c 'id -u; grep SigCgt /proc/1/status; kill -TERM 1; echo "rc=$?"; kill -KILL 1; echo "rc=$?"; sleep 1; ps -o pid,stat,args -p 1'
+0
+SigCgt:	0000000000000000
+rc=0
+rc=0
+  PID STAT COMMAND
+    1 Ss   sleep 300
+$ time docker stop lt-10-a
+lt-10-a
+  0.02s user 0.02s system 0% cpu 10.211 total
+$ docker inspect lt-10-a --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+ExitCode=137 OOMKilled=false
+$ docker run -d --init --name lt-10-b ubuntu:24.04 sleep 300 >/dev/null
+$ docker exec lt-10-b ps -eo pid,ppid,stat,args
+  PID  PPID STAT COMMAND
+    1     0 Ss   /sbin/docker-init -- sleep 300
+    7     1 S    sleep 300
+    8     0 Rs   ps -eo pid,ppid,stat,args
+$ time docker stop lt-10-b
+lt-10-b
+  0.01s user 0.01s system 17% cpu 0.090 total
+$ docker inspect lt-10-b --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+ExitCode=143 OOMKilled=false
+--- app with a handler, exec form vs wrapped in a shell
+Error response from daemon: failed to create task for container: failed to create shim task: OCI runtime create failed: runc create failed: unable to start container process: error during container init: exec: "/graceful.sh": permission denied: unknown
+Error: failed to start containers: lt-10-c
+$ docker exec lt-10-c ps -eo pid,ppid,stat,args
+Error response from daemon: container d24e134fcbb45e1e7705169637db5330944e10a6bbb3dab3881e0b99782b7287 is not running
+$ docker exec lt-10-c grep SigCgt /proc/1/status
+Error response from daemon: container d24e134fcbb45e1e7705169637db5330944e10a6bbb3dab3881e0b99782b7287 is not running
+$ time docker stop lt-10-c
+lt-10-c
+  0.01s user 0.01s system 101% cpu 0.016 total
+$ docker inspect lt-10-c --format 'ExitCode={{.State.ExitCode}}'; docker logs lt-10-c
+ExitCode=126
+$ docker exec lt-10-d ps -eo pid,ppid,stat,args
+Error response from daemon: container e55318aa9c069d779ff31099d05997a402e22375102997ca0cadf0a36b17dfbd is not running
+$ time docker stop lt-10-d
+lt-10-d
+  0.01s user 0.01s system 86% cpu 0.017 total
+$ docker inspect lt-10-d --format 'ExitCode={{.State.ExitCode}}'; docker logs lt-10-d
+ExitCode=0
+wrapper done
+/bin/sh: 1: /graceful.sh: Permission denied
+--- shell form with a single command (sh -c '/graceful.sh')
+$ docker exec lt-10-e ps -eo pid,ppid,stat,args
+Error response from daemon: container 062ad300d7fa4ff9823801786f32ae5aa0988ea2a29107248770ca0138ad94f3 is not running
+$ time docker stop lt-10-e
+lt-10-e
+  0.01s user 0.01s system 86% cpu 0.016 total
+$ docker inspect lt-10-e --format 'ExitCode={{.State.ExitCode}}'
+ExitCode=126
+
+##### RERUN of handler cases (first attempt above failed: graceful.sh lacked +x on the host copy -> 126)
+--- (c) exec form: docker create ubuntu:24.04 /graceful.sh
+$ docker exec lt-10-c ps -eo pid,ppid,stat,args
+  PID  PPID STAT COMMAND
+    1     0 Ss   /bin/bash /graceful.sh
+    8     1 S    sleep 300
+    9     0 Rs   ps -eo pid,ppid,stat,args
+$ docker exec lt-10-c grep SigCgt /proc/1/status
+SigCgt:	0000000043817efb
+$ time docker stop lt-10-c
+lt-10-c
+  0.01s user 0.01s system 13% cpu 0.120 total
+$ docker inspect lt-10-c --format 'ExitCode={{.State.ExitCode}}'; docker logs lt-10-c
+ExitCode=0
+working in /tmp/tmp.8l0urhcUg9 (pid 1)
+got SIGTERM, finishing
+cleaned up /tmp/tmp.8l0urhcUg9
+--- (d) wrapped: /bin/sh -c '/graceful.sh; echo wrapper done'
+$ docker exec lt-10-d ps -eo pid,ppid,stat,args
+  PID  PPID STAT COMMAND
+    1     0 Ss   /bin/sh -c /graceful.sh; echo wrapper done
+    7     1 S    /bin/bash /graceful.sh
+    9     7 S    sleep 300
+   10     0 Rs   ps -eo pid,ppid,stat,args
+$ time docker stop lt-10-d
+lt-10-d
+  0.01s user 0.01s system 0% cpu 10.212 total
+$ docker inspect lt-10-d --format 'ExitCode={{.State.ExitCode}}'; docker logs lt-10-d
+ExitCode=137
+working in /tmp/tmp.hL9x5Dwcfh (pid 7)
+--- (e) shell form, single command: /bin/sh -c '/graceful.sh'
+$ docker exec lt-10-e ps -eo pid,ppid,stat,args
+  PID  PPID STAT COMMAND
+    1     0 Ss   /bin/sh -c /graceful.sh
+    7     1 S    /bin/bash /graceful.sh
+    9     7 S    sleep 300
+   10     0 Rs   ps -eo pid,ppid,stat,args
+$ time docker stop lt-10-e
+lt-10-e
+  0.02s user 0.01s system 0% cpu 10.169 total
+$ docker inspect lt-10-e --format 'ExitCode={{.State.ExitCode}}'
+ExitCode=137
+
+##### the 137 ambiguity (host prompt)
+--- (1) OOM victim is a child; PID 1 carries on
+$ docker run --name lt-10-oom1 --memory 64m --memory-swap 64m ubuntu:24.04 sh -c 'tail /dev/zero; echo "tail exit=$?"; grep oom_kill /sys/fs/cgroup/memory.events'; echo "container exit=$?"
+Killed
+tail exit=137
+oom_kill 1
+container exit=0
+$ docker inspect lt-10-oom1 --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+ExitCode=0 OOMKilled=true
+--- (2) OOM victim is PID 1
+$ docker run --name lt-10-oom2 --memory 64m --memory-swap 64m ubuntu:24.04 tail /dev/zero; echo "container exit=$?"
+container exit=137
+$ docker inspect lt-10-oom2 --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'
+ExitCode=137 OOMKilled=true
+--- (3) harness-style timeout: docker kill after a deadline (what a wall-clock limit does)
+$ docker run -d --name lt-10-to ubuntu:24.04 sleep 300 >/dev/null; sleep 2; docker kill lt-10-to >/dev/null
+$ docker inspect lt-10-to --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Started={{.State.StartedAt}} Finished={{.State.FinishedAt}}'
+ExitCode=137 OOMKilled=false Started=2026-09-21T21:11:53.379340713Z Finished=2026-09-21T21:11:55.507711339Z
+
+##### docker exec reports signal deaths as 128+N too
+$ docker exec lt-10-lab bash -c 'kill -9 $$'; echo "exit=$?"
+exit=137
+$ docker exec lt-10-lab bash -c 'kill -TERM $$'; echo "exit=$?"
+exit=143
+$ docker run --rm ubuntu:24.04 bash -c 'kill -SEGV $$'; echo "exit=$?"
+exit=0
+
+##### failure accounting on results.jsonl (as learner)
+    106 "exit_code": 0
+     56 "exit_code": 1
+      9 "exit_code": 127
+      8 "exit_code": 124
+      5 "exit_code": 137
+      4 "exit_code": 2
+      4 "exit_code": 126
+--- account.py:
+import json, sys
+
+rows = [json.loads(line) for line in open(sys.argv[1])]
+RUN_OUTCOMES = {124: "timeout", 137: "killed"}   # about the run, not the answer
+
+scheduled = len(rows)
+not_completed = [r for r in rows if r["exit_code"] in RUN_OUTCOMES]
+completed = scheduled - len(not_completed)
+correct = sum(r["passed"] for r in rows)
+
+print(f"scheduled {scheduled}  completed {completed}  correct {correct}")
+for code, name in RUN_OUTCOMES.items():
+    print(f"  {name} ({code}): {sum(r['exit_code'] == code for r in rows)}")
+print(f"correct/scheduled   = {correct / scheduled:.3f}")
+print(f"correct/completed   = {correct / completed:.3f}")
+print(f"completed/scheduled = {completed / scheduled:.3f}")
+$ python3 /tmp/account.py /tmp/results.jsonl
+scheduled 192  completed 179  correct 106
+  timeout (124): 8
+  killed (137): 5
+correct/scheduled   = 0.552
+correct/completed   = 0.592
+completed/scheduled = 0.932
+--- per model
+== model-a
+scheduled 64  completed 62  correct 45
+  timeout (124): 2
+  killed (137): 0
+correct/scheduled   = 0.703
+correct/completed   = 0.726
+completed/scheduled = 0.969
+== model-b
+scheduled 64  completed 59  correct 34
+  timeout (124): 3
+  killed (137): 2
+correct/scheduled   = 0.531
+correct/completed   = 0.576
+completed/scheduled = 0.922
+== model-c
+scheduled 64  completed 58  correct 27
+  timeout (124): 3
+  killed (137): 3
+correct/scheduled   = 0.422
+correct/completed   = 0.466
+completed/scheduled = 0.906
+$ grep -c "\"exit_code\": 137" ; grep Killed
+{"task": "logrotate", "model": "model-b", "epoch": 7, "exit_code": 137, "passed": false, "stderr_tail": "Killed", "duration_s": 182.7}
+{"task": "jsonfix", "model": "model-b", "epoch": 8, "exit_code": 137, "passed": false, "stderr_tail": "Killed", "duration_s": 169.5}
+{"task": "logrotate", "model": "model-c", "epoch": 8, "exit_code": 137, "passed": false, "stderr_tail": "Killed", "duration_s": 94.4}
+{"task": "jsonfix", "model": "model-a", "epoch": 4, "exit_code": 124, "passed": false, "stderr_tail": "", "duration_s": 300.0}
+{"task": "tzparse", "model": "model-a", "epoch": 8, "exit_code": 124, "passed": false, "stderr_tail": "", "duration_s": 300.0}
+
+##### --ulimit cpu
+$ docker run --rm --ulimit cpu=1 ubuntu:24.04 bash -c 'ulimit -St; ulimit -Ht; while :; do :; done'; echo exit=$?
+1
+1
+exit=137

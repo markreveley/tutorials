@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sampling &amp; Estimation · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix B · Math &amp; Stats</p>
+    <h1>Sampling &amp; Estimation</h1>
+    <p class="lede">Your eval score is not the truth — it's an estimate of the truth, computed from a sample of questions. This appendix explains what that sentence means, how much an estimate can wobble, and how to put honest error bars on it.</p>
+
+    <p>This appendix builds on <a href="../appendices/a-probability.html">Appendix A</a> (random variables, expectation, variance). If terms like "expected value" feel shaky, read that first.</p>
+
+    <h2 id="population-vs-sample">Population vs sample</h2>
+
+    <p>Statistics textbooks open with a survey example: you want the average height of all adults in a country (the <em>population</em>), but you can only measure 1,000 of them (the <span class="term" data-g="sample">sample</span>). The population value is what you care about; the sample value is what you actually have.</p>
+
+    <p>Here's the reframe that makes this matter for evals: <strong>your eval's questions are a sample too.</strong> When you build a <span class="term" data-g="dataset">dataset</span> of 200 customer-support questions, you didn't enumerate every question your users could ever ask. You drew 200 from an imaginary, effectively infinite population of all the questions you <em>could</em> have asked — all plausible phrasings, topics, and edge cases your system will face in production. The number you care about is the model's accuracy over that whole population. The number you have is its accuracy on your 200.</p>
+
+    <div class="keyidea"><span class="label">Key idea</span> An eval score is a <em>sample estimate</em> of a <em>population value</em>. The population value — how good the model really is at this kind of task — is what you want. The score on your particular questions is merely your best guess at it, and a different draw of questions would have given a different guess.</div>
+
+    <p>This is true even if you wrote every question by hand. Had you sat down on a different day, you'd have written different questions, and gotten a different score. The "randomness" doesn't require a literal lottery; it just requires that your questions are one of many sets you could plausibly have ended up with.</p>
+
+    <h2 id="the-sample-mean">The sample mean as an estimator</h2>
+
+    <p>Most eval metrics are means. Score each of <i>n</i> questions 1 (pass) or 0 (fail), then average:</p>
+
+    <div class="math">p̂ = (x<sub>1</sub> + x<sub>2</sub> + … + x<sub>n</sub>) / n</div>
+
+    <p>In words: the observed accuracy <i>p̂</i> ("p-hat" — the hat means "estimate of") is the number of passes divided by the number of questions. It's an <em>estimator</em> of the true population accuracy <i>p</i>: a recipe that takes data in and produces a guess at the quantity you actually want.</p>
+
+    <p>A useful property for an estimator to have is being <em>unbiased</em>. An <span class="term" data-g="unbiased-estimator">unbiased estimator</span> is one with no systematic lean: it doesn't run high on average, and it doesn't run low. Across all the samples you might have drawn, the guesses average out to exactly the true value — the errors are scatter, not tilt. The sample mean is unbiased for the population mean, which is one reason it's the default. (Not every natural-looking estimator is unbiased; the naive way of computing pass@k is a famous biased one — see <a href="../appendices/d-combinatorics-pass-at-k.html">Appendix D</a>.)</p>
+
+    <p>Unbiased does <em>not</em> mean accurate. An unbiased estimator can still miss by a lot on any single sample — it just doesn't miss in a predictable direction. How far it typically misses is the next topic.</p>
+
+    <h2 id="sampling-variation">Sampling variation: same model, different score</h2>
+
+    <p>Run this thought experiment. A model has a true ability of 70%: over the whole population of questions, it answers 70% correctly. You build an eval by drawing 50 questions and scoring it. Then you throw those away, draw a fresh 50, and score it again. And again, a thousand times.</p>
+
+    <p>You will not get 70% every time. One draw happens to contain easier questions and the model scores 78%. Another draws harder ones: 62%. The scores scatter around 70% — that scatter is <em>sampling variation</em>, and its spread depends heavily on the <span class="term" data-g="sample-size">sample size</span> <i>n</i>:</p>
+
+    <ul>
+      <li>With <i>n</i> = 50, scores routinely land anywhere from about 57% to 83%.</li>
+      <li>With <i>n</i> = 500, they cluster tightly between about 66% and 74%.</li>
+    </ul>
+
+    <p>Same model, same true ability — wildly different stability. A 5-point "improvement" measured on a 50-question eval might be nothing but the luck of the draw. This is the single most common way teams fool themselves with evals.</p>
+
+    <h2 id="standard-error">Standard error: the standard deviation of your estimate</h2>
+
+    <p>The scatter above can be quantified. Imagine collecting all those repeated-eval scores into one big histogram — statisticians call it the <em>sampling distribution</em> of the estimate. Like any distribution it has a <span class="term" data-g="standard-deviation">standard deviation</span>, and that particular standard deviation gets its own name: the <span class="term" data-g="standard-error">standard error</span> (SE). It's the typical distance between your observed score and the truth.</p>
+
+    <p>For a pass/fail accuracy, you don't need to actually re-run anything — there's a formula:</p>
+
+    <div class="math">SE = √( p̂ (1 − p̂) / n )</div>
+
+    <p>In words: take your observed accuracy, multiply by one minus itself, divide by the number of questions, and take the square root. The numerator <i>p̂</i>(1 − <i>p̂</i>) is the <span class="term" data-g="variance">variance</span> of a single pass/fail outcome (from <a href="../appendices/a-probability.html">Appendix A</a>); dividing by <i>n</i> is what averaging buys you.</p>
+
+    <p>Plug in the thought experiment's numbers, with <i>p̂</i> = 0.70:</p>
+
+    <div class="card">
+      <p><strong><i>n</i> = 50:</strong> SE = √(0.70 × 0.30 / 50) = √(0.21 / 50) = √0.0042 ≈ <strong>0.065</strong> — scores typically miss the truth by about 6.5 points.</p>
+      <p><strong><i>n</i> = 500:</strong> SE = √(0.21 / 500) = √0.00042 ≈ <strong>0.020</strong> — typical miss of about 2 points.</p>
+    </div>
+
+    <p>Notice the <i>n</i> sits inside a square root. That has a consequence worth memorizing: <strong>to halve your error, you need four times the questions.</strong> Going from 50 to 500 questions (10×) only shrinks the error by √10 ≈ 3.2×. Precision gets expensive fast — which is why it's worth computing how much you actually need before labeling 5,000 examples.</p>
+
+    <figure>
+    <div class="diagram">How the sampling distribution narrows as n grows
+(true accuracy p = 0.70)
+
+  n = 50                          ▂▄█▄▂
+  SE ≈ .065          ▁▂▄▆████████████████▆▄▂▁
+            ┼─────┼─────┼─────┼─────┼─────┼─────┼
+           .55   .60   .65   .70   .75   .80   .85
+
+  n = 200                          ▄█▄
+  SE ≈ .032                    ▂▄██████▄▂
+            ┼─────┼─────┼─────┼─────┼─────┼─────┼
+           .55   .60   .65   .70   .75   .80   .85
+
+  n = 500                          ▆█▆
+  SE ≈ .020                      ▂██████▂
+            ┼─────┼─────┼─────┼─────┼─────┼─────┼
+           .55   .60   .65   .70   .75   .80   .85</div>
+    <figcaption>Each curve is the histogram of scores you'd see by re-running the eval many times with fresh questions. Quadrupling <i>n</i> halves the width.</figcaption>
+    </figure>
+
+    <h2 id="central-limit-theorem">The Central Limit Theorem in plain words</h2>
+
+    <p>Why do those histograms look like bells? Because of the <span class="term" data-g="central-limit-theorem">Central Limit Theorem</span> (CLT): when you average many independent random things, the distribution of that average approaches a bell curve (a normal distribution) — <em>regardless of what the individual things look like</em>. Each question's outcome is a lumpy two-spike distribution (0 or 1, nothing in between), but the average of 200 of them is smooth and bell-shaped.</p>
+
+    <p>This is what makes the rest of this appendix possible. The bell curve is fully described by just two numbers — its center and its spread — and we have both: the center is the true accuracy (because the mean is unbiased) and the spread is the SE (from the formula). And bell curves have a fixed geometry: about 68% of the area lies within 1 SE of the center, and about 95% lies within 1.96 SE. That last fact is where confidence intervals come from.</p>
+
+    <div class="callout"><span class="label">Why this matters</span> Without the CLT, every eval would need its own bespoke error analysis. With it, one recipe — estimate, SE, ±1.96 — covers pass/fail accuracies, average ratings, mean latencies, and almost any other metric that's a mean over many independent items.</div>
+
+    <h2 id="confidence-intervals">Confidence intervals</h2>
+
+    <p>Put the pieces together. Your estimate is bell-distributed around the truth with spread SE, and 95% of a bell's mass is within 1.96 SE of its center. So the interval</p>
+
+    <div class="math">95% CI = p̂ ± 1.96 × SE</div>
+
+    <p>— your estimate, plus or minus 1.96 standard errors — is a <span class="term" data-g="confidence-interval">confidence interval</span>: a range built so that the procedure captures the true value 95% of the time.</p>
+
+    <div class="card">
+      <p><strong>Worked example, start to finish.</strong> Your model answers 140 of 200 eval questions correctly.</p>
+      <p><strong>Step 1 — estimate:</strong> p̂ = 140 / 200 = <strong>0.70</strong>.</p>
+      <p><strong>Step 2 — standard error:</strong> SE = √(0.70 × 0.30 / 200) = √(0.21 / 200) = √0.00105 ≈ <strong>0.0324</strong>.</p>
+      <p><strong>Step 3 — margin:</strong> 1.96 × 0.0324 ≈ <strong>0.0635</strong>.</p>
+      <p><strong>Step 4 — interval:</strong> 0.70 − 0.0635 to 0.70 + 0.0635 = <strong>[0.636, 0.764]</strong>.</p>
+      <p>Report: "70.0% accuracy, 95% CI [63.6%, 76.4%]". Despite 200 questions, the honest answer is "somewhere in a 13-point range."</p>
+    </div>
+
+    <p>Now the interpretation, which trips up almost everyone. The 95% describes the <em>procedure</em>, not this particular interval. The true accuracy is a fixed (unknown) number — it isn't "95% likely" to be anything; it either is in [0.636, 0.764] or it isn't. What's true is this: if you ran this whole procedure many times — fresh questions, new estimate, new interval each time — about 95% of the intervals produced would contain the true value. You're holding one interval from a machine with a 95% hit rate. A safe everyday reading: "values inside the interval are consistent with my data; values outside would be surprising."</p>
+
+    <div class="pitfall"><span class="label">Pitfall: comparing two models without error bars</span> Model A scores 70.0% and Model B scores 73.5% on your 200-question eval, so the team ships B. But A's 95% CI is [63.6%, 76.4%] and B's is [67.4%, 79.6%] — they overlap almost entirely. A 3.5-point gap is well within what sampling variation alone produces at <i>n</i> = 200 (where one SE is ≈ 3.2 points). The right move is to compare the models <em>on the same questions</em> and analyze the per-question differences, which cancels most of the shared noise — see <a href="../pages/17-comparing-models.html">Comparing Two Models</a> and <a href="../appendices/c-hypothesis-testing.html">Appendix C</a>. Never read a leaderboard gap, or your own dashboard, without asking "what's the SE?"</div>
+
+    <h2 id="when-the-picture-breaks">When the CLT picture breaks</h2>
+
+    <p>The recipe above leans on assumptions. Three common ways they fail:</p>
+
+    <ul>
+      <li><strong>Tiny <i>n</i>.</strong> The CLT is a statement about "many" items. With 15 questions, the bell-curve approximation is poor and ±1.96·SE intervals are unreliable (they can even poke past 0% or 100%). Below roughly <i>n</i> = 30–50, use exact binomial intervals or the bootstrap instead.</li>
+      <li><strong>Scores near 0 or 1.</strong> At p̂ = 0.98 on 100 questions, the formula gives SE ≈ 0.014, and the distribution of possible scores is badly skewed — there's almost no room above 1.0. The symmetric ± interval is the wrong shape. Again: exact or resampling methods.</li>
+      <li><strong>Non-independent questions.</strong> The formula assumes each question is an <span class="term" data-g="independence">independent</span> draw. If your 200 questions are really 40 documents with 5 questions each, the questions within a document tend to pass or fail together, and your <em>effective</em> sample size is closer to 40 than 200. The naive SE is too small — your error bars are overconfident, sometimes drastically. This needs clustered standard errors: see <a href="../appendices/f-resampling.html">Appendix F</a> and <a href="../pages/16-error-bars.html">Error Bars on Eval Scores</a>.</li>
+    </ul>
+
+    <div class="warn"><span class="label">Caveat</span> The SE formula uses p̂ in place of the unknown p, so the SE is itself an estimate — fine at moderate <i>n</i>, shaky at small <i>n</i>. And no formula rescues a biased sample: if your 200 questions systematically over-represent easy cases, your interval is precisely centered on the wrong number. Statistics quantifies sampling noise; it cannot detect that you sampled from the wrong population.</div>
+
+    <h2 id="where-this-goes">Where this goes next</h2>
+
+    <p>This appendix gives you the vocabulary for <a href="../pages/16-error-bars.html">Error Bars on Eval Scores</a>, which applies it to real eval reports. <a href="../appendices/c-hypothesis-testing.html">Appendix C</a> turns "do these intervals overlap?" into proper hypothesis tests, and <a href="../appendices/f-resampling.html">Appendix F</a> covers the bootstrap — the tool for when the formulas here don't apply.</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

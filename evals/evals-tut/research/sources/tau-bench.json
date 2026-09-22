@@ -1,0 +1,87 @@
+{
+  "id": "tau-bench",
+  "citation": {
+    "authors": "Shunyu Yao, Noah Shinn, Pedram Razavi, Karthik Narasimhan (Sierra)",
+    "title": "τ-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains",
+    "venue": "arXiv preprint arXiv:2406.12045 (cs.AI), marked 'Preprint. Under review.'",
+    "year": "2024 (submitted 17 Jun 2024)",
+    "url": "https://arxiv.org/abs/2406.12045"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2406.12045",
+    "https://arxiv.org/pdf/2406.12045"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Simulates user (LLM-simulated) conversations with an agent that has domain-specific API tools and policy guidelines; retail and airline domains — confirm",
+      "verdict": "confirmed",
+      "finding": "τ-bench emulates conversations between an LM-simulated user (gpt-4-0613, temperature 1.0) and an agent with database API tools and a domain policy document. Two domains: τ-retail (115 tasks, 15 API tools) and τ-airline (50 tasks, 13 API tools).",
+      "quote": "We propose τ-bench, a benchmark emulating dynamic conversations between a user (simulated by language models) and a language agent provided with domain-specific API tools and policy guidelines. ... we focus on the realm of customer service and create two different domains where agents need to assist simulated users with diverse requests (τ-retail and τ-airline). ... User simulation. We use a language model (gpt-4-0613) to simulate a human user interacting with the agent.",
+      "location": "Abstract; Section 1; Section 3 'User simulation'; Table 1"
+    },
+    {
+      "planned": "Success measured by comparing final database state to goal state — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with a nuance the course should include: the binary reward r = r_action × r_output ∈ {0,1} combines (1) final database identical to the unique annotated ground-truth database AND (2) the agent's responses to the user containing all necessary information (checked as substrings). The paper also notes r=1 is necessary but not sufficient for a truly correct episode (e.g., the agent might act without required user confirmation, violating policy, yet still score 1).",
+      "quote": "We employ an efficient and faithful evaluation process that compares the database state at the end of a conversation with the annotated goal state. ... The reward of a task episode r = r_action × r_output ∈ {0,1} is based on (1) whether the final database is identical to the unique ground truth outcome database (r_action), and (2) whether the agent's responses to the user contain all necessary information (r_output). ... Note that r = 1 might be a necessary but not sufficient condition for a successful episode e.g., the agent might issue the return without explicit user confirmation, which violates the policy.",
+      "location": "Abstract; Section 3 'Reward' (p.4)"
+    },
+    {
+      "planned": "pass^k metric: probability all k i.i.d. trials succeed, measuring reliability/consistency — confirm definition and headline finding (e.g., gpt-4o pass^8 < 25% on retail?)",
+      "verdict": "confirmed",
+      "finding": "pass^k ('pass hat k') is defined as the chance that ALL k i.i.d. task trials are successful, averaged across tasks; unbiased estimator pass^k = E_task[C(c,k)/C(n,k)] for c successes in n trials (contrasted with pass@k = 1 - E_task[C(n-c,k)/C(n,k)]). Headline finding confirmed: gpt-4o (function calling), the best agent with >60% average task success on τ-retail (pass^1 = 61.2), drops to pass^8 < 25% on τ-retail.",
+      "quote": "we propose a new metric – pass^k (pass hat k), defined as the chance that all k i.i.d. task trials are successful, averaged across tasks. ... With increasing k, the chance of consistently solving a task drops rapidly, to as low as ~25% for pass^8 on τ-retail for the same model. ... Even for the best-performing gpt-4o function calling agent which has a > 60% average task success, pass^8 drops to < 25%.",
+      "location": "Section 3 'Pass^k metric' (p.4-5); Section 1; Section 5.1 'Agent consistency via pass^k' (p.7)"
+    },
+    {
+      "planned": "Agents are markedly less reliable over repeated trials than pass@1 suggests",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Stochasticity comes only from LM sampling of user and agent (same task prompt and database transitions), yet consistency degrades steeply with k: gpt-4o retail pass^1 = 61.2 falls below 25% at pass^8. The abstract calls SOTA agents 'quite inconsistent'.",
+      "quote": "Our experiments show that even state-of-the-art function calling agents (like gpt-4o) succeed on <50% of the tasks, and are quite inconsistent (pass^8 <25% in retail). ... As shown in Figure 4, the chance of reliably and consistently solving the same task multiple times significantly drops as the number of trials k increases. ... In real-world scenarios, it is important and challenging not just to build agents with high average success (pass^1), but with more robustness and consistency (pass^k trend).",
+      "location": "Abstract; Section 5.1 (p.7), Figure 4"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "pass@k vs pass^k is a duality between discovery and reliability: pass@k (at-least-one-of-k succeeds) rewards scaling inference compute to find a solution; pass^k (all-of-k succeed) measures the consistency real deployments need.",
+      "quote": "the community has defined the pass@k (pass at k) metric as the chance that at least one out of k i.i.d. task trials is successful, which captures the trend of agents enabling discovery of solutions with scaling of inference-time compute. For real-world agent tasks requiring reliability and consistency like customer service, we propose a new metric – pass^k.",
+      "numbers": "pass^k = E_task[C(c,k)/C(n,k)]; pass@k = 1 - E_task[C(n-c,k)/C(n,k)]; pass^1 = pass@1 = E[c/n]"
+    },
+    {
+      "point": "Headline pass^1 results (function calling): gpt-4o is the best model but all models are far from solving the benchmark, especially airline.",
+      "quote": "gpt-4o is the best model with function calling ... All models are still far from solving τ-bench, especially the more challenging τ-airline where even gpt-4o solves only 35.2% of the tasks.",
+      "numbers": "gpt-4o: retail 61.2, airline 35.2, avg 48.2; claude-3-opus: 44.2/34.7/39.5; gpt-3.5-turbo: 20.0/10.8/15.4; meta-llama-3-70B: 14.8/14.4/14.6 (Table 2)"
+    },
+    {
+      "point": "Benchmark construction enforces a UNIQUE database outcome per task so that rule-based evaluation can replace subjective human judging — a deliberate trade of slow careful annotation for fast faithful evaluation (and quality over quantity: only 115+50 tasks).",
+      "quote": "In τ-bench, we trade off slow, careful task annotation for fast, faithful evaluation. By ensuring that only one database outcome is possible based on domain policies and user desires, subjective and noisy human judgments can be replaced by simple and objective database state comparisons. ... we run each τ-retail task with > 40 gpt-4-turbo trials and check all tasks with zero or low success rates",
+      "numbers": "τ-retail: 500 users, 50 products, 1,000 orders, 7 write + 8 non-write tools, 115 tasks; τ-airline: 500 users, 300 flights, 2,000 reservations, 6 write + 7 non-write tools, 50 tasks (Table 1)"
+    },
+    {
+      "point": "Failure analysis of gpt-4o on retail: of 115 sampled trajectories 40 failed; 4 were benchmark bugs (instruction typos/ambiguity, then fixed) and 36 were agent failures, broken into wrong argument (33.3%), wrong decision/rule-following (25.0%), wrong info (22.2%), partial resolution of compound requests (19.4%).",
+      "quote": "We sample 115 gpt-4o FC agent trajectories in τ-retail (1 trial per task), out of which 40 tasks have failed (pass^1=65.2%). Upon manual examination of these failures, 4 of them are caused by user instruction typo or ambiguity (and then fixed), and the remaining 36 failure cases are agent issues",
+      "numbers": "Wrong argument 33.3%, Wrong decision 25.0%, Wrong info 22.2%, Partially resolve 19.4% (Figure 5); tasks with more ground-truth database writes are harder (Figure 6)"
+    },
+    {
+      "point": "Policy-ablation result: removing the domain policy from the system prompt barely hurts gpt-4o on retail (61.2 -> 56.8, -4.4) but devastates it on airline (33.2 -> 10.8, -22.4) — evidence that 'successful' retail runs mostly stem from common sense rather than actually leveraging the policy document.",
+      "quote": "in τ-retail where rules are simpler and closer to commonsense, gpt-4o and gpt-3.5-turbo agents only degrade 4.4% and 5.5% in terms of pass^1, suggesting that their successful cases mostly stem from using tools in an intuitive and common sense way, and that they may not actually be leveraging the policy documents to the extent possible.",
+      "numbers": "Table 3: gpt-4o 61.2->56.8 (retail), 33.2->10.8 (airline); gpt-3.5 20.0->14.5, 10.8->9.6"
+    },
+    {
+      "point": "Native function calling beats text-formatted ReAct/Act prompting across SOTA models, and an added 'think' function did not help FC agents; experimental setup: agent temperature 0.0, user temperature 1.0, max 30 agent actions per task, at least 3 trials per task.",
+      "quote": "natively supported function calling consistently outperforms text-formatted agent methods with the state-of-the-art models. ... We have also experimented with adding a “think” function for function-calling agents, but it did not boost performance. ... We limit each task to at most 30 agent actions ... The LM temperature is 0.0 for agent and 1.0 for user.",
+      "numbers": "Cost: gpt-4o agent + gpt-4 user simulation ≈ $0.38 + $0.23 per task on retail (~$200 for one full trial); input prompt is 95.9% of agent cost due to long system prompt"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say success is judged ONLY by database-state comparison: the reward is r_action × r_output — it also checks that required information (e.g., '54.04', '41.64') appears as substrings in the agent's responses to the user.",
+    "Do not treat the rule-based reward as a perfect oracle: the paper itself notes r=1 is 'necessary but not sufficient' — an agent can score 1 while violating policy (e.g., issuing a return without explicit user confirmation).",
+    "Do not confuse the <50% headline with retail performance: gpt-4o pass^1 is 61.2 on retail and 35.2 on airline; <50% refers to the domain-weighted average (48.2).",
+    "pass^k is pronounced 'pass hat k' and is the paper's NEW metric; pass@k (pass at k) is the pre-existing code-generation metric. pass^1 = pass@1 = average reward.",
+    "The pass^8 < 25% figure is specific to gpt-4o on τ-retail; the paper says 'to as low as ~25%', and Section 5.1 states pass^8 drops to < 25% for the best-performing gpt-4o FC agent.",
+    "The user simulator is gpt-4-0613 (not gpt-4o); stochasticity across trials comes from LM sampling of user and agent messages — the task prompt and database transitions are identical across trials.",
+    "Venue is an arXiv preprint marked 'Preprint. Under review.' — do not cite a conference."
+  ],
+  "notes_for_authors": "All four planned claims verified against the full PDF (v1, 17 Jun 2024). Strongest teaching hook for a measurement-validity course: (1) pass^k vs pass@k as reliability vs discovery — the same per-trial data yields opposite stories; (2) the deliberate validity trade-off: tasks are annotated until only ONE database outcome is possible, making the metric objective at the cost of task count (165 total) and expressiveness; (3) the paper's own honesty about metric limits (r=1 necessary but not sufficient; user-simulator limitations including implicit bias from tuning instructions with gpt-4-turbo agent runs — see 'Directions for improvement', p.9). The policy-ablation table (Table 3) is a great example of a follow-up experiment probing WHAT a benchmark score measures: retail scores barely depend on the policy document. When citing numbers, prefer Table 2 pass^1 values (e.g., gpt-4o 61.2 retail / 35.2 airline) over the abstract's rounded ~61%/~35%."
+}

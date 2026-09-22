@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Packages and Reproducible Environments · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 4 · Storage &amp; Software</p>
+    <h1>Packages and reproducible environments</h1>
+    <p class="lede">
+      Software gets into a Linux box through package managers, and every one of them, by default,
+      installs "whatever is current today". This page teaches the apt and pip mechanics you will
+      read in Dockerfiles and transcripts, and then the part that matters for measurement: why the
+      same Dockerfile builds a different environment next month, and how to pin, fingerprint and
+      publish an environment so a score can be reproduced.
+    </p>
+
+    <h2 id="what-a-package-manager-does">What a package manager does</h2>
+    <p>
+      A <span class="term" data-g="package-manager">package manager</span> does four jobs. It knows
+      a set of <span class="term" data-g="repository">repositories</span> — servers holding packages.
+      It keeps a local <em>index</em> of what those servers offer. Asked to install something, it
+      resolves <span class="term" data-g="dependency">dependencies</span> — the other packages that
+      one needs — into a consistent set. Then it downloads, unpacks, and runs each package's install
+      scripts as root. On Debian and Ubuntu the work is split:
+      <span class="term" data-g="dpkg">dpkg</span> installs and records individual
+      <code>.deb</code> files, and <span class="term" data-g="apt">apt</span> sits above it handling
+      repositories, the index and dependency resolution.
+    </p>
+    <div class="diagram">  repositories (network)             your box
+ ┌────────────────────────┐  apt-get update   ┌────────────────────────┐
+ │ noble          (frozen)│ ────────────────▶ │ /var/lib/apt/lists/    │ the index
+ │ noble-updates  (moves) │                   └───────────┬────────────┘
+ │ noble-security (moves) │  apt-get install              │ resolve dependencies
+ │   *.deb files          │ ────────────────▶ download ───┘
+ └────────────────────────┘                       │ dpkg: unpack, run install scripts
+                                                  ▼
+                                      /var/lib/dpkg/status   what is installed
+                                      (read it with dpkg -l, dpkg -S, dpkg -L)</div>
+
+    <h2 id="apt-workflow">The apt workflow, and the errors it produces</h2>
+    <p>
+      Official Docker images ship with the index deleted to save space, so the first install in a
+      fresh container fails in a way that looks like a typo:
+    </p>
+<pre class="term"><code><span class="p">#</span> ls /var/lib/apt/lists/ | wc -l
+<span class="o">0</span>
+<span class="p">#</span> apt-get install -y curl; echo "exit=$?"
+<span class="o">Reading package lists...
+Building dependency tree...
+Reading state information...
+<span class="hl">E: Unable to locate package curl</span>
+exit=100</span></code></pre>
+    <p>
+      The package exists; the box has no index to find it in. <code>apt-get update</code>
+      "is used to resynchronize the package index files from their
+      sources"<a class="cite" href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html" title="apt-get(8), Debian bookworm manpages">[apt-get(8)]</a>
+      — it upgrades nothing, it only downloads the catalogue (22 files, 54 MB here). Hence the idiom
+      you saw in the wordfreq-bench Dockerfile (<a href="22-docker-for-evals.html#dockerfile">page 22</a>):
+    </p>
+<pre><code>RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends python3 \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*</code></pre>
+    <table>
+      <thead><tr><th>Piece</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>apt-get</code>, not <code>apt</code></td><td>apt(8) says of itself that it "is designed as an end-user tool and it may change behavior between versions", and that scripts should prefer <code>apt-get</code> and <code>apt-cache</code>, which "keep backward compatibility as much as possible".<a class="cite" href="https://manpages.debian.org/bookworm/apt/apt.8.en.html#SCRIPT_USAGE_AND_DIFFERENCES_FROM_OTHER_APT_TOOLS" title="apt(8), Script usage and differences from other APT tools">[apt(8)]</a> Run <code>apt</code> in a pipe and it prints "WARNING: apt does not have a stable CLI interface."</td></tr>
+        <tr><td><code>-y</code></td><td>"Automatic yes to prompts" — apt's own "Do you want to continue?".<a class="cite" href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html" title="apt-get(8), Debian bookworm manpages">[apt-get(8)]</a> It does not answer questions asked by <em>packages</em> (next section).</td></tr>
+        <tr><td><code>--no-install-recommends</code></td><td>"Do not consider recommended packages as a dependency for installing" — only hard dependencies. Smaller image, fewer moving parts.</td></tr>
+        <tr><td><code>update &amp;&amp; install</code> in one <code>RUN</code></td><td>Docker caches a <code>RUN</code> by its command string, so a separate <code>RUN apt-get update</code> layer is reused forever and later installs meet a stale index.<a class="cite" href="https://docs.docker.com/build/building/best-practices/#apt-get" title="Docker Docs, Building best practices: apt-get">[Docker: Dockerfile]</a></td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="tzdata">The prompt that hangs a build</h3>
+    <p>
+      Some packages ask configuration questions through a system called debconf. With nobody to
+      answer, the install waits forever. Executed in a fresh container with stdin held open and a
+      45-second <code>timeout</code>:
+    </p>
+<pre class="term"><code><span class="p">#</span> timeout 45 apt-get install -y tzdata; echo "exit=$?"
+<span class="o">…
+Setting up tzdata (2026c-0ubuntu0.24.04.1) ...
+debconf: unable to initialize frontend: Dialog
+debconf: (TERM is not set, so the dialog frontend is not usable.)
+debconf: falling back to frontend: Readline
+…
+debconf: falling back to frontend: Teletype
+Configuring tzdata
+------------------
+Please select the geographic area in which you live. …
+  1. Africa      4. Arctic    7. Australia  10. Pacific
+  2. America     5. Asia      8. Europe     11. Etc
+  3. Antarctica  6. Atlantic  9. Indian     12. Legacy
+<span class="hl">Geographic area: </span>
+exit=124</span></code></pre>
+    <p>
+      Exit 124 is <code>timeout</code>'s, not apt's (<a href="10-signals-exit-codes.html">page 10</a>).
+      <code>tzdata</code> is not in the <code>ubuntu:24.04</code> image, and it arrives as a
+      dependency of <code>python3</code> — so the most ordinary install an agent can attempt walks
+      into this. The fix is debconf's <code>noninteractive</code> frontend, which "never interacts
+      with you at all, and makes the default answers be used for all
+      questions":<a class="cite" href="https://manpages.debian.org/bookworm/debconf-doc/debconf.7.en.html" title="debconf(7), Debian bookworm manpages">[debconf(7)]</a>
+      write <code>DEBIAN_FRONTEND=noninteractive apt-get install -y …</code>, per command. Docker's
+      reference advises against baking it in with <code>ENV</code>, because it persists into the
+      running container and "may confuse users of your
+      image".<a class="cite" href="https://docs.docker.com/reference/dockerfile/#env" title="Docker Docs, Dockerfile reference: ENV">[Docker: Dockerfile]</a>
+    </p>
+    <div class="evals">
+      <span class="label">In eval work — navigate</span>
+      <p>In a transcript this looks like a <span class="term" data-g="tool-call">tool call</span>
+      that never returns and is eventually killed by the harness's
+      <span class="term" data-g="timeout">timeout</span>, often consuming the agent's whole time
+      budget. Whether it counts against the model is a design decision to make <em>before</em> the
+      run: either the task image sets the agent up to succeed (tools preinstalled, or the variable
+      set for the agent's shell), or handling interactive prompts is declared part of the skill
+      under test. What you must not do is discover it afterwards and quietly drop those samples.</p>
+    </div>
+
+    <h3 id="asking-dpkg">Asking what is installed</h3>
+<pre class="term"><code><span class="p">#</span> dpkg -l bash | tail -1                 <span class="c"># is it installed, which version?</span>
+<span class="o">ii  bash           5.2.21-2ubuntu4 arm64        GNU Bourne Again SHell</span>
+<span class="p">#</span> dpkg -S /usr/bin/ls                    <span class="c"># which package owns this file?</span>
+<span class="o">coreutils: /usr/bin/ls</span>
+<span class="p">#</span> dpkg -L bash | head -3                 <span class="c"># which files did this package install?</span>
+<span class="o">/.
+/etc
+/etc/bash.bashrc</span>
+<span class="p">#</span> apt-cache policy curl                  <span class="c"># what could be installed, and from where?</span>
+<span class="o">curl:
+  Installed: (none)
+  Candidate: 8.5.0-2ubuntu10.13
+  Version table:
+     8.5.0-2ubuntu10.13 500
+        500 http://ports.ubuntu.com/ubuntu-ports noble-updates/main arm64 Packages
+        500 http://ports.ubuntu.com/ubuntu-ports noble-security/main arm64 Packages
+     8.5.0-2ubuntu10 500
+        500 http://ports.ubuntu.com/ubuntu-ports noble/main arm64 Packages</span></code></pre>
+    <p>
+      <code>ii</code> means "desired: install, status: installed". (On an Intel machine you will see
+      <code>amd64</code> and <code>archive.ubuntu.com</code>.) Keep the <code>policy</code> output in
+      mind: two versions on offer, not twenty. That matters shortly.
+    </p>
+    <p>A symptom table for apt failures — all exit with status 100:</p>
+    <table>
+      <thead><tr><th>Transcript shows</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>E: Unable to locate package X</code></td><td>No index (never ran <code>update</code>), <strong>or no network</strong> (below), or a real typo.</td></tr>
+        <tr><td><code>E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 2795 (apt-get)</code></td><td>Another apt is running — commonly the agent's own earlier install, left in the <span class="term" data-g="background-process">background</span>. Wait; do not delete the lock file.</td></tr>
+        <tr><td><code>E: Version '…' for 'X' was not found</code></td><td>The pinned version is no longer in the repository.</td></tr>
+        <tr><td><code>W: Failed to fetch … Temporary failure resolving 'ports.ubuntu.com'</code></td><td>No DNS, which in a sandbox usually means no network (<a href="18-dns-http-tls.html">page 18</a>).</td></tr>
+      </tbody>
+    </table>
+    <div class="pitfall">
+      <span class="label">Pitfall — <code>apt-get update</code> fails with exit 0</span>
+      <p>In a <code>--network none</code> container, <code>apt-get update</code> printed four
+      "Failed to fetch" warnings and the line "Some index files failed to download. They have been
+      ignored, or old ones used instead." — and exited <strong>0</strong>. The following
+      <code>apt-get install -y curl</code> then said <code>E: Unable to locate package curl</code>,
+      exit 100. An agent (or you) reading only the last error concludes the package name is wrong.
+      The evidence that discriminates is one command up: read the <code>W:</code> lines.</p>
+    </div>
+
+    <h2 id="alpine">Alpine: a different userland</h2>
+    <p>
+      Many task images are built on <span class="term" data-g="alpine">Alpine</span>, which "is built
+      around musl libc and busybox" and "uses its own package manager called
+      apk".<a class="cite" href="https://alpinelinux.org/about/" title="Alpine Linux, About">[Alpine]</a>
+      The idiom is <code>apk add --no-cache python3</code> — index fetched, used and not kept
+      (<code>/var/cache/apk</code> was empty afterwards). No <code>bash</code> unless you add it
+      (<a href="02-shell-and-commands.html">page 2</a>). The deeper difference is the C library,
+      <span class="term" data-g="musl-glibc">musl rather than glibc</span>. Ubuntu's <code>ls</code>
+      binary, copied into an Alpine container:
+    </p>
+<pre class="term"><code><span class="p">#</span> ls -l /x/ls-glibc
+<span class="o">-rwxr-xr-x    1 root     root        199464 Sep 21 16:28 /x/ls-glibc</span>
+<span class="p">#</span> /x/ls-glibc /; echo "exit=$?"
+<span class="o"><span class="hl">sh: /x/ls-glibc: not found</span>
+exit=127</span>
+<span class="p">#</span> ls /lib/ld-*
+<span class="o">/lib/ld-musl-aarch64.so.1</span></code></pre>
+    <p>
+      The file is there and executable; what is "not found" is the glibc loader the binary names as
+      its interpreter. For Python the same split means prebuilt wheels tagged <code>manylinux</code>
+      do not apply: musl-based distributions "cannot use the existing manylinux platform tags" and
+      have their own <code>musllinux</code>
+      tag.<a class="cite" href="https://peps.python.org/pep-0656/" title="PEP 656 – Platform Tag for Linux Distributions Using Musl">[PEP 656]</a>
+      A project that publishes no such wheel leaves <code>pip</code> with only the source
+      distribution to build from, on an image that may have no compiler. Recognise "exit 127 on a file that exists" and
+      "pip is suddenly compiling C" as Alpine symptoms, not model errors.
+    </p>
+
+    <h2 id="python-layer">The Python layer: pip, venvs, and PEP 668</h2>
+    <p>
+      On Ubuntu 24.04 the system Python belongs to apt, and
+      <span class="term" data-g="pip">pip</span> refuses to touch it:
+    </p>
+<pre class="term"><code><span class="p">#</span> pip install requests; echo "exit=$?"
+<span class="o"><span class="hl">error: externally-managed-environment</span>
+
+× This environment is externally managed
+╰─&gt; To install Python packages system-wide, try apt install
+    python3-xyz, where xyz is the package you are trying to
+    install.
+
+    If you wish to install a non-Debian-packaged Python package,
+    create a virtual environment using python3 -m venv path/to/venv.
+    Then use path/to/venv/bin/python and path/to/venv/bin/pip. Make
+    sure you have python3-full installed.
+    …
+note: If you believe this is a mistake, please contact your Python installation or OS distribution provider. You can override this, at the risk of breaking your Python installation or OS, by passing --break-system-packages.
+hint: See PEP 668 for the detailed specification.
+exit=1</span></code></pre>
+    <p>
+      The mechanism is a marker file, <code>/usr/lib/python3.12/EXTERNALLY-MANAGED</code>: PEP 668
+      says an installer that is not in a virtual environment and finds that file "should exit with
+      an error message", and the helpful text is the distribution's, read from the
+      file.<a class="cite" href="https://peps.python.org/pep-0668/#marking-an-interpreter-as-using-an-external-package-manager" title="PEP 668 – Marking Python base environments as externally managed">[PEP 668]</a>
+      The PEP lets single-application container images omit the marker, so whether an agent hits
+      this depends on the <span class="term" data-g="base-image">base image</span> — check, don't
+      assume. The intended route is a <span class="term" data-g="virtual-environment">virtual
+      environment</span>: a directory with its own <code>site-packages</code>. "Activating" it is
+      less magic than it looks — it "will prepend that directory to your
+      PATH"<a class="cite" href="https://docs.python.org/3/library/venv.html#how-venvs-work" title="Python docs, venv: how venvs work">[Python: venv]</a>
+      (<a href="02-shell-and-commands.html">page 2</a>'s lookup rule does the rest), and you can skip
+      it by calling <code>/tmp/v/bin/pip</code> directly:
+    </p>
+<pre class="term"><code><span class="p">#</span> python3 -m venv /tmp/v; . /tmp/v/bin/activate; echo "PATH=$PATH"
+<span class="o">PATH=<span class="hl">/tmp/v/bin:</span>/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</span>
+<span class="p">#</span> echo "requests==2.32.3" &gt; requirements.txt; pip install -q -r requirements.txt; pip freeze
+<span class="o">certifi==2026.7.22
+charset-normalizer==3.5.1
+idna==3.20
+requests==2.32.3
+urllib3==2.8.0</span></code></pre>
+    <p>
+      One line went in; five came out. The file pinned <code>requests</code> with <code>==</code>
+      (<span class="term" data-g="version-pinning">version pinning</span>), but its four transitive
+      dependencies were chosen by PyPI <em>on the day of the install</em>. The
+      <code>pip freeze</code> output is the real environment, and pip's docs recommend it as the
+      requirements file for exactly that reason: it "would pin not only the top-level packages, but
+      also all of their transitive
+      dependencies."<a class="cite" href="https://pip.pypa.io/en/stable/topics/repeatable-installs/#pinning-the-package-versions" title="pip documentation, Repeatable installs">[pip]</a>
+      A fully pinned file of this kind is a <span class="term" data-g="lockfile">lockfile</span>.
+      One step stronger is hash-checking, which also guards against a file changing under the same
+      version number. It is all-or-nothing, as pip told us when only one line carried a hash:
+    </p>
+<pre class="term"><code><span class="p">#</span> cat hashed.txt
+<span class="o">requests==2.32.3 --hash=sha256:70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6</span>
+<span class="p">#</span> /tmp/v2/bin/pip install -r hashed.txt
+<span class="o">…
+ERROR: In --require-hashes mode, all requirements must have their versions pinned with ==. These do not:
+    charset-normalizer&lt;4,&gt;=2 from https://files.pythonhosted.org/…</span></code></pre>
+    <p>
+      Depth triage: <em>use</em> venvs, <code>==</code> pins and <code>pip freeze</code>;
+      <em>recognise</em> <code>--hash</code> lines and the PEP 668 error; <em>leave</em> wheel tags
+      and build backends to whoever packages the task's dependencies.
+    </p>
+
+    <h2 id="drift">Drift: same Dockerfile, different environment</h2>
+    <p>
+      A Dockerfile is a recipe that names three moving targets. Rebuild it next month and each may
+      have moved.
+    </p>
+    <table>
+      <thead><tr><th>Moving part</th><th>Why it moves</th><th>How to hold it still</th></tr></thead>
+      <tbody>
+        <tr><td>The base image <span class="term" data-g="tag">tag</span></td>
+            <td>"Image tags are mutable, meaning a publisher can update a tag to point to a new image."<a class="cite" href="https://docs.docker.com/build/building/best-practices/#pin-base-image-versions" title="Docker Docs, Building best practices: pin base image versions">[Docker: Dockerfile]</a></td>
+            <td>Pin the <span class="term" data-g="image-digest">digest</span>: <code>FROM ubuntu:24.04@sha256:…</code>. Cost, per the same page: "you're opting out of automated security fixes".</td></tr>
+        <tr><td>The distro repository</td><td>The <code>-updates</code> and <code>-security</code> pockets are replaced in place.</td><td>A dated snapshot of the archive.</td></tr>
+        <tr><td>PyPI</td><td>Unpinned (usually transitive) dependencies resolve to today's newest.</td><td><code>pip freeze</code> lockfile, optionally with hashes.</td></tr>
+      </tbody>
+    </table>
+<pre class="term"><code><span class="p">$</span> docker image inspect --format '{{index .RepoDigests 0}}' ubuntu:24.04
+<span class="o">ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3</span></code></pre>
+    <p>
+      The repository is the part people underestimate. This <code>ubuntu:24.04</code> image was built
+      ten days before these commands ran, and already <code>apt list --upgradable</code> showed
+      <code>perl-base</code> one security update behind. No documentation I can cite promises that
+      old versions disappear, so here is the behaviour instead. The <code>policy</code> output above
+      offered two versions of curl. Asking for one that existed in between:
+    </p>
+<pre class="term"><code><span class="p">#</span> apt-get install -y curl=8.5.0-2ubuntu10.4; echo "exit=$?"
+<span class="o">…
+<span class="hl">E: Version '8.5.0-2ubuntu10.4' for 'curl' was not found</span>
+exit=100</span>
+<span class="p">#</span> apt-get install -y curl=8.5.0-2ubuntu10 2&gt;&amp;1 | tail -2    <span class="c"># the release version IS still listed…</span>
+<span class="o"> curl : Depends: libcurl4t64 (= 8.5.0-2ubuntu10) but 8.5.0-2ubuntu10.13 is to be installed
+E: Unable to correct problems, you have held broken packages.</span></code></pre>
+    <p>
+      So a Dockerfile that pins <code>curl=…</code> does not reproduce; it <em>breaks</em>, the first
+      time that version is superseded — and pinning one package is not enough anyway, because its
+      dependencies are version-locked to it. The tool that works is an archive snapshot. Ubuntu's
+      service covers "any date and time after 1 March 2023", promises retention of "at least 2 years
+      in the past", and on 24.04 needs no configuration beyond the <code>--snapshot</code>
+      (<code>-S</code>) option.<a class="cite" href="https://snapshot.ubuntu.com/" title="Ubuntu snapshot service">[Ubuntu snapshots]</a>
+      Debian's equivalent, snapshot.debian.org, has imports "from 2005 until the
+      present".<a class="cite" href="https://snapshot.debian.org/" title="snapshot.debian.org">[Debian snapshots]</a>
+      Executed today against the archive as of 1 June 2024:
+    </p>
+<pre class="term"><code><span class="p">#</span> apt-get update -q &gt;/dev/null; apt-get install -y -q --no-install-recommends ca-certificates &gt;/dev/null
+<span class="p">#</span> apt-get update -q --snapshot 20240601T000000Z | tail -3
+<span class="o">Get:17 https://snapshot.ubuntu.com/ubuntu/20240601T000000Z noble-security/universe arm64 Packages [40.7 kB]
+Fetched 22.1 MB in 36s (621 kB/s)
+Reading package lists...</span>
+<span class="p">#</span> apt-get install -y -q --no-install-recommends --snapshot 20240601T000000Z curl | tail -2
+<span class="o">Setting up curl (<span class="hl">8.5.0-2ubuntu10.1</span>) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.9) ...</span></code></pre>
+    <p>
+      June 2024's curl, with its matching libcurl, installed in September 2026. Two things the quick
+      start does not tell you, both observed. The snapshot server is HTTPS, and the stock image has
+      no CA certificates: without the first line the update fails with "No system certificates
+      available. Try installing ca-certificates." And in a <em>fresh</em> container,
+      <code>apt-get update --snapshot …</code> as the very first command fetched the
+      <em>live</em> archive from <code>ports.ubuntu.com</code> and exited 0; only a second update
+      went to the snapshot server. (apt documents that it detects snapshot support from a
+      repository's Release file, which a fresh image does not yet have — a plausible cause, not one
+      I verified.) Either way: after a snapshot install, <em>check the versions you got</em>.
+    </p>
+
+    <h3 id="fingerprint">Fingerprint the environment</h3>
+    <p>
+      You cannot eyeball drift, but you can diff it. This script (shellcheck-clean) prints one sorted
+      line per installed thing:
+    </p>
+<pre><code>#!/usr/bin/env bash
+# Print a sorted, diffable fingerprint of this environment. Usage: fingerprint.sh [VENV]
+set -euo pipefail
+venv=${1:-}
+grep -E '^(ID|VERSION_ID)=' /etc/os-release
+uname -m
+dpkg-query -W -f='deb ${Package}=${Version}\n' | sort
+if [ -n "$venv" ]; then
+  "$venv/bin/pip" freeze | sed 's/^/pip /'
+fi</code></pre>
+<pre class="term"><code><span class="p">$</span> diff fp-fresh.txt fp-lab.txt | grep -E 'perl|tzdata|pip '
+<span class="o">&lt; deb perl-base=5.38.2-3.2ubuntu0.4
+&gt; deb perl-base=5.38.2-3.2ubuntu0.6
+&gt; deb tzdata=2026c-0ubuntu0.24.04.1
+&gt; pip certifi==2026.7.22
+&gt; pip charset-normalizer==3.5.1
+…</span></code></pre>
+    <p>
+      A fresh <code>ubuntu:24.04</code> had 92 packages; this page's lab container, 116 plus five pip
+      lines — 30 added lines in all, including a changed <code>perl-base</code> nobody asked for by
+      name. Store the fingerprint (or its SHA-256) with every results file.
+    </p>
+
+    <div class="evals">
+      <span class="label">In eval work — discuss and design</span>
+      <p><span class="term" data-g="swe-bench">SWE-bench</span> moved its harness to Docker for this
+      reason. The maintainers wrote that they had "hypothesized that <code>conda</code> environments
+      would be enough to enforce reproducible evaluation. In hindsight, it is underspecified", and
+      that evaluation "remained sensitive to discrepancies originating from different platforms and
+      user-specific configurations, leading to inconsistent results." Even containerised, the
+      reference patches resolved 99.78% (2289/2294) of tasks — five tasks fail with the
+      <em>correct</em> answer.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md" title="SWE-bench, Containerized Evaluation Harness report (June 27, 2024), v3.0.0 tag">[SWE-bench]</a>
+      A benchmark whose images rebuild differently next month is a different benchmark. So: build
+      once, push, and publish image <em>digests</em> with results; treat a rebuild as a new version
+      of the instrument and re-run the oracle solutions against it before trusting any score.</p>
+    </div>
+    <div class="evals">
+      <span class="label">In eval work — failure accounting</span>
+      <p>An agent with network access that runs <code>pip install pandas</code> gets today's pandas:
+      two rollouts of the same task a month apart ran in different environments
+      (<span class="term" data-g="nondeterminism">nondeterminism</span> you did not intend), and
+      pip's own docs note that installing "involves running arbitrary code from distributions" — a
+      supply-chain surface inside your sandbox.<a class="cite" href="https://pip.pypa.io/en/stable/topics/secure-installs/" title="pip documentation, Secure installs">[pip]</a>
+      The standard design is <strong>build with network, run without</strong>: everything the task
+      needs is installed at image build time, and the run-time container gets
+      <code>--network none</code> or an allowlist (<a href="19-firewalls-and-egress.html">page 19</a>).
+      Then installs fail at run time, and you must recognise them: <code>Temporary failure in name
+      resolution</code> followed by pip's misleading <code>No matching distribution found</code>, or
+      apt's <code>Unable to locate package</code>. If the task was solvable without the install,
+      that is the model's problem. If the image lacked something the task requires, or a mirror was
+      down during a networked run, it is an
+      <span class="term" data-g="infrastructure-failure">infrastructure failure</span>: record it
+      with its own status, keep it in <code>scheduled</code>, and report
+      <code>correct / scheduled</code> alongside <code>correct / completed</code> rather than
+      silently re-running until it passes.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>Pinning makes an environment repeatable, not correct or safe: a digest-pinned image keeps its
+      known vulnerabilities, and Ubuntu promises only about two years of snapshots. For long-lived
+      benchmarks the durable artifact is the built image in a registry you control, not the recipe.</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A team re-runs a published agentic benchmark six months later with the same model and the
+      same harness commit. The score drops four points. Their explanation: "the API model must have
+      been silently updated." The task images are built from Dockerfiles in the repo at the start of
+      each run. What would you ask for before accepting that explanation?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>Observed:</strong> a score change between two runs. <strong>Supposed:</strong>
+        that the model changed. At least three other things changed for certain, because the images
+        were rebuilt: the base image behind the tag, the distro packages, and any unpinned Python
+        dependencies. The instrument is not the same instrument.</p>
+        <p><strong>Discriminating evidence.</strong> (1) Image digests or package fingerprints from
+        both runs; if the old ones were never recorded, say so — that is itself the finding.
+        (2) Run the oracle solutions on the new images: if reference patches now fail some tasks,
+        those tasks broke independently of any model. (3) Diff per-task outcomes: drift typically
+        shows as the <em>same</em> tasks failing for every model with import errors, changed test
+        output or install failures in the logs; a model change shows as diffuse differences with
+        healthy environments. (4) If old images still exist in a registry, re-run the current model
+        on them.</p>
+        <p><strong>Bearing on the score.</strong> Tasks whose oracle fails are instrument failures:
+        report them separately and give the score over the tasks that are still valid, stating the
+        denominator. Only what remains after that can be attributed to the model — and the fix going
+        forward is to publish digests with results.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> Start a scratch box: <code>docker run -it --rm --name lt-pkg ubuntu:24.04 bash</code>.
+      Installs here need network and a few minutes.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Before <code>apt-get update</code>, try to install
+          <code>curl</code>. Then update, and use <code>apt-cache policy curl</code> to say which
+          version would be installed and from which pocket.
+          <details class="solution"><summary>Solution</summary>
+          <p><code>E: Unable to locate package curl</code>, exit 100, because
+          <code>/var/lib/apt/lists/</code> is empty. After the update, <code>policy</code> shows
+          <code>Candidate: 8.5.0-2ubuntu10.13</code> from <code>noble-updates</code> and
+          <code>noble-security</code>, with <code>8.5.0-2ubuntu10</code> from the frozen
+          <code>noble</code> pocket beneath it (your candidate will be newer — that is the point of
+          the page).</p></details></li>
+        <li><strong>Reproduce.</strong> Which package owns <code>/usr/bin/ls</code>? How many
+          packages are installed?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> dpkg -S /usr/bin/ls
+<span class="o">coreutils: /usr/bin/ls</span>
+<span class="p">#</span> dpkg -l | grep -c '^ii'
+<span class="o">92</span></code></pre></details></li>
+        <li><strong>Predict, then verify.</strong> In
+          <code>docker run --rm --network none ubuntu:24.04 bash</code>, what is the exit status of
+          <code>apt-get update</code>? What does the following <code>apt-get install -y curl</code> print?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> apt-get update 2&gt;&amp;1 | tail -2; echo "exit=${PIPESTATUS[0]}"
+<span class="o">W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-security/InRelease  Temporary failure resolving 'ports.ubuntu.com'
+W: Some index files failed to download. They have been ignored, or old ones used instead.
+exit=0</span>
+<span class="p">#</span> apt-get install -y curl 2&gt;&amp;1 | tail -1
+<span class="o">E: Unable to locate package curl</span></code></pre>
+          <p>Exit 0 for a total failure; then an error that blames the package name. A script with
+          <code>set -e</code> would not stop at the update either.</p></details></li>
+        <li><strong>Predict, then verify.</strong> Install <code>python3-pip python3-venv</code>
+          (use <code>DEBIAN_FRONTEND=noninteractive</code> and <code>--no-install-recommends</code>).
+          Run <code>pip install requests</code> and read the error. Then create a venv, install from
+          a one-line <code>requirements.txt</code> (<code>requests==2.32.3</code>), and predict how
+          many lines <code>pip freeze</code> prints.
+          <details class="solution"><summary>Solution</summary>
+          <p>The install adds 24 packages (12.6 MB), <code>tzdata</code> among them — without the
+          variable you meet the "Geographic area:" prompt. <code>pip install requests</code> gives
+          <code>error: externally-managed-environment</code>, exit 1. In the venv, <code>pip
+          freeze</code> prints five lines: <code>requests==2.32.3</code> plus certifi,
+          charset-normalizer, idna and urllib3 at whatever versions PyPI serves on the day you run
+          it. Yours will differ from this page's; save both outputs and diff them.</p></details></li>
+        <li><strong>Eval task.</strong> Save <code>fingerprint.sh</code> from this page. Produce a
+          fingerprint of a fresh <code>ubuntu:24.04</code> and one of your lab container after
+          exercise 4, and diff them. Which differences did you ask for, and which did you not?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm -v "$PWD/fingerprint.sh":/f.sh:ro ubuntu:24.04 bash /f.sh &gt; fp-fresh.txt
+<span class="p">$</span> docker cp fingerprint.sh lt-pkg:/f.sh; docker exec lt-pkg bash /f.sh /tmp/v &gt; fp-lab.txt
+<span class="p">$</span> diff fp-fresh.txt fp-lab.txt | grep -c '^&gt;'
+<span class="o">30</span></code></pre>
+          <p>You asked for two apt packages and one pip package. You got 24 apt packages and five pip
+          packages; the four transitive pip versions and every apt version were decided by the date.
+          (This page's container also shows a changed <code>perl-base</code>, from a reinstall during
+          the lock demo — a reminder that <em>any</em> apt operation can move versions.) Those
+          unrequested lines are what a results file needs to record.</p></details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>apt-get(8), Debian bookworm manpages. <a href="https://manpages.debian.org/bookworm/apt/apt-get.8.en.html">manpages.debian.org/…/apt-get.8</a></li>
+        <li>apt(8), Debian bookworm manpages, "Script usage and differences from other APT tools". <a href="https://manpages.debian.org/bookworm/apt/apt.8.en.html#SCRIPT_USAGE_AND_DIFFERENCES_FROM_OTHER_APT_TOOLS">manpages.debian.org/…/apt.8</a></li>
+        <li>debconf(7), Debian bookworm manpages. <a href="https://manpages.debian.org/bookworm/debconf-doc/debconf.7.en.html">manpages.debian.org/…/debconf.7</a></li>
+        <li>Ubuntu snapshot service. <a href="https://snapshot.ubuntu.com/">snapshot.ubuntu.com</a></li>
+        <li>snapshot.debian.org. <a href="https://snapshot.debian.org/">snapshot.debian.org</a></li>
+        <li>Docker Docs: Building best practices (apt-get; pin base image versions). <a href="https://docs.docker.com/build/building/best-practices/">docs.docker.com/build/building/best-practices/</a></li>
+        <li>Docker Docs: Dockerfile reference (ENV). <a href="https://docs.docker.com/reference/dockerfile/#env">docs.docker.com/reference/dockerfile/#env</a></li>
+        <li>Alpine Linux, About. <a href="https://alpinelinux.org/about/">alpinelinux.org/about/</a></li>
+        <li>PEP 656 – Platform Tag for Linux Distributions Using Musl. <a href="https://peps.python.org/pep-0656/">peps.python.org/pep-0656/</a></li>
+        <li>PEP 668 – Marking Python base environments as "externally managed". <a href="https://peps.python.org/pep-0668/">peps.python.org/pep-0668/</a></li>
+        <li>Python documentation: venv — how venvs work. <a href="https://docs.python.org/3/library/venv.html#how-venvs-work">docs.python.org/3/library/venv.html</a></li>
+        <li>pip documentation: Repeatable installs; Secure installs. <a href="https://pip.pypa.io/en/stable/topics/repeatable-installs/">pip.pypa.io/…/repeatable-installs/</a>, <a href="https://pip.pypa.io/en/stable/topics/secure-installs/">pip.pypa.io/…/secure-installs/</a></li>
+        <li>SWE-bench, "Containerized Evaluation Harness" report, June 27, 2024 (at the v3.0.0 tag). <a href="https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md">github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

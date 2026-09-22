@@ -1,0 +1,84 @@
+{
+  "id": "osworld",
+  "citation": {
+    "authors": "Tianbao Xie, Danyang Zhang, Jixuan Chen, Xiaochuan Li, Siheng Zhao, Ruisheng Cao, Toh Jing Hua, Zhoujun Cheng, Dongchan Shin, Fangyu Lei, Yitao Liu, Yiheng Xu, Shuyan Zhou, Silvio Savarese, Caiming Xiong, Victor Zhong, Tao Yu",
+    "title": "OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments",
+    "venue": "NeurIPS 2024 (Datasets and Benchmarks Track)",
+    "year": "2024",
+    "url": "https://arxiv.org/abs/2404.07972"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2404.07972",
+    "https://arxiv.org/pdf/2404.07972 (downloaded, full text extracted via pdftotext)",
+    "https://proceedings.neurips.cc//paper_files/paper/2024/hash/5d413e48f84dc61244b6be550f1cd8f5-Abstract-Datasets_and_Benchmarks_Track.html (venue confirmation)"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "369 real computer tasks in a real OS VM (Ubuntu, also Windows) with execution-based evaluation scripts per task — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed with one refinement: the 369-task benchmark is defined and executed on Ubuntu; Windows is an ADDITIONAL set of 43 tasks for analysis (not part of the 369). The environment itself supports Ubuntu, Windows, and macOS. Each task has a custom execution-based evaluation script; the benchmark uses 134 unique evaluation functions.",
+      "quote": "We introduce the OSWORLD benchmark, which encompasses 369 real computing tasks defined and executed on Ubuntu. Additionally, we provide a set of 43 tasks for Windows built on the OSWORLD environment. ... OSWORLD contains a total of 369 tasks (and an additional 43 tasks on Windows for analysis), with the majority (268 tasks or 72.6%) aiming at single application functionalities and a remarkable section of workflow-related tasks (101 tasks or 27.4%).",
+      "location": "Section 3 (OSWorld Benchmark) and Section 3.2 (Tasks)"
+    },
+    {
+      "planned": "Humans ~72%, best model ~12% at publication — confirm numbers",
+      "verdict": "confirmed",
+      "finding": "Humans: 72.36%. Best model: 12.24% (GPT-4 with accessibility-tree input; in Table 5 the a11y-tree group's Overall column reads Mixtral-8x7B 2.98%, Llama-3-70B 1.61%, GPT-3.5 2.69%, GPT-4 12.24%, Gemini-Pro 2.37%). Screenshot-only with the strongest VLMs (GPT-4V, Gemini-Pro-Vision) was just 5.26%-5.80%.",
+      "quote": "While humans can accomplish over 72.36% of the tasks, the best model achieves only 12.24% success, primarily struggling with GUI grounding and operational knowledge.",
+      "location": "Abstract; Table 5 and Section 4.2 (Results)"
+    },
+    {
+      "planned": "Each task has custom initial state setup and execution-based reward script — confirm harness design",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Each example has a detailed initial state setup configuration plus a custom execution-based evaluation script composed from getter functions + evaluator functions; 302 distinct initial states and 134 unique evaluation functions across the benchmark. 9 CS-background authors annotated; setup took ~1 man-hour per example and evaluation development ~2 man-hours per example, ~400 man-hours total collection.",
+      "quote": "Each task example is derived from real-world computer use cases and includes a detailed initial state setup configuration and a custom execution-based evaluation script for reliable, reproducible evaluation. ... the dataset incorporates 302 distinct initial states and 134 different evaluation scripts ... The getter function is used to extract key components (e.g., the modified file, the text contents displayed in a window element) from the final state of the environment, and the evaluator function assesses success based on the extracted key components.",
+      "location": "Abstract; Section 3.2 (Initial state setup configs; Execution-based evaluation); Section 3.3 statistics"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Evaluation diversity is itself a measure of benchmark realism: OSWorld needed 134 unique evaluation functions ('nearly sample-specific' scripts), versus a handful of generic checkers in prior work, and each example's evaluator cost ~2 man-hours of graduate-student time plus three rounds of cross-checking.",
+      "quote": "we implement nearly sample-specific executable evaluation scripts, resulting in a total of 134 unique evaluation functions for assessing functional correctness—significantly more than the previous benchmarks. The average time spent on developing the evaluation for an example and its examination amounts to approximately 2 man-hours from graduate students.",
+      "numbers": "134 unique evaluation functions; 302 distinct initial states; ~2 man-hours per evaluator; ~400 man-hours total task collection; 9 author-annotators"
+    },
+    {
+      "point": "The benchmark deliberately includes infeasible tasks to test whether agents can recognize impossibility (deprecated or hallucinated features) — the reward is 1 only if the agent correctly predicts failure on these.",
+      "quote": "we notice that it is challenging to find enough examples... we also collect the infeasible ones that are inherently impossible to be completed due to deprecated features or hallucinated features raised by real users, which results in 30 infeasible examples in our benchmark.",
+      "numbers": "30 infeasible tasks = 8.1% of the dataset"
+    },
+    {
+      "point": "Human baseline is far below 100%, and OSWorld tasks are measurably harder than web-only benchmarks — useful for teaching that human ceilings must be measured, not assumed.",
+      "quote": "the human performance on our tasks was approximately 72.36%, significantly lower than the 88% observed on the pure web task dataset.",
+      "numbers": "Humans: 72.36% on OSWorld vs 88% on WebArena; mean completion time 111.94s vs 35.38s on WebArena"
+    },
+    {
+      "point": "Agent performance variance across task categories is enormous while human performance is flat — a validity lesson about aggregate scores hiding capability gaps. Multi-app workflow tasks are the hardest for agents.",
+      "quote": "performance on workflow-type tasks involving multiple software is far below the figures on a single software, generally below 5%. However, human performance is consistent across these tasks, fluctuating around 70% without exceeding a 5% variance.",
+      "numbers": "Workflow tasks: best baseline 6.57% (intro figure), generally <5%; some application subsets reach 0%; baseline range overall 0.99%-12.24%; humans ~70% +/-5% across all categories"
+    },
+    {
+      "point": "Observation-space choice changes the leaderboard: the 12.24% best score came from text-based a11y-tree input (GPT-4), while screenshot-only VLMs topped out at 5.26-5.80%, and Set-of-Mark prompting actually HURT GPT-4V on the OS desktop (contradicting web-agent findings) because high-resolution screens with countless elements (e.g., spreadsheet cells) make SoM boxes noisy.",
+      "quote": "when only using screenshots as input and adopting pyautogui as the code space, the success rate of the model is only 5.26% to 5.80% even with the strongest VLMs GPT-4V and Gemini-Pro-vision. Meanwhile, the most advanced batch of language models, when using the a11y tree as input, has a success rate ranging from 2.37% to 12.24%.",
+      "numbers": "Screenshot-only: 5.26%-5.80%; a11y tree: 2.37%-12.24%; SoM declined for GPT-4V vs screenshot+a11y"
+    },
+    {
+      "point": "Task scope: eight representative applications plus OS basics, with 22.8% of tasks integrated from prior single-domain benchmarks — showing OSWorld as a unifying environment.",
+      "quote": "we mainly focus on eight representative applications as well as the basic ones system provide: Chrome for web browsing, VLC for media playback, Thunderbird for email management, VS Code as a coding IDE, and LibreOffice (Calc, Writer, and Impress)... GIMP for image editing, and other basic OS apps like terminal, file manager, image viewer, and PDF viewer.",
+      "numbers": "8 representative apps; 84 tasks (22.8%) integrated from NL2Bash, Mind2Web, SheetCopilot, PPTC, GAIA"
+    },
+    {
+      "point": "Quality control as a process lesson: each example was cross-checked by two other authors for feasibility/ambiguity, then attempted by two authors who did not annotate it, acting as agents.",
+      "quote": "each example will be cross-checked by the other two authors on the feasibility, ambiguity, and alignment with the source. ... Once annotation is finished, each example is attempted by two authors who did not participate in annotating that specific example, acting as agents to complete the task.",
+      "numbers": "2 cross-checkers + 2 independent attempters per example; eval scripts iterated 3 times"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say the 369 tasks span Ubuntu AND Windows: the 369 benchmark tasks are defined and executed on Ubuntu; Windows is a separate additional 43-task set, and macOS is supported by the environment but has no benchmark tasks.",
+    "Do not attribute the 12.24% best score to a vision/screenshot agent: it was GPT-4 using the accessibility (a11y) TREE as text input; screenshot-only VLMs topped out at 5.26-5.80% in the original results.",
+    "Do not present 72.36% as a casual estimate ('~72%' is fine, but it is from a measured human study with participants 'not familiar with the software', not expert ceiling).",
+    "Note the current arXiv version of the paper adds later models (GPT-4o: 11.36% with a11y tree, Gemini-Pro-1.5) to Table 5; 'at publication' framing for 12.24% (GPT-4) remains correct but live OSWorld leaderboard numbers are now far higher — do not cite 12.24% as current state of the art.",
+    "Do not say every task has a unique evaluation script: scripts are 'nearly sample-specific' built from a library of 134 unique evaluation functions plus getter functions; some are shared."
+  ],
+  "notes_for_authors": "All three planned claims check out, with one precision fix: phrase the task count as '369 Ubuntu tasks plus an additional 43 Windows tasks' rather than '369 tasks (Ubuntu, also Windows)'. The harness-design claim is the pedagogical gold here: per-task initial-state configs (302 distinct initial states), getter+evaluator composition, 134 unique eval functions, ~2 man-hours per evaluator, 3 review passes, and reward=1 on infeasible tasks only when the agent declares them infeasible. The human study (72.36%, 111.94s avg, vs WebArena 88%/35.38s) is a clean example of measuring rather than assuming the human ceiling. The category-variance finding (agents <5% on multi-app workflows while humans are flat ~70%) is a strong validity teaching moment about aggregate metrics. Verified against the latest arXiv PDF (which adds GPT-4o/Gemini-1.5 rows) and the NeurIPS 2024 Datasets and Benchmarks Track proceedings listing."
+}

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Political Economy of Leaderboards · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Contamination &amp; Validity</p>
+    <h1>The political economy of leaderboards</h1>
+    <p class="lede">
+      The previous pages treated measurement failures as technical problems. This page treats them as
+      <em>incentive</em> problems: what happens to an eval when billions of dollars ride on its rankings.
+      The case study is the field's most influential leaderboard, Chatbot Arena, as audited in "The
+      Leaderboard Illusion."
+    </p>
+
+    <h2 id="arena">The instrument with the best validity story</h2>
+    <p>
+      Chatbot Arena seemed contamination-proof by construction: real users converse with two anonymous
+      models, vote for the better answer, and Elo-style ratings aggregate millions of fresh, live
+      preference battles — the design introduced alongside MT-Bench in
+      2023.<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, MT-Bench/Chatbot Arena, §2.3">[MT-Bench]</a>
+      No fixed test set to leak, questions invented continuously by users. If any public eval should
+      resist the dynamics of Module 6, it's this one. "The Leaderboard Illusion" (Singh et al., 2025 —
+      Cohere Labs with academic co-authors) audited the operational reality and found four distortions,
+      none of which involve contaminated data.<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, The Leaderboard Illusion">[Leaderboard Illusion]</a>
+    </p>
+
+    <h2 id="best-of-n">Distortion 1: private testing and best-of-N disclosure</h2>
+    <p>
+      An unstated Arena policy allowed select providers to test multiple model variants privately —
+      anonymously, with the option to retract scores — and publish only the winner. The documented
+      extreme: <strong>27 private variants tested by Meta</strong> on the main leaderboard in the
+      lead-up to Llama 4 (March 2025 alone; the paper calls 27 conservative, counting 16 more on the
+      vision leaderboard). No academic lab tested any private models in the observed
+      period.<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, §3">[Leaderboard Illusion]</a>
+    </p>
+    <p>
+      Why this breaks the math rather than just the optics: pick the maximum of N noisy scores and
+      you've measured your luck, not your model. The authors demonstrated it with the cleanest possible
+      experiment — submitting two <em>identical</em> checkpoints of their own model. The identical twins
+      earned different Arena scores, 1069 vs 1052, with four other models ranked between
+      them.<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, §3.2">[Leaderboard Illusion]</a>
+      Their simulation: privately testing just 10 variants buys roughly +100 points of expected maximum
+      score — enough that "a weaker family of models … enabled with private testing can outperform a
+      stronger family … restricted to a single
+      submission."<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, §3.1, Figures 7–8">[Leaderboard Illusion]</a>
+      Rank, under this policy, partly measures testing strategy.
+    </p>
+
+    <h2 id="asymmetry">Distortions 2–4: data, fit, and quiet removal</h2>
+    <ul>
+      <li><strong>Sampling asymmetry.</strong> Battles aren't distributed evenly: Google and OpenAI
+        models received an estimated 19.2% and 20.4% of <em>all</em> Arena data respectively; four
+        proprietary providers together got 62.8% — 68× the combined share of Allen AI, Stanford,
+        Princeton, and Berkeley — while 83 open-weight models split
+        29.7%.<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, §4.1">[Leaderboard Illusion]</a>
+        Battles are also data <em>collection</em>: every battle delivers user prompts and preference
+        votes to the provider, compounding advantage.</li>
+      <li><strong>Distribution fit masquerading as capability.</strong> In a controlled experiment, fine-tuning
+        with progressively more Arena data (0% → 70% of a fixed budget) raised win-rate on ArenaHard —
+        a test set drawn from the Arena distribution — from 23.5% to 49.9%, a relative gain of 112%.
+        The same training showed limited benefit on MMLU: the gains were Arena-shaped, not
+        general.<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, §4.2, Figure 10">[Leaderboard Illusion]</a>
+        That is Goodhart's law with a measured effect size — optimizing the proxy, detaching it from
+        the construct (<a href="20-validity.html">page 20</a>).</li>
+      <li><strong>Silent deprecation, asymmetrically applied.</strong> Of 243 public models, 205 had
+        their sampling quietly cut to near zero — versus 47 officially listed as deprecated — and 64%
+        of the silently deprecated were open-weight or open-source (deprecation rates ~88–89% for open
+        models vs 80% proprietary).<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, §5">[Leaderboard Illusion]</a>
+        Beyond fairness, this corrodes the rating model itself: Elo-style (Bradley–Terry) rankings
+        assume a connected graph of comparisons under a stable distribution, and selective removal
+        breaks both.</li>
+    </ul>
+
+    <h2 id="reforms">The reforms — readable as design principles</h2>
+    <p>
+      The paper's five recommendations generalize to any eval that takes submissions: prohibit score
+      retraction; publish hard limits on concurrent private variants (they suggest a maximum of three);
+      apply deprecation policy uniformly across license types; sample fairly (prioritizing
+      under-evaluated, high-variance pairs); and publish the full deprecation
+      list.<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, Recommendations">[Leaderboard Illusion]</a>
+      The common thread: <strong>the rules of participation are part of the instrument</strong>, and
+      undisclosed rules are undisclosed measurement error.
+    </p>
+    <div class="warn">
+      <span class="label">Caveats — and an auditor's disclosure done right</span>
+      <p>This is an arXiv preprint whose lead authors work at Cohere — an Arena participant — a dual
+      role they disclose explicitly (their own private-variant experiments appear in their data); the
+      Arena's operators publicly disputed parts of the characterization after release. The data-share
+      figures are estimates from scraped battle samples, not platform disclosures. None of that
+      neutralizes the identical-checkpoint experiment or the simulations, which stand on their own
+      math — but it does mean this page's framing comes from one side of a live dispute, and you should
+      read the other side before quoting it in anger.<a class="cite" href="https://arxiv.org/abs/2504.20879" title="Singh et al. 2025, author disclosures">[Leaderboard Illusion]</a></p>
+    </div>
+
+    <h2 id="labs">The view from inside a lab</h2>
+    <p>
+      It would be tidy to cast operators and providers as villains, but the better closing note for this
+      module is Anthropic's own accounting of why evaluation is hard even with aligned incentives and
+      internal access: multiple-choice benchmarks with label errors and ~5-point formatting
+      sensitivity; third-party frameworks costing months of engineering (BIG-bench was "not 'plug and
+      play'" — they found bugs and "dropped it after this experiment"); human evaluation that is
+      expensive, slow, and gameable ("a system could avoid harm simply by providing unhelpful
+      responses"); red-teaming that is "more art than
+      science."<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023, Challenges in Evaluating AI Systems">[Anthropic]</a>
+      Their conclusion is institutional, matching this page's theme: fund the science of repeatable
+      evaluations, fund implementations and robustness analysis, fund government evaluators like NIST,
+      and create legal safe harbor for third-party
+      evaluation.<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023, policy recommendations">[Anthropic]</a>
+      Good measurement at this scale is infrastructure, and infrastructure needs governance.
+    </p>
+
+    <div class="keyidea">
+      <span class="label">Key idea — and the close of Module 6</span>
+      <p>A leaderboard is not a reading of nature; it's an institution — operating policies, sampling
+      decisions, disclosure rules, participant incentives — that <em>produces</em> readings. Module 6's
+      complete checklist for trusting any public number: Is the data uncontaminated
+      (<a href="21-contamination.html">21</a>)? Is the chain from construct to metric intact
+      (<a href="20-validity.html">20</a>)? Are the defenses real (<a href="22-contamination-defenses.html">22</a>)?
+      And — this page — <em>who runs the measurement, under what rules, and who benefits?</em> Skepticism
+      about that last question isn't cynicism; it's how the auditors in this module found everything
+      they found.</p>
+    </div>
+
+    <p>
+      The course closes with tooling: <a href="24-inspect.html">Module 7</a> — one eval harness in
+      depth, then the wider ecosystem.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Shivalika Singh et al., "The Leaderboard Illusion," arXiv:2504.20879 (v2), 2025. <a href="https://arxiv.org/abs/2504.20879">arxiv.org/abs/2504.20879</a></li>
+        <li>Lianmin Zheng et al., "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena," NeurIPS 2023. <a href="https://arxiv.org/abs/2306.05685">arxiv.org/abs/2306.05685</a></li>
+        <li>Anthropic, "Challenges in Evaluating AI Systems," anthropic.com, October 2023. <a href="https://www.anthropic.com/news/evaluating-ai-systems">anthropic.com/news/evaluating-ai-systems</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

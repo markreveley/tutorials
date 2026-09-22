@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elixir → BEAM: a memory-model wiki</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">A guided descent</p>
+    <h1>From Elixir down to the metal</h1>
+    <p class="lede">
+      You already write Elixir. This wiki extends that mental model <em>downward</em> — through the
+      bytecode your code compiles to, into how values are laid out in memory, and finally to how the
+      running VM reads those bytes back. One ladder, top to bottom.
+    </p>
+
+    <div class="card">
+      <p style="margin-top:0"><strong>The one question underneath everything here:</strong></p>
+      <p style="margin-bottom:0; font-size:18px; color:var(--ink)">
+        When you write <code>{m, :a, :b}</code> in Elixir, what literally exists in memory — and what
+        does the BEAM <em>do</em> with it?
+      </p>
+    </div>
+
+    <p>
+      The chapters build on each other. Each rung answers a question the previous one raises, and every
+      claim about the runtime is checked against <a href="https://blog.stenmans.org/theBeamBook" target="_blank" rel="noopener">The
+      BEAM Book</a> (citations like <span class="cite">Ch.4.2</span> link to the relevant section).
+      Wherever it helps, there's something interactive to <em>poke</em> — not for decoration, but because
+      these ideas are spatial and a static paragraph hides the shape.
+    </p>
+
+    <div class="callout">
+      <span class="label">Memorised rules vs. derived ones</span>
+      Most of us carry the BEAM's rules as standalone facts: <em>"data is immutable," "atoms aren't
+      garbage-collected," "don't send giant structures between processes."</em> Memorised, they hold up for
+      years of ordinary work — until an edge case (a GC pause, a copying bottleneck, atom-table exhaustion)
+      lands somewhere the rule doesn't reach. The point of going down the ladder is to convert each rule into
+      one you can <em>re-derive</em>: not "atoms aren't GC'd, because reasons," but "an atom is an index into a
+      single global table — <em>therefore</em> creating them without bound leaks." A derived rule tells you
+      what to do when it breaks; a memorised one only tells you that it did.
+    </div>
+
+    <h2>The ladder</h2>
+
+    <div class="ladder">
+      <a class="rung-row" href="pages/elixir-to-bytecode.html">
+        <div class="level">ABSTRACTION<br>↑ what you write</div>
+        <div class="step"><h3><span class="n">1</span>From Elixir to Bytecode</h3>
+          <p>Your source isn't transliterated — it's rewritten and lowered onto a register machine. What "build a tuple from these values" actually instructs.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/machine-word-and-tags.html">
+        <div class="level">TERMS</div>
+        <div class="step"><h3><span class="n">2</span>The Machine Word &amp; Tags</h3>
+          <p>Every value is a self-describing word. The split between <em>immediates</em> and <em>boxed</em> terms, and the alignment trick that hides a type tag inside a pointer.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/tuples-vs-lists.html">
+        <div class="level">DATA<br>STRUCTURES</div>
+        <div class="step"><h3><span class="n">3</span>Tuples vs Lists in Memory</h3>
+          <p>A contiguous block versus a chain of cons cells. Watch where O(1) index access and O(n) traversal physically come from.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/structural-sharing.html">
+        <div class="level"></div>
+        <div class="step"><h3><span class="n">4</span>Structural Sharing</h3>
+          <p>The centerpiece. "Shared, not copied" stops being a slogan once you can see <em>where</em> the shared value lives: a graph of small blocks connected by arrows.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/atoms-and-atom-table.html">
+        <div class="level"></div>
+        <div class="step"><h3><span class="n">5</span>Atoms &amp; the Atom Table</h3>
+          <p>An atom is a name that <em>is</em> its own identity — interned once into a global table, compared by integer. Why that's cheap, and why it's a footgun.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/maps.html">
+        <div class="level"></div>
+        <div class="step"><h3><span class="n">6</span>Maps: Flat &amp; Hashed</h3>
+          <p>One <code>%{}</code> syntax, two underlying layouts: a small sorted <em>flatmap</em>, and a hash-array-mapped trie for big maps — both leaning on the same structural sharing.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/runtime-reads-memory.html">
+        <div class="level">THE METAL<br>↓ what runs</div>
+        <div class="step"><h3><span class="n">7</span>How the Runtime Reads It</h3>
+          <p>Tag → mask → dereference → header. The BEAM is itself a native C program that asks the OS for memory and plays OS to a world of processes, each with its own heap.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/gc-and-process-memory.html">
+        <div class="level"></div>
+        <div class="step"><h3><span class="n">8</span>GC &amp; Process Memory</h3>
+          <p>Stack and heap share one block and grow toward each other; when they meet, a per-process copying generational collector runs — pausing only that one process.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/message-passing.html">
+        <div class="level"></div>
+        <div class="step"><h3><span class="n">9</span>Message Passing &amp; Copying</h3>
+          <p>Isolated heaps have a price: sending a message <em>copies</em> the term into the receiver's heap. The exception — large binaries, shared off-heap by reference count.</p></div>
+      </a>
+      <div class="connector">⋮</div>
+      <a class="rung-row" href="pages/structural-vs-semantic.html">
+        <div class="level">APPLIED</div>
+        <div class="step"><h3><span class="n">10</span>Structural vs Semantic</h3>
+          <p>The payoff: representation leaking into behavior. Why <code>"álien" &gt; "office"</code> the moment you sort by raw bytes — and what to do instead.</p></div>
+      </a>
+    </div>
+
+    <div class="callout aha">
+      <span class="label">How to read this</span>
+      The ladder reads top to bottom, but rung 4 (<a href="pages/structural-sharing.html">Structural
+      Sharing</a>) stands on its own for anyone wanting the phrase "the elements themselves are not copied"
+      made concrete.
+    </div>
+
+    <h2>Conventions</h2>
+    <ul>
+      <li><span class="cite" style="border:none">Ch.x</span> markers cite <strong>The BEAM Book</strong> (Erik Stenman). Implementation details
+          (exact bit layouts, the 60-bit small-int range) are <em>how it works today</em>, not language
+          guarantees — they can shift across OTP versions and 32/64-bit. The observable Elixir behavior is stable.</li>
+      <li>Colour throughout: <span style="color:var(--imm)">green = an immediate value</span>,
+          <span style="color:var(--boxed)">blue = a pointer / arrow</span>,
+          <span style="color:var(--tag)">amber = tag bits</span>,
+          <span style="color:var(--cons)">rose = a list / cons cell</span>.</li>
+      <li>The conversation that seeded this wiki is preserved as <a href="THREAD.md">THREAD.md</a>.</li>
+    </ul>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Primary reference: The BEAM Book — blog.stenmans.org/theBeamBook · source: github.com/happi/theBeamBook</p>
+
+  </main>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+<script>WIKI.mount('index');</script>
+</body>
+</html>

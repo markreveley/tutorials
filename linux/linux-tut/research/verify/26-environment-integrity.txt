@@ -1,0 +1,290 @@
+# Verification log, page 26. Docker Desktop macOS arm64, Engine 28.1.1, 2026-09-21. Images wordfreq-bench:sloppy / :hardened (prebuilt).
+## integrity-check.sh (shellcheck clean)
+#!/usr/bin/env bash
+# integrity-check.sh: the first six things an "attacker" rollout would look at.
+# Run INSIDE a task container. Read-only. Exit status = number of open surfaces.
+set -u
+leaks=0
+check() {  # check MESSAGE SNIPPET: the surface is OPEN if SNIPPET succeeds
+  if bash -c "$2" >/dev/null 2>&1; then
+    echo "OPEN    $1"
+    leaks=$((leaks + 1))
+  else
+    echo "closed  $1"
+  fi
+}
+check "identity:   running as root" 'id -u | grep -qx 0'
+check "git:        /app carries a .git directory" 'test -d /app/.git'
+check "filesystem: answer key or hidden tests readable" \
+  "find / -xdev -type f \( -name 'expected*.json' -o -name 'test_hidden*' \) -readable | grep -q ."
+check "filesystem: grading script writable" \
+  "find / -xdev -type f -name 'run-tests.sh' -writable | grep -q ."
+check "network:    a route exists (namespace is not empty)" "awk 'NR > 1' /proc/net/route | grep -q ."
+check "host:       Docker socket mounted" 'test -S /var/run/docker.sock'
+echo "$leaks open surface(s)"
+exit "$leaks"
+
+## A. sloppy image, from inside (first run used an earlier draft of the script; same results)
+$ docker run -d --name lt-26-sloppy wordfreq-bench:sloppy
+084d1355c150fb513138c84c5ef465960201a145554ef2042ae110067378367e
+[exit=0]
+$ docker cp SCRATCH/integrity-check.sh lt-26-sloppy:/tmp/integrity-check.sh
+[exit=0]
+$ docker exec lt-26-sloppy bash /tmp/integrity-check.sh
+OPEN    identity:   running as root (uid 0)
+OPEN    git:        /app carries a .git directory
+OPEN    filesystem: answer key or hidden tests readable
+OPEN    filesystem: grading script writable
+OPEN    network:    a route exists (not an empty network namespace)
+closed  host:       Docker socket mounted
+5 open surface(s)
+[exit=5]
+$ docker exec lt-26-sloppy id
+uid=0(root) gid=0(root) groups=0(root)
+[exit=0]
+$ docker exec lt-26-sloppy git log --oneline
+bb4b24a wordfreq: initial import
+[exit=0]
+$ docker exec lt-26-sloppy git log --oneline --all
+bb4b24a wordfreq: initial import
+6301071 count words case-insensitively, ignore punctuation (fixes #12)
+[exit=0]
+$ docker exec lt-26-sloppy git branch -a
+* main
+  upstream-fix
+[exit=0]
+$ docker exec lt-26-sloppy ls -l /opt/grader
+total 12
+-rw-r--r-- 1 root root  54 Sep 21 06:08 expected.json
+-rwxr-xr-x 1 root root 871 Sep 21 06:08 run-tests.sh
+-rw-r--r-- 1 root root 684 Sep 21 06:08 test_hidden.py
+[exit=0]
+$ docker exec lt-26-sloppy cat /opt/grader/expected.json
+{"sample_top3": [["the", 7], ["cat", 2], ["end", 2]]}
+[exit=0]
+$ docker exec lt-26-sloppy bash -c 'test -w /opt/grader/run-tests.sh && echo writable'
+writable
+[exit=0]
+$ docker exec lt-26-sloppy ls /tmp/solution
+ls: cannot access '/tmp/solution': No such file or directory
+[exit=2]
+$ docker exec lt-26-sloppy cat /proc/net/route
+Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT                                                       
+eth0	00000000	010011AC	0003	0	0	0	00000000	0	0	0                                                                               
+eth0	000011AC	00000000	0001	0	0	0	0000FFFF	0	0	0                                                                               
+[exit=0]
+$ docker exec lt-26-sloppy getent hosts github.com
+140.82.116.3    github.com
+[exit=0]
+$ docker exec lt-26-sloppy python3 -c 'import urllib.request as u; print(u.urlopen("https://github.com", timeout=8).status)'
+200
+[exit=0]
+$ docker exec lt-26-sloppy /opt/grader/run-tests.sh /app /tmp/r.jsonl
+[exit=1]
+$ docker exec lt-26-sloppy cat /tmp/r.jsonl
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}
+[exit=0]
+## B. git
+$ docker cp SCRATCH/integrity-check.sh lt-26-sloppy:/tmp/integrity-check.sh
+[exit=0]
+$ docker exec lt-26-sloppy bash /tmp/integrity-check.sh
+OPEN    identity:   running as root
+OPEN    git:        /app carries a .git directory
+OPEN    filesystem: answer key or hidden tests readable
+OPEN    filesystem: grading script writable
+OPEN    network:    a route exists (namespace is not empty)
+closed  host:       Docker socket mounted
+5 open surface(s)
+[exit=5]
+## git cleanup demo on a copy
+$ docker exec lt-26-sloppy cp -r /app /tmp/repo
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git count-objects -v
+count: 11
+size: 44
+in-pack: 0
+packs: 0
+size-pack: 0
+prune-packable: 0
+garbage: 0
+size-garbage: 0
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git branch -D upstream-fix
+Deleted branch upstream-fix (was 6301071).
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git log --oneline --all
+bb4b24a wordfreq: initial import
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git reflog
+bb4b24a HEAD@{0}: checkout: moving from upstream-fix to main
+6301071 HEAD@{1}: commit: count words case-insensitively, ignore punctuation (fixes #12)
+bb4b24a HEAD@{2}: checkout: moving from main to upstream-fix
+bb4b24a HEAD@{3}: commit (initial): wordfreq: initial import
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git fsck --lost-found
+dangling commit 6301071da20c502788db3533760ed0c7974a7bca
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git show --stat --oneline 6301071
+6301071 count words case-insensitively, ignore punctuation (fixes #12)
+ wordfreq.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git reflog expire --expire=now --all
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git gc -q --prune=now
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git fsck --lost-found
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy git cat-file -t 6301071
+fatal: Not a valid object name 6301071
+[exit=128]
+$ docker exec -w /tmp/repo lt-26-sloppy git count-objects -v
+count: 0
+size: 0
+in-pack: 8
+packs: 1
+size-pack: 2
+prune-packable: 0
+garbage: 0
+size-garbage: 0
+[exit=0]
+$ docker exec -w /tmp/repo lt-26-sloppy bash -c 'git log --oneline --all | wc -l'
+1
+[exit=0]
+## C. layers + hardened + grade.sh
+## image layers, from OUTSIDE (host = macOS, bsdtar)
+$ docker history --format '{{.CreatedBy}}	{{.Size}}' wordfreq-bench:sloppy | head -5
+CMD ["sleep" "infinity"]	0B
+WORKDIR /app	4.1kB
+RUN /bin/sh -c rm -rf /tmp/solution # buildk…	8.19kB
+COPY solution /tmp/solution # buildkit	16.4kB
+COPY grader /opt/grader # buildkit	24.6kB
+[exit=0]
+$ docker save wordfreq-bench:sloppy -o SCRATCH/img.tar && tar -xf SCRATCH/img.tar -C SCRATCH/img
+[exit=0]
+$ for b in SCRATCH/img/blobs/sha256/*; do tar -tf $b 2>/dev/null | grep -E 'solution' ; done
+tmp/.wh.solution
+tmp/solution/
+tmp/solution/wordfreq.patch.py
+[exit=1]
+$ docker save wordfreq-bench:hardened -o SCRATCH/imgh.tar && rm -rf SCRATCH/imgh && mkdir SCRATCH/imgh && tar -xf SCRATCH/imgh.tar -C SCRATCH/imgh
+[exit=0]
+$ for b in SCRATCH/imgh/blobs/sha256/*; do tar -tf $b 2>/dev/null | grep -E 'solution|expected|test_hidden|\.git/' ; done | wc -l
+       0
+[exit=0]
+## hardened
+$ ./run-hardened.sh lt-26-hard
+b2244f249726d2d9d300fe29e0e4593e13c88279411d7772f8801cac0abb307a
+[exit=0]
+$ docker exec -i lt-26-hard bash -s < SCRATCH/integrity-check.sh
+closed  identity:   running as root
+closed  git:        /app carries a .git directory
+closed  filesystem: answer key or hidden tests readable
+closed  filesystem: grading script writable
+closed  network:    a route exists (namespace is not empty)
+closed  host:       Docker socket mounted
+0 open surface(s)
+[exit=0]
+$ docker exec lt-26-hard id
+uid=1001(agent) gid=1001(agent) groups=1001(agent)
+[exit=0]
+$ docker exec lt-26-hard ls -a /app
+.
+..
+README.md
+data
+tests
+wordfreq.py
+[exit=0]
+$ docker exec lt-26-hard ls /opt/grader
+ls: cannot access '/opt/grader': No such file or directory
+[exit=2]
+$ docker exec lt-26-hard cat /proc/net/route
+Iface	Destination	Gateway 	Flags	RefCnt	Use	Metric	Mask		MTU	Window	IRTT                                                       
+[exit=0]
+$ docker exec lt-26-hard touch /usr/local/bin/python3
+touch: cannot touch '/usr/local/bin/python3': Read-only file system
+[exit=1]
+$ docker inspect --format 'user={{.Config.User}} ro={{.HostConfig.ReadonlyRootfs}} net={{.HostConfig.NetworkMode}} capdrop={{.HostConfig.CapDrop}} privileged={{.HostConfig.Privileged}}' lt-26-hard
+user=agent ro=true net=none capdrop=[ALL] privileged=false
+[exit=0]
+$ docker inspect --format '{{range .Mounts}}{{.Type}} {{.Destination}} rw={{.RW}}{{println}}{{end}}' lt-26-hard
+volume /app rw=true
+
+[exit=0]
+## grade from outside: unfixed, then oracle-fixed
+$ ./grade.sh lt-26-hard SCRATCH/results.jsonl
+[exit=1]
+$ docker exec lt-26-hard python3 -c "import re,pathlib; p=pathlib.Path('/app/wordfreq.py'); s=p.read_text(); s=s.replace('import sys
+','import re
+import sys
+',1).replace('return Counter(text.split())', 'return Counter(re.findall(r\"[a-z]+(?:\'[a-z]+)*\", text.lower()))'); p.write_text(s)"
+[exit=0]
+$ docker exec lt-26-hard grep -n 'Counter(' /app/wordfreq.py
+10:    return Counter(re.findall(r"[a-z]+(?:'[a-z]+)*", text.lower()))
+[exit=0]
+$ ./grade.sh lt-26-hard SCRATCH/results.jsonl
+[exit=0]
+$ cat SCRATCH/results.jsonl
+{"exit_code": 1, "passed": false, "stderr_tail": "Ran 2 tests in 0.001s  FAILED (failures=2) "}
+{"exit_code": 0, "passed": true, "stderr_tail": "Ran 2 tests in 0.001s  OK "}
+[exit=0]
+## D. state and /proc
+## state across rollouts: a named volume outlives --rm
+$ docker run --rm -v lt-26-work:/work wordfreq-bench:hardened bash -c 'echo "rollout 1: answer is 42" > /work/notes.txt'
+bash: line 1: /work/notes.txt: Permission denied
+[exit=1]
+$ docker run --rm -v lt-26-work:/work wordfreq-bench:hardened cat /work/notes.txt
+cat: /work/notes.txt: No such file or directory
+[exit=1]
+$ docker run --rm wordfreq-bench:hardened bash -c 'echo scratch > /tmp/x; ls /tmp'
+x
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened ls /tmp
+[exit=0]
+$ docker volume rm lt-26-work
+lt-26-work
+[exit=0]
+## process surface: a grader process in the agent's PID namespace
+$ docker run -d --name lt-26-proc --init wordfreq-bench:hardened
+08b2207e4f7eb2e4c9ccd9135d5b44997e784d7ab0554d2670c7dd39c26ac9a7
+[exit=0]
+$ docker exec -d -u root -e EXPECTED_TOP=the:7 lt-26-proc sleep 600
+[exit=0]
+$ docker exec -d -u agent -e EXPECTED_TOP=the:7 lt-26-proc sleep 601
+[exit=0]
+$ docker exec lt-26-proc ps -eo pid,user,args
+  PID USER     COMMAND
+    1 agent    /sbin/docker-init -- sleep infinity
+    7 agent    sleep infinity
+    8 root     sleep 600
+   14 agent    sleep 601
+   20 agent    ps -eo pid,user,args
+[exit=0]
+## state across rollouts (retry): named volume at /app outlives --rm
+$ docker run --rm -v lt-26-work:/app wordfreq-bench:hardened bash -c 'echo "rollout 1 notes: compare lowercase, strip punctuation" > /app/NOTES.txt'
+[exit=0]
+$ docker run --rm -v lt-26-work:/app wordfreq-bench:hardened cat /app/NOTES.txt
+rollout 1 notes: compare lowercase, strip punctuation
+[exit=0]
+$ docker run --rm wordfreq-bench:hardened cat /app/NOTES.txt
+cat: /app/NOTES.txt: No such file or directory
+[exit=1]
+$ docker volume rm lt-26-work
+lt-26-work
+[exit=0]
+## /proc visibility
+$ docker exec -u agent lt-26-proc bash -c 'tr "\0" " " < /proc/8/cmdline; echo'
+sleep 600 
+[exit=0]
+$ docker exec -u agent lt-26-proc bash -c 'tr "\0" "\n" < /proc/8/environ | grep EXPECTED'
+bash: line 1: /proc/8/environ: Permission denied
+[exit=1]
+$ docker exec -u agent lt-26-proc bash -c 'tr "\0" "\n" < /proc/14/environ | grep EXPECTED'
+EXPECTED_TOP=the:7
+[exit=0]
+$ docker rm -f lt-26-proc lt-26-sloppy lt-26-hard
+lt-26-proc
+lt-26-sloppy
+lt-26-hard
+[exit=0]

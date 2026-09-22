@@ -1,0 +1,144 @@
+{
+  "id": "signal-7",
+  "tag": "[signal(7)]",
+  "citation": {
+    "authors": "Linux man-pages project (M. Kerrisk et al.); kill(1) from util-linux",
+    "title": "signal(7) — overview of signals; kill(2) — send signal to a process; kill(1) — terminate a process",
+    "venue": "Linux man-pages 6.19 (man7.org rendering of 2026-09-09); util-linux",
+    "year": "2026",
+    "url": "https://man7.org/linux/man-pages/man7/signal.7.html"
+  },
+  "fetched_urls": [
+    "https://man7.org/linux/man-pages/man7/signal.7.html",
+    "https://man7.org/linux/man-pages/man2/kill.2.html",
+    "https://man7.org/linux/man-pages/man1/kill.1.html",
+    "https://man7.org/linux/man-pages/man7/pipe.7.html",
+    "https://man7.org/linux/man-pages/man1/bash.1.html"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "SIGKILL and SIGSTOP cannot be caught, blocked, or ignored",
+      "verdict": "confirmed",
+      "finding": "Verbatim in signal(7). These are the only two such signals.",
+      "quote": "The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.",
+      "location": "signal(7), DESCRIPTION > Standard signals (sentence directly under the table)",
+      "cite_url": "https://man7.org/linux/man-pages/man7/signal.7.html"
+    },
+    {
+      "planned": "Signal numbers on x86/ARM: HUP 1, INT 2, QUIT 3, KILL 9, SEGV 11, PIPE 13, ALRM 14, TERM 15, CHLD 17, CONT 18, STOP 19, TSTP 20; default dispositions (Term/Core/Ign/Stop)",
+      "verdict": "confirmed",
+      "finding": "All twelve numbers are exactly as planned for the 'x86/ARM and most others' column. Also: SIGILL 4, SIGTRAP 5, SIGABRT 6, SIGBUS 7, SIGFPE 8, SIGUSR1 10, SIGUSR2 12, SIGSTKFLT 16, SIGTTIN 21, SIGTTOU 22, SIGURG 23, SIGXCPU 24, SIGXFSZ 25, SIGVTALRM 26, SIGPROF 27, SIGWINCH 28, SIGIO 29, SIGPWR 30, SIGSYS 31. Numbers DIFFER on Alpha/SPARC, MIPS, PARISC (e.g. SIGCHLD is 20 on Alpha/SPARC, 18 on MIPS) — so say 'on x86 and ARM'. Default actions: Term = HUP, INT, KILL, PIPE, ALRM, TERM, USR1, USR2; Core = QUIT, ILL, ABRT, FPE, SEGV, BUS, SYS, TRAP, XCPU, XFSZ; Ign = CHLD, URG, WINCH; Stop = STOP, TSTP, TTIN, TTOU; Cont = CONT. There are FIVE disposition classes (Term, Ign, Core, Stop, Cont), not four.",
+      "quote": "The first numeric value in each table row shows the signal number on x86, ARM, and most other architectures; the second value is for Alpha and SPARC; the third is for MIPS; and the last is for PARISC.",
+      "location": "signal(7), DESCRIPTION > Signal numbering for standard signals; action column from > Standard signals table; classes from > Signal dispositions",
+      "cite_url": "https://man7.org/linux/man-pages/man7/signal.7.html"
+    },
+    {
+      "planned": "kill(1) sends TERM by default; kill -0 tests existence/permission; negative PID signals a process group",
+      "verdict": "confirmed",
+      "finding": "kill(1): default signal is TERM. Signal 0: no signal sent but error checking performed. PID argument -n (n>1) signals process group n, but on the command line it must be preceded by an explicit signal or by '--' or it is parsed as the signal to send. PID 0 = all processes in caller's process group; PID -1 = all processes with PID > 1. At the syscall level kill(2): pid>0 that process; pid==0 caller's process group; pid==-1 every process the caller may signal except PID 1; pid<-1 process group -pid.",
+      "quote": "If no signal is specified, the TERM signal is sent. The default action for this signal is to terminate the process. This signal should be used in preference to the KILL signal (number 9), since a process may install a handler for the TERM signal in order to perform clean-up steps before terminating in an orderly fashion.",
+      "location": "kill(1), DESCRIPTION; ARGUMENTS (for -n and 0 and -1); kill(2) DESCRIPTION for sig 0 and pid < -1",
+      "cite_url": "https://man7.org/linux/man-pages/man1/kill.1.html"
+    },
+    {
+      "planned": "Permission to signal: sender needs CAP_KILL or matching real/effective UID",
+      "verdict": "corrected",
+      "finding": "The exact rule: sender is privileged (CAP_KILL in the user namespace of the TARGET process), OR the sender's real or effective UID equals the target's real UID or SAVED SET-user-ID (not the target's effective UID). Special case: SIGCONT may be sent to any process in the same session. Failure is EPERM; nonexistent target is ESRCH.",
+      "quote": "For a process to have permission to send a signal, it must either be privileged (under Linux: have the CAP_KILL capability in the user namespace of the target process), or the real or effective user ID of the sending process must equal the real or saved set-user-ID of the target process.",
+      "location": "kill(2), DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man2/kill.2.html"
+    },
+    {
+      "planned": "SIGPIPE is sent when writing to a pipe with no reader (explains `yes | head`)",
+      "verdict": "confirmed",
+      "finding": "signal(7) table: SIGPIPE, Term, 'Broken pipe: write to pipe with no readers; see pipe(7)'. pipe(7): when all read-end fds are closed, write(2) generates SIGPIPE for the writer; if the writer ignores SIGPIPE, write fails with EPIPE instead. Executed: `yes | head -1` in bash gives PIPESTATUS '141 0' — 141 = 128+13, i.e. yes was killed by SIGPIPE while the pipeline as a whole reports head's 0.",
+      "quote": "If all file descriptors referring to the read end of a pipe have been closed, then a write(2) will cause a SIGPIPE signal to be generated for the calling process. If the calling process is ignoring this signal, then write(2) fails with the error EPIPE.",
+      "location": "pipe(7), DESCRIPTION > I/O on pipes and FIFOs; signal(7) Standard signals table",
+      "cite_url": "https://man7.org/linux/man-pages/man7/pipe.7.html"
+    },
+    {
+      "planned": "(Added by the Appendix F author, 2026-09-21) What man7.org is: the online home of rendered Linux man-pages, used as this course's canonical man-page link target",
+      "verdict": "confirmed",
+      "finding": "man7.org/linux/man-pages/index.html describes itself as HTML renderings of the man pages from the Linux man-pages project plus a curated collection of pages from various other free software projects, browsable by section, alphabetically, or by project. Each man-pages page ends with a COLOPHON naming the project and the release tarball it was rendered from (signal(7) fetched 2026-09-21: man-pages-6.19), which can be newer than the manpages package on a given distro (Ubuntu 24.04 ships manpages 6.7-2, checked with dpkg). URL pattern: https://man7.org/linux/man-pages/man<SECTION>/<name>.<SECTION>.html.",
+      "quote": "The links from this page display HTML renderings of the man pages from the Linux man-pages project as well as a curated collection of pages from various other free software projects.",
+      "location": "man7.org > Linux > man-pages (index page, first paragraph); COLOPHON section of signal(7)",
+      "cite_url": "https://man7.org/linux/man-pages/index.html"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "The five default dispositions, verbatim definitions.",
+      "quote": "Term Default action is to terminate the process. Ign Default action is to ignore the signal. Core Default action is to terminate the process and dump core (see core(5)). Stop Default action is to stop the process. Cont Default action is to continue the process if it is currently stopped.",
+      "location": "signal(7), DESCRIPTION > Signal dispositions"
+    },
+    {
+      "finding": "A process chooses per signal between three behaviours: default action, ignore, or catch with a handler. Disposition is per-process (shared by all threads).",
+      "quote": "a process can elect one of the following behaviors to occur on delivery of the signal: perform the default action; ignore the signal; or catch the signal with a signal handler, a programmer-defined function that is automatically invoked when the signal is delivered.",
+      "location": "signal(7), DESCRIPTION > Signal dispositions"
+    },
+    {
+      "finding": "Inheritance: fork copies dispositions; execve resets HANDLED signals to default but leaves IGNORED signals ignored. (So a parent that ignores SIGTERM/SIGINT/SIGPIPE passes that on to every program it execs — relevant to harnesses that launch agents.) Signal mask is also inherited across fork and preserved across execve.",
+      "quote": "A child created via fork(2) inherits a copy of its parent's signal dispositions. During an execve(2), the dispositions of handled signals are reset to the default; the dispositions of ignored signals are left unchanged.",
+      "location": "signal(7), DESCRIPTION > Signal dispositions"
+    },
+    {
+      "finding": "Standard signals do not queue: several instances sent while blocked collapse into one pending instance.",
+      "quote": "Standard signals do not queue. If multiple instances of a standard signal are generated while that signal is blocked, then only one instance of the signal is marked as pending (and the signal will be delivered just once when it is unblocked).",
+      "location": "signal(7), DESCRIPTION > Queueing and delivery semantics for standard signals"
+    },
+    {
+      "finding": "Signal-table comments worth quoting: SIGHUP 'Hangup detected on controlling terminal or death of controlling process'; SIGINT 'Interrupt from keyboard'; SIGQUIT 'Quit from keyboard' (Core); SIGTSTP 'Stop typed at terminal'; SIGSEGV 'Invalid memory reference'; SIGCHLD 'Child stopped, terminated, or continued'; SIGSYS 'Bad system call (SVr4); see also seccomp(2)'; SIGXCPU 'CPU time limit exceeded'; SIGXFSZ 'File size limit exceeded'.",
+      "quote": "SIGHUP P1990 Term Hangup detected on controlling terminal or death of controlling process",
+      "location": "signal(7), DESCRIPTION > Standard signals (table)"
+    },
+    {
+      "finding": "PID 1 protection at the kill(2) level: only signals for which init has installed a handler can be sent to PID 1. (See note 'pid1' for the PID-namespace version.)",
+      "quote": "The only signals that can be sent to process ID 1, the init process, are those for which init has explicitly installed signal handlers. This is done to assure the system is not brought down accidentally.",
+      "location": "kill(2), NOTES"
+    },
+    {
+      "finding": "kill(1) on KILL: cannot be caught, so no clean-up is possible. Escalation pattern TERM-then-KILL is the documented recommendation.",
+      "quote": "If a process does not terminate after a TERM signal has been sent, then the KILL signal may be used; be aware that the latter signal cannot be caught, and so does not give the target process the opportunity to perform any clean-up before terminating.",
+      "location": "kill(1), DESCRIPTION"
+    },
+    {
+      "finding": "Most shells have a builtin kill that shadows /usr/bin/kill; kill -l lists signal names, kill -L prints a table of names and numbers. util-linux kill also has --timeout MS SIGNAL (send a follow-up signal race-free via pidfd).",
+      "quote": "Most modern shells have a built-in kill command, with a usage rather similar to that of the command described here.",
+      "location": "kill(1), DESCRIPTION and OPTIONS"
+    },
+    {
+      "finding": "kill(2) ESRCH note: a PID that 'exists' may be a zombie — kill -0 succeeding does not prove the process is still running.",
+      "quote": "ESRCH The target process or process group does not exist. Note that an existing process might be a zombie, a process that has terminated execution, but has not yet been wait(2)ed for.",
+      "location": "kill(2), ERRORS"
+    },
+    {
+      "finding": "Exit status of a signal-killed command as seen in bash is 128+N (SIGKILL -> 137, SIGTERM -> 143, SIGPIPE -> 141, SIGSEGV -> 139, SIGXCPU -> 152, SIGXFSZ -> 153). 127 = command not found, 126 = found but not executable.",
+      "quote": "When a command terminates on a fatal signal N, bash uses the value of 128+N as the exit status.",
+      "location": "bash(1), EXIT STATUS",
+      "cite_url": "https://man7.org/linux/man-pages/man1/bash.1.html"
+    },
+    {
+      "finding": "Interactive bash ignores SIGTERM and SIGQUIT and handles SIGINT; this is why `kill $$` does not close an interactive shell.",
+      "quote": "When bash is interactive, in the absence of any traps, it ignores SIGTERM (so that kill 0 does not kill an interactive shell), and catches and handles SIGINT (so that the wait builtin is interruptible). ... In all cases, bash ignores SIGQUIT.",
+      "location": "bash(1), SIGNALS"
+    },
+    {
+      "finding": "EXECUTED: signal numbering, default TERM, kill -0, and 128+N in Ubuntu 24.04 bash.",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c 'kill -l | head -4; sleep 30 & kill -0 $!; echo \"kill -0 live rc=$?\"; kill $!; wait $!; echo \"wait rc=$?\"; kill -0 99999; echo \"kill -0 dead rc=$?\"'\n 1) SIGHUP\t 2) SIGINT\t 3) SIGQUIT\t 4) SIGILL\t 5) SIGTRAP\n 6) SIGABRT\t 7) SIGBUS\t 8) SIGFPE\t 9) SIGKILL\t10) SIGUSR1\n11) SIGSEGV\t12) SIGUSR2\t13) SIGPIPE\t14) SIGALRM\t15) SIGTERM\n16) SIGSTKFLT\t17) SIGCHLD\t18) SIGCONT\t19) SIGSTOP\t20) SIGTSTP\nkill -0 live rc=0\nwait rc=143\nkill -0 dead rc=1\nbash: line 1: kill: (99999) - No such process",
+      "location": "executed ubuntu:24.04 (Docker Desktop 28.1.1, kernel 6.10.14-linuxkit, arm64)"
+    },
+    {
+      "finding": "EXECUTED: SIGPIPE in a pipeline.",
+      "quote": "$ docker run --rm ubuntu:24.04 bash -c 'yes | head -1; echo \"PIPESTATUS=${PIPESTATUS[*]}\"'\ny\nPIPESTATUS=141 0",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "Table comments for three more signals, verified against the live page by the appendix-B author on 2026-09-21: SIGABRT 'Abort signal from abort(3)' (Core); SIGALRM 'Timer signal from alarm(2)' (Term); SIGUSR1 'User-defined signal 1' (Term).",
+      "quote": "SIGABRT P1990 Core Abort signal from abort(3) / SIGALRM P1990 Term Timer signal from alarm(2) / SIGUSR1 P1990 Term User-defined signal 1",
+      "location": "signal(7), DESCRIPTION > Standard signals (table)"
+    }
+  ],
+  "teaching_notes": "signal(7) is the single authority for 'which signals exist, their numbers, and what they do by default'. Folklore it corrects: (1) numbers are architecture-specific — always qualify with 'on x86/ARM'; (2) there are five default actions, including Cont; (3) SIGQUIT, SIGXCPU and SIGXFSZ dump core by default (signal(7) says Core; getrlimit(2) loosely says 'terminate'); (4) the permission rule compares the sender's real/effective UID with the target's real/SAVED UID, and CAP_KILL is evaluated in the target's user namespace; (5) ignored dispositions survive execve — a harness that ignores SIGPIPE or SIGINT silently changes the behaviour of everything it launches. The man7.org kill(1) page is the util-linux binary; in practice the bash builtin runs, with the same defaults. pipe(7) and bash(1) were fetched in addition to the listed URLs to ground the SIGPIPE mechanism and the 128+N convention (137/143 are needed on the OOM and docker-stop pages)."
+}

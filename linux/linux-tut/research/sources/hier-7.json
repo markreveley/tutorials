@@ -1,0 +1,145 @@
+{
+ "id": "hier-7",
+ "tag": "[hier(7)]",
+ "citation": {
+  "authors": "Linux man-pages project; systemd project; UAPI Group",
+  "title": "hier(7) (Linux man-pages 6.19); file-hierarchy(7) (systemd); UAPI.9 Linux File System Hierarchy",
+  "venue": "man7.org; uapi-group.org",
+  "year": "2026 (man-pages 6.19, dated 2026-02-08)",
+  "url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man7/hier.7.html",
+  "https://man7.org/linux/man-pages/man7/file-hierarchy.7.html",
+  "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/",
+  "https://www.debian.org/releases/bookworm/amd64/release-notes/ch-information.en.html#a-merged-usr-is-now-required"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Linux-specific descriptions of the tree incl. /run, /proc, /sys; /usr merge (bin -> usr/bin symlinks) on modern distros",
+   "verdict": "corrected",
+   "finding": "Two corrections. (1) hier(7) (man-pages 6.19) describes /run, /proc and /sys but says NOTHING about the /usr merge; it still describes /bin and /sbin as separate directories, following FHS 3.0. (2) file-hierarchy(7) on man7.org is now a three-sentence stub (systemd 262~devel): the content moved to the UAPI Group spec 'UAPI.9 Linux File System Hierarchy', which is where the merge is documented as 'Compatibility Symlinks'. Debian's bookworm release notes state merged-/usr is now required. Verified by running: on ubuntu:24.04 and debian:bookworm-slim /bin -> usr/bin, /sbin -> usr/sbin, /lib -> usr/lib; alpine:3.20 is NOT merged (/bin, /sbin, /lib are real directories). Note UAPI.9 goes further than Ubuntu/Debian: it also lists /usr/sbin as a symlink to /usr/bin, which Ubuntu 24.04 does not do (/sbin -> usr/sbin).",
+   "quote": "These compatibility symlinks point to /usr/bin/, ensuring that scripts and binaries referencing these legacy paths correctly find their binaries.",
+   "location": "UAPI.9 Linux File System Hierarchy, 'Compatibility Symlinks: /bin/; /sbin/; /usr/sbin/'",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "file-hierarchy(7) is now a pointer page.",
+   "quote": "Operating systems using the systemd(1) system and service manager are organized based on a file system hierarchy inspired by UNIX, as described in UAPI.9 Linux File System Hierarchy[1].",
+   "location": "file-hierarchy(7) DESCRIPTION (systemd 262~devel)",
+   "cite_url": "https://man7.org/linux/man-pages/man7/file-hierarchy.7.html"
+  },
+  {
+   "fact": "Debian 12 on merged-/usr.",
+   "quote": "Debian has adopted a filesystem layout, referred to as \"merged-/usr\", which no longer includes the legacy directories /bin, /sbin, /lib, or optional variants such as /lib64. In the new layout, the legacy directories are replaced with symlinks to the corresponding locations /usr/bin, /usr/sbin, /usr/lib, and /usr/lib64.",
+   "location": "Debian 12 release notes 5.1.14 'A \"merged-/usr\" is now required'",
+   "cite_url": "https://www.debian.org/releases/bookworm/amd64/release-notes/ch-information.en.html#a-merged-usr-is-now-required"
+  },
+  {
+   "fact": "Observed layouts.",
+   "quote": "ubuntu:24.04 $ ls -ld /bin /sbin /lib -> lrwxrwxrwx ... /bin -> usr/bin ; /lib -> usr/lib ; /sbin -> usr/sbin\ndebian:bookworm-slim: identical symlinks\nalpine:3.20: drwxr-xr-x /bin, /lib, /sbin (real directories; /bin/sh, /bin/ls, /usr/bin/timeout -> /bin/busybox)",
+   "location": "executed ubuntu:24.04, debian:bookworm-slim, alpine:3.20"
+  },
+  {
+   "fact": "hier(7) /run.",
+   "quote": "This directory contains information which describes the system since it was booted. Once this purpose was served by /var/run and programs may continue to use it.",
+   "location": "hier(7) DESCRIPTION, /run",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) /proc.",
+   "quote": "This is a mount point for the proc filesystem, which provides information about running processes and the kernel. This pseudo-filesystem is described in more detail in proc(5).",
+   "location": "hier(7) DESCRIPTION, /proc",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) /sys.",
+   "quote": "This is a mount point for the sysfs filesystem, which provides information about the kernel like /proc, but better structured, following the formalism of kobject infrastructure.",
+   "location": "hier(7) DESCRIPTION, /sys",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) /tmp — may vanish without notice.",
+   "quote": "This directory contains temporary files which may be deleted with no notice, such as by a regular job or at system boot up.",
+   "location": "hier(7) DESCRIPTION, /tmp",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) /var/tmp.",
+   "quote": "Like /tmp, this directory holds temporary files stored for an unspecified duration.",
+   "location": "hier(7) DESCRIPTION, /var/tmp",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) /usr.",
+   "quote": "This directory is usually mounted from a separate partition. It should hold only shareable, read-only data, so that it can be mounted by various machines running Linux.",
+   "location": "hier(7) DESCRIPTION, /usr",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) /usr/bin, /usr/local, /var/log, /opt, /srv, /mnt, /root, /dev one-liners.",
+   "quote": "/usr/bin This is the primary directory for executable programs. ... /usr/local This is where programs which are local to the site typically go. ... /var/log Miscellaneous log files. ... /opt This directory should contain add-on packages that contain static files.",
+   "location": "hier(7) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) /etc/skel — where a new user's dotfiles come from.",
+   "quote": "When a new user account is created, files from this directory are usually copied into the user's home directory.",
+   "location": "hier(7) DESCRIPTION, /etc/skel",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "hier(7) admits it is not authoritative for any given box, and cites FHS 3.0 as its standard.",
+   "quote": "This list is not exhaustive; different distributions and systems may be configured differently.",
+   "location": "hier(7) BUGS; STANDARDS",
+   "cite_url": "https://man7.org/linux/man-pages/man7/hier.7.html"
+  },
+  {
+   "fact": "UAPI.9 /tmp: usually a tmpfs, small files only, flushed at boot, may be aged out; honour $TMPDIR.",
+   "quote": "The place for small temporary files. This directory is usually mounted as a tmpfs instance, and should hence not be used for larger files. (Use /var/tmp/ for larger files.) This directory is usually flushed at boot-up. Also, files that are not accessed within a certain time may be automatically deleted.",
+   "location": "UAPI.9, /tmp/",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  },
+  {
+   "fact": "UAPI.9 /var/tmp.",
+   "quote": "The place for larger and persistent temporary files. In contrast to /tmp/, this directory is usually mounted from a persistent physical file system and can thus accept larger files. ... This directory is generally not flushed at boot-up, but time-based cleanup of files that have not been accessed for a certain time is applied.",
+   "location": "UAPI.9, /var/tmp/",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  },
+  {
+   "fact": "UAPI.9 /run.",
+   "quote": "A tmpfs file system for system packages to place runtime data, socket files, and similar. This directory is flushed on boot, and generally writable for privileged programs only. Always writable.",
+   "location": "UAPI.9, /run/",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  },
+  {
+   "fact": "UAPI.9 /usr and /etc may be read-only.",
+   "quote": "Vendor-supplied operating system resources. Usually read-only, but this is not required. Possibly shared between multiple hosts. This directory should not be modified by the administrator, except when installing or removing vendor-supplied packages.",
+   "location": "UAPI.9, /usr/ (and /etc/: 'System-specific configuration. This directory may be read-only.')",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  },
+  {
+   "fact": "UAPI.9 /proc and /sys are kernel APIs, and /sys is normally read-only in containers — directly relevant to sandbox audits.",
+   "quote": "A virtual kernel file system exposing discovered devices and other functionality. This file system is mostly an API to interface with the kernel and not a place where normal files may be stored. In sandboxed/containerized setups, this directory is generally mounted read-only.",
+   "location": "UAPI.9, /sys/",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  },
+  {
+   "fact": "UAPI.9 /dev/shm: world-writable tmpfs.",
+   "quote": "Place for POSIX shared memory segments, as created via shm_open(3). This directory is flushed on boot, and is a tmpfs file system. Since all users have write access to this directory, special care should be taken to avoid name clashes and vulnerabilities.",
+   "location": "UAPI.9, /dev/shm/",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  },
+  {
+   "fact": "UAPI.9 /var/run is a compatibility symlink to /run.",
+   "quote": "This compatibility symlink points to /run/, ensuring that programs referencing this legacy path correctly find their runtime data.",
+   "location": "UAPI.9, Compatibility Symlinks, /var/run/",
+   "cite_url": "https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/"
+  }
+ ],
+ "teaching_notes": "The planned claim needs re-sourcing: hier(7) does not mention the /usr merge at all, and file-hierarchy(7) has been hollowed out into a pointer to the UAPI Group's UAPI.9 spec (cite it as https://uapi-group.org/specifications/specs/linux_file_system_hierarchy/ with a tag such as [UAPI.9] if quoting it). For 'modern distros are usr-merged' cite the Debian 12 release notes plus the executed ls -ld output; and teach that Alpine is the counter-example (unmerged, BusyBox symlinks). UAPI.9 is more useful than hier(7) for container work because it states operational properties (tmpfs /tmp and /run, read-only /usr and /sys in containers). Added sources beyond the planned URLs: UAPI.9 and the Debian bookworm release notes (both primary)."
+}

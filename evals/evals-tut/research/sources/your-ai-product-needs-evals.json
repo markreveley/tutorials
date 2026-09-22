@@ -1,0 +1,89 @@
+{
+  "id": "your-ai-product-needs-evals",
+  "citation": {
+    "authors": "Hamel Husain",
+    "title": "Your AI Product Needs Evals",
+    "venue": "hamel.dev (personal blog)",
+    "year": "2024 (published March 29, 2024)",
+    "url": "https://hamel.dev/blog/posts/evals/"
+  },
+  "fetched_urls": [
+    "https://hamel.dev/blog/posts/evals/"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Argues evaluation systems are the differentiator for AI products; iteration velocity framing",
+      "verdict": "confirmed",
+      "finding": "Husain attributes unsuccessful AI products to one common root cause — lack of robust evaluation systems — and frames success as a function of iteration speed, with evaluation as the most critical component of the iteration loop.",
+      "quote": "I've found that unsuccessful products almost always share a common root cause: a failure to create robust evaluation systems. ... Like software engineering, success with AI hinges on how fast you can iterate. You must have processes and tools for: Evaluating quality (ex: tests). Debugging issues (ex: logging & inspecting data). Changing the behavior or the system (prompt engineering, fine-tuning, writing code).",
+      "location": "Motivation / 'Iterating Quickly == Success' sections"
+    },
+    {
+      "planned": "Three levels of evaluation: unit tests, human & model eval (logging traces), A/B testing — confirm the exact taxonomy",
+      "verdict": "confirmed",
+      "finding": "Exact taxonomy confirmed. Section headings: 'Level 1: Unit Tests', 'Level 2: Human & Model Eval' (with subsections Logging Traces, Looking At Your Traces, Automated Evaluation w/ LLMs), 'Level 3: A/B Testing'. In the body list it is phrased 'Level 2: Model & Human Eval (this includes debugging)'. Logging traces is the core mechanism of Level 2, as planned. Level 1 has three steps: Write Scoped Tests, Create Test Cases, Run & Track Your Tests Regularly. Level 3 is deferred for mature products.",
+      "quote": "There are three levels of evaluation to consider: Level 1: Unit Tests, Level 2: Model & Human Eval (this includes debugging), Level 3: A/B testing. ... [On Level 3:] It's okay to put this stage off until you are sufficiently ready and convinced that your AI product is suitable for showing to real users. This level of evaluation is usually only appropriate for more mature products.",
+      "location": "'The Types Of Evaluation' section and Level 1/2/3 headings"
+    },
+    {
+      "planned": "Lucid/Rechat case study details — confirm specifics",
+      "verdict": "corrected",
+      "finding": "The company is Rechat; its AI assistant is named Lucy — not 'Lucid'. Rechat is a SaaS app for real estate professionals (contracts, listings, creative assets, appointments); Lucy is a conversational interface over it. After early prompt-engineering progress, performance plateaued as Lucy's surface area grew: whack-a-mole failure modes, no visibility beyond vibe checks, bloated prompts. Rechat built hundreds of unit-test assertions, ran them via CI (GitHub Actions), and used LangSmith for trace logging.",
+      "quote": "Rechat is a SaaS application that allows real estate professionals to perform various tasks, such as managing contracts, searching for listings, building creative assets, managing appointments, and more. ... Rechat's AI assistant, Lucy, is a canonical AI product: a conversational interface that obviates the need to click, type, and navigate the software. ... As Lucy's surface area expanded, the performance of the AI plateaued. Symptoms of this were: Addressing one failure mode led to the emergence of others, resembling a game of whack-a-mole. There was limited visibility into the AI system's effectiveness across tasks beyond vibe checks. Prompts expanded into long and unwieldy forms, attempting to cover numerous edge cases and examples.",
+      "location": "'Case Study: Lucy, A Real Estate AI Assistant' and 'Problem: How To Systematically Improve The AI?' sections"
+    },
+    {
+      "planned": "Confirm the 'remove all friction from looking at data' principle",
+      "verdict": "confirmed",
+      "finding": "Stated verbatim twice: once in the Level 2 'Looking At Your Traces' subsection, and again as the first conclusion takeaway ('Remove ALL friction from looking at data.'). Husain pairs it with rendering traces in domain-specific ways and often building his own data viewing/labeling tool (the example shown was built with Shiny for Python in less than a day).",
+      "quote": "You must remove all friction from the process of looking at data. This means rendering your traces in domain-specific ways. I've often found that it's better to build my own data viewing & labeling tool ... [Conclusion:] Remove ALL friction from looking at data. Keep it simple. Don't buy fancy LLM tools. Use what you have first. You are doing it wrong if you aren't looking at lots of data.",
+      "location": "'Looking At Your Traces' subsection and Conclusion"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "LLM unit tests are assertions (pytest-style) that should be reusable beyond tests — for data cleaning and automatic retries — and must run fast and cheap on every code change. Rechat maintains hundreds, continuously updated from observed production failures.",
+      "quote": "Unit tests for LLMs are assertions (like you would write in pytest). Unlike typical unit tests, you want to organize these assertions for use in places beyond unit tests, such as data cleaning and automatic retries ... Rechat has hundreds of these unit tests. We continuously update them based on new failures we observe in the data as users challenge the AI or the product evolves.",
+      "numbers": "hundreds of unit tests; example assertion: regex check that responses contain no UUIDs"
+    },
+    {
+      "point": "Use LLMs to synthesize test inputs when you lack user data — e.g., prompting a model to generate 50 varied instructions per feature scenario.",
+      "quote": "Write 50 different instructions that a real estate agent can give to his assistant to create contacts on his CRM. ... Imagine if Zillow was able to parse natural language. Come up with 50 different ways users would be able to search listings there.",
+      "numbers": "50 synthetic instructions per feature/scenario in both quoted prompts"
+    },
+    {
+      "point": "Look at lots of data, especially early: read traces from ALL test cases and user-generated traces at minimum; sampling can increase over time but never stops entirely.",
+      "quote": "When starting, you should examine as much data as possible. I usually read traces generated from ALL test cases and user-generated traces at a minimum. You can never stop looking at data—no free lunch exists. However, you can sample your data more over time, lessening the burden.",
+      "numbers": ""
+    },
+    {
+      "point": "LLM-as-judge must be aligned with a human: track model-human correlation to decide how much to trust automatic eval, and collect labeler critiques to iterate on the judge. Husain used a low-tech Excel spreadsheet, sending a colleague (Phillip) 25-50 examples at a time every few days to grade.",
+      "quote": "You should track the correlation between model-based and human evaluation to decide how much you can rely on automatic evaluation. ... I love using low-tech solutions like Excel to iterate on aligning model-based eval with humans. For example, I sent my colleague Phillip the following spreadsheet every few days to grade ... his critique, outcome, and desired response for 25-50 examples at a time.",
+      "numbers": "25-50 examples per grading batch, every few days"
+    },
+    {
+      "point": "Eval systems unlock 'superpowers for free': fine-tuning (the eval system doubles as a data generation/curation engine), data synthesis & curation, and debugging. Fine-tuning is mostly a data problem.",
+      "quote": "99% of the labor involved with fine-tuning is assembling high-quality data that covers your AI product's surface area. However, if you have a solid evaluation system like Rechat's, you already have a robust data generation and curation engine! ... If you have a robust evaluation system, you already have: A database of traces that you can search and filter. A set of mechanisms (assertions, tests, etc) that can help you flag errors and bad behaviors.",
+      "numbers": "99% of fine-tuning labor = data assembly"
+    },
+    {
+      "point": "Reject generic/off-the-shelf eval frameworks; evals must be domain-specific, and most of your effort should go into the eval system itself ('Eval and Curation' sits at the center of his virtuous-cycle diagram).",
+      "quote": "Don't rely on generic evaluation frameworks to measure the quality of your AI. Instead, create an evaluation system specific to your problem. ... You should spend most of your time making your evaluation more robust and streamlined.",
+      "numbers": ""
+    },
+    {
+      "point": "Run Level 1 tests via existing CI infrastructure but track metrics and test/prompt versions outside CI for analysis; tooling is nascent, so choose whatever has least friction in your stack.",
+      "quote": "Rechat has been leveraging CI infrastructure (e.g., GitHub Actions, GitLab Pipelines, etc.) to execute these tests. However, the tooling for this part of the workflow is nascent and evolving rapidly. My advice is to orchestrate tests that involve the least friction in your tech stack.",
+      "numbers": ""
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "The AI assistant in the case study is named 'Lucy', not 'Lucid'. The company is Rechat. Course text saying 'Lucid/Rechat' must be corrected to 'Lucy (Rechat's AI assistant)'.",
+    "The Level 2 heading is 'Human & Model Eval' (body text also phrases it as 'Model & Human Eval (this includes debugging)') — do not call it 'LLM-as-judge' alone; it covers human trace review AND model-based eval, with logging traces as the prerequisite.",
+    "Husain does NOT say to skip A/B testing — he says to defer it until the product is mature enough to show real users.",
+    "Trace tooling is not anti-vendor per se: Rechat uses LangSmith, but Husain warns 'Don't buy fancy LLM tools. Use what you have first' and often builds custom viewers (Shiny for Python, built in under a day).",
+    "The article explicitly scopes out RAG evaluation ('Evaluating RAG is beyond the scope of this post') — don't cite it for RAG-eval specifics."
+  ],
+  "notes_for_authors": "Full text fetched and key quotes verified verbatim against the page HTML on 2026-06-09. Published March 29, 2024. Strongest quotable lines for the course: 'success with AI hinges on how fast you can iterate', 'You must remove all friction from the process of looking at data', 'You are doing it wrong if you aren't looking at lots of data', and the whack-a-mole plateau description. The three-level taxonomy maps cleanly to a code-based-evals -> human/LLM-judge -> online-experiments progression. Note the heading nuance: TOC says 'Level 2: Human & Model Eval' while the in-body list says 'Level 2: Model & Human Eval (this includes debugging)' — either order is faithful. The Phillip spreadsheet workflow (25-50 examples, critiques, binary good/bad outcome, iterating the judge prompt until aligned) is an excellent concrete teaching example for judge-human alignment and connects directly to measurement-validity themes."
+}

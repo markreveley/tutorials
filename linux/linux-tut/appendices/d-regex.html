@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regular Expressions · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix D</p>
+    <h1>Regular expressions</h1>
+    <p class="lede">
+      A regular expression is a pattern that describes a set of strings. <code>grep</code>,
+      <code>sed</code>, <code>awk</code>, <code>jq</code> and Python all take them — in three
+      slightly different dialects, which is where most of the pain comes from. This appendix covers
+      the pieces you need for log work, the dialect differences that actually bite, and ten
+      patterns worth keeping.
+    </p>
+
+    <h2 id="sample">The sample log</h2>
+    <p>
+      Every example below was run in the container lab (GNU grep 3.11 on Ubuntu 24.04) against this
+      twelve-line file, <code>agent.log</code> — a made-up harness log whose last line ends in
+      three trailing spaces — or against <code>results.jsonl</code> from
+      <a href="../pages/05-text-fu.html">page 5</a>. Create it with
+      <code>cat &gt; agent.log &lt;&lt;'EOF'</code> (quoted delimiter:
+      <a href="../pages/04-streams-pipes-redirection.html#here-docs">page 4</a>).
+    </p>
+<pre><code>2026-09-21T10:52:03Z INFO  sandbox 172.17.0.2 started task=wordfreq epoch=1
+2026-09-21T10:52:04Z INFO  tool_call cmd="pytest -q" cwd=/app
+2026-09-21T10:52:09Z ERROR tool_result exit code 127: bash: line 1: pytest: command not found
+2026-09-21T10:52:15Z INFO  tool_call cmd="pip install pytest"
+2026-09-21T10:52:41Z WARN  proxy 10.0.0.5 denied CONNECT github.com:443
+2026-09-21T10:53:02Z ERROR tool_result exit code 1: Traceback (most recent call last):
+  File "/app/wordfreq.py", line 12, in count
+    return totals[word]
+KeyError: 'the'
+2026-09-21T10:55:40Z ERROR tool_result exit code 137: Killed
+2026-09-21T10:55:41Z INFO  note="model said \"done\" early" exit code 0
+2026-09-21T10:57:00Z ERROR harness timeout after 300s, exit code 124   </code></pre>
+
+    <h2 id="building-blocks">The building blocks</h2>
+    <p>
+      A <span class="term" data-g="regex">regex</span> is matched against each line separately, and
+      it matches if it fits <em>anywhere</em> in the line unless you anchor it. Most characters
+      stand for themselves; a few are operators.
+    </p>
+    <table>
+      <tr><th>Piece</th><th>Means</th><th>Example</th></tr>
+      <tr><td>literal</td><td>Itself</td><td><code>ERROR</code></td></tr>
+      <tr><td><code>.</code></td><td>Any one character</td><td><code>epoch=.</code></td></tr>
+      <tr><td><code>[abc]</code> <code>[0-9]</code> <code>[^"]</code></td><td>One character from the set; a range; one character <em>not</em> in the set</td><td><code>[0-9]</code></td></tr>
+      <tr><td><code>[[:space:]]</code> <code>[[:alpha:]]</code> <code>[[:digit:]]</code></td><td>Named classes (portable everywhere, unlike <code>\s</code> and <code>\d</code>)</td><td><code>[[:space:]]$</code></td></tr>
+      <tr><td><code>^</code> <code>$</code></td><td>Anchors: start of line, end of line</td><td><code>^2026</code></td></tr>
+      <tr><td><code>*</code> <code>+</code> <code>?</code> <code>{n,m}</code></td><td>Quantifiers on the previous item: zero or more; one or more; zero or one; between n and m</td><td><code>[0-9]+</code></td></tr>
+      <tr><td><code>( )</code></td><td>Group: lets a quantifier or alternation apply to several characters; also captures for <code>\1</code></td><td><code>(\.[0-9]+){3}</code></td></tr>
+      <tr><td><code>a|b</code></td><td>Alternation: either side</td><td><code>WARN|ERROR</code></td></tr>
+      <tr><td><code>\.</code> <code>\$</code> <code>\[</code></td><td>Backslash makes an operator literal</td><td><code>10\.0\.0\.5</code></td></tr>
+    </table>
+<pre class="term"><code><span class="p">$</span> grep 'exit code 1' agent.log | cut -c 27-60      <span class="c"># unanchored: matches 1, 127, 137, 124</span>
+<span class="o"> tool_result exit code 127: bash: 
+ tool_result exit code 1: Tracebac
+ tool_result exit code 137: Killed
+ harness timeout after 300s, exit </span>
+<span class="p">$</span> grep -c '^2026' agent.log                          <span class="c"># anchored: lines that START with 2026</span>
+<span class="o">9</span>
+<span class="p">$</span> grep -v '^2026' agent.log                          <span class="c"># …and the three that don't: the traceback body</span>
+<span class="o">  File "/app/wordfreq.py", line 12, in count
+    return totals[word]
+KeyError: 'the'</span>
+<span class="p">$</span> echo '10x0y0z5' | grep -o '10.0.0.5'               <span class="c"># an unescaped dot matches anything</span>
+<span class="o">10x0y0z5</span>
+<span class="p">$</span> echo '10x0y0z5' | grep -c '10\.0\.0\.5'
+<span class="o">0</span></code></pre>
+    <p>
+      The first command is the everyday regex bug in eval work: a search for "exit code 1" that
+      quietly includes 127, 137 and 124. Say where the number ends —
+      <code>'exit code 1:'</code> here, or <code>-w</code>/<code>\b</code> (a word boundary) in
+      general.
+    </p>
+
+    <h2 id="dialects">Three dialects</h2>
+    <p>
+      The same pattern means different things depending on the tool and flag.
+    </p>
+    <table>
+      <tr><th>Dialect</th><th>Where</th><th>What differs</th></tr>
+      <tr><td><strong>BRE</strong> (basic)</td><td><code>grep</code>, <code>sed</code> by default</td><td><code>+ ? | ( ) { }</code> are <em>literal</em> characters. GNU tools accept them as operators when backslashed (<code>\+</code>, <code>\|</code>, <code>\(…\)</code>).</td></tr>
+      <tr><td><strong>ERE</strong> (extended)</td><td><code>grep -E</code>, <code>sed -E</code>, <code>awk</code></td><td>Those characters are operators; backslash makes them literal. No <code>\d</code>, no lazy quantifiers.</td></tr>
+      <tr><td><strong>PCRE-style</strong></td><td><code>grep -P</code> (GNU only), Python <code>re</code>, jq, most programming languages</td><td>Adds <code>\d</code> <code>\s</code> <code>\w</code>, lazy <code>*?</code> <code>+?</code>, lookarounds, <code>\K</code>.</td></tr>
+    </table>
+<pre class="term"><code><span class="p">$</span> grep -c 'WARN|ERROR' agent.log        <span class="c"># BRE: looks for the literal text WARN|ERROR</span>
+<span class="o">0</span>
+<span class="p">$</span> grep -c -E 'WARN|ERROR' agent.log
+<span class="o">5</span>
+<span class="p">$</span> grep -o 'exit code [0-9]+' agent.log | head -n 2      <span class="c"># BRE: + is a literal plus; no output</span>
+<span class="p">$</span> grep -o -E 'exit code [0-9]+' agent.log | head -n 2
+<span class="o">exit code 127
+exit code 1</span>
+<span class="p">$</span> echo 'a+b' | grep -c -E 'a+b'          <span class="c"># and the reverse: in ERE, a+b means "one or more a, then b"</span>
+<span class="o">0</span>
+<span class="p">$</span> echo 'a+b' | grep -c -F 'a+b'          <span class="c"># -F: fixed string, no regex at all</span>
+<span class="o">1</span></code></pre>
+    <p>
+      Two rules remove most of the confusion: <strong>always use <code>-E</code></strong> (with
+      both grep and sed), and when you are searching for a literal string full of punctuation — a
+      file path, an error message with brackets — use <strong><code>grep -F</code></strong>.
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><strong><code>\d</code> is not portable, and fails silently.</strong> Models and people
+      arriving from Python write <code>\d+</code> everywhere. GNU grep and sed in ERE mode treat
+      <code>\d</code> as the letter <code>d</code> — no error, just wrong output:</p>
+<pre class="term"><code><span class="p">$</span> echo 'exit code 137' | grep -o -E '\d+'
+<span class="o">d</span>
+<span class="p">$</span> echo 'exit code 137' | sed -E 's/\d+/N/'
+<span class="o">exit coNe 137</span>
+<span class="p">$</span> echo 'exit code 137' | grep -o -P '\d+'
+<span class="o">137</span></code></pre>
+      <p><code>-P</code> fixes it on Ubuntu, but it is a GNU extension. On Alpine, whose grep is
+      <span class="term" data-g="busybox">BusyBox</span>'s, we got
+      <code>grep: unrecognized option: P</code> (exit status 2); the Mac's BSD grep says
+      <code>invalid option -- P</code> — yet that same Mac grep <em>does</em> accept
+      <code>\d</code> under <code>-E</code> and printed <code>137</code>. One pattern, three
+      machines, three behaviours. <code>[0-9]</code> works on all of them. In a
+      <span class="term" data-g="transcript">transcript</span>, an agent whose
+      <code>grep '\d+'</code> "finds nothing" and which then concludes the log is clean has made a
+      Linux-fluency error, and the conclusion it drew is unsupported
+      (<a href="../pages/27-reading-terminal-transcripts.html">page 27</a>).</p>
+    </div>
+
+    <h2 id="greedy">Greedy matching</h2>
+    <p>
+      Quantifiers are <em>greedy</em>: they match as much as they can while still letting the whole
+      pattern succeed. "A quoted string" written as <code>".*"</code> therefore runs from the first
+      quote on the line to the last:
+    </p>
+<pre class="term"><code><span class="p">$</span> echo 'cmd="a" arg="b"' | grep -o '".*"'
+<span class="o">"a" arg="b"</span>
+<span class="p">$</span> echo 'cmd="a" arg="b"' | grep -o '"[^"]*"'       <span class="c"># portable fix: "anything that is not a quote"</span>
+<span class="o">"a"
+"b"</span>
+<span class="p">$</span> echo 'cmd="a" arg="b"' | grep -o -P '".*?"'      <span class="c"># PCRE-only fix: lazy quantifier</span>
+<span class="o">"a"
+"b"</span></code></pre>
+    <p>
+      Python's <code>re.findall(r'".*?"', s)</code> gives the same two matches. Prefer the negated
+      class <code>[^"]*</code>: it works in every dialect and says what you mean.
+    </p>
+
+    <h2 id="quoting">Quoting patterns from the shell</h2>
+    <p>
+      Before grep sees a pattern, the shell has had a go at it
+      (<span class="term" data-g="quoting">quoting</span> is covered on
+      <a href="../pages/06-shell-scripting.html">page 6</a>). Unquoted, <code>[0-9]*</code> is a
+      <span class="term" data-g="glob">glob</span> and is replaced by any matching file names;
+      inside double quotes, <code>$5</code> is a shell variable (empty), and an empty pattern
+      matches every line:
+    </p>
+<pre class="term"><code><span class="p">$</span> mkdir -p q; cd q; touch 5
+<span class="p">$</span> echo 'exit 137' | grep -o [0-9]*       <span class="c"># shell turned the pattern into the file name "5": no match</span>
+<span class="p">$</span> echo 'exit 137' | grep -o '[0-9]*'
+<span class="o">137</span>
+<span class="p">$</span> echo 'cost: 9' | grep -c "$5"          <span class="c"># pattern became the empty string: matches anything</span>
+<span class="o">1</span>
+<span class="p">$</span> echo 'cost: 9' | grep -c '\$5'
+<span class="o">0</span></code></pre>
+    <p>
+      The first failure depends on what files happen to be in the current directory — so the same
+      command works in one <span class="term" data-g="rollout">rollout</span> and not in another.
+      <strong>Single-quote every pattern.</strong>
+    </p>
+
+    <h2 id="ten-patterns">Ten patterns for log work</h2>
+    <p>All ERE (<code>grep -E</code> / <code>sed -E</code>) unless marked.</p>
+    <table>
+      <tr><th>#</th><th>Goal</th><th>Pattern</th></tr>
+      <tr><td>1</td><td>Extract exit codes</td><td><code>grep -o -E 'exit code [0-9]+'</code></td></tr>
+      <tr><td>2</td><td>Only the codes with special meaning (126–255: not executable, not found, killed by a signal — <a href="b-exit-codes-signals.html">Appendix B</a>)</td><td><code>'exit code (12[6-9]|1[3-9][0-9]|2[0-4][0-9]|25[0-5])\b'</code></td></tr>
+      <tr><td>3</td><td>IPv4-shaped strings</td><td><code>'[0-9]{1,3}(\.[0-9]{1,3}){3}'</code></td></tr>
+      <tr><td>4</td><td>ISO-8601 UTC timestamps</td><td><code>'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z'</code></td></tr>
+      <tr><td>5</td><td>Log lines at WARN or above</td><td><code>'^[0-9-]+T[0-9:]+Z (ERROR|WARN) '</code></td></tr>
+      <tr><td>6</td><td>A Python traceback with its body</td><td><code>grep -A 3 'Traceback'</code> (context, not regex: page 5)</td></tr>
+      <tr><td>7</td><td>The final exception line of a traceback</td><td><code>'^[A-Za-z]+(Error|Exception):'</code></td></tr>
+      <tr><td>8</td><td>Which command was not found (capture group)</td><td><code>sed -n -E 's/.*: ([^:]+): command not found$/\1/p'</code></td></tr>
+      <tr><td>9</td><td>Trailing whitespace (breaks exact-match graders)</td><td><code>grep -n -E '[[:space:]]+$'</code></td></tr>
+      <tr><td>10</td><td><code>key=value</code> pairs</td><td><code>grep -o -E '(task|epoch)=[^ ]+'</code></td></tr>
+    </table>
+<pre class="term"><code><span class="p">$</span> grep -E 'exit code (12[6-9]|1[3-9][0-9]|2[0-4][0-9]|25[0-5])\b' agent.log | cut -c 1-75
+<span class="o">2026-09-21T10:52:09Z ERROR tool_result exit code 127: bash: line 1: pytest:
+2026-09-21T10:55:40Z ERROR tool_result exit code 137: Killed</span>
+<span class="p">$</span> grep -o -E '[0-9]{1,3}(\.[0-9]{1,3}){3}' agent.log
+<span class="o">172.17.0.2
+10.0.0.5</span>
+<span class="p">$</span> grep -c -E '^[0-9-]+T[0-9:]+Z (ERROR|WARN) ' agent.log
+<span class="o">5</span>
+<span class="p">$</span> grep -E '^[A-Za-z]+(Error|Exception):' agent.log
+<span class="o">KeyError: 'the'</span>
+<span class="p">$</span> sed -n -E 's/.*: ([^:]+): command not found$/\1/p' agent.log
+<span class="o">pytest</span>
+<span class="p">$</span> grep -n -E '[[:space:]]+$' agent.log | cut -c 1-40
+<span class="o">12:2026-09-21T10:57:00Z ERROR harness ti</span>
+<span class="p">$</span> grep -o -E '(task|epoch)=[^ ]+' agent.log
+<span class="o">task=wordfreq
+epoch=1</span></code></pre>
+    <p>
+      Notes on three of them. Pattern 2 shows how awkward numeric ranges are in a language that only
+      knows characters: for "exit code ≥ 126", extract the number with pattern 1 and compare it in
+      <code>awk</code>. Pattern 3 matches the <em>shape</em> of an address — it would accept
+      <code>999.999.999.999</code> — which is fine for finding candidates in a log and wrong for
+      validating input. In pattern 8, <code>sed -n</code> with the <code>p</code> flag prints only
+      lines where the substitution happened, and <code>\1</code> is whatever the first
+      <code>( )</code> group captured.
+    </p>
+
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p><strong>Don't parse JSON with a regex.</strong> The <code>[^"]*</code> trick works on
+      <code>results.jsonl</code> only because no value in it contains a quote. The sample log has
+      one that does:</p>
+<pre class="term"><code><span class="p">$</span> grep -o 'note="[^"]*"' agent.log
+<span class="o">note="model said \"</span>
+<span class="p">$</span> grep -o -E 'note="([^"\\]|\\.)*"' agent.log
+<span class="o">note="model said \"done\" early"</span></code></pre>
+      <p>The second pattern ("any character that isn't a quote or backslash, or a backslash
+      followed by anything") is correct and unreadable, and JSON has more escapes than that. Model
+      output is exactly where embedded quotes, newlines and backslashes turn up. For JSON use
+      <span class="term" data-g="jq">jq</span> (<a href="../pages/05-text-fu.html#jq">page 5</a>),
+      which parses rather than pattern-matches; keep regexes for unstructured text.</p>
+    </div>
+
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p><strong>A regex in a grader is part of the measuring instrument.</strong> Many scorers
+      extract the model's answer with a pattern — <code>ANSWER: (\d+)</code>, a fenced code block,
+      the last number in the output. Each mistake on this page has a scoring consequence: an
+      unanchored pattern accepts <code>137</code> when the expected answer is <code>1</code>; a
+      greedy <code>.*</code> swallows two answers into one; trailing whitespace fails an exact
+      match on a correct answer; a dialect slip makes the extractor return nothing, and "no answer
+      found" is recorded as "wrong". When you review a scorer, read its regexes as carefully as its
+      logic, and test them against real transcripts, including the ugly ones. A rollout whose
+      answer the extractor could not find is a different outcome from a wrong answer, and should be
+      counted separately until someone has looked.</p>
+    </div>
+
+    <h2 id="practice">Practice</h2>
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong>, with <code>agent.log</code> as above and
+      <code>results.jsonl</code> from page 5.</p>
+      <ol>
+        <li>
+          <p>Predict the output of <code>grep -c 'exit code 1$' agent.log</code>. Why is it not 1?</p>
+          <details class="solution"><summary>Solution</summary>
+          <p>It prints <code>0</code>. <code>$</code> anchors to the end of the <em>line</em>, and
+          no line ends right after <code>exit code 1</code>: that line continues with
+          <code>: Traceback…</code>. To match the code 1 exactly, use
+          <code>'exit code 1:'</code> or <code>-E 'exit code 1\b'</code>.</p>
+          </details>
+        </li>
+        <li>
+          <p>Count the rollouts in <code>results.jsonl</code> that ended with exit code 124 or 137
+          using one <code>grep -E</code>. Why does the pattern need the trailing comma (or a
+          <code>\b</code>)?</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> grep -c -E '"exit_code": (124|137),' results.jsonl
+<span class="o">13</span></code></pre>
+          <p>Without something after the group, <code>(124|137)</code> would also match the start
+          of a longer number such as 1240. It can't occur in this file; in a real one you don't
+          know. (The jq version on page 5 compares numbers and has no such problem.)</p>
+          </details>
+        </li>
+        <li>
+          <p>Extract just the numbers from the <code>exit code N</code> lines of
+          <code>agent.log</code> — once with <code>sed -E</code> and a capture group, once with
+          <code>grep -P</code> and <code>\K</code> ("forget everything matched so far").</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> echo 'exit code 137' | sed -E 's/exit code ([0-9]+)/status=\1/'
+<span class="o">status=137</span>
+<span class="p">$</span> grep -o -P 'exit code \K\d+' agent.log
+<span class="o">127
+1
+137
+0
+124</span></code></pre>
+          <p>For the whole file with sed:
+          <code>sed -n -E 's/.*exit code ([0-9]+).*/\1/p' agent.log</code>. The <code>-P</code>
+          form is shorter and will not run on Alpine or macOS.</p>
+          </details>
+        </li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>This appendix is executed mechanics throughout: every command was run in an <code>ubuntu:24.04</code> container (GNU grep 3.11, GNU sed, Python 3.12.3, jq 1.7) as a non-root user; the Alpine result is from <code>alpine:3.20</code> (BusyBox v1.36.1) and the macOS results from BSD grep 2.6.0 on the authoring Mac. The record is in <code>research/verify/d-regex.txt</code>.</li>
+        <li>For the formal definitions of BRE and ERE, read <code>man 7 regex</code> in the lab, or <a href="https://man7.org/linux/man-pages/man7/regex.7.html">regex(7) on man7.org</a>; <a href="f-getting-help.html">Appendix F</a> explains how to read a man page.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

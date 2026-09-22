@@ -1,0 +1,87 @@
+{
+  "id": "humaneval",
+  "citation": {
+    "authors": "Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde de Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, et al. (58 authors)",
+    "title": "Evaluating Large Language Models Trained on Code",
+    "venue": "arXiv preprint arXiv:2107.03374 (v2, 14 Jul 2021)",
+    "year": "2021",
+    "url": "https://arxiv.org/abs/2107.03374"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2107.03374",
+    "https://arxiv.org/pdf/2107.03374"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "164 hand-written programming problems with unit tests; functional correctness over text similarity (BLEU fails to distinguish correct/incorrect) — confirm",
+      "verdict": "confirmed",
+      "finding": "HumanEval is 164 hand-written programming problems, each with a function signature, docstring, body, and several unit tests (average 7.7 tests per problem). The paper argues functional correctness over match-based metrics, and empirically shows BLEU distributions for correct vs. wrong Codex-12B solutions overlap significantly on 4 random HumanEval tasks (Figure 8).",
+      "quote": "We evaluate functional correctness on a set of 164 hand-written programming problems, which we call the HumanEval dataset. Each problem includes a function signature, docstring, body, and several unit tests, with an average of 7.7 tests per problem. ... [Sec 2.1] match-based metrics are unable to account for the large and complex space of programs functionally equivalent to a reference solution. ... [Figure 8 / Sec 3.4] when we plot the distributions of BLEU scores for correct and incorrect solutions, we notice significant overlap ... we conclude that improvements in BLEU score may not indicate improved rates of functional correctness in practice.",
+      "location": "Section 2.2 (HumanEval), Section 2.1 (Functional Correctness), Section 3.4 and Figure 8 (BLEU overlap)"
+    },
+    {
+      "planned": "pass@k definition and the unbiased estimator: generate n >= k samples, c correct, estimator 1 - C(n-c,k)/C(n,k) — confirm formula exactly",
+      "verdict": "confirmed",
+      "finding": "Exact match. Definition (from Kulal et al. 2019): k samples generated per problem, problem counts as solved if any sample passes the unit tests, fraction of problems solved is reported. Because that raw computation has high variance, the paper generates n >= k samples per task (n=200, k <= 100 in the paper), counts correct samples c <= n, and computes Equation (1): pass@k := E_Problems[1 - C(n-c,k) / C(n,k)]. Figure 3 gives a numerically stable numpy implementation that evaluates the product term-by-term (returning 1.0 when n - c < k).",
+      "quote": "Kulal et al. (2019) evaluate functional correctness using the pass@k metric, where k code samples are generated per problem, a problem is considered solved if any sample passes the unit tests, and the total fraction of problems solved is reported. However, computing pass@k in this way can have high variance. Instead, to evaluate pass@k, we generate n >= k samples per task (in this paper, we use n = 200 and k <= 100), count the number of correct samples c <= n which pass unit tests, and calculate the unbiased estimator: pass@k := E_Problems[ 1 - binom(n-c, k) / binom(n, k) ]  (1). Calculating this estimator directly results in very large numbers and numerical instability.",
+      "location": "Section 2.1, Equation (1), Figure 3"
+    },
+    {
+      "planned": "Why the naive estimator (1-(1-p)^k with empirical p) is biased — confirm paper's explanation",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with the direction of bias: 1-(1-p̂)^k using empirical pass@1 is a consistent UNDERESTIMATE of the true pass@k. The gap does not fully close even when n > 5k, so results 'can seem better with more samples'. The paper's interpretation: this estimator corresponds to drawing k samples WITH replacement from a pool of n candidates, but the k draws are not independent. Equation (1) is unbiased because it estimates the fail probability (1-pass@1)^k as the probability of drawing k failed samples WITHOUT replacement; Appendix A proves E_c[1 - C(n-c,k)/C(n,k)] = 1-(1-p)^k where c ~ Binom(n,p) and p is the true pass@1.",
+      "quote": "While all estimators mentioned previously are consistent, only the empirical estimate used by Kulal et al. (2019), and (1) are unbiased. ... For example, estimating pass@k = 1-(1-pass@1)^k with 1-(1-p̂)^k using the empirical pass@1, results in a consistent underestimate as shown in Figure 13. The gap doesn't fully close even when n > 5k, and results can seem better with more samples. The interpretation of this estimator is that we draw k samples with replacement from a pool of n candidates, but the k samples are not independent. (1) is unbiased, because it estimates the fail probability (1-pass@1)^k as the probability of drawing k failed samples without replacement.",
+      "location": "Appendix A (Estimating pass@k) and Figure 13"
+    },
+    {
+      "planned": "Codex headline numbers (e.g., 28.8% pass@1, ~70%+ pass@100?) — confirm",
+      "verdict": "confirmed",
+      "finding": "Confirmed with model attribution: Codex-12B solves 28.8% of problems with a single sample (300M Codex: 13.2%); GPT-3 solves 0% and GPT-J-6B solves 11.4%. With 100 samples per problem, 70.2% of problems are solved (abstract; Codex). Codex-S (further fine-tuned on standalone correctly-implemented functions) reaches 37.7% with a single sample and 77.5% within 100 samples; picking the sample with highest mean log-probability passes unit tests for 44.5% of problems.",
+      "quote": "On HumanEval ... our model solves 28.8% of the problems, while GPT-3 solves 0% and GPT-J solves 11.4%. ... Using this method, we solve 70.2% of our problems with 100 samples per problem. [Sec 1] With just a single sample, a 12B parameter Codex solves 28.8% of these problems, and a 300M parameter Codex solves 13.2% of these problems. ... The resulting model, Codex-S, solves 37.7% of problems with a single sample. ... Within 100 samples, Codex-S is able to generate at least one correct function for 77.5% of the problems. ... the sample with highest mean log-probability passes unit tests for 44.5% of the problems.",
+      "location": "Abstract; Section 1 (Introduction); Figure 1"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Hand-written problems are a deliberate contamination defense: models train on GitHub, which already contains solutions to existing benchmark problems.",
+      "quote": "It is important for these tasks to be hand-written, since our models are trained on a large fraction of GitHub, which already contains solutions to problems from a variety of sources. For example, there are more than ten public repositories containing solutions to Codeforces problems, which make up part of the recently proposed APPS dataset.",
+      "numbers": "164 problems; >10 public repos with Codeforces solutions"
+    },
+    {
+      "point": "Sampling temperature must be tuned per k: higher temperature is optimal for larger k because diversity matters when only one success is needed. Reported pass@1 and pass@100 use different temperatures.",
+      "quote": "We find that higher temperatures are optimal for larger k, because the resulting set of samples has higher diversity, and the metric rewards only whether the model generates any correct solution. In particular, for a 679M parameter model, the optimal temperature for pass@1 is T* = 0.2 and the optimal temperature for pass@100 is T* = 0.8.",
+      "numbers": "T*=0.2 for pass@1, T*=0.8 for pass@100 (679M model); Figures 5-6"
+    },
+    {
+      "point": "pass@k is an oracle metric (best-of-k with knowledge of unit tests). Without an oracle, reranking by highest mean token log-probability beats random selection — the practically deployable version of repeated sampling.",
+      "quote": "Pass@k can also be interpreted as the result of evaluating the best out of k samples, where the best sample is picked by an oracle with prior knowledge of the unit tests. ... we find that choosing the sample with the highest mean token log probability outperforms evaluating a random sample, while choosing the sample based on sum log probability can perform slightly worse than picking randomly.",
+      "numbers": "Codex-S: oracle 77.5% vs mean-logp reranking 44.5% vs pass@1 37.7% (Figure 1, Figure 7)"
+    },
+    {
+      "point": "The BLEU failure is shown empirically, not just argued: BLEU score densities for correct vs. wrong solutions to the same problem overlap heavily, and wrong solutions are guaranteed functionally inequivalent.",
+      "quote": "Since an incorrect solution is guaranteed to be functionally inequivalent to the reference solution, we conclude that improvements in BLEU score may not indicate improved rates of functional correctness in practice. ... the distributions are not cleanly separable, suggesting that optimizing for BLEU score is not equivalent to optimizing for functional correctness.",
+      "numbers": "Figure 8: 4 random HumanEval tasks (HumanEval/72, /38, /4, /21), Codex-12B samples at temperature 0.8"
+    },
+    {
+      "point": "Executing model-generated code requires a sandbox: the paper used gVisor containers with eBPF-based firewall rules, since generated/public code may be malicious or incorrect.",
+      "quote": "we developed a sandbox environment to safely run untrusted programs against unit tests. ... We selected the gVisor container runtime ... Network-adjacent hosts and services are protected by eBPF-based firewall rules that prevent inbound and outbound connections except for those required for experiment control.",
+      "numbers": "Section 2.3"
+    },
+    {
+      "point": "Scale comparison anchor points: GPT-Neo-2.7B is roughly equivalent to Codex-85M (30x fewer parameters), GPT-J-6B roughly to Codex-300M (20x fewer) — fine-tuning on code buys enormous parameter efficiency. Test loss follows a power law (N/5.92e7)^-0.13 in non-embedding parameters.",
+      "quote": "GPT-Neo achieves 6.4% pass@1 and 21.3% pass@100 ... GPT-Neo-2.7B roughly equivalent to Codex-85M (30x fewer parameters). Similarly, GPT-J-6B achieves 11.6% pass@1 and 27.7% pass@100, which is roughly equivalent to Codex-300M (20x fewer parameters).",
+      "numbers": "GPT-Neo-2.7B: 6.4% pass@1, 21.3% pass@100; GPT-J-6B: 11.6% pass@1, 27.7% pass@100"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "28.8% pass@1 is Codex-12B (GPT-12B fine-tuned on code), not GPT-3. GPT-3 solves 0% ('all GPT models achieve near 0%').",
+    "Do not conflate the two 100-sample numbers: 70.2% is Codex with 100 samples per problem (abstract); 77.5% is Codex-S. Codex-S pass@1 is 37.7%.",
+    "The naive estimator 1-(1-p̂)^k UNDERestimates pass@k (it is a 'consistent underestimate'); it does not inflate scores. The subtle danger is that 'results can seem better with more samples' because the gap shrinks as n grows.",
+    "pass@1 and pass@100 headline numbers use different sampling temperatures (~0.2 vs ~0.8); they are not the same run sliced two ways.",
+    "pass@k as reported is the unbiased estimator from n=200 samples (Equation 1), not literally 'run k samples and check' — that raw procedure is what the paper rejects for high variance.",
+    "HumanEval problems average 7.7 unit tests each — passing is not against a single test, but ~7.7 tests is also far from exhaustive coverage (later work like HumanEval+ exploited this).",
+    "The 11.4% GPT-J figure in the abstract/intro differs slightly from the 11.6% in Section 3.4's comparative analysis (best-over-temperatures); cite which one you use."
+  ],
+  "notes_for_authors": "Access was full (arXiv abstract page + complete PDF, including Appendix A). All four planned claims confirmed against the v2 PDF. For the stats tier this paper is ideal: Equation (1) on p.3 gives the exact estimator pass@k := E_Problems[1 - C(n-c,k)/C(n,k)], Figure 3 gives the numerically stable numpy implementation (worth reproducing verbatim in the course: 'if n - c < k: return 1.0 / return 1.0 - np.prod(1.0 - k / np.arange(n - c + 1, n + 1))'), and Appendix A + Figure 13 give the bias argument (with-replacement vs without-replacement intuition, plus a short binomial-expectation proof that E[estimator] = 1-(1-p)^k). When teaching, attribute pass@k's origin to Kulal et al. 2019 — Chen et al. contributed the unbiased estimator, not the metric itself. The BLEU material spans Section 2.1 (argument) and Figure 8/Section 3.4 (empirical demonstration); using both makes the validity lesson concrete. Temperature-vs-k (Figures 5-6) is a clean example of a metric shaping optimal decoding hyperparameters."
+}

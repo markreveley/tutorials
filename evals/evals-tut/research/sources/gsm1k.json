@@ -1,0 +1,88 @@
+{
+  "id": "gsm1k",
+  "citation": {
+    "authors": "Hugh Zhang, Jeff Da, Dean Lee, Vaughn Robinson, Catherine Wu, Will Song, Tiffany Zhao, Pranav Raja, Charlotte Zhuang, Dylan Slack, Qin Lyu, Sean Hendryx, Russell Kaplan, Michele Lunati, Summer Yue (Scale AI)",
+    "title": "A Careful Examination of Large Language Model Performance on Grade School Arithmetic",
+    "venue": "NeurIPS 2024 (Datasets and Benchmarks Track); arXiv:2405.00332 (camera-ready v4, 22 Nov 2024)",
+    "year": "2024",
+    "url": "https://arxiv.org/abs/2405.00332"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2405.00332",
+    "https://arxiv.org/html/2405.00332 (v4 camera-ready, full text)",
+    "https://arxiv.org/abs/2405.00332v1 (v1 abstract, for version comparison)",
+    "https://arxiv.org/html/2405.00332v1 (v1 full text, for version comparison)"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Built 1,250 fresh GSM8k-style problems matched on difficulty (human annotators, matched distributions) — confirm construction method",
+      "verdict": "corrected",
+      "finding": "The final NeurIPS camera-ready (v4) has 1205 problems, not 1250. The 1250 figure is from the v1 preprint (May 2024); the count was revised to 1205 in later versions. Construction method confirmed: human annotators prompted with 3 example GSM8k problems created novel problems; pipeline went 2108 initial -> 1419 passed second-solve -> 1375 passed quality audit -> 1205 after winnowing to match GSM8k's answer-magnitude distribution. Difficulty matching was validated via human differentiation rates (annotators picked the GSM1k odd-one-out 21.83% of the time vs 20% chance, 1205 attempts, 19 annotators), human solve rates under time pressure (4.07±0.93 GSM8k problems vs 4.36±1.11 GSM1k problems solved in 15 minutes — GSM1k slightly easier), and LLM solve rates on provably uncontaminated pre-2021 models (GPT-2, GPT-NeoX-20B showed minimal difference). Scale paid ~$180K to annotators.",
+      "quote": "GSM1k consists of 1205 problems requiring only elementary mathematical reasoning to solve. We created GSM1k using human annotators. Annotators were prompted with 3 example GSM8k problems and asked to produce novel problems of a similar difficulty level. ... Out of a total of 2108 initial problems, 1419 passed the second solve stage and 1375 passed the general quality audit. ... GSM1k consists of the 1205 problems that survive this final winnowing. [v1 said: 'GSM1k consists of 1250 problems requiring only elementary mathematical reasoning to solve.']",
+      "location": "Section 3 (GSM1k), Sections 3.1-3.2"
+    },
+    {
+      "planned": "Some model families dropped up to ~8-13% vs GSM8k (which families?) while frontier models showed minimal drop — confirm exact findings",
+      "verdict": "corrected",
+      "finding": "The final version says drops of up to 8%, not 13%. The 13% figure is only in the v1 preprint abstract; after methodological revisions the camera-ready abstract reads 'accuracy drops of up to 8%'. Systematically overfit families: Phi and Mistral ('for almost every release and scale'); Yi, Xwin, Gemma, and CodeLlama to a lesser extent. Worst individual drops (Appendix F results table, 5-shot GSM8k-train prompt): Yi-6B-Chat -8.0% (43.7%->35.7%), math-shepherd-mistral-7b-rl -7.2% (82.6%->75.4%), phi-2 -6.3% (56.6%->50.4%). Frontier confirmed: all frontier or close-to-frontier models (GPT, Gemini, Claude, and the proprietary Mistral Large) perform similarly on both; the Claude family actually scores above the 45-degree line (better on GSM1k).",
+      "quote": "When evaluating leading open- and closed-source LLMs on GSM1k, we observe accuracy drops of up to 8%, with several families of models showing evidence of systematic overfitting across almost all model sizes. ... Several families of models, including the Phi and Mistral families of models, show systematic tendencies to perform stronger on GSM8k compared to GSM1k for almost every release and scale of models. Other model families, such as Yi, Xwin, Gemma and CodeLlama also show this pattern to a lesser extent. ... we find that all frontier or close-to-frontier models (including the proprietary Mistral Large) appear to perform similarly on both GSM8k and GSM1k.",
+      "location": "Abstract; Section 5.1 (Lesson 1); Section 5.2 (Lesson 2); Appendix F results table"
+    },
+    {
+      "planned": "Positive correlation between a model's probability of generating GSM8k examples (log-likelihood) and its performance gap — confirm (Spearman r?)",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Spearman's rank correlation of 0.36 (p=0.03) between per-character log-likelihood of generating GSM8k and the GSM8k-GSM1k performance gap. The abstract phrases this as Spearman's r^2 = 0.36. Also reported: Pearson r^2 = 0.26 and Kendall's tau = 0.29 (authors note Pearson is not ideal since the fit is non-linear). Each percentage point of GSM8k-GSM1k gap is associated with a 1.2e-2 increase in per-character log-likelihood. Note: v1 reported r^2 = 0.32; the camera-ready value is 0.36. Caveat the authors stress: contamination is 'likely not the full story' — outliers exist (e.g., Mixtral-8x22b vs Mixtral-8x22b-Instruct have lowest and highest log-likelihoods but similar overfit; Math-Shepherd-Mistral-7B-RL is among the most overfit yet has low log-likelihood, suggesting overfitting via synthetic data resembling the benchmark rather than direct test-set leakage).",
+      "quote": "We observe a Spearman's rank correlation of 0.36 between the per-character log-likelihood of generating GSM8k and the performance gap between GSM8k and GSM1k (p=0.03), and the relationship suggests that every percentage point difference in GSM8k and GSM1k performance is associated with an increase of 1.2x10^-2 in the per-character log-likelihood.",
+      "location": "Section 5.4 (Lesson 4); Abstract; Figure 5"
+    },
+    {
+      "planned": "The replication-with-fresh-instances method as a reusable contamination test",
+      "verdict": "confirmed",
+      "finding": "Confirmed as the paper's core method: commission fresh human-written problems mirroring an existing benchmark's distribution (style, human solve rates, step count, answer magnitude), then compare per-model accuracy on old vs new instances; the gap measures overfitting/contamination. The authors explicitly keep GSM1k private to preserve its validity, run recurring evaluations of major model releases, and committed to releasing the dataset when top open-source models exceed 95% on GSM1k or by June 2025, whichever comes first. They also validated the method on uncontaminated-by-construction models (GPT-2, GPT-NeoX-20B), which show no gap.",
+      "quote": "We do not intend to release GSM1k publicly at this time to prevent a similar problem of data contamination occurring in the future. However, we plan to run recurring evaluations of all major open- and closed- source releases and to continually update our results ... [we] commit to open sourcing the entire benchmark when either 1) the top open source models score over 95% on GSM1k or 2) June 2025, whichever comes earlier",
+      "location": "Section 1 (Introduction); Section 6 (Discussion)"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Overfit models still reason — contamination inflates scores but does not mean pure memorization. The benchmark gap measures inflation, not absence of capability.",
+      "quote": "The fact that a model is overfit does not mean that it is poor at reasoning, merely that it is not as good as the benchmarks might indicate it to be. ... while Phi-2 has a 6% drop in accuracy between GSM8k and GSM1k, we find that it is still able to correctly solve over half of GSM1k problems – which are certain to not have appeared in its training distribution.",
+      "numbers": "Phi-2: -6.3% drop yet >50% accuracy on guaranteed-novel GSM1k problems, comparable to Llama2-70B (25x parameters)"
+    },
+    {
+      "point": "Direct test-set leakage is not the only contamination pathway: training on synthetic data similar to the benchmark also causes overfitting. Math-Shepherd-Mistral-7B-RL is among the most overfit models yet has low log-likelihood on GSM8k.",
+      "quote": "one [of] the most overfit models we discovered (Math-Shepherd-Mistral-7B-RL) had a relatively low per-character log-likelihood. Math Shepherd trains a reward model on process level data using synthetic data. ... data contamination is likely not the full story.",
+      "numbers": "Math-Shepherd-Mistral-7B-RL: -7.2% (82.6% -> 75.4%) despite low GSM8k log-likelihood"
+    },
+    {
+      "point": "Validate the difficulty match of a replication benchmark empirically, on multiple axes: human distinguishability (odd-one-out at near-chance), timed human solve rates, and solve rates of models that provably never saw either benchmark.",
+      "quote": "annotators were able to correctly identify the lone GSM1k example 21.83% of the time out of 1205 attempts (20% is pure chance). ... Annotators were able to solve an average of 4.07 ± 0.93 problems on the GSM8k dataset. They were able to solve 4.36 ± 1.11 problems on the GSM1k dataset.",
+      "numbers": "Odd-one-out: 21.83% vs 20% chance (19 annotators, 1205 attempts); timed solves: 4.07±0.93 (GSM8k) vs 4.36±1.11 (GSM1k) per 15 min; pre-2021 models GPT-2 and GPT-NeoX-20B show no gap"
+    },
+    {
+      "point": "Two hypotheses for why frontier models show no gap, with evidence favoring 'strong models learn the underlying skill': Mistral Large is the only Mistral-family model without overfitting, and it is implausible Mistral decontaminated only its largest model.",
+      "quote": "Since the hypothesis that Mistral took unique care in ensuring that only their largest model was free from data contamination seems unlikely, we lean instead towards the hypothesis that sufficiently strong LLMs also learn elementary reasoning ability during training.",
+      "numbers": "Mistral Large: only Mistral model with no overfit signs; GPT, Gemini, Claude near or above the 45-degree no-overfit line"
+    },
+    {
+      "point": "GSM1k was slightly EASIER than GSM8k by human solve rate, making the observed drops conservative — the gaps cannot be explained by the new problems being harder. Claude models scoring above the 45-degree line is consistent with this.",
+      "quote": "This suggests that GSM1k is comparable in difficulty (and perhaps even slightly easier) than GSM8k. As such, substantial decreases in model accuracy on GSM1k compared to GSM8k are likely not explainable due to differences in dataset difficulty.",
+      "numbers": "Human solves per 15 min: 4.36±1.11 (GSM1k) vs 4.07±0.93 (GSM8k)"
+    },
+    {
+      "point": "Building a careful held-out benchmark is expensive and procedural: ~$180K in annotation cost, a multi-stage filter (independent re-solve, quality audit, answer-magnitude winnowing), and standardized evaluation (forked LM Evaluation Harness, identical 5-shot GSM8k-train prompts for both datasets, temperature 0, max tokens raised 256->1000 to avoid truncating chain-of-thought).",
+      "quote": "Out of a total of 2108 initial problems, 1419 passed the second solve stage and 1375 passed the general quality audit. ... In total, Scale paid out around 180K to human annotators to create this benchmark. ... increasing the maximum number of allowed generated tokens from 256 to 1000, as we notice that the default setting did not allow some models to complete their full chain-of-thought reasoning before being truncated.",
+      "numbers": "2108 -> 1419 -> 1375 -> 1205 problems; ~$180K; annotators paid $20-25/hr; 5-shot, temp 0"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do NOT say GSM1k has 1,250 problems — that is the v1 preprint figure; the final NeurIPS version has 1205 problems.",
+    "Do NOT cite 'up to 13%' drops as the paper's finding — 13% appears only in the v1 abstract; the camera-ready says 'up to 8%'. If teaching the version history, cite both explicitly as v1 vs final.",
+    "Do NOT call the correlation 'Spearman r = 0.36' loosely — the paper's abstract writes Spearman's r^2 = 0.36, and the body specifies a Spearman's rank correlation of 0.36 (p=0.03). v1 reported 0.32.",
+    "Do NOT claim the paper shows overfit models cannot reason — Lesson 3 explicitly rejects this; all models, including the most overfit, generalize to novel problems.",
+    "Do NOT claim the paper proves test-set leakage — the authors frame contamination as one important component, with outliers showing it is 'likely not the full explanation' (e.g., training on benchmark-like synthetic data).",
+    "Do NOT say GSM1k is named for having 1000 problems and therefore has exactly 1000 — it is 'Grade School Math 1000' but contains 1205 problems."
+  ],
+  "notes_for_authors": "Strong primary source for the contamination tier, fully accessible (arXiv HTML v4 = NeurIPS camera-ready). Critical version caveat: the widely-circulated May 2024 preprint numbers (1250 problems, up to 13% drops, Spearman r^2=0.32) were all revised in the final version (1205 problems, up to 8%, r^2=0.36) — a nice meta-lesson about citing preprints. The four 'Lessons' in Section 5 map cleanly onto course points: (1) systematic family-level overfitting (Phi, Mistral; lesser: Yi, Xwin, Gemma, CodeLlama), (2) frontier models clean (GPT, Gemini, Claude, Mistral Large), (3) overfit != can't reason, (4) contamination is not the full explanation. The held-out-and-drip-release protocol (private benchmark, recurring evals, release trigger of 95% open-source score or June 2025) is the reusable methodological template. The per-character log-likelihood probe (eq. 1) is a second, independent contamination signal worth teaching alongside the fresh-instances gap."
+}

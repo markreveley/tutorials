@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Case Study: SWE-bench · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 4 · Evaluating Agents</p>
+    <h1>Case study: SWE-bench</h1>
+    <p class="lede">
+      The most consequential agent benchmark gets the full dissection: how it was built, why its design
+      was genuinely good, and how — in three documented waves — the field discovered that its numbers
+      meant less than they appeared to. Every lesson in this course shows up here in the wild.
+    </p>
+
+    <h2 id="construction">The design, and why it was good</h2>
+    <p>
+      SWE-bench (Jimenez et al., ICLR 2024) asks: can a model resolve real GitHub issues? Its
+      construction is a masterclass in getting <span class="term" data-g="ground-truth">ground truth</span>
+      for free from human history. Starting from ~90,000 pull requests across 12 popular Python
+      repositories, a three-stage filter kept only merged PRs that (1) resolved a GitHub issue and
+      (2) changed the repo's test files — meaning the human fixer contributed tests proving the fix —
+      and then (3) survived an execution check that at least one test flips from fail to pass when the
+      fix is applied. Result: 2,294 task instances.<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, SWE-bench, §2.1">[SWE-bench]</a>
+    </p>
+    <p>
+      The grading is strictly outcome-based: the agent submits a patch; the harness applies it and runs
+      the tests. "If the patch applies successfully and all of these tests pass we consider the proposed
+      solution to have successfully resolved the
+      issue."<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, §2.2">[SWE-bench]</a>
+      That's both the issue-specific fail-to-pass tests <em>and</em> a median of 51 pre-existing tests
+      guarding against regressions.<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, §2.3">[SWE-bench]</a>
+      The tasks are real software engineering at real scale — codebases averaging ~438,000 lines,
+      reference fixes touching 1.7 files on average.<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, Table 1">[SWE-bench]</a>
+      The original headline made the point that this was hard: the best model of late 2023, Claude 2,
+      resolved <strong>1.96%</strong>.<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, Abstract">[SWE-bench]</a>
+    </p>
+    <div class="callout">
+      <span class="label">Even the headline had a harness inside it</span>
+      <p>That 1.96% is not a model property — it's a model-plus-retrieval property: with BM25 retrieval
+      fetching candidate files into 13k context. Hand the model the actual files that the human fix
+      touched ("oracle" retrieval) and Claude 2 scores 4.8% — 2.5× the score, same
+      model.<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, Table 2 and Appendix">[SWE-bench]</a>
+      And most failures weren't reasoning failures at all: Claude 2 produced a patch that even
+      <em>applied</em> only 43% of the time.<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, Table 5 (v3)">[SWE-bench]</a>
+      Lesson from <a href="02-anatomy-of-an-eval.html">page 2</a>, confirmed at agent scale.</p>
+    </div>
+
+    <h2 id="wave-1">Wave 1: the tasks themselves were noisy</h2>
+    <p>
+      As scores climbed through 2024, OpenAI's Preparedness team — needing this benchmark to give
+      <em>accurate</em> readings of autonomous coding ability — hired 93 Python-experienced developers
+      to manually screen 1,699 randomly sampled tasks against a severity rubric. The findings:
+      <strong>38.3%</strong> of samples were flagged for underspecified problem statements,
+      <strong>61.1%</strong> for unit tests that "may unfairly mark valid solutions as incorrect"
+      (categories overlap), and overall <strong>68.3% of samples were filtered
+      out</strong>.<a class="cite" href="https://openai.com/index/introducing-swe-bench-verified/" title="OpenAI 2024, Introducing SWE-bench Verified">[SWE-bench Verified]</a>
+      Two distinct validity failures: tasks whose inputs don't determine an answer, and graders that
+      reject correct answers.
+    </p>
+    <p>
+      The 500 surviving tasks became <strong>SWE-bench Verified</strong> — and the repair moved the
+      needle dramatically: "GPT-4o's performance on the best-performing scaffold reaches 33.2% on
+      SWE-bench Verified, more than doubling its score of 16% on the original
+      SWE-bench."<a class="cite" href="https://openai.com/index/introducing-swe-bench-verified/" title="OpenAI 2024">[SWE-bench Verified]</a>
+      Same model, same scaffold — double the score. When cleaning the <em>benchmark</em> changes the
+      number that much, the number was always measuring the benchmark as much as the model.
+    </p>
+
+    <h2 id="wave-2">Wave 2: the answers were sometimes in the question</h2>
+    <p>
+      The second wave audited not task quality but task <em>integrity</em>. SWE-Bench+ (Aleithan et al.)
+      manually examined the patches that SWE-Agent + GPT-4 successfully resolved and found that
+      <strong>32.67%</strong> of those successes involved
+      <span class="term" data-g="solution-leakage">solution leakage</span> — "the solutions were
+      directly provided in the issue report or the comments." Another <strong>31.08%</strong> passed on
+      the strength of weak test suites — incorrect or incomplete fixes that the tests failed to
+      catch.<a class="cite" href="https://arxiv.org/abs/2410.06992" title="Aleithan et al. 2024, SWE-Bench+, Table 1">[SWE-bench+]</a>
+      (Both figures are fractions of <em>resolved</em> instances, not of the whole dataset.) Filtering
+      the suspicious successes dropped SWE-Agent + GPT-4's resolution rate from 12.47% to
+      3.97%.<a class="cite" href="https://arxiv.org/abs/2410.06992" title="Aleithan et al. 2024, Abstract">[SWE-bench+]</a>
+    </p>
+    <p>
+      Two details make this wave sting. First, human curation hadn't helped: SWE-bench <em>Verified</em>
+      showed essentially the same leak rate among resolved instances (33.04%) — OpenAI's annotators had
+      screened for clarity and fair tests, not for leaked
+      answers.<a class="cite" href="https://arxiv.org/abs/2410.06992" title="Aleithan et al. 2024, §2.3">[SWE-bench+]</a>
+      Second, the authors built a decontaminated alternative — 548 fresh post-cutoff issues, manually
+      screened for leakage — and performance collapsed by another order of magnitude: SWE-Agent + GPT-4
+      resolved <strong>0.55%</strong>.<a class="cite" href="https://arxiv.org/abs/2410.06992" title="Aleithan et al. 2024">[SWE-bench+]</a>
+      The full arc, one agent, one task family: <strong>12.47% → 3.97% → 0.55%</strong>, each step
+      removing a different kind of inflation.
+    </p>
+
+    <h2 id="wave-3">Wave 3: the models had seen the test</h2>
+    <p>
+      The third wave asked about <span class="term" data-g="memorization">memorization</span> directly.
+      "The SWE-Bench Illusion" (Liang et al.) ran controlled diagnostics — and the design is a reusable
+      recipe. Give a model <em>only</em> the repo name and issue text, no code, and ask which file
+      contains the bug. On SWE-bench Verified, the best model identified the buggy file path with up to
+      <strong>76%</strong> accuracy; on comparable tasks from repositories <em>not</em> in SWE-bench,
+      accuracy was at best 53%.<a class="cite" href="https://arxiv.org/abs/2506.12286" title="Liang et al. 2025, The SWE-Bench Illusion">[SWE-bench Illusion]</a>
+      The model knew things about these specific tasks that the inputs don't contain.
+    </p>
+    <p>
+      Sharper still: fresh issues drawn from the <em>same repositories</em> ("SWE-Bench Extra") scored
+      like out-of-distribution tasks — so the models hadn't merely learned the codebases; they had
+      learned "the curated, canonical solutions that human evaluators deemed
+      high-quality."<a class="cite" href="https://arxiv.org/abs/2506.12286" title="Liang et al. 2025, §4.3">[SWE-bench Illusion]</a>
+      In a prefix-completion test, models reproduced ground-truth fix code verbatim for 11.7–31.6% of
+      Verified instances, with the rate rising monotonically across model generations — the more capable
+      the model, the more of the benchmark it had
+      memorized.<a class="cite" href="https://arxiv.org/abs/2506.12286" title="Liang et al. 2025, Table 3">[SWE-bench Illusion]</a>
+      The authors frame this carefully — gains "may be partially driven by memorization," not "agents
+      can't code" — and the original SWE-bench paper had itself run a temporal check (pre- vs post-2023
+      issues) and found little difference for most models at the
+      time.<a class="cite" href="https://arxiv.org/abs/2310.06770" title="Jimenez et al. 2024, Table 7">[SWE-bench]</a>
+      Contamination grew as the benchmark's fame did. Module 6 picks up this thread in full.
+    </p>
+
+    <h2 id="lessons">What the dissection teaches</h2>
+    <table>
+      <tr><th>Wave</th><th>What was broken</th><th>Which part of the four-part machine</th><th>Detection method</th></tr>
+      <tr><td>Verified</td><td>Underspecified tasks; unfair tests</td><td>Task + grader</td><td>Structured human annotation (93 devs, severity rubric)</td></tr>
+      <tr><td>SWE-Bench+</td><td>Answers leaked in inputs; weak test oracles</td><td>Data + grader</td><td>Manual audit of <em>successful</em> patches</td></tr>
+      <tr><td>Illusion</td><td>Training-set memorization</td><td>Data (vs the model's training corpus)</td><td>In-benchmark vs fresh-same-repo vs outside-repo differentials</td></tr>
+    </table>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>None of the three audits required privileged access — just the discipline of treating a famous
+      number as a claim to investigate. The transferable techniques: <strong>audit the successes, not
+      the failures</strong> (leakage hides inside passing runs); <strong>build a fresh control set</strong>
+      and compare; <strong>probe for knowledge the inputs don't contain</strong>. A benchmark score is
+      the start of an investigation, not the end of one.</p>
+    </div>
+
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>Keep the critiques in proportion. The audited agent results are GPT-4-era (2024); both critique
+      papers are arXiv preprints; and SWE-bench's core design — real issues, execution-based grading,
+      regression tests — remains the strongest template in code evaluation, which is precisely why its
+      flaws matter and got found. The lesson is not "SWE-bench bad"; it's that <em>every</em> benchmark
+      this important needs — and will eventually get — this audit. Read the scoring harness before the
+      leaderboard.</p>
+    </div>
+
+    <p>
+      Next: the same dissecting eye, faster, across <a href="13-agentic-benchmark-landscape.html">the
+      rest of the agentic benchmark landscape</a> — GAIA, WebArena, OSWorld, AgentBench, Terminal-Bench.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Carlos E. Jimenez, John Yang et al., "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?", ICLR 2024. <a href="https://arxiv.org/abs/2310.06770">arxiv.org/abs/2310.06770</a></li>
+        <li>OpenAI, "Introducing SWE-bench Verified," openai.com, August 2024. <a href="https://openai.com/index/introducing-swe-bench-verified/">openai.com/index/introducing-swe-bench-verified</a></li>
+        <li>Reem Aleithan et al., "SWE-Bench+: Enhanced Coding Benchmark for LLMs," arXiv:2410.06992, 2024. <a href="https://arxiv.org/abs/2410.06992">arxiv.org/abs/2410.06992</a></li>
+        <li>Shanchao Liang, Spandan Garg, Roshanak Zilouchian Moghaddam, "The SWE-Bench Illusion: When State-of-the-Art LLMs Remember Instead of Reason," arXiv:2506.12286 (v4), 2025. <a href="https://arxiv.org/abs/2506.12286">arxiv.org/abs/2506.12286</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

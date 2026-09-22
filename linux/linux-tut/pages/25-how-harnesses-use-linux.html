@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Harnesses Drive a Sandbox · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 7 · Linux in Eval Harnesses</p>
+    <h1>How harnesses drive a sandbox</h1>
+    <p class="lede">
+      Every agentic eval framework, however elaborate, talks to its Linux box through one narrow
+      interface: run this argv as this user with this timeout, and hand back an exit code and two
+      streams. This page shows that interface by hand, then reads Inspect, Terminal-Bench and
+      SWE-bench as three sets of decisions about it, each one a Linux mechanism you have already met.
+    </p>
+
+    <h2 id="universal-loop">The universal loop</h2>
+    <p>
+      An eval <span class="term" data-g="harness">harness</span> is an ordinary program, usually
+      Python, running on a machine you trust. The <span class="term" data-g="sandbox">sandbox</span>
+      is a container or VM you do not trust, because a model decides what runs in it. AISI describe their design the same way: "Inspect itself sits outside of the sandbox and sends
+      commands into it, as requested by the model being
+      tested."<a class="cite" href="https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations" title="AISI, The Inspect Sandboxing Toolkit (Aug 2025), 'Our Solution'">[AISI: Sandboxing]</a>
+      Strip away the framework and every rollout is the same seven steps.
+    </p>
+    <div class="diagram">  HOST (trusted)                       SANDBOX (untrusted)
+  ┌───────────────────────┐            ┌────────────────────────┐
+  │ harness process       │ 1 create   │ container or VM        │
+  │  · model API client ──┼─▶ LLM      │  PID 1: sleep / tail   │
+  │  · tool code          │ 2 files ──▶│  /app  (task repo)     │
+  │  · scorer             │            │                        │
+  │  · log writer         │ 4 exec ───▶│  argv, user, cwd, env, │
+  │                       │            │  stdin, timeout        │
+  │                       │◀── 5 ──────│  exit code, stdout,    │
+  │                       │            │  stderr (truncated)    │
+  └───────────────────────┘            └────────────────────────┘
+  3 model emits a tool call ─▶ 4 ─▶ 5 ─▶ result goes back to the
+    model as text ─▶ 3 … until it submits or a limit is hit
+  6 scorer execs checks / reads files      7 teardown (rm -f)</div>
+    <p>
+      There is no long-lived terminal in this picture, and the model never "logs in". Each <span class="term" data-g="tool-call">tool call</span> is a separate
+      process started from outside. You can play the harness yourself with the Docker CLI and the running example's image
+      (<a href="22-docker-for-evals.html">page 22</a>). The commands run on your Mac; everything
+      after the container name runs in Linux.
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-25-box --network none --init wordfreq-bench:hardened   <span class="c"># 1 create</span>
+<span class="o">db55aeef7392…</span>
+<span class="p">$</span> docker exec lt-25-box id                                                     <span class="c"># 4 exec, 5 result</span>
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span>
+<span class="p">$</span> docker exec lt-25-box bash -c 'cd /tmp &amp;&amp; export FOO=1 &amp;&amp; pwd'
+<span class="o">/tmp</span>
+<span class="p">$</span> docker exec lt-25-box bash -c 'pwd; echo FOO=${FOO:-unset}'
+<span class="o"><span class="hl">/app
+FOO=unset</span></span>
+<span class="p">$</span> docker exec --user root --workdir /tmp --env GREETING=hi lt-25-box bash -c 'id -un; pwd; echo $GREETING'
+<span class="o">root
+/tmp
+hi</span></code></pre>
+    <p>
+      The second pair is the most common surprise in agent transcripts. The
+      <code>cd</code> and the <code>export</code> happened inside a bash process that exited when
+      the call returned; the next call is a new process starting from the image's <code>WORKDIR</code> with the
+      container's original environment (<a href="02-shell-and-commands.html">page 2</a>). The last command shows the four knobs every exec interface has:
+      <em>who</em> (<code>--user</code>, <a href="07-users-groups-root.html">page 7</a>),
+      <em>where</em> (<code>--workdir</code>), <em>with what environment</em>
+      (<code>--env</code>, <a href="11-environment-and-secrets.html">page 11</a>), and the argv itself.
+    </p>
+    <p>What comes back is three things, and a harness that drops any of them is blind:</p>
+<pre class="term"><code><span class="p">$</span> docker exec lt-25-box python3 -m unittest discover -s tests &gt;out.txt 2&gt;err.txt; echo "exit=$?"
+<span class="o">exit=0</span>
+<span class="p">$</span> wc -c out.txt err.txt
+<span class="o">       <span class="hl">0 out.txt</span>
+      98 err.txt</span>
+<span class="p">$</span> docker exec lt-25-box bash -c 'python3 nosuch.py'; echo "exit=$?"
+<span class="o">python3: can't open file '/app/nosuch.py': [Errno 2] No such file or directory
+exit=2</span>
+<span class="p">$</span> docker exec lt-25-box timeout 2 sleep 30; echo "exit=$?"
+<span class="o">exit=124</span>
+<span class="p">$</span> docker exec lt-25-box timeout -s KILL 2 sleep 30; echo "exit=$?"
+<span class="o">exit=137</span></code></pre>
+    <p>
+      Python's <code>unittest</code> writes its whole report, including the final <code>OK</code>,
+      to stderr: stdout is zero bytes
+      (<a href="04-streams-pipes-redirection.html">page 4</a>). <code>docker exec</code> passes the
+      inner command's exit status through, so 124
+      and 137 mean exactly what they meant on
+      <a href="10-signals-exit-codes.html">page 10</a>: <code>timeout</code> gave up, or something
+      was killed with SIGKILL (128 + 9). Files go in
+      over stdin or <code>docker cp</code>, and processes the agent backgrounds outlive the call
+      that started them:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker exec -i lt-25-box bash -c 'cat &gt; /app/notes.txt' &lt;&lt;&lt; 'written over stdin'   <span class="c"># 2 files in</span>
+<span class="p">$</span> docker exec lt-25-box bash -c 'nohup sleep 300 &gt;/dev/null 2&gt;&amp;1 &amp; echo started'
+<span class="o">started</span>
+<span class="p">$</span> docker exec lt-25-box ps -eo pid,ppid,user,args
+<span class="o">  PID  PPID USER     COMMAND
+    1     0 agent    /sbin/docker-init -- sleep infinity
+    7     1 agent    sleep infinity
+   <span class="hl">96     1 agent    sleep 300</span>
+   97     0 agent    ps -eo pid,ppid,user,args</span>
+<span class="p">$</span> docker diff lt-25-box | grep -v pycache                                       <span class="c"># 6 what changed?</span>
+<span class="o">C /app
+A /app/notes.txt
+C /app/tests
+C /usr
+C /usr/sbin
+A /usr/sbin/docker-init</span>
+<span class="p">$</span> docker rm -f lt-25-box                                                       <span class="c"># 7 teardown</span></code></pre>
+    <p>
+      The orphaned <code>sleep 300</code> was re-parented to PID 1
+      (<a href="09-processes.html">page 9</a>) and is still running when the scorer arrives. Each
+      exec'd process shows <code>PPID 0</code>: its real parent is the container runtime, outside
+      this PID namespace
+      (<a href="20-namespaces.html">page 20</a>).
+    </p>
+    <div class="keyidea"><span class="label">Key idea</span>
+      A harness's view of the box is <code>exec(argv, user, cwd, env, stdin, timeout) → (exit
+      code, stdout, stderr)</code> plus read-file and write-file. Everything a framework adds is policy around that call.
+    </div>
+
+    <h2 id="inspect">Inspect: the interface made explicit</h2>
+    <p>
+      <span class="term" data-g="inspect">Inspect</span> (the UK AI Security Institute's framework;
+      the sibling course covers it as an eval tool on
+      <a href="../../../evals/evals-tut/pages/24-inspect.html">its page 24</a>) names the interface
+      directly. A tool gets the box with <code>sandbox()</code> and calls:
+    </p>
+<pre><code>async def exec(self, cmd: list[str], input: str | bytes | None = None,
+               cwd: str | None = None, env: dict[str, str] = {},
+               user: str | None = None, timeout: int | None = None,
+               timeout_retry: bool = True, concurrency: bool = True) -&gt; ExecResult[str]</code></pre>
+    <p>
+      <code>ExecResult</code> has exactly four fields: <code>success</code>,
+      <code>returncode</code>, <code>stdout</code>,
+      <code>stderr</code>.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect docs, Sandboxing: Environment Interface, exec(); Sandbox Limits">[Inspect]</a>
+      Beside it sit <code>read_file()</code> and <code>write_file()</code> (which creates parent
+      directories). That is the same list you just drove by hand. The tool's Python code runs in the
+      harness process on the host; only what it sends through <code>sandbox()</code> runs in the
+      container. "Sandbox" is a plug-in: Docker is built in, Kubernetes, Proxmox VMs and cloud
+      providers are external packages, and the built-in <code>local</code> provider is, in the
+      docs' words, "no
+      sandbox".<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#environment-binding" title="Inspect docs, Sandboxing: Environment Binding (provider table)">[Inspect]</a>
+      Where each sits on the isolation ladder is <a href="24-isolation-ladder.html">page 24</a>.
+    </p>
+
+    <h3 id="inspect-bash-tool">The bash tool is exec-per-call</h3>
+    <p>
+      The standard <span class="term" data-g="bash-tool">bash tool</span> has the signature
+      <code>bash(timeout=None, user=None, sandbox=None, background=False)</code>. Its
+      implementation runs <code>sandbox.exec(cmd=["bash", "--login", "-c", command], …)</code> and
+      returns stderr followed by stdout as one string. The timeout is in seconds and defaults to
+      <em>none</em>. Each call is a fresh shell, and several bash calls in one model message run
+      concurrently.<a class="cite" href="https://inspect.aisi.org.uk/reference/inspect_ai.tool.html#bash" title="Inspect reference, inspect_ai.tool: bash(); source _execute.py">[Inspect]</a>
+      So <code>FOO=unset</code> above is Inspect's default behaviour too. The stateful
+      alternative is <code>bash_session()</code>, where "the prompt, working directory, and
+      environment variables are all retained across
+      calls."<a class="cite" href="https://inspect.aisi.org.uk/tools-standard.html" title="Inspect docs, Standard Tools: Bash Session">[Inspect]</a>
+      Reading a transcript (<a href="27-reading-terminal-transcripts.html">page 27</a>) starts with
+      knowing which of the two the agent had.
+    </p>
+    <p>
+      On a <span class="term" data-g="timeout">timeout</span>, <code>exec()</code> raises
+      <code>TimeoutError</code>, which Inspect reports to the model as a tool error. By default it
+      also <em>retries</em> timed-out commands (<code>timeout_retry=True</code>); pass
+      <code>False</code> for commands that are not safe to run
+      twice.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect docs, Sandboxing: exec() timeout_retry">[Inspect]</a>
+      Inspect also separates <em>expected</em> errors (timeout, permission, decode, output limit),
+      which are handed to the model, from unexpected ones such as losing contact with the container
+      runtime, which fail the sample with an
+      error<a class="cite" href="https://inspect.aisi.org.uk/tools-custom.html" title="Inspect docs, Custom Tools: Tool Errors, Default Handling">[Inspect]</a>.
+      That is this course's "model failed" versus
+      <span class="term" data-g="infrastructure-failure">infrastructure failure</span> distinction, built in. Above the per-call timeout sit per-sample limits (<code>time_limit</code> is wall-clock);
+      a sample that hits one is still scored, "albeit nearly always as
+      'incorrect'".<a class="cite" href="https://inspect.aisi.org.uk/setting-limits.html" title="Inspect docs, Setting Limits: Sample Limits, Working Limit">[Inspect]</a>
+      So account for them yourself. A limit hit or an errored sample is an observation about the
+      <em>run</em>; report <code>correct/scheduled</code>, <code>correct/completed</code> and
+      <code>completed/scheduled</code> as three numbers, and choose the headline one before looking.
+    </p>
+    <div class="warn"><span class="label">Caveat: silent truncation</span>
+      Inspect caps exec output at 10 MiB and file reads at 100 MiB (overridable with
+      <code>INSPECT_SANDBOX_MAX_EXEC_OUTPUT_SIZE</code> and
+      <code>INSPECT_SANDBOX_MAX_READ_FILE_SIZE</code>). Folklore says both raise an exception. Only
+      <code>read_file()</code> does. In the built-in providers an oversized <code>exec()</code>
+      result is truncated from the <em>front</em>, keeping the tail, and returned as a successful
+      <code>ExecResult</code>.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#sec-sandbox-limits" title="Inspect docs, Sandbox Limits; source util/_sandbox/limits.py">[Inspect]</a>
+      A scorer that parses JSON from a chatty command's stdout can be handed half a document with
+      <code>success=True</code>. The docs' advice: write to a file and fetch it with
+      <code>read_file()</code>.
+    </div>
+
+    <h3 id="inspect-compose">The Docker provider is Compose underneath</h3>
+    <p>
+      With no configuration, Inspect generates a
+      Compose file. The docs only describe it; the
+      source gives it exactly:
+    </p>
+<pre><code>services:
+  default:
+    image: "aisiuk/inspect-tool-support"
+    command: "tail -f /dev/null"
+    init: true
+    network_mode: none
+    stop_grace_period: 1s</code></pre>
+    <p>
+      Read it as Linux: <code>tail -f /dev/null</code> is a PID 1 that never exits, so the container stays up to be exec'd into; <code>init: true</code> adds a real init for signals and zombies (<a href="10-signals-exit-codes.html">page 10</a>);
+      <code>network_mode: none</code> is an empty
+      network namespace
+      (<a href="19-firewalls-and-egress.html">page 19</a>); a one-second grace period makes teardown effectively SIGKILL. There are <em>no</em> CPU or memory limits in it; the
+      <code>cpus: 1.0</code> and <code>mem_limit: 0.5gb</code> people remember are from the docs'
+      example file.<a class="cite" href="https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/src/inspect_ai/util/_sandbox/docker/config.py" title="inspect_ai source, util/_sandbox/docker/config.py: COMPOSE_GENERIC_YAML">[Inspect]</a>
+      A <code>Dockerfile</code> or <code>compose.yaml</code> beside the task is discovered
+      automatically. The agent's box is the service named <code>default</code> (else one marked
+      <code>x-default: true</code>, else the first listed); other services are reached as
+      <code>sandbox("name")</code>. Every sample gets its own sandbox instance, "so samples do not
+      interfere with each other's
+      sandboxes".<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#environment-cleanup" title="Inspect docs, Sandboxing: Per Sample Setup; Multiple Environments; Environment Cleanup">[Inspect]</a>
+      At most <code>max_sandboxes</code> run at once, by default twice the CPUs available to the
+      eval.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#resource-management" title="Inspect docs, Sandboxing: Resource Management">[Inspect]</a>
+    </p>
+    <div class="pitfall"><span class="label">Pitfall: your compose file deletes the network policy</span>
+      "Supplying a custom Compose configuration … replaces the generated configuration rather than
+      extending it, including its <code>network_mode: none</code>. Docker Compose's default is a
+      project-scoped network with outbound Internet
+      access."<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html" title="Inspect docs, Sandboxing: Docker Configuration">[Inspect]</a>
+      Add a <code>compose.yaml</code> to set a memory limit and your "offline" benchmark is online
+      unless you wrote that line yourself. The same service, without and then with it:
+<pre class="term"><code><span class="p">$</span> docker compose -p lt-25-net exec default python3 -c 'import urllib.request as u; print(u.urlopen("http://example.com", timeout=5).status)'
+<span class="o">200</span>
+<span class="p">$</span> echo "    network_mode: none" &gt;&gt; compose.yaml &amp;&amp; docker compose -p lt-25-net up -d
+<span class="p">$</span> docker compose -p lt-25-net exec -T default python3 -c '…same…' 2&gt;&amp;1 | tail -1
+<span class="o">urllib.error.URLError: &lt;urlopen error [Errno -3] Temporary failure in name resolution&gt;</span></code></pre>
+      The reverse trap: <code>network_mode: none</code> "applies only to processes inside the
+      container"; tool code, scorers and the model provider keep their network.
+    </div>
+
+    <h3 id="inspect-task">A complete task for wordfreq-bench</h3>
+    <p>
+      Two files. The compose file gives the agent the hardened image and adds a second service; the <span class="term" data-g="scorer">scorer</span> copies the one file
+      under test out of the agent's box, into the grader box, uploads the
+      <span class="term" data-g="held-out-tests">held-out tests</span> from the host, and execs them
+      there. The hidden tests never enter the agent's container.
+    </p>
+<pre><code># compose.yaml
+services:
+  default:                      # the agent's box: sandbox() with no name
+    image: wordfreq-bench:hardened
+    x-local: true               # built locally; do not try to pull it
+    init: true
+    command: tail -f /dev/null
+    network_mode: none          # a custom compose file must say this itself
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+  grader:                       # a second box the agent never touches
+    image: wordfreq-bench:hardened
+    x-local: true
+    init: true
+    command: tail -f /dev/null
+    network_mode: none</code></pre>
+<pre><code># wordfreq_task.py
+from pathlib import Path
+
+from inspect_ai import Task, task
+from inspect_ai.agent import react
+from inspect_ai.dataset import Sample
+from inspect_ai.scorer import CORRECT, INCORRECT, Score, Target, accuracy, scorer
+from inspect_ai.solver import TaskState
+from inspect_ai.tool import bash
+from inspect_ai.util import sandbox
+
+GRADER = Path(__file__).parent / "grader"   # hidden tests live on the host
+
+
+@scorer(metrics=[accuracy()])
+def hidden_tests():
+    async def score(state: TaskState, target: Target) -&gt; Score:
+        # copy the one file the task is about OUT of the agent's box ...
+        submission = await sandbox().read_file("/app/wordfreq.py")
+        # ... and INTO a box the agent never had a shell in
+        box = sandbox("grader")
+        await box.write_file("/tmp/sub/wordfreq.py", submission)
+        for name in ("test_hidden.py", "expected.json"):
+            await box.write_file(f"/tmp/grader/{name}", (GRADER / name).read_text())
+        result = await box.exec(
+            ["python3", "-m", "unittest", "discover", "-s", "/tmp/grader", "-p", "test_hidden.py"],
+            cwd="/tmp/sub",          # python -m puts the cwd first on sys.path
+            env={"APP_DIR": "/app"},  # pristine data file from the image
+            timeout=60,
+        )
+        return Score(
+            value=CORRECT if result.success else INCORRECT,
+            explanation=f"exit {result.returncode}\n{result.stderr[-800:]}",
+        )
+
+    return score
+
+
+@task
+def wordfreq():
+    return Task(
+        dataset=[Sample(input="Fix the bug in /app/wordfreq.py so that words are counted "
+                              "case-insensitively and punctuation is ignored.")],
+        solver=react(tools=[bash(timeout=120)]),
+        scorer=hidden_tests(),
+        sandbox=("docker", "compose.yaml"),
+        message_limit=30,
+        time_limit=900,
+    )</code></pre>
+    <div class="callout"><span class="label">What was and was not executed</span>
+      This task was run for real with <code>inspect_ai</code> 0.3.266 in a Python 3.12 virtual
+      environment, but <strong>never against a real model</strong>. I ran it with Inspect's built-in mock (<code>--model mockllm/model</code>) and with a short
+      <span class="term" data-g="oracle-solution">oracle</span> solver that applies the known fix
+      through <code>sandbox().exec()</code>. Results: do-nothing agent 0.000, oracle 1.000. The <code>react</code> loop with a live model is the one path not exercised.
+    </div>
+    <p>
+      The oracle run earned its keep. My first scorer passed
+      <code>env={"PYTHONPATH": "/tmp/sub"}</code> and no <code>cwd</code>, and the oracle scored
+      <strong>0.000</strong>. Inspect's debugging path found it in two minutes:
+    </p>
+<pre class="term"><code><span class="p">$</span> inspect eval wordfreq_task.py --model mockllm/model --solver oracle.py@oracle --no-sandbox-cleanup
+<span class="o">…
+│ 1         │ 1     │ inspect-wordfreq-ifwpnc3-default-1 │
+│           │       │ inspect-wordfreq-ifwpnc3-grader-1  │
+Cleanup all containers  : inspect sandbox cleanup docker</span>
+<span class="p">$</span> docker exec inspect-wordfreq-ifwpnc3-default-1 grep -n "Counter(" /app/wordfreq.py
+<span class="o">10:    return Counter(re.findall(r"[a-z]+(?:'[a-z]+)*", text.lower()))</span></code></pre>
+    <p>
+      The fix was in the agent's box, and <code>ls</code> showed the copy in the grader box, yet the score explanation showed the buggy output
+      <code>[('The', 3), ('the', 3), ('on', 2)]</code>. The exec had started in the image's
+      <code>WORKDIR</code>, <code>/app</code>, which holds the pristine buggy
+      <code>wordfreq.py</code>, and <code>python3 -m</code> puts the working directory ahead of
+      <code>PYTHONPATH</code> on the import path. The grader was testing its own copy. With a real model that harness bug would have been scored as a model failure. Container names
+      follow <code>inspect-&lt;task&gt;-&lt;random&gt;-&lt;service&gt;-1</code>, and
+      <code>docker compose ls</code> showed one Compose project per
+      sample.<a class="cite" href="https://inspect.aisi.org.uk/sandboxing.html#environment-cleanup" title="Inspect docs, Sandboxing: Environment Cleanup (--no-sandbox-cleanup, inspect sandbox cleanup docker)">[Inspect]</a>
+    </p>
+    <div class="evals"><span class="label">In eval work</span>
+      Run the oracle solution and a do-nothing agent through the <em>full</em> harness before any
+      model: the oracle must score 1 and the no-op must score 0. Terminal-Bench makes both a
+      condition of accepting a task (CI runs the oracle script; a no-op "dummy" agent must
+      fail).<a class="cite" href="https://arxiv.org/html/2601.11868#S2.SS3" title="Merrill et al. 2026, Terminal-Bench, §2.3 Verification">[Terminal-Bench]</a>
+      SWE-bench's equivalent is <code>--predictions_path gold</code>; in the 2024 validation the
+      gold patches resolved 2,289 of 2,294 tasks, 99.78%, so even a careful harness is not at
+      100%.<a class="cite" href="https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md" title="SWE-bench, Containerized Evaluation Harness report, 27 June 2024">[SWE-bench]</a>
+      Rerun both after every hardening step from <a href="23-hardening-containers.html">page 23</a>.
+    </div>
+
+    <h2 id="terminal-bench">Terminal-Bench and Harbor: a terminal, then tests</h2>
+    <p>
+      A <span class="term" data-g="terminal-bench">Terminal-Bench</span> task is five things: an
+      instruction, a Docker image, a set of tests, an oracle solution, and a time limit. Tests check
+      the <em>final container state</em>, not what the agent typed or printed. Its harness since
+      version 2.0 is Harbor, where a task is a directory: <code>instruction.md</code>,
+      <code>task.toml</code>, <code>environment/</code> (the Dockerfile),
+      <code>solution/solve.sh</code>, <code>tests/test.sh</code>; the test script must write a
+      number to
+      <code>/logs/verifier/reward.txt</code>.<a class="cite" href="https://docs.harborframework.com/core-concepts/tasks/verifier" title="Harbor docs, Tasks: Verifier; Terminal-Bench paper §2.1">[Terminal-Bench]</a>
+    </p>
+    <p>
+      Two details are routinely misreported. First, the famous
+      <span class="term" data-g="tmux">tmux</span> mechanism belongs to the reference agent,
+      Terminus 2, not to the harness. The model emits keystrokes, the agent types them with <code>tmux send-keys</code> into a
+      <code>bash --login</code> session inside the container, and reads the screen back with
+      <code>tmux capture-pane</code>. That is a real TTY, so <code>vim</code>, pagers and prompts
+      work, where exec-per-call harnesses hang
+      (<a href="27-reading-terminal-transcripts.html">page 27</a>). Other agents (Claude Code, Codex
+      CLI, OpenHands) are installed into the container and use their own
+      tools.<a class="cite" href="https://arxiv.org/html/2601.11868#A6" title="Merrill et al. 2026, Terminal-Bench, App. F Terminus 2; Harbor source">[Terminal-Bench]</a>
+      Second, "the tests are hidden" is half true. The image may not contain tests or solutions
+      (CI rejects a Dockerfile that references them), and "the <code>tests/</code>
+      directory is uploaded to the environment at <code>/tests/</code> after the agent runs". But
+      "by default, the <span class="term" data-g="verifier">verifier</span> runs in the same
+      container as the agent", where the agent was typically root (an unset <code>agent.user</code> means the image default). Terminal-Bench 3.0 (July 2026) changed this: "We separate the agent container and
+      verifier container."<a class="cite" href="https://www.tbench.ai/news/terminal-bench-3-0" title="Terminal-Bench 3.0 release post, 30 Jul 2026">[Terminal-Bench]</a>
+      The task above has the same shape; <a href="26-environment-integrity.html">page 26</a> explains why.
+    </p>
+    <p>
+      Harbor's other knobs are this course's modules respelled: network policy is
+      <code>public</code>, <code>no-network</code> or an <code>allowlist</code>, per phase;
+      <code>agent.timeout_sec</code> defaults to <em>no timeout</em>; <code>cpus</code> and
+      <code>memory_mb</code> are a hard limit on Docker but only a request on some cloud providers,
+      so the same task can be capped differently depending on where it
+      runs.<a class="cite" href="https://docs.harborframework.com/core-concepts/sandboxes/pre-integrated-sandboxes" title="Harbor docs: Network policies; Configuration; Resources; Pre-integrated sandboxes">[Terminal-Bench]</a>
+    </p>
+
+    <h2 id="swe-bench">SWE-bench: images in three layers, grading by patch</h2>
+    <p>
+      <span class="term" data-g="swe-bench">SWE-bench</span>'s harness (dissected as a benchmark in
+      the sibling course's
+      <a href="../../../evals/evals-tut/pages/12-swe-bench-case-study.html">page 12</a>) moved to Docker in June 2024 because conda environments left evaluation "sensitive to
+      discrepancies originating from different platforms and user-specific configurations".<a class="cite" href="https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md" title="SWE-bench, Containerized Evaluation Harness report, 27 June 2024">[SWE-bench]</a>
+      Its <span class="term" data-g="task-image">task images</span> come in three layers: a base
+      image, about 60 environment images shared between instances, and one instance image per task
+      with the repo at the right commit. The README asks for 120 GB of free disk, 16 GB RAM and 8
+      cores.<a class="cite" href="https://github.com/SWE-bench/SWE-bench#-set-up" title="SWE-bench README: Set Up; Docker Setup Guide">[SWE-bench]</a>
+      
+    </p>
+    <p>
+      The agent is not in this harness at all. It receives a <em>patch</em> and, in a fresh instance
+      container, applies it, runs the repo's tests, and parses the log: solved only if every
+      FAIL_TO_PASS and PASS_TO_PASS test is found passing; a missing test counts as a fail; a patch
+      that will not apply scores
+      zero.<a class="cite" href="https://arxiv.org/html/2310.06770v3" title="Jimenez et al. 2024, SWE-bench, App. A.4 Evaluation Procedure">[SWE-bench]</a>
+      The eval script re-checks-out the named test files and applies the official test patch before
+      running, so edits to those files never reach grading. The current
+      harness reports "instances with errors" and "likely infrastructure failures" separately from
+      unresolved
+      ones,<a class="cite" href="https://github.com/SWE-bench/SWE-bench/blob/main/docs/guides/evaluation.md" title="SWE-bench docs, Evaluation guide: What the counts mean">[SWE-bench]</a>
+      and keeps <code>test_output.txt</code>, <code>run_instance.log</code> and the
+      <code>eval.sh</code> it ran under <code>logs/evaluation/</code>: audit question 5,
+      <em>where are the logs</em>, answered by design.
+    </p>
+
+    <h2 id="rosetta">Every harness feature is a Linux mechanism</h2>
+    <table>
+      <thead><tr><th>Harness feature</th><th>Linux mechanism</th><th>Taught on</th></tr></thead>
+      <tbody>
+        <tr><td>One exec per tool call; <code>cd</code>/<code>export</code> do not persist</td><td>each call is a new non-interactive process with its own cwd and environment</td><td><a href="02-shell-and-commands.html">2</a>, <a href="11-environment-and-secrets.html">11</a></td></tr>
+        <tr><td><code>stdout</code>/<code>stderr</code> fields; merged tool output</td><td>file descriptors 1 and 2</td><td><a href="04-streams-pipes-redirection.html">4</a></td></tr>
+        <tr><td><code>returncode</code>, tool timeout, 124/137</td><td>exit status; SIGTERM then SIGKILL</td><td><a href="10-signals-exit-codes.html">10</a>, <a href="../appendices/b-exit-codes-signals.html">App. B</a></td></tr>
+        <tr><td><code>user=</code>, <code>agent.user</code></td><td>the uid a process runs as</td><td><a href="07-users-groups-root.html">7</a>, <a href="08-permissions.html">8</a></td></tr>
+        <tr><td><code>network_mode: none</code>, allowlists</td><td>empty network namespace; firewall rules</td><td><a href="19-firewalls-and-egress.html">19</a>, <a href="20-namespaces.html">20</a></td></tr>
+        <tr><td><code>mem_limit</code>, <code>cpus</code>, <code>pids_limit</code></td><td>cgroup v2 controllers; the OOM killer</td><td><a href="12-resources-and-limits.html">12</a>, <a href="21-cgroups-capabilities-seccomp.html">21</a></td></tr>
+        <tr><td><code>command: tail -f /dev/null</code>, <code>init: true</code></td><td>PID 1 and signal delivery</td><td><a href="10-signals-exit-codes.html">10</a></td></tr>
+        <tr><td>Fresh sandbox per sample</td><td>a new writable layer over read-only image layers</td><td><a href="14-mounts-and-filesystems.html">14</a>, <a href="22-docker-for-evals.html">22</a></td></tr>
+        <tr><td>tmux-driven agents</td><td>a pseudo-terminal, so interactive programs work</td><td><a href="27-reading-terminal-transcripts.html">27</a></td></tr>
+      </tbody>
+    </table>
+
+    <div class="evals"><span class="label">In eval work: five things to find in any benchmark repo</span>
+      Reading an unfamiliar agentic benchmark means locating five decisions.
+      (1) <strong>The image definition</strong>: a Dockerfile, a compose file, or a registry name,
+      and is it pinned? (2) <strong>The exec path</strong>: stateless exec, a session, or a TTY, and
+      as which user? (3) <strong>Timeouts and limits</strong>: per call, per sample, per
+      verifier, and is "none" the default? (4) <strong>The network policy</strong>, and whether a
+      custom config quietly replaced it. (5) <strong>Where grading runs</strong>: inside the agent's
+      box or outside, before or after the agent's processes are gone, as which user, reading which
+      files. The first four tell you whether scores are comparable; the
+      fifth tells you whether they are trustworthy.
+    </div>
+    <div class="evals"><span class="label">In eval work: agents that live inside the box</span>
+      When the agent is a whole CLI program installed in the sandbox, it needs to reach a model API,
+      which collides with <code>network_mode: none</code>. Inspect's
+      <code>sandbox_agent_bridge()</code> solves it with the loopback interface: a proxy inside the
+      container listens on <code>localhost:13131</code>, the agent is pointed at it (for example
+      <code>ANTHROPIC_BASE_URL=http://localhost:13131</code>), and requests are relayed to the
+      harness outside. The docs flag the hole this leaves: provider-side tools such as web search
+      execute at the model provider, outside the sandbox, and would bypass the box's
+      egress policy, so the bridge withholds them unless
+      the eval grants them
+      explicitly.<a class="cite" href="https://inspect.aisi.org.uk/agent-bridge.html#sandbox-bridge" title="Inspect docs, Agent Bridge: Sandbox Bridge">[Inspect]</a>
+      "What can the box reach?" includes what the model's own tools can reach for it.
+    </div>
+
+    <div class="check"><span class="label">Check your understanding</span>
+      <p>
+        A team moves a benchmark from Inspect's default sandbox to a custom <code>compose.yaml</code>
+        "to add a memory limit". The pass rate rises four points and fewer samples hit the time
+        limit. The write-up credits the new model checkpoint that shipped the same week. What would
+        you ask before accepting that?
+      </p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p>
+          <strong>Observed:</strong> two things changed at once, the model and the environment.
+          <strong>Hypotheses:</strong> (a) the model improved; (b) the custom file dropped
+          <code>network_mode: none</code>, so the agent can now <code>pip install</code> or look
+          things up; (c) the new memory limit differs from the old default (none) and changed
+          which samples die. The discriminating test is cheap: rerun the <em>old</em> checkpoint
+          under the new compose file. If its score also moves, the environment did it. Supporting
+          evidence: <code>docker inspect --format '{{.HostConfig.NetworkMode}}'</code> on a live
+          sample, and a grep of transcripts for network commands that now succeed. For the
+          time-limit shift, ask whether limit hits are counted as incorrect or excluded: report
+          <code>correct/scheduled</code> and <code>completed/scheduled</code> for both runs, so a
+          change in the denominator cannot pass as a change in capability.
+        </p>
+      </details>
+    </div>
+
+    <div class="lab"><span class="label">Lab</span>
+      <p>
+        Container lab, driven from your Mac's terminal (the <code>docker</code> commands are the
+        harness; what follows the container name runs in Linux). Setup, using the image built on
+        <a href="22-docker-for-evals.html">page 22</a>:
+        <code>docker run -d --name lt-25-box --network none --init wordfreq-bench:hardened</code>.
+        Finish with <code>docker rm -f lt-25-box</code>.
+      </p>
+      <ol>
+        <li>
+          <strong>Reproduce.</strong> Run the <code>cd /tmp &amp;&amp; export FOO=1</code> call and
+          the follow-up. Then make one call that does change directory, set a variable and use both.
+          <details class="solution"><summary>Solution</summary>
+            State lives only inside one process, so put the sequence in one call:
+<pre class="term"><code><span class="p">$</span> docker exec lt-25-box bash -c 'cd /tmp &amp;&amp; export FOO=1 &amp;&amp; pwd &amp;&amp; echo FOO=$FOO'
+<span class="o">/tmp
+FOO=1</span></code></pre>
+            This is why agents under exec-per-call harnesses learn to write
+            <code>cd /app &amp;&amp; …</code> at the start of every command.
+          </details>
+        </li>
+        <li>
+          <strong>Predict, then verify.</strong> A harness logs only stdout. Before running it,
+          write down how many bytes of
+          <code>docker exec lt-25-box python3 -m unittest discover -s tests</code> it will record.
+          <details class="solution"><summary>Solution</summary>
+            Zero. <code>unittest</code> reports on stderr:
+<pre class="term"><code><span class="p">$</span> docker exec lt-25-box python3 -m unittest discover -s tests &gt;out.txt 2&gt;err.txt; echo "exit=$?"; wc -c out.txt err.txt
+<span class="o">exit=0
+       0 out.txt
+      98 err.txt</span></code></pre>
+            The exit status is the only trustworthy signal in that log, which is why
+            <code>run-tests.sh</code> on <a href="06-shell-scripting.html">page 6</a> records it.
+          </details>
+        </li>
+        <li>
+          <strong>Predict, then verify.</strong> What will <code>echo $?</code> print after
+          <code>docker exec lt-25-box timeout 2 sleep 30</code>, and after the same with
+          <code>-s KILL</code>? What after <code>docker exec lt-25-box nosuchcmd</code>?
+          <details class="solution"><summary>Solution</summary>
+            124, 137 and 127. The last one is produced by the container runtime, not by a shell,
+            because there was no shell in the argv:
+<pre class="term"><code><span class="p">$</span> docker exec lt-25-box nosuchcmd; echo "exit=$?"
+<span class="o">OCI runtime exec failed: exec failed: unable to start container process: exec: "nosuchcmd": executable file not found in $PATH: unknown
+exit=127</span></code></pre>
+          </details>
+        </li>
+        <li>
+          <strong>What survives a tool call?</strong> Start
+          <code>nohup sleep 300 &gt;/dev/null 2&gt;&amp;1 &amp;</code> in one exec and list processes
+          in the next. Who is its parent, and why does a scorer care?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker exec lt-25-box ps -eo pid,ppid,user,args
+<span class="o">  PID  PPID USER     COMMAND
+    1     0 agent    /sbin/docker-init -- sleep infinity
+    7     1 agent    sleep infinity
+   96     1 agent    sleep 300
+   97     0 agent    ps -eo pid,ppid,user,args</span></code></pre>
+            PPID 1: orphaned and adopted by init. Anything the agent leaves running is still
+            running while an in-box scorer executes, with the agent's uid. Grading in a different
+            container, or after the agent's container is stopped, removes that whole class of
+            interference.
+          </details>
+        </li>
+        <li>
+          <strong>Eval task: audit a compose file.</strong> A colleague's Inspect task ships this
+          <code>compose.yaml</code> and the README says "runs offline". Prove or disprove it
+          without reading any Python.
+<pre><code>services:
+  default:
+    image: wordfreq-bench:hardened
+    init: true
+    command: tail -f /dev/null
+    mem_limit: 512m</code></pre>
+          <details class="solution"><summary>Solution</summary>
+            There is no <code>network_mode</code>, and a custom file replaces Inspect's generated
+            one, so Compose's default network applies. Bring it up and test from inside:
+<pre class="term"><code><span class="p">$</span> docker compose -p lt-25-net up -d
+<span class="p">$</span> docker compose -p lt-25-net exec default getent hosts example.com
+<span class="o">2606:4700:10::ac42:93f3 example.com
+2606:4700:10::6814:179a example.com</span>
+<span class="p">$</span> docker compose -p lt-25-net exec default python3 -c 'import urllib.request as u; print(u.urlopen("http://example.com", timeout=5).status)'
+<span class="o">200</span>
+<span class="p">$</span> docker inspect --format '{{.HostConfig.NetworkMode}}' lt-25-net-default-1
+<span class="o">lt-25-net_default</span>
+<span class="p">$</span> docker compose -p lt-25-net down</code></pre>
+            DNS resolves and HTTP returns 200: the box is online. After adding
+            <code>network_mode: none</code>, <code>getent</code> exits 2 with no output and
+            <code>docker inspect</code> prints <code>none</code>. Report it as a validity finding:
+            any score from this task was measured with open egress.
+          </details>
+        </li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>UK AI Security Institute, Inspect AI documentation: Sandboxing; Standard Tools; Custom Tools; Setting Limits; Agent Bridge; <code>inspect_ai.tool</code> reference (living docs, fetched Sept 2026). <a href="https://inspect.aisi.org.uk/sandboxing.html">inspect.aisi.org.uk/sandboxing.html</a>. Default compose YAML from the source file <a href="https://github.com/UKGovernmentBEIS/inspect_ai/blob/main/src/inspect_ai/util/_sandbox/docker/config.py">util/_sandbox/docker/config.py</a>.</li>
+        <li>UK AI Security Institute, "The Inspect Sandboxing Toolkit: Scalable and secure AI agent evaluations", 7 Aug 2025. <a href="https://www.aisi.gov.uk/blog/the-inspect-sandboxing-toolkit-scalable-and-secure-ai-agent-evaluations">aisi.gov.uk/blog/…</a></li>
+        <li>Merrill, Shaw, Carlini et al., "Terminal-Bench: Benchmarking Agents on Hard, Realistic Tasks in Command Line Interfaces", arXiv:2601.11868 (Jan 2026). <a href="https://arxiv.org/abs/2601.11868">arxiv.org/abs/2601.11868</a>; Harbor documentation, <a href="https://docs.harborframework.com/core-concepts/tasks/verifier">docs.harborframework.com</a>; Terminal-Bench 3.0 release post, <a href="https://www.tbench.ai/news/terminal-bench-3-0">tbench.ai/news/terminal-bench-3-0</a>.</li>
+        <li>Jimenez, Yang et al., SWE-bench: "Containerized Evaluation Harness" report (27 June 2024), <a href="https://github.com/SWE-bench/SWE-bench/blob/v3.0.0/docs/20240627_docker/README.md">github.com/SWE-bench/…/v3.0.0/docs/20240627_docker</a>; repository README and evaluation guide, <a href="https://github.com/SWE-bench/SWE-bench">github.com/SWE-bench/SWE-bench</a>; paper, arXiv:2310.06770, App. A.4, <a href="https://arxiv.org/html/2310.06770v3">arxiv.org/html/2310.06770v3</a>.</li>
+        <li>Executed material: <code>research/verify/25-how-harnesses-use-linux.txt</code> (Docker Engine 28.1.1; <code>inspect_ai</code> 0.3.266 with <code>mockllm/model</code> and an oracle solver; no real model was called).</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

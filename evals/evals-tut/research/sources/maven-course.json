@@ -1,0 +1,75 @@
+{
+  "id": "maven-course",
+  "citation": {
+    "authors": "Hamel Husain, Shreya Shankar",
+    "title": "AI Evals For Engineers & PMs",
+    "venue": "Maven (Parlance Labs)",
+    "year": "2026 (cohort Sep 5 - Oct 3, 2026; material refined over a year of prior cohorts)",
+    "url": "https://maven.com/parlance-labs/evals"
+  },
+  "fetched_urls": [
+    "https://maven.com/parlance-labs/evals"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "The course exists, taught by Shankar & Husain",
+      "verdict": "confirmed",
+      "finding": "Course 'AI Evals For Engineers & PMs' is live on Maven, taught by Hamel Husain ('ML Engineer with 25 years of experience', previously Airbnb and GitHub) and Shreya Shankar ('ML Systems & Applied AI Evals Researcher', PhD from UC Berkeley, joining Carnegie Mellon as Assistant Professor in 2027). Current cohort: Sep 5 - Oct 3, 2026; $4,200; 17 live sessions over 4 weeks.",
+      "quote": "AI Evals For Engineers & PMs ... Hamel Husain - ML Engineer with 25 years of experience ... Shreya Shankar - ML Systems & Applied AI Evals Researcher",
+      "location": "Course landing page header / instructor bios"
+    },
+    {
+      "planned": "Confirm current curriculum themes: instrumenting agents, error analysis, designing judges aligned with expert judgment",
+      "verdict": "confirmed",
+      "finding": "All three themes appear verbatim as course outcomes: agent instrumentation with inspectable traces, a repeatable error-analysis process replacing spot-checking, and LLM-as-judge/code-based evals validated against expert judgment. Syllabus lessons include 'L1: Building Agents, Foundations', 'L2: Building Agents, Designing for Evaluability', 'L3: Error Analysis, Finding Failures'. Additional themes: CI/CD regression testing, red-teaming for safety, cost/accuracy optimization.",
+      "quote": "Instrument a real agent so every run leaves a trace you can inspect. ... Replace random spot-checking with a repeatable way to read traces and spot failures. ... Design and validate LLM-as-judge and code-based evals that match expert judgment.",
+      "location": "Course outcomes and syllabus sections"
+    },
+    {
+      "planned": "Confirm scale claim (~700+ or more engineers/PMs taught)",
+      "verdict": "corrected",
+      "finding": "The current page claims 4,500+ engineers and PMs, not ~700+. The '700+' figure is stale; the course also shows a 4.7 rating from 879 reviews. If citing scale, use '4,500+ engineers and PMs from teams like OpenAI, Google, Meta, Amazon, and Microsoft' (as of June 2026).",
+      "quote": "refined this exact material over a year of cohorts with 4,500+ engineers and PMs from teams like OpenAI, Google, Meta, Amazon, and Microsoft",
+      "location": "Course landing page, instructor credibility section"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Error analysis should be a repeatable process of reading traces, not ad-hoc spot-checking",
+      "quote": "Replace random spot-checking with a repeatable way to read traces and spot failures.",
+      "numbers": ""
+    },
+    {
+      "point": "Agents must be designed for evaluability from the start: instrument so every run produces an inspectable trace",
+      "quote": "Instrument a real agent so every run leaves a trace you can inspect. ... L2: Building Agents, Designing for Evaluability",
+      "numbers": ""
+    },
+    {
+      "point": "Judges (LLM-as-judge or code-based) are only trustworthy when validated against expert judgment",
+      "quote": "Design and validate LLM-as-judge and code-based evals that match expert judgment.",
+      "numbers": ""
+    },
+    {
+      "point": "Evals belong in CI/CD as regression tests, plus red-teaming for safety and cost/accuracy optimization as downstream curriculum themes",
+      "quote": "CI/CD integration for regression testing; Red-teaming for safety; Cost and accuracy optimization (curriculum themes)",
+      "numbers": ""
+    },
+    {
+      "point": "The course frames its target audience around an evals anti-pattern: shipping prompt changes without measurement",
+      "quote": "Engineers and PMs who ship prompt changes and hope nothing breaks.",
+      "numbers": ""
+    },
+    {
+      "point": "Field-tested at large scale across major AI labs and big tech",
+      "quote": "refined this exact material over a year of cohorts with 4,500+ engineers and PMs from teams like OpenAI, Google, Meta, Amazon, and Microsoft",
+      "numbers": "4,500+ students; rating 4.7 (879 reviews); $4,200; 17 live sessions; 4 weeks; 3-5 hrs/week"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do NOT cite '~700+ engineers/PMs taught' — the current page says 4,500+ (the 700 figure is from an earlier snapshot of the course).",
+    "Do not describe it as a generic 'prompt engineering' course — the curriculum is structured around building/instrumenting agents, error analysis, and judge validation.",
+    "The course is by both instructors jointly under Parlance Labs on Maven; do not attribute it to only one of them."
+  ],
+  "notes_for_authors": "Strong core source. The three pillars (instrument agents for traces, repeatable error analysis, judges validated against expert judgment) are quoted verbatim on the live page and map cleanly onto a measurement-validity narrative. Update any scale claim to '4,500+ engineers and PMs' (verified 2026-06-09); the page is a live marketing page so numbers (rating 4.7/879, price $4,200, cohort dates Sep 5 - Oct 3 2026) will drift — date-stamp them. Syllabus lesson titles available: L1 Building Agents Foundations; L2 Building Agents, Designing for Evaluability; L3 Error Analysis, Finding Failures (14 more sessions not enumerated on page)."
+}

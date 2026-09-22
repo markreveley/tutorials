@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Does a Score Mean? Validity · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Contamination &amp; Validity</p>
+    <h1>What does a score mean? Validity</h1>
+    <p class="lede">
+      Modules 1–5 taught you to build evals and to handle their noise. This module confronts the
+      failure no error bar can catch: a score that is precise, reproducible, and <em>about the wrong
+      thing</em>. The concept that organizes the whole module is validity — and it comes from
+      measurement science, not machine learning.
+    </p>
+
+    <h2 id="construct">The proxy chain</h2>
+    <p>
+      You never measure what you care about. You care about something abstract — "this model can do
+      real software engineering," "this assistant is safe" — called the <em>construct</em> in
+      measurement theory. What you measure is the end of a chain of stand-ins:
+    </p>
+    <div class="diagram">what you care about        "can it do real software engineering?"
+        │  (construct)
+        ▼
+a task family              resolve GitHub issues
+        ▼
+a dataset                  2,294 issues from 12 Python repos
+        ▼
+a grader                   do the PR's tests pass?
+        ▼
+a number                   "33.2%"</div>
+    <p>
+      <span class="term" data-g="construct-validity">Construct validity</span> is the question of
+      whether the whole chain holds — whether the number at the bottom still says something about the
+      idea at the top. Every link is a place it can break, and Modules 1–5 have already collected
+      verified breaks for each one. The EleutherAI reproducibility paper states the right default
+      posture in one line: "The appropriate conclusions to draw about a model's behavior are
+      <em>informed by</em>, not <em>constituted by</em>, these numerical
+      scores."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Biderman, Schoelkopf, Sutawika et al., Lessons from the Trenches, §4">[Eleuther]</a>
+      The score is evidence about the construct, never the construct itself.
+    </p>
+
+    <h2 id="link-audit">Auditing the chain, link by link</h2>
+    <table>
+      <tr><th>Link</th><th>How it breaks</th><th>Verified example</th></tr>
+      <tr><td>Construct → task</td><td>The task family captures a slice of the construct and gets treated as the whole</td><td>Two scoring methods for the <em>same questions</em> — log-likelihood vs generation — "do not even agree," so which slice you measured depends on the harness<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Eleuther, §4.1">[Eleuther]</a></td></tr>
+      <tr><td>Task → dataset</td><td>Instances don't actually pose the task</td><td>38.3% of sampled SWE-bench tasks had underspecified problem statements<a class="cite" href="https://openai.com/index/introducing-swe-bench-verified/" title="OpenAI 2024, SWE-bench Verified">[SWE-bench Verified]</a></td></tr>
+      <tr><td>Dataset → grader</td><td>The grader passes wrong answers or fails right ones</td><td>61.1% of sampled SWE-bench tasks had tests that could reject valid solutions<a class="cite" href="https://openai.com/index/introducing-swe-bench-verified/" title="OpenAI 2024">[SWE-bench Verified]</a>; tau-bench's reward is "necessary but not sufficient"<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §3">[tau-bench]</a></td></tr>
+      <tr><td>Grader → number</td><td>Aggregation hides the structure that matters</td><td>OSWorld agents scored &lt;5% on multi-app workflows inside a 12% overall average<a class="cite" href="https://arxiv.org/abs/2404.07972" title="Xie et al. 2024, §4.2">[OSWorld]</a></td></tr>
+    </table>
+    <p>
+      Two cousins of construct validity complete the vocabulary.
+      <span class="term" data-g="internal-validity">Internal validity</span>: is the comparison clean
+      <em>within</em> the experiment — or did task ordering, environment state, or an unvalidated judge
+      contaminate it? <span class="term" data-g="external-validity">External validity</span>: does the
+      result transfer beyond the eval's conditions? METR's time-horizon work is unusually honest about
+      the latter: the metric is defined relative to a task distribution and a reference human
+      population, and switching that population from repository maintainers to external contractors
+      shifts measured task times by 5–18×<a class="cite" href="https://arxiv.org/abs/2503.14499" title="Kwa, West et al. (METR), limitations">[METR]</a> —
+      the same model, a several-fold different "horizon."
+    </p>
+
+    <h2 id="probes">Three cheap probes for a broken chain</h2>
+    <p>
+      Validity sounds philosophical; testing it is mostly mechanical. Three probes, each verified in
+      action earlier in this course:
+    </p>
+    <div class="card">
+      <p><strong>1. The control check: what would a broken system score?</strong> Anthropic's models
+      scored a perfect bias score of 0 on the BBQ benchmark — because they weren't answering the
+      questions at all, and the metric couldn't tell.<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023, Challenges in Evaluating AI Systems">[Anthropic]</a>
+      If a trivial, broken, or constant system scores well, the chain is broken above the metric.</p>
+      <p><strong>2. The ablation: remove an input the construct requires.</strong> tau-bench's authors
+      deleted the policy document their benchmark supposedly tests adherence to; the retail score barely
+      moved (−4.4), revealing that successes "mostly stem from using tools in an intuitive and common
+      sense way" — not the construct on the label.<a class="cite" href="https://arxiv.org/abs/2406.12045" title="Yao et al. 2024, §5.2, Table 3">[tau-bench]</a></p>
+      <p><strong>3. The fresh-instance replication: re-pose the task with new data.</strong> If the
+      score drops on new instances matched for difficulty, the old score was partly measuring
+      familiarity, not ability. This is the GSM1k method —
+      <a href="21-contamination.html">the next page</a> — and the SWE-Bench+ arc (12.47% → 0.55%) was
+      its agentic cousin.<a class="cite" href="https://arxiv.org/abs/2410.06992" title="Aleithan et al. 2024, SWE-Bench+">[SWE-bench+]</a></p>
+    </div>
+
+    <h2 id="lifecycle">Validity decays: saturation and Goodhart</h2>
+    <p>
+      A benchmark's validity isn't fixed at construction — it erodes through use, by two mechanisms.
+      <span class="term" data-g="saturation">Saturation</span>: as models approach the ceiling, the
+      benchmark stops discriminating — remaining gaps are noise and label errors (recall that Anthropic
+      found mislabeled and unanswerable items in MMLU itself: even "ground truth" has an error
+      rate<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023">[Anthropic]</a>).
+      And targeting: once a measure carries stakes, it gets optimized <em>as a measure</em>. The
+      verified small-scale case is leaderboard models fine-tuned to match lm-eval separator
+      tokens<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Eleuther, §4.1">[Eleuther]</a>;
+      the industrial-scale case is <a href="23-leaderboard-illusion.html">page 23</a>. Both are
+      Goodhart's-law dynamics: pressure on the proxy detaches it from the construct precisely because
+      it's a proxy.
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Equating "rigorous" with "quantitative." A team that replaces judgment with an invalid number
+      has not become more scientific — it has laundered a guess through arithmetic. The BBQ-zero story
+      is the canonical miniature: the number was exact, the pipeline reproducible, the conclusion
+      ("we reduced bias") false. Rigor is the chain holding end to end, not the precision of the last
+      link.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Ask of every score: <em>valid for what?</em> A score is valid for a use, not in general —
+      SWE-bench Verified numbers are informative for comparing coding agents and nearly mute on "will
+      this agent handle my legacy codebase." The rest of this module covers the most consequential way
+      the chain breaks — <a href="21-contamination.html">the test set leaking into training</a> — the
+      <a href="22-contamination-defenses.html">defenses</a>, and
+      <a href="23-leaderboard-illusion.html">what stakes do to measurements</a>.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Stella Biderman, Hailey Schoelkopf, Lintang Sutawika et al. (EleutherAI), "Lessons from the Trenches on Reproducible Evaluation of Language Models," arXiv:2405.14782 (v3). <a href="https://arxiv.org/abs/2405.14782">arxiv.org/abs/2405.14782</a></li>
+        <li>OpenAI, "Introducing SWE-bench Verified," openai.com, August 2024. <a href="https://openai.com/index/introducing-swe-bench-verified/">openai.com/index/introducing-swe-bench-verified</a></li>
+        <li>Shunyu Yao et al., "τ-bench," arXiv:2406.12045, 2024. <a href="https://arxiv.org/abs/2406.12045">arxiv.org/abs/2406.12045</a></li>
+        <li>Tianbao Xie et al., "OSWorld," NeurIPS 2024. <a href="https://arxiv.org/abs/2404.07972">arxiv.org/abs/2404.07972</a></li>
+        <li>Anthropic, "Challenges in Evaluating AI Systems," anthropic.com, October 2023. <a href="https://www.anthropic.com/news/evaluating-ai-systems">anthropic.com/news/evaluating-ai-systems</a></li>
+        <li>Thomas Kwa, Ben West et al. (METR), "Measuring AI Ability to Complete Long Software Tasks," arXiv:2503.14499 (v3). <a href="https://arxiv.org/abs/2503.14499">arxiv.org/abs/2503.14499</a></li>
+        <li>Reem Aleithan et al., "SWE-Bench+," arXiv:2410.06992, 2024. <a href="https://arxiv.org/abs/2410.06992">arxiv.org/abs/2410.06992</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

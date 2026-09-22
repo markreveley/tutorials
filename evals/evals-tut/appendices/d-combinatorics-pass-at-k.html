@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D. Counting &amp; the pass@k Estimator · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix D · Math &amp; Stats</p>
+    <h1>Counting &amp; the pass@k Estimator</h1>
+    <p class="lede">pass@k — the chance that at least one of k attempts solves a problem — is the standard metric for code generation and agents. The obvious way to estimate it is subtly wrong. This appendix builds the counting tools from zero and derives the correct, unbiased formula, step by verifiable step.</p>
+
+    <h2 id="counting-toolkit">The counting toolkit, from zero</h2>
+
+    <p>Everything in this appendix rests on one question: <em>how many ways are there to pick k things out of n?</em></p>
+
+    <h3 id="factorials">Factorials: counting orderings</h3>
+
+    <p>How many ways can you arrange n distinct items in a row? You have n choices for the first slot, n−1 for the second, n−2 for the third, down to 1. Multiplying these gives the <strong>factorial</strong>:</p>
+
+    <div class="math">n! = n × (n−1) × (n−2) × … × 2 × 1</div>
+
+    <p>This counts the number of ways to put n distinct items in order. For example, 4! = 4 × 3 × 2 × 1 = 24. By convention 0! = 1 (one way to arrange nothing: do nothing).</p>
+
+    <h3 id="ordered-vs-unordered">Ordered vs. unordered selection</h3>
+
+    <p>Now pick k items out of n where <em>order matters</em>: n choices, then n−1, then n−2, for k slots — which works out to n!/(n−k)! (the full factorial, with the orderings of the n−k unpicked items divided away).</p>
+
+    <p>But often we don't care about order: picking {A, B} is the same selection as {B, A}. Every unordered group of k items shows up k! times in the ordered count — once per arrangement — so divide by k!:</p>
+
+    <div class="math">C(n, k) = n! / (k! (n−k)!)</div>
+
+    <p>In words: C(n, k) — read "n choose k" — is the number of distinct k-item subsets you can form from n items, ignoring order. This quantity is called the <strong>binomial coefficient</strong>, because it also shows up in the <span class="term" data-g="binomial-distribution">binomial distribution</span> (counting how many ways c successes can be arranged among n trials — see <a href="a-probability.html">Appendix A</a>).</p>
+
+    <h3 id="toy-count">A concrete count: choose 2 of 4</h3>
+
+    <p>Take four items: A, B, C, D. How many ways to choose 2 of them? The formula says C(4, 2) = 4!/(2! · 2!) = 24/(2 × 2) = 6. We can check by listing every pair:</p>
+
+    <table>
+      <thead><tr><th>#</th><th>Subset</th><th>Contains A?</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>{A, B}</td><td>yes</td></tr>
+        <tr><td>2</td><td>{A, C}</td><td>yes</td></tr>
+        <tr><td>3</td><td>{A, D}</td><td>yes</td></tr>
+        <tr><td>4</td><td>{B, C}</td><td>no</td></tr>
+        <tr><td>5</td><td>{B, D}</td><td>no</td></tr>
+        <tr><td>6</td><td>{C, D}</td><td>no</td></tr>
+      </tbody>
+    </table>
+
+    <p>Exactly 6 — the formula checks out. The third column previews the trick the whole appendix turns on: 3 of the 6 pairs avoid A. If A were the only "correct" item, the chance a random pair misses it would be 3/6 — and that 3 is C(3, 2), the number of pairs you can build from the three non-A items. <em>Counting the subsets that avoid the good items</em> is the entire derivation, coming up below.</p>
+
+    <h2 id="the-pass-at-k-question">The pass@k question</h2>
+
+    <p>Here is the question <span class="term" data-g="pass-at-k">pass@k</span> answers: <em>if I let the model attempt this problem k times, what is the probability that at least one attempt passes?</em></p>
+
+    <p>Why is "at least one" the right framing? Because for code generation — and for agents more broadly — you can often <em>verify</em> candidates cheaply: generate k candidate solutions, run the test suite against each, ship whichever passes. Under that workflow, one success out of k is a win — you get to pick the winner — so the per-attempt success rate (pass@1) undersells the model. pass@k matches how the system is actually used. It was introduced in this form by the HumanEval paper, which evaluated code models exactly this way: generate many samples, run unit tests, score problems where any sample passed <a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Evaluating Large Language Models Trained on Code">[HumanEval]</a>.</p>
+
+    <div class="callout"><span class="label">Why this matters</span> pass@k assumes you can tell winners from losers (a test suite, a checker, a verifiable end state). When you can't verify, the metric flips to reliability — do <em>all</em> attempts pass? That's pass^k, contrasted at the end of this appendix.</div>
+
+    <h2 id="naive-estimator">The naive estimator, and why it's biased</h2>
+
+    <p>Suppose each attempt independently succeeds with some true (unknown) probability p. Then the probability all k attempts fail is (1−p)<sup>k</sup>, so the true pass@k is:</p>
+
+    <div class="math">pass@k = 1 − (1 − p)<sup>k</sup></div>
+
+    <p>In words: one minus the chance of k failures in a row. The natural move is: run n attempts, count c successes, estimate p̂ = c/n, and plug it in:</p>
+
+    <div class="math">naive estimate = 1 − (1 − p̂)<sup>k</sup> = 1 − (1 − c/n)<sup>k</sup></div>
+
+    <p>That is: pretend the observed success rate is the true one, and compute the formula with it. This feels harmless — p̂ is itself a perfectly good, unbiased estimate of p (its <span class="term" data-g="expectation">expectation</span> over repeated experiments equals p; see <a href="a-probability.html">Appendix A</a>). The problem is that the function 1 − (1−p)<sup>k</sup> is <em>nonlinear</em>: a curve that rises steeply at first and then flattens out as p grows.</p>
+
+    <p>Here's why that breaks things. Your p̂ bounces around the true p from one experiment to the next — sometimes high, sometimes low. On a straight line, the highs and lows would cancel and the plugged-in answers would average out to the true value. But on a curve that flattens out, a p̂ that overshoots p gains you only a little (the curve is flat up there), while a p̂ that undershoots by the same amount loses you a lot (the curve is steep down there). The losses outweigh the gains, so <em>on average the naive estimate comes out below the true pass@k</em>. An unbiased input pushed through a nonlinear function comes out biased — that's the general lesson. (For k = 1 the function is a straight line and the naive estimate is fine; the bias grows with k and shrinks only slowly with n.)</p>
+
+    <h2 id="unbiased-estimator">The unbiased estimator</h2>
+
+    <p>The fix, from the HumanEval paper <a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Evaluating Large Language Models Trained on Code">[HumanEval]</a>, avoids estimating p altogether. Generate n ≥ k attempts per problem and count c correct. Now ask a purely counting question about the attempts you already have: <em>if I drew k of these n attempts at random, what's the chance none of them is correct?</em></p>
+
+    <p>This is the toy count from above, scaled up. There are C(n, k) equally likely k-subsets of your n attempts. A subset contains no correct attempt exactly when all k members come from the n−c incorrect ones — C(n−c, k) ways. So:</p>
+
+    <div class="math">P(<span class="plain">k random attempts, none correct</span>) = C(n−c, k) / C(n, k)</div>
+
+    <p>In words: the all-incorrect subsets, divided by all subsets. Flip it around to get the estimator:</p>
+
+    <div class="math">pass@k ≈ 1 − C(n−c, k) / C(n, k)</div>
+
+    <p>That is: one minus the fraction of k-subsets that miss every correct attempt. Every step is a count you could verify by listing subsets, exactly as we did for C(4, 2). And this is a true <span class="term" data-g="unbiased-estimator">unbiased estimator</span>: averaged over repeated experiments, it equals the true pass@k exactly. The intuition: a random k-subset of your n independent attempts behaves just like a fresh batch of k attempts, so the chance it contains no success is exactly the (1−p)<sup>k</sup> we wanted — with no plug-in step to bend it.</p>
+
+    <div class="keyidea"><span class="label">Key idea</span> Don't estimate the per-attempt rate and push it through a curve. Oversample (n ≥ k attempts), then answer the pass@k question directly by counting subsets of the attempts you actually have.</div>
+
+    <h2 id="worked-example">Fully worked example</h2>
+
+    <div class="card">
+      <p><strong>Setup.</strong> One problem, n = 10 attempts, c = 3 correct (so 7 incorrect). Estimate pass@5.</p>
+      <p><strong>Step 1 — all subsets.</strong> C(10, 5) = 10!/(5! · 5!) = 252. There are 252 ways to pick 5 attempts out of 10.</p>
+      <p><strong>Step 2 — all-incorrect subsets.</strong> C(7, 5) = 7!/(5! · 2!) = (7 × 6)/2 = 21. There are 21 ways to pick 5 attempts using only the 7 incorrect ones.</p>
+      <p><strong>Step 3 — divide and flip.</strong></p>
+      <div class="math">pass@5 ≈ 1 − 21/252 = 1 − 1/12 = 11/12 ≈ 0.917</div>
+      <p>In words: only 1 in 12 random 5-subsets misses all three correct attempts, so the estimated chance that 5 attempts include at least one winner is about 91.7%.</p>
+      <p><strong>Compare with the naive estimate.</strong> p̂ = 3/10 = 0.3, so 1 − (1 − 0.3)<sup>5</sup> = 1 − 0.7<sup>5</sup> = 1 − 0.16807 ≈ 0.832. The naive answer (0.832) and the unbiased answer (0.917) differ by more than 8 percentage points on the same data — this is not a rounding-level subtlety.</p>
+    </div>
+
+    <h2 id="numerical-stability">Computing it without overflow</h2>
+
+    <p>For real runs (say n = 200, k = 100), factorials like 200! are astronomically large and will overflow naive floating-point code. Expand the binomial coefficients, cancel the shared terms, and the ratio collapses to a short product:</p>
+
+    <div class="math">C(n−c, k) / C(n, k) = ∏<sub>i=n−c+1</sub><sup>n</sup> (1 − k/i)</div>
+
+    <p>In words: multiply the factors (1 − k/i) for i from n−c+1 up to n — just c factors, each between 0 and 1, so nothing overflows. (Sanity check on the example: i = 8, 9, 10 gives (3/8)(4/9)(5/10) = 60/720 = 1/12. Matches.) This is the same algebra the HumanEval reference implementation uses. In Python, stdlib only:</p>
+
+<pre><code>def pass_at_k(n, c, k):
+    """Unbiased pass@k estimate for one problem.
+    n: total attempts, c: correct attempts, k: budget."""
+    if n - c &lt; k:
+        return 1.0   # every k-subset must contain a correct attempt
+    prob_all_fail = 1.0
+    for i in range(n - c + 1, n + 1):
+        prob_all_fail *= 1.0 - k / i
+    return 1.0 - prob_all_fail
+
+print(pass_at_k(10, 3, 5))   # 0.9166666666666666</code></pre>
+
+    <p>The early return handles the case where there are fewer than k incorrect attempts: then no all-incorrect k-subset exists (C(n−c, k) = 0), so the estimate is exactly 1.</p>
+
+    <h2 id="caveats">Caveats and how this connects</h2>
+
+    <p>First, the formula above is a <em>per-problem</em> estimate. A benchmark score is the average of these estimates across problems: compute pass@k for each problem from its own n attempts, then take the mean. Don't pool attempts across problems — a problem the model aces and one it always fails are not interchangeable attempts at one task.</p>
+
+    <div class="warn"><span class="label">Caveat</span> Unbiased does not mean precise. With small n the estimate is right <em>on average</em> but can be far off in any single run — with n = 10 and c = 3 above, one lucky or unlucky batch swings the answer a lot. Variance shrinks as n grows, which is why you want n comfortably larger than k, and why scores still need error bars across problems (see <a href="../pages/16-error-bars.html">page 16</a> and <a href="b-sampling.html">Appendix B</a>).</div>
+
+    <div class="pitfall"><span class="label">Pitfall</span> Setting k = n (or close to it). At k = n there is exactly one "subset" — all your attempts — so the estimator collapses to 1 if c ≥ 1 and 0 if c = 0: a coin-flip-grade measurement with no averaging-down of variance. The same trap in different clothes: computing the naive estimate from a handful of samples (say k = 10 from n = 10) and reporting it as pass@10. Generate n meaningfully larger than the largest k you report, so many distinct k-subsets contribute to the count.</div>
+
+    <p>Finally, keep pass@k separate from its near-namesake. pass@k asks whether <em>any</em> of k attempts passes — right when you can verify candidates and pick the winner. <span class="term" data-g="pass-hat-k">pass^k</span> asks whether <em>all</em> k attempts pass — a reliability measure for when the user gets whichever attempt happens to run, with no verifier in between. Same letters, opposite tempers: pass@k rises as k grows, pass^k falls. <a href="../pages/14-reliability-pass-hat-k.html">Page 14</a> covers pass^k; <a href="../pages/18-pass-at-k.html">page 18</a> puts this appendix's estimator to work on real eval questions.</p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Chen et al., “Evaluating Large Language Models Trained on Code,” arXiv 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a> — origin of the unbiased pass@k estimator and its numerically stable product form. The derivation above is self-contained; every step can be checked by direct counting.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

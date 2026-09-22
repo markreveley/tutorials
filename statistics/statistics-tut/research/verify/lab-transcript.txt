@@ -1,0 +1,457 @@
+Statistics for Evals: actual local command transcript
+Authoring date: 2026-09-21
+Python: 3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]
+Quiz stdin supplied by verifier: 1, 2, 3, 2, 2, 3 (one answer per line).
+All data are synthetic; no model calls or network requests.
+
+$ python3 --version
+Python 3.14.3
+
+[exit 0]
+
+$ python3 labs/stats_lab.py --help
+usage: stats_lab.py [-h]
+                    {rate,sample,compare,power,multiple,peek,bayes,rare,reliability,quiz} ...
+
+Offline statistics experiments for evals. Run --help or quiz to start.
+
+positional arguments:
+  {rate,sample,compare,power,multiple,peek,bayes,rare,reliability,quiz}
+    rate                Wilson interval for a pass count
+    sample              simulate repeated samples and confidence-interval
+                        coverage
+    compare             paired task or cluster bootstrap on JSONL data
+    power               approximate independent-pair sample size
+    multiple            simulate multiple null comparisons
+    peek                demonstrate invalid repeated fixed-sample testing
+    bayes               Beta-Binomial update and prior sensitivity
+    rare                upper failure-rate bound after zero failures
+    reliability         at-least-one and all-k success estimates
+    quiz                interactive judgment checks with explanations
+
+options:
+  -h, --help            show this help message and exit
+
+[exit 0]
+
+$ python3 labs/stats_lab.py quiz
+Eval statistics: six judgment checks. Type 1, 2, or 3; q to quit. No data is saved.
+
+1. A and B answered the same 200 tasks. What do you analyze?
+  1. The 200 B-A task differences
+  2. Two unrelated headline percentages
+  3. Only the tasks B passed
+Your answer: Correct. Keep the pairs: shared task difficulty can cancel. Choose an independent unit before computing uncertainty.
+
+2. Ten tasks each ran 100 times. How many distinct tasks were sampled?
+  1. 1000
+  2. 10
+  3. 100
+Your answer: Correct. There are 10 tasks and 1000 attempts. Repeats inform within-task behavior; they do not add task coverage.
+
+3. A 95% difference interval is [-2,+6] percentage points. What follows?
+  1. The systems are equivalent
+  2. B is better with 95% probability
+  3. Both modest harm and useful benefit remain compatible
+Your answer: Correct. Failure to reject zero is not equivalence. Compare the interval with a predeclared practical margin.
+
+4. A grader has 98% accuracy; failures occur on 2% of cases. Next step?
+  1. Deploy it
+  2. Inspect failure recall and false alarms
+  3. Round accuracy to 100%
+Your answer: Correct. An always-pass grader already gets 98% accuracy. Inspect a confusion matrix against independently adjudicated labels.
+
+5. You keep rerunning until p<.05. What changed?
+  1. Only convenience
+  2. The error properties of the decision rule
+  3. The model became better
+Your answer: Correct. Ordinary fixed-sample p-values do not justify this stopping rule. Plan the endpoint or use an appropriate sequential design.
+
+6. You saw zero critical failures in 100 independent random cases. Report?
+  1. Failure probability is zero
+  2. Safety is proven
+  3. Zero observed; one-sided 95% upper bound about 3% under the model
+Your answer: Correct. An unobserved failure can still occur. The bound depends on the sampling and independence assumptions.
+
+6/6. For the full readiness task, open lesson 23.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare
+Tasks: 200; attempts/model: 200; independent resampling units assumed: 200 (task)
+Equal-task mean: A=72.00%; B=78.00%; B-A=+6.00 percentage points
+95% paired task percentile bootstrap: [-1.50, +13.50] percentage points
+Resamples: 4000; seed: 7; task-weighted statistic recomputed in each draw.
+B-only passes: 36; A-only passes: 24
+Two-sided exact discordance p-value: 0.1550
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --resamples 100
+Tasks: 200; attempts/model: 200; independent resampling units assumed: 200 (task)
+Equal-task mean: A=72.00%; B=78.00%; B-A=+6.00 percentage points
+95% paired task percentile bootstrap: [-3.52, +13.29] percentage points
+Resamples: 100; seed: 7; task-weighted statistic recomputed in each draw.
+B-only passes: 36; A-only passes: 24
+Two-sided exact discordance p-value: 0.1550
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py sample --p 0.7 --trials 10 --experiments 2000
+Synthetic iid Bernoulli population: p=0.700; n=10; seed=7
+Experiments: 2000; mean estimate: 0.702; SD of estimates: 0.1431
+Theoretical SE: 0.1449
+Wilson coverage in this simulation: 93.3%
+ 0- 10% |  0
+10- 20% |  0
+20- 30% |  2
+30- 40% | # 16
+40- 50% | ##### 64
+50- 60% | ################# 228
+60- 70% | ########################## 364
+70- 80% | ######################################## 550
+80- 90% | ################################### 475
+90-100% | ###################### 301
+Bins include the lower endpoint; only the final bin includes its upper endpoint.
+Coverage varies with n, p, and Monte Carlo error; it need not equal exactly 95%.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py sample --trials 100 --seed 7
+Synthetic iid Bernoulli population: p=0.700; n=100; seed=7
+Experiments: 2000; mean estimate: 0.701; SD of estimates: 0.0469
+Theoretical SE: 0.0458
+Wilson coverage in this simulation: 92.8%
+ 0- 10% |  0
+10- 20% |  0
+20- 30% |  0
+30- 40% |  0
+40- 50% |  0
+50- 60% | # 36
+60- 70% | ############################## 832
+70- 80% | ######################################## 1101
+80- 90% | # 31
+90-100% |  0
+Bins include the lower endpoint; only the final bin includes its upper endpoint.
+Coverage varies with n, p, and Monte Carlo error; it need not equal exactly 95%.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py sample --trials 400 --seed 7
+Synthetic iid Bernoulli population: p=0.700; n=400; seed=7
+Experiments: 2000; mean estimate: 0.700; SD of estimates: 0.0232
+Theoretical SE: 0.0229
+Wilson coverage in this simulation: 94.0%
+ 0- 10% |  0
+10- 20% |  0
+20- 30% |  0
+30- 40% |  0
+40- 50% |  0
+50- 60% |  0
+60- 70% | ################################### 930
+70- 80% | ######################################## 1070
+80- 90% |  0
+90-100% |  0
+Bins include the lower endpoint; only the final bin includes its upper endpoint.
+Coverage varies with n, p, and Monte Carlo error; it need not equal exactly 95%.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py rate 72 100
+Observed pass rate: 72/100 = 72.0%
+95% Wilson interval: [62.5%, 79.9%]
+Assumption: independent Bernoulli trials sampled from the declared population.
+This interval does not cover grader bias, task selection bias, or distribution shift.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py rate 10 10
+Observed pass rate: 10/10 = 100.0%
+95% Wilson interval: [72.2%, 100.0%]
+Assumption: independent Bernoulli trials sampled from the declared population.
+This interval does not cover grader bias, task selection bias, or distribution shift.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py sample --p 0.7 --trials 100
+Synthetic iid Bernoulli population: p=0.700; n=100; seed=7
+Experiments: 2000; mean estimate: 0.701; SD of estimates: 0.0469
+Theoretical SE: 0.0458
+Wilson coverage in this simulation: 92.8%
+ 0- 10% |  0
+10- 20% |  0
+20- 30% |  0
+30- 40% |  0
+40- 50% |  0
+50- 60% | # 36
+60- 70% | ############################## 832
+70- 80% | ######################################## 1101
+80- 90% | # 31
+90-100% |  0
+Bins include the lower endpoint; only the final bin includes its upper endpoint.
+Coverage varies with n, p, and Monte Carlo error; it need not equal exactly 95%.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --resamples 4000 --seed 7
+Tasks: 200; attempts/model: 200; independent resampling units assumed: 200 (task)
+Equal-task mean: A=72.00%; B=78.00%; B-A=+6.00 percentage points
+95% paired task percentile bootstrap: [-1.50, +13.50] percentage points
+Resamples: 4000; seed: 7; task-weighted statistic recomputed in each draw.
+B-only passes: 36; A-only passes: 24
+Two-sided exact discordance p-value: 0.1550
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --resamples 4000 --seed 19
+Tasks: 200; attempts/model: 200; independent resampling units assumed: 200 (task)
+Equal-task mean: A=72.00%; B=78.00%; B-A=+6.00 percentage points
+95% paired task percentile bootstrap: [-1.50, +14.00] percentage points
+Resamples: 4000; seed: 19; task-weighted statistic recomputed in each draw.
+B-only passes: 36; A-only passes: 24
+Two-sided exact discordance p-value: 0.1550
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py power --delta 0.06 --sd 0.5
+Approximate independent pairs needed: 546
+Difference to detect: 6 percentage points; SD of paired differences: 0.5
+Two-sided alpha=0.05; target power=0.8; normal approximation.
+Use a pilot estimate of difference SD, not the SD of one model. Clustering requires a design-aware plan.
+This plans detection against zero, not proof that the effect exceeds a deployment threshold.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py power --delta 0.03 --sd 0.5
+Approximate independent pairs needed: 2181
+Difference to detect: 3 percentage points; SD of paired differences: 0.5
+Two-sided alpha=0.05; target power=0.8; normal approximation.
+Use a pilot estimate of difference SD, not the SD of one model. Clustering requires a design-aware plan.
+This plans detection against zero, not proof that the effect exceeds a deployment threshold.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py power --delta 0.03 --sd 0.35
+Approximate independent pairs needed: 1069
+Difference to detect: 3 percentage points; SD of paired differences: 0.35
+Two-sided alpha=0.05; target power=0.8; normal approximation.
+Use a pilot estimate of difference SD, not the SD of one model. Clustering requires a design-aware plan.
+This plans detection against zero, not proof that the effect exceeds a deployment threshold.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --data labs/data/clustered_tasks.jsonl --unit task
+Tasks: 120; attempts/model: 360; independent resampling units assumed: 120 (task)
+Equal-task mean: A=66.67%; B=76.67%; B-A=+10.00 percentage points
+95% paired task percentile bootstrap: [+5.56, +14.44] percentage points
+Resamples: 4000; seed: 7; task-weighted statistic recomputed in each draw.
+CAUTION: shared clusters detected. Task resampling ignores that dependence; compare --unit cluster.
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --data labs/data/clustered_tasks.jsonl --unit cluster
+Tasks: 120; attempts/model: 360; independent resampling units assumed: 30 (cluster)
+Equal-task mean: A=66.67%; B=76.67%; B-A=+10.00 percentage points
+95% paired cluster percentile bootstrap: [+1.11, +18.89] percentage points
+Resamples: 4000; seed: 7; task-weighted statistic recomputed in each draw.
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --data labs/data/clustered_tasks.jsonl --unit cluster --slice routine
+Tasks: 80; attempts/model: 240; independent resampling units assumed: 20 (cluster)
+Equal-task mean: A=65.00%; B=88.33%; B-A=+23.33 percentage points
+95% paired cluster percentile bootstrap: [+16.67, +30.00] percentage points
+Resamples: 4000; seed: 7; task-weighted statistic recomputed in each draw.
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --data labs/data/clustered_tasks.jsonl --unit cluster --slice sensitive
+Tasks: 40; attempts/model: 120; independent resampling units assumed: 10 (cluster)
+Equal-task mean: A=70.00%; B=53.33%; B-A=-16.67 percentage points
+95% paired cluster percentile bootstrap: [-26.67, -6.67] percentage points
+Resamples: 4000; seed: 7; task-weighted statistic recomputed in each draw.
+CAUTION: few independent units; percentile bootstrap coverage may be poor.
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py bayes 8 10 --alpha 1 --beta 1 --threshold 0.8
+Prior: Beta(1,1); posterior: Beta(9,3)
+Posterior mean: 0.750
+Approximate 95% equal-tail credible interval: [0.484, 0.940]
+Approximate P(p>0.8 | data, model, prior): 0.386
+Monte Carlo draws: 20000; seed: 7. Assumes iid Bernoulli outcomes with one common p.
+Try another prior. Model misspecification and biased task selection are not covered by this posterior.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py bayes 8 10 --alpha 8 --beta 2 --threshold 0.8
+Prior: Beta(8,2); posterior: Beta(16,4)
+Posterior mean: 0.800
+Approximate 95% equal-tail credible interval: [0.604, 0.940]
+Approximate P(p>0.8 | data, model, prior): 0.544
+Monte Carlo draws: 20000; seed: 7. Assumes iid Bernoulli outcomes with one common p.
+Try another prior. Model misspecification and biased task selection are not covered by this posterior.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py bayes 8 10 --alpha 2 --beta 8 --threshold 0.8
+Prior: Beta(2,8); posterior: Beta(10,10)
+Posterior mean: 0.500
+Approximate 95% equal-tail credible interval: [0.290, 0.709]
+Approximate P(p>0.8 | data, model, prior): 0.002
+Monte Carlo draws: 20000; seed: 7. Assumes iid Bernoulli outcomes with one common p.
+Try another prior. Model misspecification and biased task selection are not covered by this posterior.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py multiple --tests 1
+Toy null experiment: independent Uniform(0,1) p-values, every null true.
+Families: 5000; tests/family: 1; seed: 7
+At least one raw p<.05: 5.1%; theoretical: 5.0%
+At least one Bonferroni rejection: 5.1%
+Real eval tests can be dependent. Bonferroni still bounds familywise error when each p-value is valid.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py multiple --tests 20
+Toy null experiment: independent Uniform(0,1) p-values, every null true.
+Families: 5000; tests/family: 20; seed: 7
+At least one raw p<.05: 63.8%; theoretical: 64.2%
+At least one Bonferroni rejection: 5.4%
+Real eval tests can be dependent. Bonferroni still bounds familywise error when each p-value is valid.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py multiple --tests 100
+Toy null experiment: independent Uniform(0,1) p-values, every null true.
+Families: 5000; tests/family: 100; seed: 7
+At least one raw p<.05: 99.4%; theoretical: 99.4%
+At least one Bonferroni rejection: 4.9%
+Real eval tests can be dependent. Bonferroni still bounds familywise error when each p-value is valid.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py peek --experiments 2000 --seed 7
+Toy null: iid Normal(0,1), known SD=1. Two-sided z tests; looks at n=20,40,...,1000.
+Experiments: 2000; seed: 7
+Reject only at planned n=1000: 4.7%
+Reject if any look crosses 1.96: 32.8%
+This is a demonstration of a broken stopping rule, not a sequentially valid test.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py reliability 8 10 3
+One task: 8/10 passes; k=3
+At-least-one success estimator (pass@k): 1.0000
+All-k-success estimator: 0.4667
+Compute per task, then average. Assumes independent, identically distributed attempts within a task.
+These are point estimates, not uncertainty intervals or a policy for selecting a correct answer.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py rare 100
+Zero failures in 100 independent trials.
+Exact one-sided 95% upper failure-probability bound: 0.029513 (2.951%)
+Rule-of-three approximation: 0.030000 (useful for large n).
+Assumes a fixed n, independent trials and constant failure probability; a red-team set is not traffic prevalence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py rare 1000
+Zero failures in 1000 independent trials.
+Exact one-sided 95% upper failure-probability bound: 0.002991 (0.299%)
+Rule-of-three approximation: 0.003000 (useful for large n).
+Assumes a fixed n, independent trials and constant failure probability; a red-team set is not traffic prevalence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py compare --data labs/data/clustered_tasks.jsonl --unit cluster --seed 19
+Tasks: 120; attempts/model: 360; independent resampling units assumed: 30 (cluster)
+Equal-task mean: A=66.67%; B=76.67%; B-A=+10.00 percentage points
+95% paired cluster percentile bootstrap: [+1.11, +18.89] percentage points
+Resamples: 4000; seed: 19; task-weighted statistic recomputed in each draw.
+Within-task attempts are averaged, never counted as new tasks. No within-task nested bootstrap is added.
+Inference assumes independent sampled units, a stable run policy, and adequate coverage of the target population.
+A bootstrap interval is approximate; increasing resamples does not add evaluation evidence.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py rate 0 10
+Observed pass rate: 0/10 = 0.0%
+95% Wilson interval: [0.0%, 27.8%]
+Assumption: independent Bernoulli trials sampled from the declared population.
+This interval does not cover grader bias, task selection bias, or distribution shift.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py power --sd 0.5 --delta 0.03
+Approximate independent pairs needed: 2181
+Difference to detect: 3 percentage points; SD of paired differences: 0.5
+Two-sided alpha=0.05; target power=0.8; normal approximation.
+Use a pilot estimate of difference SD, not the SD of one model. Clustering requires a design-aware plan.
+This plans detection against zero, not proof that the effect exceeds a deployment threshold.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py sample --trials 100 --p 0.7
+Synthetic iid Bernoulli population: p=0.700; n=100; seed=7
+Experiments: 2000; mean estimate: 0.701; SD of estimates: 0.0469
+Theoretical SE: 0.0458
+Wilson coverage in this simulation: 92.8%
+ 0- 10% |  0
+10- 20% |  0
+20- 30% |  0
+30- 40% |  0
+40- 50% |  0
+50- 60% | # 36
+60- 70% | ############################## 832
+70- 80% | ######################################## 1101
+80- 90% | # 31
+90-100% |  0
+Bins include the lower endpoint; only the final bin includes its upper endpoint.
+Coverage varies with n, p, and Monte Carlo error; it need not equal exactly 95%.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py peek
+Toy null: iid Normal(0,1), known SD=1. Two-sided z tests; looks at n=20,40,...,1000.
+Experiments: 2000; seed: 7
+Reject only at planned n=1000: 4.7%
+Reject if any look crosses 1.96: 32.8%
+This is a demonstration of a broken stopping rule, not a sequentially valid test.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py bayes 8 10 --alpha 1 --beta 1
+Prior: Beta(1,1); posterior: Beta(9,3)
+Posterior mean: 0.750
+Approximate 95% equal-tail credible interval: [0.484, 0.940]
+Approximate P(p>0.8 | data, model, prior): 0.386
+Monte Carlo draws: 20000; seed: 7. Assumes iid Bernoulli outcomes with one common p.
+Try another prior. Model misspecification and biased task selection are not covered by this posterior.
+
+[exit 0]

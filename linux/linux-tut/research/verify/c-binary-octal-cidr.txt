@@ -1,0 +1,61 @@
++ umask
++ touch a
+0022
++ mkdir d
++ stat -c '%a %A %n' a d
+644 -rw-r--r-- a
+755 drwxr-xr-x d
++ umask 077
++ touch b
++ mkdir e
++ stat -c '%a %A %n' b e
+600 -rw------- b
+700 drwx------ e
++ umask 033
++ touch c
++ mkdir f
++ stat -c '%a %A %n' c f
+644 -rw-r--r-- c
+744 drwxr--r-- f
++ umask 022
++ printf '%o\n' 420 484 411
++ printf '%o\n' 420
++ echo 7 5 4 493
++ touch s
+644
+744
+633
+644
+7 5 4 493
++ chmod 4755 s
++ stat -c '%a %A %n' s
+4755 -rwsr-xr-x s
++ chmod 1777 d
++ stat -c '%a %A %n' d
+1777 drwxrwxrwt d
++ chmod u=rwx,g=rx,o= a
++ stat -c '%a %A' a
+750 -rwxr-x---
++ chmod 640 a
++ stat -c '%a %A' a
+640 -rw-r-----
++ stat -c '%a %A %n' /tmp /usr/bin/passwd
+1777 drwxrwxrwt /tmp
+4755 -rwsr-xr-x /usr/bin/passwd
+
+### python3 cidr.py
+/8  mask 255.0.0.0       addresses 16,777,216  172.0.0.0 - 172.255.255.255
+/12 mask 255.240.0.0     addresses  1,048,576  172.16.0.0 - 172.31.255.255
+/16 mask 255.255.0.0     addresses     65,536  172.16.0.0 - 172.16.255.255
+/24 mask 255.255.255.0   addresses        256  172.16.0.0 - 172.16.0.255
+/28 mask 255.255.255.240 addresses         16  172.16.0.0 - 172.16.0.15
+172.20.5.9 in 172.16.0.0/12: True
+172.20.5.9 is_private: True
+172.17.0.0/16
+10.1.2.160/28
+10101100000101000000010100001001
+11111111111100000000000000000000
+False False
+ValueError: 10.1.2.170/28 has host bits set
+10.1.2.160/28
+Python 3.12.3

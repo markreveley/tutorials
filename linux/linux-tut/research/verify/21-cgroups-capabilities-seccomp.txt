@@ -1,0 +1,251 @@
+### docker run --rm --memory 256m --cpus 1.5 --pids-limit 100 lt-21-tools:local bash -c cat /proc/self/cgroup; stat -fc %T /sys/fs/cgroup; cat /sys/fs/cgroup/cgroup.controllers; cd /sys/fs/cgroup; for f in memory.max memory.high memory.swap.max cpu.max pids.max memory.current memory.peak pids.current; do echo "$f: $(cat $f)"; done; cat memory.events; findmnt -n -o TARGET,FSTYPE,OPTIONS /sys/fs/cgroup; echo 999999999 > memory.max
+0::/
+cgroup2fs
+cpuset cpu io memory hugetlb pids rdma
+memory.max: 268435456
+memory.high: max
+memory.swap.max: 268435456
+cpu.max: 150000 100000
+pids.max: 100
+memory.current: 2293760
+memory.peak: 4362240
+pids.current: 2
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
+/sys/fs/cgroup cgroup2 ro,nosuid,nodev,noexec,relatime
+bash: line 1: memory.max: Read-only file system
+[exit=1]
+
+### docker run --rm lt-21-tools:local bash -c cd /sys/fs/cgroup; for f in memory.max cpu.max pids.max; do echo "$f: $(cat $f)"; done
+memory.max: max
+cpu.max: max 100000
+pids.max: max
+[exit=0]
+
+### docker run --name lt-21-oom --memory 64m --memory-swap 64m lt-21-tools:local bash -c python3 -c "x=bytearray(200*1024*1024)" 2>/dev/null || tail /dev/zero; echo "child exit=$?"; grep -E "^oom" /sys/fs/cgroup/memory.events; cat /sys/fs/cgroup/memory.peak; echo "carrying on"; exit 0
+child exit=137
+bash: line 1:     8 Killed                  tail /dev/zero
+oom 1
+oom_kill 1
+oom_group_kill 0
+67108864
+carrying on
+[exit=0]
+
+### docker inspect lt-21-oom --format ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}
+ExitCode=0 OOMKilled=true
+[exit=0]
+
+### docker run --rm --cpus 0.5 lt-21-tools:local bash -c timeout 3 bash -c "while :; do :; done"; echo "loop exit=$?"; cat /sys/fs/cgroup/cpu.max; grep -E "nr_periods|nr_throttled|throttled_usec" /sys/fs/cgroup/cpu.stat
+loop exit=124
+50000 100000
+nr_periods 31
+nr_throttled 30
+throttled_usec 1498849
+[exit=0]
+
+### docker run --rm --pids-limit 10 lt-21-tools:local bash -c for i in $(seq 1 15); do sleep 2 & done 2>&1 | head -2; cat /sys/fs/cgroup/pids.max; cat /sys/fs/cgroup/pids.events
+bash: fork: retry: Resource temporarily unavailable
+bash: fork: retry: Resource temporarily unavailable
+10
+max 2
+[exit=0]
+
+### docker run --name lt-21-oom --memory 64m --memory-swap 64m lt-21-tools:local bash -c tail /dev/zero; echo "child exit=$?"; grep oom_kill /sys/fs/cgroup/memory.events; echo "carrying on"
+bash: line 1:     7 Killed                  tail /dev/zero
+child exit=137
+oom_kill 1
+carrying on
+[exit=0]
+
+### docker inspect lt-21-oom --format ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}
+ExitCode=0 OOMKilled=true
+[exit=0]
+
+### docker run --rm lt-21-tools:local bash -c grep -E "^Cap" /proc/self/status; capsh --decode=00000000a80425fb; cat /proc/sys/kernel/cap_last_cap
+CapInh:	0000000000000000
+CapPrm:	00000000a80425fb
+CapEff:	00000000a80425fb
+CapBnd:	00000000a80425fb
+CapAmb:	0000000000000000
+0x00000000a80425fb=cap_chown,cap_dac_override,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_net_bind_service,cap_net_raw,cap_sys_chroot,cap_mknod,cap_audit_write,cap_setfcap
+40
+[exit=0]
+
+### docker run --rm --user 1001 lt-21-tools:local grep -E ^Cap(Eff|Bnd) /proc/self/status
+CapEff:	0000000000000000
+CapBnd:	00000000a80425fb
+[exit=0]
+
+### docker run --rm --cap-drop ALL lt-21-tools:local grep -E ^Cap(Eff|Bnd) /proc/self/status
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+[exit=0]
+
+### docker run --rm --privileged lt-21-tools:local bash -c grep -E "^Cap(Eff|Bnd)" /proc/self/status; capsh --decode=000001ffffffffff | tr "," "
+" | wc -l
+CapEff:	000001ffffffffff
+CapBnd:	000001ffffffffff
+41
+[exit=0]
+
+### docker run --rm lt-21-tools:local bash -c id -u; mount -t tmpfs none /mnt; echo "exit=$?"; ip link set eth0 down; echo "exit=$?"; hostname x; echo "exit=$?"
+0
+mount: /mnt: permission denied.
+       dmesg(1) may have more information after failed mount system call.
+exit=32
+RTNETLINK answers: Operation not permitted
+exit=2
+hostname: you must be root to change the host name
+exit=1
+[exit=0]
+
+### docker run --rm --cap-add NET_ADMIN lt-21-tools:local bash -c ip link set eth0 down && ip -br link show eth0
+eth0@if639       DOWN           6e:0b:49:5d:ac:dc <BROADCAST,MULTICAST> 
+[exit=0]
+
+### docker run --rm --cap-drop DAC_OVERRIDE lt-21-tools:local bash -c id -u; echo key > /home/learner/answer; chown learner /home/learner/answer; chmod 600 /home/learner/answer; ls -l /home/learner/answer; cat /home/learner/answer
+0
+bash: line 1: /home/learner/answer: Permission denied
+chown: cannot access '/home/learner/answer': Permission denied
+chmod: cannot access '/home/learner/answer': Permission denied
+ls: cannot access '/home/learner/answer': Permission denied
+cat: /home/learner/answer: Permission denied
+[exit=1]
+
+### docker run --rm lt-21-tools:local bash -c echo key > /home/learner/answer; chown learner /home/learner/answer; chmod 600 /home/learner/answer; cat /home/learner/answer
+key
+[exit=0]
+
+### docker run --rm --cap-drop ALL lt-21-tools:local bash -c ping -c1 -W1 127.0.0.1 | tail -2; cat /proc/sys/net/ipv4/ping_group_range
+bash: line 1: /usr/bin/ping: Operation not permitted
+0	2147483647
+[exit=0]
+
+### docker run --rm --cap-drop ALL lt-21-tools:local bash -c python3 -V; chown learner /tmp; echo "exit=$?"
+bash: line 1: python3: command not found
+chown: changing ownership of '/tmp': Operation not permitted
+exit=1
+[exit=0]
+
+### docker run --rm --cap-drop NET_RAW lt-21-tools:local bash -c ping -c1 -W1 127.0.0.1 | tail -2
+bash: line 1: /usr/bin/ping: Operation not permitted
+[exit=0]
+
+### docker run --rm --cap-drop ALL --cap-add NET_RAW lt-21-tools:local bash -c getcap /usr/bin/ping; ping -c1 -W1 127.0.0.1 | tail -2
+/usr/bin/ping cap_net_raw=ep
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 0.428/0.428/0.428/0.000 ms
+[exit=0]
+
+### docker run --rm --cap-drop DAC_OVERRIDE lt-21-tools:local bash -c id -u; ls -ld /home/learner; ls /home/learner
+0
+drwxr-x--- 2 learner learner 4096 Sep 21 11:09 /home/learner
+ls: cannot open directory '/home/learner': Permission denied
+[exit=2]
+
+### docker info --format {{json .SecurityOptions}}
+["name=seccomp,profile=unconfined","name=cgroupns"]
+[exit=0]
+
+### docker run --rm lt-21-tools:local grep -E NoNewPrivs|Seccomp /proc/self/status
+NoNewPrivs:	0
+Seccomp:	0
+Seccomp_filters:	0
+[exit=0]
+
+### docker run --rm --security-opt seccomp=builtin lt-21-tools:local grep -E NoNewPrivs|Seccomp /proc/self/status
+NoNewPrivs:	0
+Seccomp:	2
+Seccomp_filters:	1
+[exit=0]
+
+### docker run --rm --security-opt seccomp=builtin lt-21-tools:local bash -c unshare --user --map-root-user id; echo "exit=$?"; python3 -c 1 2>/dev/null; date -s 2030-01-01 >/dev/null; echo "exit=$?"
+unshare: unshare failed: Operation not permitted
+exit=1
+date: cannot set date: Operation not permitted
+exit=1
+[exit=0]
+
+### docker run --rm lt-21-tools:local bash -c unshare --user --map-root-user id
+uid=0(root) gid=0(root) groups=0(root)
+[exit=0]
+
+### docker run --rm --security-opt seccomp=builtin --cap-add SYS_ADMIN lt-21-tools:local bash -c mount -t tmpfs none /mnt; echo "exit=$?"
+exit=0
+[exit=0]
+
+### docker run --rm --security-opt seccomp=builtin --privileged lt-21-tools:local grep -E Seccomp: /proc/self/status
+docker: Error response from daemon: Decoding seccomp profile failed: invalid character 'b' looking for beginning of value
+
+Run 'docker run --help' for more information
+[exit=125]
+
+### docker run --rm lt-21-tools:local bash -c cp /usr/bin/id /usr/local/bin/suid-id; chmod u+s /usr/local/bin/suid-id; ls -l /usr/local/bin/suid-id; su learner -c "id -u; suid-id -u; grep -E \"NoNewPrivs|CapEff\" /proc/self/status"
+-rwsr-xr-x 1 root root 67952 Sep 21 21:14 /usr/local/bin/suid-id
+1001
+0
+CapEff:	0000000000000000
+NoNewPrivs:	0
+[exit=0]
+
+### docker run --rm --security-opt no-new-privileges lt-21-tools:local bash -c cp /usr/bin/id /usr/local/bin/suid-id; chmod u+s /usr/local/bin/suid-id; su learner -c "id -u; suid-id -u; grep NoNewPrivs /proc/self/status"
+1001
+1001
+NoNewPrivs:	1
+[exit=0]
+
+### docker run --rm --user 1001 lt-21-tools:local bash -c grep CapEff /proc/self/status
+CapEff:	0000000000000000
+[exit=0]
+
+### docker run --rm --mount type=volume,src=lt-21-vol,dst=/tests,readonly lt-21-tools:local bash -c findmnt -n -o TARGET,VFS-OPTIONS /tests; echo "assert True" > /tests/test_hidden.py; mount -o remount,rw /tests; echo "remount exit=$?"
+/tests ro,relatime
+bash: line 1: /tests/test_hidden.py: Read-only file system
+mount: /tests: permission denied.
+       dmesg(1) may have more information after failed mount system call.
+remount exit=32
+[exit=0]
+
+### docker run --rm --cap-add SYS_ADMIN --mount type=volume,src=lt-21-vol,dst=/tests,readonly lt-21-tools:local bash -c echo "assert True" > /tests/test_hidden.py; mount -o remount,rw /tests; echo "remount exit=$?"; echo "assert True" > /tests/test_hidden.py && cat /tests/test_hidden.py
+bash: line 1: /tests/test_hidden.py: Read-only file system
+remount exit=0
+assert True
+[exit=0]
+
+### docker run --rm --user 1001 --cap-drop ALL --security-opt no-new-privileges --security-opt seccomp=builtin --memory 512m --pids-limit 128 lt-21-tools:local bash -c id -u; grep -E "CapEff|CapBnd|NoNewPrivs|Seccomp:" /proc/self/status; cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/pids.max
+1001
+CapEff:	0000000000000000
+CapBnd:	0000000000000000
+NoNewPrivs:	1
+Seccomp:	2
+536870912
+128
+[exit=0]
+
+### docker run --rm --memory 512m --cpus 0.25 lt-21-tools:local cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max
+536870912
+25000 100000
+[exit=0]
+
+### docker run --rm --cap-drop ALL --cap-add NET_BIND_SERVICE lt-21-tools:local bash -c capsh --decode=$(grep CapEff /proc/self/status | cut -f2)
+0x0000000000000400=cap_net_bind_service
+[exit=0]
+
+### docker run --rm lt-21-tools:local bash -c cp /usr/bin/grep /usr/local/bin/suid-grep; chmod u+s /usr/local/bin/suid-grep; su learner -c "grep CapEff /proc/self/status; suid-grep CapEff /proc/self/status"
+CapEff:	0000000000000000
+CapEff:	00000000a80425fb
+[exit=0]
+
+### docker run --rm --security-opt no-new-privileges lt-21-tools:local bash -c cp /usr/bin/grep /usr/local/bin/suid-grep; chmod u+s /usr/local/bin/suid-grep; su learner -c "suid-grep CapEff /proc/self/status"
+CapEff:	0000000000000000
+[exit=0]
+
+### nnp second run, both greps
+CapEff:	0000000000000000
+CapEff:	0000000000000000
+NoNewPrivs:	1

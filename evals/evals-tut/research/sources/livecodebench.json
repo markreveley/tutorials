@@ -1,0 +1,81 @@
+{
+  "id": "livecodebench",
+  "citation": {
+    "authors": "Naman Jain, King Han, Alex Gu, Wen-Ding Li, Fanjia Yan, Tianjun Zhang, Sida Wang, Armando Solar-Lezama, Koushik Sen, Ion Stoica",
+    "title": "LiveCodeBench: Holistic and Contamination Free Evaluation of Large Language Models for Code",
+    "venue": "ICLR 2025 (poster); arXiv:2403.07974",
+    "year": "2024 (arXiv v1 Mar 2024); ICLR 2025",
+    "url": "https://arxiv.org/abs/2403.07974"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2403.07974",
+    "https://arxiv.org/pdf/2403.07974",
+    "https://arxiv.org/html/2403.07974",
+    "https://openreview.net/forum?id=chfJJYC3iL (located via search; ICLR 2025 poster confirmed)"
+  ],
+  "access": "full",
+  "version_note": "Full text verified against arXiv v2 PDF (6 Jun 2024), which hosts 511 problems (May 2023-May 2024). The ICLR 2025 camera-ready abstract states 'over six hundred coding problems that were published between May 2023 and Aug 2024.' All quotes below are from the arXiv v2 PDF.",
+  "claims": [
+    {
+      "planned": "Problems tagged with release dates from LeetCode/AtCoder/CodeForces; evaluate only on post-cutoff problems to detect contamination — confirm",
+      "verdict": "confirmed",
+      "finding": "Problems are scraped from contests on LeetCode, AtCoder, and CodeForces and each is tagged with its contest/release date. For newer models, evaluation is restricted to problems released after the model's training cutoff date ('scrolling through time'), which both avoids contamination and detects it (a performance drop after the cutoff signals the older problems were in training data).",
+      "quote": "we collect problems from weekly contests on competition platforms and tag them with a release date. Next, for newer models, we only consider problems released after the model's cutoff date to ensure that the model has not encountered the exact problem in the training dataset. [...] we associate the contest date D for each problem. The release date allows us the measure the performance of LLMs over different time windows by filtering problems based on whether the problem release date falls within a time window (referred to as 'scrolling' through time).",
+      "location": "Section 1 (Introduction, finding 1) and Section 3.1 (Data Collection, 'Scrolling through time')"
+    },
+    {
+      "planned": "Demonstrated likely contamination: e.g., DeepSeek models' performance dropped sharply on problems released after model cutoff — confirm which models/numbers",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with specifics: DS-Ins-33B (DeepSeek-Coder-33B-Instruct) shows a stark drop on LeetCode problems released after Aug 2023 (right before DeepSeek's Sep 2023 release). DS-Base-33B drops from Pass@1 ~60 on May 2023 LeetCode problems to Pass@1 ~0 on September problems, implying contamination entered at pretraining. GPT-4-O drops on problems released since November 2023 (its official cutoff). Codestral: Pass@1 36.5 on May'23-Jan'24 problems vs 28.3 on problems since Feb'24. Important nuance: the drop is primarily on LeetCode only; AtCoder performance is relatively stable. Negative controls: GPT-4-Turbo (1106, cutoff Apr 2023) and Claude-3 (cutoff Aug 2023) show no drastic variation across months.",
+      "quote": "We notice a stark drop in the performance of DS-Ins-33B model after Aug. 2023 (right before its release date), which suggests that the earlier problems might indeed be contaminated. [...] performance of the GPT-4-O model drops on problems released since November (its official cutoff date). [...] even the DS-Base-33B model also suffers from contamination dropping from Pass@1 ~60 in May problems to Pass@1 ~0 in September LeetCode problems. [...] Finally, Codestral achieves Pass@1 36.5 on problems released between May'23 and Jan'24 and Pass@1 28.3 on problems since Feb'24.",
+      "location": "Section 5.1 (Avoiding Contamination), Figure 1"
+    },
+    {
+      "planned": "Holistic: also tests self-repair, code execution, test output prediction — confirm scenario list",
+      "verdict": "confirmed",
+      "finding": "Confirmed: four scenarios total — code generation, self-repair, code execution, and test output prediction. Self-repair: fix an incorrect program given the failing test and execution feedback. Code execution: predict the output of a given program on a given input. Test output prediction: produce the expected output for a problem input from the natural-language description alone.",
+      "quote": "we host four different scenarios, namely code generation, self-repair, code execution, and test output prediction. [...] Self-Repair. Fix an incorrect program from execution information, evaluating the ability to debug code from feedback. [...] Code Execution. 'Execute' a program on an input, evaluating code comprehension ability. [...] Test Output Prediction. Solve the natural language task on a specified input, evaluating the ability to generate testing outputs.",
+      "location": "Section 1 (finding 2, 'Holistic Evaluation') and Figure 2 caption"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "HumanEval overfitting is directly demonstrated: models split into two clusters, and the cluster that does well on HumanEval+ but poorly on LiveCodeBench is almost entirely fine-tuned open-access models — a concrete lesson in benchmark overfitting and why high scores on a saturated benchmark may not generalize.",
+      "quote": "the models cluster into two groups [...] models shaded in red [...] perform well only on HumanEval+ but not as well on LiveCodeBench. Interestingly, the green-shaded cluster contains base models or closed-access models, while the red-shaded cluster primarily comprises fine-tuned variants of open-access models.",
+      "numbers": "Correlation between HumanEval+ and LCB-Easy Pass@1 is only 0.72. Example: DS-Ins-1.3B scores 59.8% Pass@1 on HumanEval+ but only 26.3% on LCB-Easy. DS-Ins-6.7B and CodeQwen beat Claude-3-Sonnet on HumanEval+ but are >20 points behind on LCB-Easy."
+    },
+    {
+      "point": "Contamination is platform-specific: the post-cutoff drop appears primarily on LeetCode problems while AtCoder performance is stable across months — evidence that contamination analysis must be disaggregated, not averaged.",
+      "quote": "we find that this drop in performance primarily occurs for the LeetCode problems only and that the model performance is relatively smooth across the months for problems from other platforms.",
+      "numbers": "Figure 11 shows stable AtCoder performance across periods (possible exception of May and June)."
+    },
+    {
+      "point": "Negative controls matter: models whose training predates the benchmark window (GPT-4-Turbo 1106, cutoff Apr 2023; Claude-3, cutoff Aug 2023) show no drastic month-to-month variation, ruling out 'problems just got harder over time' as the explanation for DeepSeek's drop.",
+      "quote": "GPT-4-Turbo (1106-preview variant) and Claude-3s have cutoff dates April 2023 and August 2023 respectively. Irrespective of the release or cutoff dates, we do not find any drastic performance variations across the months, as shown in Figure 12, particularly compared to the DeepSeek models.",
+      "numbers": "Cutoffs: GPT-4-Turbo Apr 2023, Claude-3 Aug 2023; releases: GPT-4-Turbo Nov 2023, Gemini-Pro Dec 2023, Mistral-L Feb 2024, Claude-3 Mar 2024."
+    },
+    {
+      "point": "The four scenarios are highly correlated but not interchangeable: rankings are mostly consistent, yet relative gaps shift by scenario (e.g., GPT-4-Turbo extends its lead over GPT-4 in self-repair) — supports teaching that a single metric hides capability differences.",
+      "quote": "the relative order of models remains mostly consistent across the scenarios. This is also supported by high correlations between Pass@1 metric across the scenarios - over 0.88 across all pairs",
+      "numbers": "Pairwise Pass@1 correlations: 0.98 generation vs self-repair; 0.96 test output prediction vs code execution; 0.89 generation vs execution; >0.88 all pairs."
+    },
+    {
+      "point": "Practical contamination mitigation in the paper's own evaluations: they didn't discard DeepSeek, they restricted the eval window to post-cutoff problems for all model comparisons.",
+      "quote": "To overcome contamination issues in DeepSeek models, we only consider problems released since Sep 2023 for all evaluations below.",
+      "numbers": "Sep 2023 cutoff window applied to all Section 5.2 comparisons; 18 base + 34 instruction-tuned models evaluated."
+    },
+    {
+      "point": "Benchmark construction choices for validity: problems sourced from platforms with user-validated quality, ~17 tests per problem on average (LLM-assisted via input generators rather than direct LLM-generated inputs), and difficulty filtering because raw competition problems give near-zero scores with low variance (GPT-4's CodeForces Elo is 392, bottom 5 percentile), which artificially compresses model differences.",
+      "quote": "for every problem, we provide a good number of tests (about 17 on average) for meaningful and robust evaluations [...] GPT-4 achieving an average CodeForces rating (ELO) of 392, placing it in the bottom 5 percentile [...] instead of generating inputs directly using the LLM, we construct generators that sample inputs based on the problem specifications using in context learning.",
+      "numbers": "~17 tests/problem; GPT-4 Elo 392 (bottom 5%); 511 problems in v2 (May 2023-May 2024); HumanEval+ found up to 8% performance drop when tests were strengthened."
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say the DeepSeek drop was '~60% to ~0%' for the instruct model: the explicit Pass@1 ~60 -> ~0 (May -> September LeetCode) figure is stated for DS-Base-33B; for DS-Ins-33B the paper says 'stark drop' after Aug 2023 (shown in Figure 1) without quoting those exact numbers in text.",
+    "The drop point for DeepSeek is tied to its Sep 2023 RELEASE date (used as a normalized cutoff since the training cutoff was unpublished), whereas GPT-4-O's November date is its official training cutoff — these are different kinds of dates and the paper distinguishes them.",
+    "The benchmark is not LeetCode-only: three platforms (LeetCode, AtCoder, CodeForces), but the contamination signal appears mainly on LeetCode.",
+    "Problem counts differ by version: ~400 (v1), 511 / 'over five hundred' May 2023-May 2024 (arXiv v2), 'over six hundred' May 2023-Aug 2024 (ICLR 2025 camera-ready). LiveCodeBench is a rolling, continuously updated benchmark, so quote a version when citing counts.",
+    "Test output prediction is not the same as code execution: execution gives the model the program; test output prediction gives only the natural-language problem statement plus an input."
+  ],
+  "notes_for_authors": "Strong primary source for the contamination tier. The cleanest teaching figure is Figure 1 (month-by-month LeetCode performance with the DeepSeek cliff at its release date and GPT-4-O's drop at its November cutoff). Pair the DeepSeek finding with the two control observations (stable AtCoder performance; stable GPT-4-Turbo/Claude-3 across months) to teach causal hygiene: a longitudinal drop only indicates contamination when other models and other platforms don't show it. The HumanEval-overfitting scatter (Figure 5, r=0.72, DS-Ins-1.3B 59.8% vs 26.3%) is the best single exhibit for 'benchmark scores are not construct validity.' Cite as ICLR 2025 (OpenReview chfJJYC3iL); quotes above were verified against arXiv v2 (June 2024), so use v2's 511-problem count or the ICLR version's 600+ count consistently, not both."
+}

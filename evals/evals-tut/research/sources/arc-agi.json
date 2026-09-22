@@ -1,0 +1,77 @@
+{
+  "id": "arc-agi",
+  "citation": {
+    "authors": "François Chollet et al. (ARC Prize Foundation)",
+    "title": "ARC-AGI / ARC Prize: benchmark datasets, technical guide, and model testing policy",
+    "venue": "arcprize.org",
+    "year": "2024-2026 (ongoing; ARC-AGI-1 dataset originally 2019)",
+    "url": "https://arcprize.org/arc-agi"
+  },
+  "fetched_urls": [
+    "https://arcprize.org/arc-agi",
+    "https://arcprize.org/guide",
+    "https://arcprize.org/arc-agi/1",
+    "https://arcprize.org/guide/1",
+    "https://arcprize.org/arc-agi/2",
+    "https://arcprize.org/policy",
+    "https://arcprize.org/leaderboard",
+    "https://arcprize.org/competitions/2025"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Dataset split architecture: public training, public eval, semi-private eval (for public leaderboard, exposed to third-party APIs), private eval (compute-limited, no internet) — confirm exact split design and rationale",
+      "verdict": "confirmed",
+      "finding": "The four-way split is confirmed, but exact task counts depend on benchmark version. ARC-AGI-1 (arcprize.org/arc-agi/1): 400 public training, 400 public eval, 100 semi-private eval (introduced mid-2024, hand-selected), 100 private eval. ARC-AGI-2 (arcprize.org/arc-agi/2 and /guide/1): 1,000 public training, 120 public eval, 120 semi-private, 120 private. Semi-private drives the public ARC-AGI leaderboard and Kaggle live contest standings and may have been exposed to limited third parties via API; private drives the Kaggle final contest leaderboard with bounded compute and no internet access (per the model testing policy at arcprize.org/policy).",
+      "quote": "Semi-private: '\"Semi\" means these tasks may have been exposed to limited third-parties eg. via API' ... 'used for Kaggle live contest leaderboard and ARC Prize leaderboard.' Private: '\"Private\" means these tasks have not been exposed to third-parties' ... 'used for Kaggle final contest leaderboard.' Policy page: the Private set is for 'open-source models with constraints including bounded compute and no internet access', while the Semi-Private set has 'no limitations on internet access or compute'.",
+      "location": "arcprize.org/arc-agi/2 (dataset table); arcprize.org/arc-agi/1 (ARC-AGI-1 counts); arcprize.org/policy (constraints)"
+    },
+    {
+      "planned": "Rationale: protecting against contamination/overfitting while allowing commercial-API testing — confirm stated reasoning",
+      "verdict": "confirmed",
+      "finding": "Stated rationale matches: private tasks are kept private specifically so models cannot be trained on them; the semi-private set exists so closed-source commercial models can be tested over the internet (which necessarily exposes tasks to third-party APIs) while the foundation works with providers to prevent retention; score agreement between semi-private and public eval sets is used as an overfitting check.",
+      "quote": "'These tasks are private to ensure models may not be trained on them.' (guide/1) — 'Introduced in mid-2024, this set of 100 tasks was hand selected to use as a semi-private hold out set when testing closed source models.' (arc-agi/1) — 'We will work closely with model providers to ensure that no data from the Semi-Private Evaluation set is retained.' and 'Any APIs called must be publicly and commercially available for others to use.' (policy) — 'Scores are comparable across these sets (<1pp expected), assuming no overfitting.' (arc-agi/2)",
+      "location": "arcprize.org/guide/1 (private set rationale); arcprize.org/arc-agi/1 (semi-private origin); arcprize.org/policy (retention + API rules)"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Score agreement across calibrated splits is used as a live contamination/overfitting detector: new leaderboard scores are only accepted when semi-private and public eval results agree.",
+      "quote": "'New scores are accepted when the Semi-Private and Public Evaluation sets are in good agreement.' (policy) and 'Private Evaluation, Public Evaluation and Semi-Private Evaluation sets are now calibrated to be roughly the same difficulty (<1pp) as measured by human & AI performance.' (guide/1)",
+      "numbers": "<1 percentage point expected difficulty difference between splits"
+    },
+    {
+      "point": "ARC-AGI-2 eval sets are difficulty-calibrated via large-scale human testing, with a human-solvability floor on every eval task.",
+      "quote": "'100% of tasks have been solved by at least 2 humans (many by more) in under 2 attempts.' Calibration was done via controlled human testing with 400+ participants, ensuring 'Scores are comparable across these sets (<1pp expected), assuming no overfitting.'",
+      "numbers": "400+ human participants; pass@2; every eval task solved by >=2 humans"
+    },
+    {
+      "point": "The guide explicitly warns researchers against soft contamination — leaking eval information by iterating against the eval score, not just by training on the data.",
+      "quote": "'To ensure fair evaluation results, be sure not to leak information from the evaluation set into your algorithm (e.g., by looking at the tasks in the evaluation set yourself during development, or by repeatedly modifying an algorithm while using its evaluation score as feedback.)'",
+      "numbers": ""
+    },
+    {
+      "point": "Training and eval splits are deliberately NOT difficulty-matched in ARC-AGI-1: the training set is easier, while public eval matches the private test set difficulty — so train-set scores overstate capability.",
+      "quote": "'The public training set consists of simpler tasks whereas the public evaluation set is roughly the same level of difficulty as the private test set.' ARC-AGI-2 training is 'Uncalibrated, public, a spectrum of difficulty ranging from very easy to very difficult'.",
+      "numbers": "ARC-AGI-1: 400 train / 400 public eval / 100 semi-private / 100 private; ARC-AGI-2: 1,000 train / 120 / 120 / 120"
+    },
+    {
+      "point": "The leaderboard imposes cost constraints as part of the measurement contract, treating efficiency as part of the result.",
+      "quote": "'Only systems which required less than $10,000 to run are shown' (leaderboard); '$10,000 USD is the maximum amount that can be spent on runtime costs, including calling commercial APIs.' (policy); 2025 Kaggle competition reported 'Cost per task: USD $0.20'.",
+      "numbers": "$10,000 max runtime cost; $0.20/task in the 2025 competition"
+    },
+    {
+      "point": "The semi-private set is an explicit trust compromise, not a guarantee: the foundation relies on provider agreements and only verifies commercially available systems.",
+      "quote": "'We will work closely with model providers to ensure that no data from the Semi-Private Evaluation set is retained.' ... 'We never verify untrusted non-open-source, non-commercial systems.' ... 'Any APIs called must be publicly and commercially available for others to use.'",
+      "numbers": "Semi-private set introduced mid-2024; 100 tasks (ARC-AGI-1), 120 tasks (ARC-AGI-2)"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not cite a single set of task counts as 'the ARC-AGI splits' — ARC-AGI-1 is 400/400/100/100 and ARC-AGI-2 is 1,000/120/120/120. The course should specify which version it means.",
+    "The semi-private set is not secure against contamination — the site itself says '\"Semi\" means these tasks may have been exposed to limited third-parties eg. via API'. It is a managed-risk compromise, not a sealed holdout.",
+    "The public ARC Prize leaderboard runs on the SEMI-private set (no compute/internet limits, commercial APIs allowed); the PRIVATE set is only used for the Kaggle competition (open-source, bounded compute, no internet). Don't swap these.",
+    "The semi-private set did not exist from the start — it was 'Introduced in mid-2024' for ARC-AGI-1, after the original 2019 dataset.",
+    "ARC-AGI-1 originally had only train + eval + private test (Kaggle 2020); the four-way architecture is the current ARC Prize-era design."
+  ],
+  "notes_for_authors": "Both planned claims are confirmed with exact quotes. The cleanest single source for the split-design table is arcprize.org/arc-agi/2 (ARC-AGI-2), which states the semi/private distinction verbatim; arcprize.org/policy supplies the compute-limited/no-internet constraint for the private set and the contamination-management process (provider retention agreements, score-agreement gating). Note the top-level pages arcprize.org/arc-agi and arcprize.org/guide are navigation shells — the substantive content lives at /arc-agi/1, /arc-agi/2, /guide/1, and /policy; cite those deep URLs. The strongest teaching hook: ARC Prize operationalizes contamination detection statistically — calibrated splits within <1pp difficulty plus the rule that new scores are only accepted when semi-private and public eval agree, so divergence itself flags overfitting. Also note one typo-grade quirk in the source: guide/1 says public eval 'contains 120 task files for to test the performance' (sic)."
+}

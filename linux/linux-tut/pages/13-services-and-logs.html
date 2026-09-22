@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Services, Init, and Logs · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 3 · Processes</p>
+    <h1>Services, init, and logs</h1>
+    <p class="lede">
+      This page answers audit question 5 — <em>where are the logs?</em> — for the two kinds of machine
+      you will meet: a real VM, where systemd supervises long-running software and keeps a journal,
+      and a container, where there is usually no supervisor and the only log is whatever the main
+      process printed. When a rollout dies and the transcript doesn't say why, the answer is in one
+      of these places.
+    </p>
+
+    <h2 id="two-worlds">Two worlds</h2>
+    <p>
+      A <span class="term" data-g="daemon">daemon</span> or <em>service</em> is a program meant to run
+      indefinitely in the background: a web server, the Docker daemon, your eval harness's worker.
+      Something must start it at boot, restart it if it crashes, stop it cleanly, and keep what it
+      prints. On a VM that something is the <span class="term" data-g="init">init system</span>. In a
+      container, by design, it is mostly nothing.
+    </p>
+    <div class="diagram">  VM / bare metal                       container
+  ───────────────                       ─────────
+  kernel boots                          runtime starts ONE command
+    └─ PID 1 = systemd                    └─ PID 1 = your app (or a shell)
+         ├─ ssh.service                        └─ its children
+         ├─ docker.service
+         ├─ eval-worker.service         no supervisor, no restart policy
+         └─ systemd-journald  ◀── logs  inside; nobody collects files in
+                                        /var/log
+  logs:  journalctl, /var/log/*         logs:  PID 1's stdout + stderr,
+         dmesg (kernel)                        captured OUTSIDE by the
+                                               runtime → docker logs</div>
+    <div class="callout">
+      <span class="label">Depth triage</span>
+      <p>systemd is a large system. For evals work, sort it like this:</p>
+      <table>
+        <tr><th>Learn to use</th><th>Recognise when you see it</th><th>Leave to a platform/SRE role</th></tr>
+        <tr><td><code>systemctl status</code>, <code>--failed</code>, <code>restart</code>;
+          <code>journalctl -u / --since / -p / -k</code>; <code>docker logs</code>;
+          <code>/var/log/apt</code> and <code>dpkg.log</code>; <code>dmesg</code></td>
+          <td>A unit file's <code>[Service]</code> section; <code>enable</code> vs <code>start</code>;
+          restart policies; log rotation config; journal persistence</td>
+          <td>Writing targets, timers, socket activation; dependency ordering; journald tuning and
+          remote log shipping; cgroup delegation</td></tr>
+      </table>
+      <p>The aim is to read a sandbox host's state and pull evidence from it, not to administer it.</p>
+    </div>
+
+    <h2 id="systemd">On a VM: systemd</h2>
+    <p>
+      When a Linux machine boots, the <span class="term" data-g="kernel">kernel</span> initialises
+      hardware, mounts the root filesystem, and starts exactly one user-space program as
+      <span class="term" data-g="pid-1">PID 1</span>. Everything else descends from it
+      (<a href="09-processes.html">page 9</a>). On Ubuntu 24.04 that program is
+      <span class="term" data-g="systemd">systemd</span>, version 255: "a system and service manager
+      for Linux operating systems" which, when run as PID 1, "acts as init system that brings up and
+      maintains userspace services."<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.html" title="systemd(1), freedesktop.org">[systemd]</a>
+    </p>
+    <p>
+      systemd manages <span class="term" data-g="unit">units</span>, each described by a small text
+      file. There are eleven unit types (service, socket, timer, mount, target…); you will deal
+      almost only with <code>.service</code> units. Unit files installed by packages live in
+      <code>/usr/lib/systemd/system</code>; ones an administrator writes go in
+      <code>/etc/systemd/system</code>, which takes
+      priority.<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html" title="systemd.unit(5): unit file load path">[systemd]</a>
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — nothing in this section was run in the container lab</span>
+      <p>systemd needs to be PID 1 of a real machine, and Docker Desktop cannot provide that
+      reliably. So this section shows no systemd output: commands are described from the manual, and
+      the exercises that use them are marked <strong>VM lab</strong>. What the container lab
+      <em>can</em> show is the failure you get when you try anyway — worth recognising when an
+      agent tries it:</p>
+<pre class="term"><code><span class="p">#</span> systemctl status
+<span class="o">System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to connect to bus: Host is down</span>
+<span class="p">#</span> journalctl --no-pager -n 3
+<span class="o">No journal files were found.
+-- No entries --</span></code></pre>
+      <p>That is from a container where the <code>systemd</code> package had been installed by hand.
+      In a stock <code>ubuntu:24.04</code> image the commands do not exist at all (exit 127). An
+      agent that answers "start the server" with <code>systemctl start nginx</code> in a container
+      has made a Linux-fluency error; the fix is to run the program directly.</p>
+    </div>
+
+    <h3 id="systemctl">The systemctl working set</h3>
+    <table>
+      <tr><th>Command</th><th>What it does</th></tr>
+      <tr><td><code>systemctl status UNIT</code></td><td>Shows "runtime status information … followed by most recent log data from the journal":<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemctl.html" title="systemctl(1): status">[systemd]</a> whether it is active or failed, its main PID, its cgroup's process tree, the last log lines. The first command to run on any service.</td></tr>
+      <tr><td><code>systemctl start | stop | restart UNIT</code></td><td>Change the running state now.</td></tr>
+      <tr><td><code>systemctl enable | disable UNIT</code></td><td>Change whether it starts <em>at boot</em>. <code>enable</code> "does not have the effect of also starting" the unit; add <code>--now</code> for both.<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemctl.html" title="systemctl(1): enable">[systemd]</a></td></tr>
+      <tr><td><code>systemctl list-units --type=service --state=running</code></td><td>What is running — audit question 1 at the service level.</td></tr>
+      <tr><td><code>systemctl --failed</code></td><td>Units in the failed state. On a healthy host: none.</td></tr>
+    </table>
+    <p>
+      The enable/start split is the classic trap: a worker you <code>start</code>ed by hand runs fine
+      until the host reboots for a kernel update at 02:00, and the next morning's eval has half its
+      capacity.
+    </p>
+
+    <h3 id="unit-file">Reading a unit file</h3>
+    <p>
+      You will more often read unit files than write them. Here is one for a hypothetical eval
+      worker (it passes <code>systemd-analyze verify</code> on systemd 255 once the user and paths it
+      names exist):
+    </p>
+<pre><code>[Unit]
+Description=Eval worker (pulls rollouts from the queue, drives sandboxes)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+User=evalworker
+WorkingDirectory=/opt/eval-worker
+EnvironmentFile=/etc/eval-worker/env
+Environment=LC_ALL=C TZ=UTC
+ExecStart=/opt/eval-worker/venv/bin/python -m worker --concurrency 8
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+    <table>
+      <tr><th>Line</th><th>Meaning</th><th>Why an evals engineer reads it</th></tr>
+      <tr><td><code>ExecStart=</code></td><td>The command run when the service starts.<a class="cite" href="https://man7.org/linux/man-pages/man5/systemd.service.5.html" title="systemd.service(5): ExecStart=">[systemd]</a> An absolute path, no shell: no <code>PATH</code> lookup, no <code>.bashrc</code>.</td><td>The real concurrency and flags, as opposed to what the README says.</td></tr>
+      <tr><td><code>User=</code></td><td>The user the processes run as. For system services the default is root.<a class="cite" href="https://man7.org/linux/man-pages/man5/systemd.exec.5.html" title="systemd.exec(5): User=, Group=">[systemd]</a></td><td>A missing <code>User=</code> means the harness is root on the sandbox host (<a href="07-users-groups-root.html">page 7</a>).</td></tr>
+      <tr><td><code>WorkingDirectory=</code></td><td>The directory the process starts in; if unset, <code>/</code>.<a class="cite" href="https://man7.org/linux/man-pages/man5/systemd.exec.5.html" title="systemd.exec(5): WorkingDirectory=">[systemd]</a></td><td>Where relative paths in its config and its result files resolve.</td></tr>
+      <tr><td><code>Environment=</code>, <code>EnvironmentFile=</code></td><td>The service's environment variables, inline or from a file of <code>NAME=value</code> lines.<a class="cite" href="https://man7.org/linux/man-pages/man5/systemd.exec.5.html" title="systemd.exec(5): Environment=, EnvironmentFile=">[systemd]</a> Nothing from your login shell is inherited.</td><td>Where the API keys are. systemd's manual itself warns that "environment variables are not suitable for passing secrets", for the reasons on <a href="11-environment-and-secrets.html">page 11</a>.</td></tr>
+      <tr><td><code>Restart=on-failure</code></td><td>Restart after a non-zero exit, a fatal signal, or a timeout — not after a clean exit. The default is <code>no</code>.<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html" title="systemd.service(5): Restart=">[systemd]</a></td><td>A worker that crashes and silently restarts mid-run may re-queue or drop rollouts. Restarts show in the journal; look for them.</td></tr>
+      <tr><td><code>TimeoutStopSec=</code></td><td>On stop, systemd sends SIGTERM to every process in the unit's cgroup, waits this long, then sends SIGKILL. The manager-wide default is 90 s.<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemd-system.conf.html" title="systemd-system.conf(5): DefaultTimeoutStopSec= defaults to 90 s; systemd.kill(5) KillMode=control-group">[systemd]</a></td><td>The same TERM-wait-KILL protocol as <code>docker stop</code>'s 10 s (<a href="10-signals-exit-codes.html">page 10</a>). Rollouts in flight when the worker is restarted die with 137 or 143 — teardown, not model failure.</td></tr>
+      <tr><td><code>WantedBy=</code></td><td>What <code>enable</code> hooks the unit into, so it starts at boot.</td><td></td></tr>
+    </table>
+
+    <h3 id="journal">The journal</h3>
+    <p>
+      systemd starts every service "with standard output and standard error connected to the journal
+      by default",<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html" title="systemd-journald.service(8)">[systemd]</a>
+      and the <span class="term" data-g="journal">journal</span> also collects kernel messages and
+      classic <span class="term" data-g="syslog">syslog</span> messages. One store, indexed by unit,
+      time, and priority, read with <code>journalctl</code>:
+    </p>
+    <table>
+      <tr><th>Flag</th><th>Selects</th></tr>
+      <tr><td><code>-u UNIT</code></td><td>One service's output: <code>journalctl -u eval-worker</code></td></tr>
+      <tr><td><code>--since</code>, <code>--until</code></td><td>A time window: <code>--since "03:00" --until "03:30"</code>, <code>--since yesterday</code>, <code>--since "2 hours ago"</code></td></tr>
+      <tr><td><code>-p err</code></td><td>That priority <em>and more important</em> (levels run emerg 0 … debug 7)</td></tr>
+      <tr><td><code>-k</code></td><td>Kernel messages only, current boot — where OOM kills are</td></tr>
+      <tr><td><code>-b</code>, <code>-b -1</code></td><td>The current boot; the previous boot</td></tr>
+      <tr><td><code>-f</code></td><td>Follow, like <code>tail -f</code></td></tr>
+      <tr><td><code>--no-pager</code>, <code>-o json</code></td><td>For scripts and agents: journalctl opens a <span class="term" data-g="pager">pager</span> by default, which hangs a non-interactive caller</td></tr>
+    </table>
+    <p>
+      All of these are documented in
+      journalctl(1).<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/journalctl.html" title="journalctl(1)">[systemd]</a>
+      Flags combine: <code>journalctl -u docker -p warning --since "03:00" --no-pager</code>. Reading
+      the system journal requires root or membership of the <code>systemd-journal</code> or
+      <code>adm</code>
+      group.<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/journalctl.html" title="journalctl(1): access control">[systemd]</a>
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall — the journal that forgets, and the journal that drops</span>
+      <p><strong>Persistence.</strong> On systemd 255 the <code>Storage=</code> setting defaults to
+      <code>auto</code>: logs are kept on disk under <code>/var/log/journal</code> only if that
+      directory exists; otherwise they live in <code>/run/log/journal</code> and are lost at
+      reboot.<a class="cite" href="https://manpages.ubuntu.com/manpages/noble/en/man5/journald.conf.5.html" title="journald.conf(5), Ubuntu 24.04 (systemd 255): Storage=">[systemd]</a>
+      (Ubuntu 24.04's shipped <code>/etc/systemd/journald.conf</code> shows the commented default
+      <code>#Storage=auto</code>; newer upstream releases default to <code>persistent</code>, so check
+      the version you are on.) If a sandbox host rebooted after an incident, <code>ls
+      /var/log/journal</code> tells you whether the evidence survived, and <code>journalctl -b
+      -1</code> retrieves it.</p>
+      <p><strong>Rate limiting.</strong> By default journald drops a service's messages beyond 10,000
+      in 30
+      seconds.<a class="cite" href="https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html" title="journald.conf(5): RateLimitIntervalSec=, RateLimitBurst=">[systemd]</a>
+      A harness that logs every tool call of 200 concurrent rollouts to stdout can exceed that, and
+      the missing lines will be the busy moments you wanted.</p>
+    </div>
+
+    <h3 id="text-logs">Text logs in <code>/var/log</code>, and the kernel's own log</h3>
+    <p>
+      Older than the journal, and still present, is the convention of plain text files under
+      <code>/var/log</code>. Where the <code>rsyslog</code> package is installed (Ubuntu 24.04's
+      archive marks it <code>Priority: important</code>), its shipped rules read:
+    </p>
+<pre class="term"><code><span class="p">#</span> grep -vE '^\s*(#|$)' /etc/rsyslog.d/50-default.conf
+<span class="o">auth,authpriv.*			/var/log/auth.log
+*.*;auth,authpriv.none		-/var/log/syslog
+kern.*				-/var/log/kern.log
+…</span></code></pre>
+    <p>
+      So: logins, <code>sudo</code> use and SSH attempts go to <code>auth.log</code>; kernel messages
+      to <code>kern.log</code>; nearly everything else to <code>syslog</code>. If those files are
+      absent the machine is journal-only, and <code>journalctl</code> is the whole story. Applications
+      add their own subdirectories (<code>/var/log/nginx</code>, <code>/var/log/apt</code>).
+    </p>
+    <p>
+      Text logs would grow forever, so <code>logrotate</code> renames, compresses, and eventually
+      deletes them on a schedule. Its per-package rules are short enough to read; this is what bounds
+      how far back your evidence goes:
+    </p>
+<pre class="term"><code><span class="p">#</span> cat /etc/logrotate.d/dpkg
+<span class="o">/var/log/dpkg.log {
+	monthly
+	rotate 12
+	compress
+	delaycompress
+	missingok
+	notifempty
+	create 644 root root
+}</span></code></pre>
+    <p>
+      Twelve monthly files for <code>dpkg.log</code>; the rsyslog-managed files above are rotated
+      weekly and only four are kept. Rotated logs appear as <code>syslog.1</code>,
+      <code>syslog.2.gz</code>… (<code>zcat</code> or <code>zgrep</code> reads the compressed ones).
+    </p>
+    <p>
+      Beneath all of this sits the kernel's own log, a fixed-size ring buffer in memory that
+      <span class="term" data-g="dmesg">dmesg</span> "is used to examine or
+      control."<a class="cite" href="https://man7.org/linux/man-pages/man1/dmesg.1.html" title="dmesg(1), Linux man-pages">[dmesg(1)]</a>
+      This is where the OOM killer from <a href="12-resources-and-limits.html">page 12</a> writes its
+      report. A default container may not read it — Docker's default capability set lacks
+      <code>CAP_SYSLOG</code>, which the kernel can require for
+      <code>dmesg</code><a class="cite" href="https://docs.kernel.org/admin-guide/sysctl/kernel.html#dmesg-restrict" title="Kernel docs, sysctl/kernel: dmesg_restrict">[Kernel: sysctl]</a>
+      — but from the host, or a container granted that one capability, the record is there:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 dmesg
+<span class="o">dmesg: read kernel buffer failed: Operation not permitted</span>
+<span class="p">$</span> docker run --name lt-13-oom --memory 64m --memory-swap 64m ubuntu:24.04 tail /dev/zero
+<span class="p">$</span> docker run --rm --cap-add SYSLOG ubuntu:24.04 bash -c 'dmesg | grep -oE \
+    "oom-kill:constraint=[A-Z_]+|oom_memcg=[^,]+|Killed process [0-9]+ \([^)]+\)" | tail -3'
+<span class="o">oom-kill:constraint=<span class="hl">CONSTRAINT_MEMCG</span>
+<span class="hl">oom_memcg=/docker/fbc75245f11e…</span>
+<span class="hl">Killed process 72523 (tail)</span></span></code></pre>
+    <p>
+      The full lines are long (the <code>grep -o</code> keeps the three useful fragments): the
+      record names the victim's command and its PID <em>as the host sees it</em>, its memory at
+      death, and — in <code>oom_memcg</code> — the full 64-character ID of the container whose limit
+      was hit.
+      <code>CONSTRAINT_MEMCG</code> says a cgroup limit caused it, rather than the whole machine
+      running out. On a VM the same lines are in <code>journalctl -k</code> and
+      <code>/var/log/kern.log</code>. Two cautions: <code>dmesg -T</code> timestamps "could be
+      inaccurate"<a class="cite" href="https://man7.org/linux/man-pages/man1/dmesg.1.html" title="dmesg(1): -T, --ctime">[dmesg(1)]</a>
+      after a suspend, so match on container ID rather than the clock; and the ring buffer is shared
+      by the whole machine — that same command also showed kills from other containers — so
+      <code>CAP_SYSLOG</code> is not something to hand a sandbox.
+    </p>
+
+    <h2 id="containers">In a container: stdout is the log</h2>
+    <p>
+      A stock task container has none of the above:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm ubuntu:24.04 bash -c 'command -v systemctl journalctl; echo "status=$?"; cat /proc/1/comm; ls /var/log'
+<span class="o">status=1
+bash
+alternatives.log
+apt
+bootstrap.log
+btmp
+dpkg.log
+faillog
+lastlog
+wtmp</span></code></pre>
+    <p>
+      No service manager, PID 1 is the command you gave, and <code>/var/log</code> holds only what the
+      package manager wrote while the image was built. Docker's model is that a container's main
+      process is its <code>ENTRYPOINT</code>/<code>CMD</code>, and that its log is that command's
+      output: "By default, <code>docker logs</code> shows the command's <code>STDOUT</code> and
+      <code>STDERR</code>."<a class="cite" href="https://docs.docker.com/engine/logging/" title="Docker Docs: View container logs">[Docker: logs]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-13-app ubuntu:24.04 bash -c 'echo "worker started";
+    echo "WARN: retrying API call" &gt;&amp;2; echo "detail only in a file" &gt; /var/log/app.log; sleep 300'
+<span class="p">$</span> docker logs lt-13-app
+<span class="o">WARN: retrying API call
+worker started</span>
+<span class="p">$</span> docker logs lt-13-app 2&gt;/dev/null
+<span class="o">worker started</span>
+<span class="p">$</span> docker logs -t --since 10m lt-13-app
+<span class="o">2026-09-21T21:09:04.753795677Z WARN: retrying API call
+2026-09-21T21:09:04.753821302Z worker started</span></code></pre>
+    <p>Three things to take from that, and a fourth that matters more:</p>
+    <ul>
+      <li>The two streams are kept separate (<a href="04-streams-pipes-redirection.html">page 4</a>),
+        and their relative order is not guaranteed — stderr arrived first here although it was
+        written second. Use <code>-t</code> timestamps, not line order, across streams.</li>
+      <li>The line written to <code>/var/log/app.log</code> is not there. An application that logs to
+        a file is invisible to <code>docker logs</code>; you must <code>docker exec … cat</code> or
+        <code>docker cp</code> it out <em>before the container is removed</em>. (The official nginx
+        image avoids this by symlinking its log files to <code>/dev/stdout</code> and
+        <code>/dev/stderr</code>.<a class="cite" href="https://docs.docker.com/engine/logging/" title="Docker Docs: View container logs — nginx symlink example">[Docker: logs]</a>)</li>
+      <li><code>docker logs</code> takes <code>--since</code>, <code>--until</code>,
+        <code>--tail N</code>, <code>-f</code> and <code>-t</code> — the same questions
+        <code>journalctl</code> answers.</li>
+    </ul>
+<pre class="term"><code><span class="p">$</span> docker exec lt-13-app bash -c 'echo "agent ran this via exec"'
+<span class="o">agent ran this via exec</span>
+<span class="p">$</span> docker logs lt-13-app 2&gt;&amp;1 | grep -c "agent ran"
+<span class="o"><span class="hl">0</span></span></code></pre>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p><code>docker logs</code> records what <em>PID 1 and the processes that inherited its
+      stdout/stderr</em> wrote. A process started by <code>docker exec</code> has its own streams,
+      returned to whoever called exec. Since harnesses drive agents through exec
+      (<a href="25-how-harnesses-use-linux.html">page 25</a>), and the usual PID 1 of a task
+      container is <code>sleep infinity</code> or <code>tail -f /dev/null</code>, the container log
+      of a typical rollout is <strong>empty</strong>. The agent's commands and their output exist
+      only in the harness's <span class="term" data-g="transcript">transcript</span>.</p>
+    </div>
+    <div class="warn">
+      <span class="label">Caveat — the default log driver never rotates</span>
+      <p>Docker's default logging driver is <code>json-file</code>, and "by default, no log-rotation
+      is performed", which "can lead to disk space
+      exhaustion";<a class="cite" href="https://docs.docker.com/engine/logging/configure/" title="Docker Docs: Configure logging drivers">[Docker: logs]</a>
+      Docker recommends the <code>local</code> driver, or set limits per container:
+      <code>--log-opt max-size=10m --log-opt max-file=3</code> (check with <code>docker inspect
+      --format '{{json .HostConfig.LogConfig}}'</code>). A container whose PID 1 is chatty — a server
+      under test with debug logging, a build — can fill the sandbox host's disk over a long run, and
+      then <em>every</em> rollout on that host starts failing with <code>No space left on
+      device</code> (page 12).</p>
+    </div>
+
+    <h3 id="forensics">The package logs as a forensic record</h3>
+    <p>
+      Two files in <code>/var/log</code> are useful in every container, because apt and dpkg write
+      them whoever is supervising: <code>/var/log/apt/history.log</code> records each apt command
+      line with its start and end time, and <code>/var/log/dpkg.log</code> records every package
+      state change. Together they answer "what did the agent install, and when?":
+    </p>
+<pre class="term"><code><span class="p">#</span> grep -E '^(Start-Date|Commandline)' /var/log/apt/history.log | tail -4
+<span class="o">Start-Date: 2026-09-21  11:11:30
+Commandline: apt-get install -y -qq --no-install-recommends procps sudo locales tzdata python3
+Start-Date: 2026-09-21  21:09:29
+Commandline: apt-get install -y -qq --no-install-recommends rsyslog logrotate systemd</span>
+<span class="p">#</span> awk '$3=="install"{print $1,$2,$4,$6}' /var/log/dpkg.log | tail -3
+<span class="o">2026-09-21 21:09:29 logrotate:arm64 3.21.0-2build1
+2026-09-21 21:09:29 ucf:all 3.0043+nmu1
+2026-09-21 21:09:29 rsyslog:arm64 8.2312.0-3ubuntu9.3</span></code></pre>
+    <p>
+      Entries dated at image-build time are the image; entries dated during the rollout are the
+      agent. The exact versions let you ask whether two rollouts of the "same" task ran against the
+      same software (<a href="15-packages-reproducibility.html">page 15</a>). The limits of this
+      evidence: both files are ordinary root-owned files, so an agent running as root can edit them;
+      they see only apt and dpkg, not <code>pip install</code> or a <code>curl | tar</code>; and they
+      vanish with the container. <code>docker diff</code> (<a href="22-docker-for-evals.html">page
+      22</a>) is the broader tool.
+    </p>
+
+    <h2 id="where-to-look">Where to look for what</h2>
+    <table>
+      <tr><th>Question</th><th>On a VM (systemd)</th><th>In / about a container</th></tr>
+      <tr><td>Is the service up? Since when?</td><td><code>systemctl status UNIT</code></td><td><code>docker ps -a</code>; <code>docker inspect --format '{{.State.Status}} {{.State.StartedAt}}'</code></td></tr>
+      <tr><td>What did it print?</td><td><code>journalctl -u UNIT</code></td><td><code>docker logs</code> (PID 1 only); the harness transcript (exec'd commands); files inside via <code>docker exec</code>/<code>cp</code></td></tr>
+      <tr><td>What happened around 03:00?</td><td><code>journalctl --since … --until …</code></td><td><code>docker logs -t --since … --until …</code>; harness log</td></tr>
+      <tr><td>Was something OOM-killed?</td><td><code>journalctl -k | grep -i oom</code>; <code>dmesg -T</code></td><td><code>State.OOMKilled</code>; <code>memory.events</code>; the <em>host's</em> kernel log</td></tr>
+      <tr><td>What crashed or restarted?</td><td><code>systemctl --failed</code>; <code>journalctl -p err -b</code></td><td><code>docker ps -a</code> exit codes; <code>RestartCount</code> in <code>docker inspect</code></td></tr>
+      <tr><td>Who logged in / used sudo?</td><td><code>/var/log/auth.log</code> or <code>journalctl -u ssh</code></td><td>Normally nothing to see: no sshd, no sudo</td></tr>
+      <tr><td>What was installed, when?</td><td colspan="2"><code>/var/log/apt/history.log</code>, <code>/var/log/dpkg.log</code> — both worlds</td></tr>
+      <tr><td>Did logs survive a reboot / removal?</td><td><code>ls /var/log/journal</code>; <code>journalctl -b -1</code></td><td>Gone with <code>docker rm</code> (and <code>--rm</code>) unless shipped out first</td></tr>
+    </table>
+
+    <h2 id="evidence-streams">Three evidence streams</h2>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>Every rollout leaves evidence in three places, written by three different observers, and
+      each is blind to something the others see:</p>
+      <table>
+        <tr><th>Stream</th><th>Sees</th><th>Blind to</th></tr>
+        <tr><td><strong>Transcript</strong> (harness)</td><td>Each command the agent ran, its stdout, stderr, exit code, duration</td><td><em>Why</em> a process died; anything between tool calls; background processes; the box's state</td></tr>
+        <tr><td><strong>Container state and logs</strong> (runtime)</td><td>PID 1's output, exit code, <code>OOMKilled</code>, start and finish times, resource config</td><td>What exec'd commands printed; anything after <code>docker rm</code></td></tr>
+        <tr><td><strong>Host logs</strong> (journal, kernel log)</td><td>OOM kills with container ID, Docker daemon errors, disk-full and network errors, the harness worker's own crashes and restarts</td><td>What the agent was trying to do</td></tr>
+      </table>
+      <p>A rollout whose transcript ends in <code>Killed</code> is an <em>observation</em>. "The model
+      wrote a memory-hungry solution", "the limit is too low for this task", and "the host ran out
+      because 40 neighbours spiked" are <em>hypotheses</em>, and only the second and third streams
+      discriminate between them. Design consequence: <strong>collect streams two and three before
+      teardown</strong> — per rollout, save <code>docker inspect</code> output and
+      <code>docker logs</code> next to the transcript, and keep host journals persistent and
+      time-synchronised — because a harness that removes containers on completion destroys the
+      evidence at the moment it becomes interesting. The sibling courses go further on this:
+      <a href="../../../evals/evals-tut/pages/26-observability.html">Understanding LLM Evals, page
+      26</a> and <a href="../../../networking/networking-tut/pages/18-observability.html">Networking
+      for LLM Evals, lesson 18</a>. (<em>Navigate</em>, then <em>design</em>.)</p>
+    </div>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p><strong>Harness workers and sandbox hosts are services.</strong> When 5% of last night's
+      rollouts failed and the failures cluster between 03:00 and 03:20, the transcripts will show
+      twenty different symptoms. The host shows one cause. On the sandbox host:
+      <code>journalctl --since "02:55" --until "03:25" -p warning --no-pager</code>, then
+      <code>-u docker</code>, then <code>-k</code>. Candidates worth checking first are mundane: a scheduled
+      job saturating the disk, a package upgrade restarting the Docker daemon, the worker itself
+      being OOM-killed and restarted by <code>Restart=on-failure</code>. Each is a hypothesis until
+      a log line with a matching timestamp confirms it. Whatever it turns out to be, those
+      rollouts are infrastructure failures: they count in <em>scheduled</em>, not in
+      <em>completed</em>, and they are reported, not quietly re-run
+      (<a href="12-resources-and-limits.html#failure-accounting">page 12</a>).</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>Your team's harness runs each rollout in a container started with <code>--rm</code>, PID 1 is
+      <code>sleep infinity</code>, and the agent is driven through exec calls. A reviewer of your
+      benchmark paper asks: "Of the 412 failed rollouts, how many were environment failures rather
+      than wrong answers?" Your colleague proposes grepping the transcripts for <code>Killed</code>
+      and <code>No space left</code> and reporting that count. What is wrong with that as an answer,
+      and what would you change before the next run?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+        <p><strong>What the grep can and cannot establish.</strong> It finds rollouts where an
+        environment symptom <em>reached the agent's stdout or stderr</em>. That is a lower bound, and a
+        biased one. It misses kills of background processes the agent never waited on, a harness
+        timeout firing on a CPU-starved box (the transcript shows a timeout, not a cause), the
+        Docker daemon restarting under the rollout, and anything that happened during grading. It
+        also over-counts: <code>Killed</code> after the agent's own <code>kill -9</code> or
+        <code>timeout -s KILL</code> is not an environment failure.</p>
+        <p><strong>What evidence would discriminate — and whether it still exists.</strong> For each
+        failure you want <code>State.OOMKilled</code>, exit code and timing, and the host's kernel
+        and Docker logs for that window. With <code>--rm</code> the container state is gone;
+        <code>docker logs</code> would have been empty anyway (exec output never enters it). The
+        host journal is the only remaining second source — if it is persistent
+        (<code>ls /var/log/journal</code>) and has not rotated. <code>journalctl -k</code> for
+        <code>oom_memcg=/docker/&lt;id&gt;</code> lines can be joined to rollouts only if the harness
+        logged container IDs. Establish these facts before promising the reviewer a number.</p>
+        <p><strong>What to report now, and change next.</strong> Report the grep count explicitly as
+        a lower bound with its method, plus whatever the host journal adds; do not present it as
+        "the" environment-failure count. For the next run: drop <code>--rm</code> in favour of
+        inspect-then-remove; save <code>docker inspect</code> JSON and container ID per rollout; make
+        the host journal persistent; record harness-initiated kills (timeouts, teardown) as such in
+        the harness log, so that 137s can be attributed; and fix the accounting categories before
+        looking at results.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p>Exercises 1–3 are <strong>container lab</strong>. Exercises 4–5 are <strong>VM lab</strong>:
+      they need a machine whose PID 1 is systemd (the Ubuntu VM from
+      <a href="01-lab-setup.html">page 1</a>). VM-lab solutions describe what to look for rather than
+      showing output, because this course only prints output its authors produced, and the authoring
+      machine has no systemd host.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Start
+          <code>docker run -d --name lt-13-x ubuntu:24.04 bash -c 'echo out; echo err &gt;&amp;2; echo hidden &gt; /var/log/app.log; sleep 120'</code>.
+          Using only <code>docker logs</code> and redirection on your Mac, print just the stdout
+          line, then just the stderr line. Where is "hidden"?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker logs lt-13-x 2&gt;/dev/null
+<span class="o">out</span>
+<span class="p">$</span> docker logs lt-13-x 2&gt;&amp;1 &gt;/dev/null
+<span class="o">err</span>
+<span class="p">$</span> docker exec lt-13-x cat /var/log/app.log
+<span class="o">hidden</span></code></pre>
+          <p><code>docker logs</code> replays the container's stdout on its own stdout and stderr on
+          its own stderr, so page 4's redirections select between them. The file is only inside
+          the container.</p></details></li>
+        <li><strong>Predict, then verify.</strong> In the same container, run
+          <code>docker exec lt-13-x bash -c 'echo "from exec"'</code>. Will <code>docker logs</code>
+          contain it? Then find a way, from inside an exec'd shell, to make a line appear in
+          <code>docker logs</code> anyway. (Hint: page 9's <code>/proc/PID/fd</code>.)
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker logs lt-13-x 2&gt;&amp;1 | grep -c "from exec"
+<span class="o">0</span>
+<span class="p">$</span> docker exec lt-13-x bash -c 'echo "to pid1 stdout" &gt; /proc/1/fd/1'
+<span class="p">$</span> docker logs lt-13-x 2&gt;&amp;1 | tail -1
+<span class="o">to pid1 stdout</span>
+<span class="p">$</span> docker rm -f lt-13-x</code></pre>
+          <p>The log is whatever is written to the pipe that PID 1's fd 1 and 2 point at. Opening
+          <code>/proc/1/fd/1</code> writes into that same pipe. This worked because the exec'd shell
+          ran as root, the same user as PID 1. It is also a reminder that container logs are not
+          tamper-proof evidence: a root agent can write anything into them.</p></details></li>
+        <li><strong>Eval task (container lab).</strong> In your lab container, as root, run
+          <code>apt-get update &amp;&amp; apt-get install -y --no-install-recommends tree</code>.
+          Then, pretending you are auditing a finished rollout, answer from the logs alone: what
+          command line installed software, at what time, and which package versions arrived?
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">#</span> grep -E '^(Start-Date|Commandline)' /var/log/apt/history.log | tail -2
+<span class="p">#</span> awk '$3=="install"{print $1,$2,$4,$6}' /var/log/dpkg.log | tail -3</code></pre>
+          <p>The first prints the last apt run's start time and exact command line; the second prints
+          date, time, package and version for the most recent installs (the page shows real output
+          of both for a different install). Compare the dates with the image's build-time entries
+          at the top of the same files: everything after the container's start time is the
+          "agent".</p></details></li>
+        <li><strong>VM lab — reproduce.</strong> On your Ubuntu VM: find the state of the SSH
+          service, list running services, list failed units, and show the SSH service's log lines
+          from the last hour without a pager.
+          <details class="solution"><summary>Solution</summary>
+          <p><code>systemctl status ssh</code> — look for the <code>Active:</code> line
+          (<code>active (running)</code> and a since-time), the <code>Main PID</code>, the
+          <code>CGroup</code> tree, and the journal excerpt at the bottom, which should include your
+          own login. <code>systemctl list-units --type=service --state=running</code>;
+          <code>systemctl --failed</code> (expect zero units on a fresh VM);
+          <code>journalctl -u ssh --since "1 hour ago" --no-pager</code>. Also run
+          <code>systemctl cat ssh</code> (which prints the unit file) and find its <code>ExecStart=</code>
+          and <code>Restart=</code> lines, and <code>ls /var/log/journal</code> to learn whether this
+          VM's journal survives reboots. If a unit name differs on your distribution,
+          <code>systemctl list-units 'ssh*'</code> finds it.</p></details></li>
+        <li><strong>VM lab — eval task.</strong> With Docker installed on the VM, run page 12's
+          <code>docker run --memory 64m --memory-swap 64m ubuntu:24.04 tail /dev/zero</code>. Then,
+          as if you had only the host and a rough time, find the kernel's record of the kill and
+          extract the container ID from it. Which of the three evidence streams did you just use,
+          and what would you need in the harness log to join it to a rollout?
+          <details class="solution"><summary>Solution</summary>
+          <p><code>sudo journalctl -k --since "10 minutes ago" --no-pager | grep -iE "oom-kill|Killed
+          process"</code> (or <code>sudo dmesg -T | grep -i oom</code>). Expect the two line shapes
+          shown on this page: an <code>oom-kill:constraint=CONSTRAINT_MEMCG … oom_memcg=/…/&lt;id&gt;</code>
+          line and a <code>Memory cgroup out of memory: Killed process … (tail)</code> line; on a
+          systemd host the cgroup path is laid out differently from Docker Desktop's
+          <code>/docker/&lt;id&gt;</code> but still contains the 64-character container ID, which
+          <code>docker ps -a --no-trunc</code> confirms. That is the host-log stream. To join it to
+          a rollout, the harness must have logged the container ID (or name) with the sample ID —
+          otherwise you are matching on timestamps, which is a hypothesis, not evidence.</p></details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>systemd manual pages, freedesktop.org: systemd(1), systemd.unit(5), systemctl(1), systemd.service(5), systemd-system.conf(5), systemd-journald.service(8), journalctl(1), journald.conf(5). <a href="https://www.freedesktop.org/software/systemd/man/latest/systemd.html">freedesktop.org/software/systemd/man/latest/</a></li>
+        <li>journald.conf(5) as shipped in Ubuntu 24.04 (systemd 255), for the <code>Storage=auto</code> default. <a href="https://manpages.ubuntu.com/manpages/noble/en/man5/journald.conf.5.html">manpages.ubuntu.com/…/journald.conf.5.html</a></li>
+        <li>systemd.exec(5) and systemd.service(5), man7.org rendering (User=, WorkingDirectory=, Environment=, EnvironmentFile=, ExecStart=). <a href="https://man7.org/linux/man-pages/man5/systemd.exec.5.html">man7.org/…/systemd.exec.5.html</a>, <a href="https://man7.org/linux/man-pages/man5/systemd.service.5.html">man7.org/…/systemd.service.5.html</a></li>
+        <li>dmesg(1), util-linux, Linux man-pages project. <a href="https://man7.org/linux/man-pages/man1/dmesg.1.html">man7.org/…/dmesg.1.html</a></li>
+        <li>"Documentation for /proc/sys/kernel/" (<code>dmesg_restrict</code>), Linux kernel documentation. <a href="https://docs.kernel.org/admin-guide/sysctl/kernel.html#dmesg-restrict">docs.kernel.org/admin-guide/sysctl/kernel.html</a></li>
+        <li>Docker Docs: "View container logs", "Configure logging drivers", "JSON File logging driver". <a href="https://docs.docker.com/engine/logging/">docs.docker.com/engine/logging/</a>, <a href="https://docs.docker.com/engine/logging/configure/">…/logging/configure/</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

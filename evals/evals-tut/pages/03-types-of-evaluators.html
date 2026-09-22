@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three Kinds of Graders · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · Foundations</p>
+    <h1>Three kinds of graders</h1>
+    <p class="lede">
+      Everything hard about evaluating LLM systems concentrates in one box of the machine: the
+      <span class="term" data-g="grader">grader</span>, the thing that looks at a single output and says
+      pass or fail. There are exactly three kinds — code, humans, and models — and choosing among them
+      is an engineering trade-off you'll make over and over.
+    </p>
+
+    <h2 id="the-problem">Why grading LLM output is the hard part</h2>
+    <p>
+      For a sorting function, the grader is trivial: assert the output is sorted. For "write a friendly
+      reply to this customer," there is no assertion. The EleutherAI reproducibility paper states the
+      core difficulty precisely: many syntactically different strings are semantically equivalent, and
+      "our best automated tools for determining whether two sentences are semantically equivalent are
+      the very models we are seeking to
+      evaluate."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Biderman, Schoelkopf, Sutawika et al., Lessons from the Trenches, §2.1">[Eleuther]</a>
+      Every grading strategy in use is a workaround for that circularity, with different costs.
+    </p>
+    <p>
+      One distinction cuts across all three grader types before we start. A
+      <span class="term" data-g="reference-based">reference-based</span> grader compares the output
+      against a known-good answer (the <span class="term" data-g="ground-truth">ground truth</span>);
+      a <span class="term" data-g="reference-free">reference-free</span> grader judges the output on
+      its own merits — essential in production, where no answer key exists for live user
+      requests.
+    </p>
+
+    <h2 id="code">Grader 1: code</h2>
+    <p>
+      The cheapest, fastest, most trustworthy grader is a deterministic check — an
+      <span class="term" data-g="assertion">assertion</span>. It can't evaluate "is this reply
+      friendly?", but a surprising amount of quality decomposes into properties code <em>can</em> check:
+    </p>
+    <ul>
+      <li><strong>Execution checks</strong> — run the generated code against unit tests. This is
+        HumanEval's grader, chosen over text similarity because actually running the code measures the
+        thing that matters.<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021">[HumanEval]</a></li>
+      <li><strong>Format and content assertions</strong> — valid JSON, required fields present, no
+        leaked internals. Husain's canonical example from the Rechat case study: a regex asserting that
+        responses contain no raw UUIDs.<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a></li>
+      <li><strong>Classification metrics</strong> — when the task is classification-shaped (toxicity
+        detection, document routing, extractive QA), grade it like the classifier it is. Eugene Yan:
+        use "standard classification metrics such as recall, precision, PRAUC" — and never bare
+        accuracy, which is "too coarse a metric to be
+        useful."<a class="cite" href="https://eugeneyan.com/writing/evals/" title="Yan 2024, Task-Specific LLM Evals">[Yan]</a>
+        (New to these metrics? <a href="../appendices/e-agreement-metrics.html">Appendix E</a> teaches
+        them from zero.)</li>
+    </ul>
+    <p>
+      Code graders should be your default wherever they apply, and well-built ones earn their keep
+      beyond evals: Husain notes that LLM unit-test assertions should be organized for reuse "in places
+      beyond unit tests, such as data cleaning and automatic retries" — the same UUID check that fails
+      an eval can block a bad response in production. Rechat accumulated <em>hundreds</em> of such
+      assertions, continuously updated from observed
+      failures.<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a>
+    </p>
+
+    <h2 id="humans">Grader 2: humans</h2>
+    <p>
+      Humans are the gold standard for "is this output actually good?" — by definition, for a product:
+      quality <em>means</em> what your users and domain experts judge it to mean. Human grading
+      (<span class="term" data-g="annotation">annotation</span>) has two structural problems: it's slow
+      and expensive, so it can't run in CI on every commit; and humans disagree with each other, so
+      "the" human label is partly a fiction unless you manage it.
+    </p>
+    <p>
+      The practitioner solution to disagreement is organizational, not statistical: appoint one
+      <span class="term" data-g="principal-domain-expert">principal domain expert</span> whose judgment
+      is definitive. The Husain/Shankar FAQ recommends that "for most small to medium-sized companies,
+      appointing a single domain expert as a 'benevolent dictator' is the most effective approach,"
+      reserving multi-annotator setups — with agreement measured by
+      <span class="term" data-g="cohens-kappa">Cohen's kappa</span> — for larger, multi-domain
+      organizations.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      The same source warns that outsourcing labeling to third parties is "usually a big mistake":
+      the expert's tacit knowledge of what good looks like in <em>your</em> domain is the asset being
+      encoded.
+    </p>
+    <div class="callout">
+      <span class="label">What to ask humans for</span>
+      <p>A recurring position across this course's spine sources: ask for a <strong>binary pass/fail
+      plus a written critique</strong>, not a 1–5 score. The FAQ's reasoning — the difference between a
+      3 and a 4 "is subjective and inconsistent across annotators," detecting differences on scales
+      needs larger samples, and "annotators often default to middle values to avoid making hard
+      decisions."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      Binary forces a decision; the critique captures the nuance the scale was pretending to capture.
+      <a href="05-from-failures-to-evals.html">Module 2</a> returns to this in depth.</p>
+    </div>
+
+    <h2 id="models">Grader 3: models (LLM-as-judge)</h2>
+    <p>
+      The third grader uses an LLM to judge LLM output —
+      <span class="term" data-g="llm-as-judge">LLM-as-judge</span>. It promises the coverage of code
+      with something approaching the judgment of humans, and it's the only way to grade subjective
+      quality at production scale. It is also the easiest grader to fool yourself with, because its
+      failure modes are invisible in any single output: systematic biases (most judges favor whichever
+      answer they see first<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, MT-Bench">[MT-Bench]</a>),
+      and real detection gaps. On factual-consistency grading, Yan reports an LLM evaluator that
+      identified over 95% of <em>consistent</em> summaries but only 30–60% of <em>inconsistent</em>
+      ones — a judge that looks accurate while missing half the actual
+      failures.<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024, Evaluating the Effectiveness of LLM-Evaluators">[Yan]</a>
+      On hallucination detection, the best model tested on the HaluEval benchmark managed 58.5%
+      accuracy — "barely above
+      chance."<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024">[Yan]</a>
+    </p>
+    <p>
+      The discipline that makes judges usable is <strong>validating the judge against human labels
+      before trusting it</strong> — measuring its true positive and true negative rates on a held-out,
+      human-labeled set, exactly as you'd validate any classifier.<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      All of <a href="08-llm-as-judge.html">Module 3</a> is about doing this properly.
+    </p>
+    <p>
+      A judge doesn't have to be a frontier LLM, either. For narrow recurring checks, Yan's evidence
+      favors small fine-tuned classifiers: a compact NLI model fine-tuned on a few hundred task-specific
+      examples "likely outperforms n-gram, similarity, and LLM-based evals" for factual consistency,
+      and with a thousand-plus examples becomes "good enough as a hallucination
+      guardrail."<a class="cite" href="https://eugeneyan.com/writing/llm-evaluators/" title="Yan 2024">[Yan]</a>
+      The general-purpose judge is a starting point, not a destination.
+    </p>
+
+    <h2 id="choosing">Choosing: the cost hierarchy</h2>
+    <table>
+      <tr><th>Grader</th><th>Cost per output</th><th>Can judge subjective quality?</th><th>Main risk</th><th>Validate by</th></tr>
+      <tr><td>Code</td><td>~zero</td><td>No</td><td>Measures the checkable, not the important</td><td>Reading it; control checks</td></tr>
+      <tr><td>Human</td><td>High, doesn't scale</td><td>Yes — it's the definition</td><td>Inconsistency; disagreement</td><td>Inter-annotator agreement (<a href="../appendices/e-agreement-metrics.html">App. E</a>)</td></tr>
+      <tr><td>LLM judge</td><td>Low-ish, scales</td><td>Approximately, if validated</td><td>Biases; silent detection gaps</td><td>TPR/TNR against human labels</td></tr>
+    </table>
+    <p>
+      The practitioner ordering is explicit in the FAQ: cheap code assertions first; an LLM judge is an
+      investment reserved for "persistent, subjective failures," because each judge realistically
+      requires "100+ labeled examples, ongoing weekly maintenance, and coordination between developers,
+      PMs, and domain experts."<a class="cite" href="https://hamel.dev/blog/posts/evals-faq/" title="Husain &amp; Shankar, Evals FAQ">[Evals FAQ]</a>
+      A useful mental model: <strong>humans define quality, judges scale it, code locks it in.</strong>
+      Human review discovers what failure looks like; a validated judge automates that judgment over
+      thousands of outputs; and wherever a failure mode turns out to be mechanically checkable, it
+      graduates to an assertion and runs forever for free.
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Reaching for an LLM judge first — because it's one API call — and skipping straight past code
+      and humans. Teams end up with a judge nobody validated, scoring outputs nobody reads, optimizing
+      a number nobody can interpret. The grader hierarchy runs on evidence from human review; without
+      that foundation, a judge is an unvalidated instrument wired directly into your decisions.</p>
+    </div>
+
+    <p>
+      That completes the foundations. <a href="04-error-analysis.html">Module 2</a> starts the
+      practitioner's loop: where eval criteria actually come from — looking at your data.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Hamel Husain &amp; Shreya Shankar, "LLM Evals: Everything You Need to Know" (the Evals FAQ), hamel.dev, January 2026. <a href="https://hamel.dev/blog/posts/evals-faq/">hamel.dev/blog/posts/evals-faq</a></li>
+        <li>Hamel Husain, "Your AI Product Needs Evals," hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a></li>
+        <li>Eugene Yan, "Task-Specific LLM Evals that Do &amp; Don't Work" and "Evaluating the Effectiveness of LLM-Evaluators," eugeneyan.com, 2024. <a href="https://eugeneyan.com/writing/evals/">eugeneyan.com/writing/evals</a>, <a href="https://eugeneyan.com/writing/llm-evaluators/">eugeneyan.com/writing/llm-evaluators</a></li>
+        <li>Stella Biderman et al. (EleutherAI), "Lessons from the Trenches on Reproducible Evaluation of Language Models," arXiv:2405.14782. <a href="https://arxiv.org/abs/2405.14782">arxiv.org/abs/2405.14782</a></li>
+        <li>Mark Chen et al., "Evaluating Large Language Models Trained on Code," arXiv:2107.03374, 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+        <li>Lianmin Zheng et al., "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena," NeurIPS 2023. <a href="https://arxiv.org/abs/2306.05685">arxiv.org/abs/2306.05685</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

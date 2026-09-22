@@ -1,0 +1,263 @@
+[
+  {
+    "id": "book-introduction",
+    "url": "https://7e.systemsapproach.org/introduction.html",
+    "resolved_url": "https://7e.systemsapproach.org/introduction.html",
+    "ok": true,
+    "characters": 80942,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-applications",
+    "url": "https://7e.systemsapproach.org/applications.html",
+    "resolved_url": "https://7e.systemsapproach.org/applications.html",
+    "ok": true,
+    "characters": 89132,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-technology",
+    "url": "https://7e.systemsapproach.org/technology.html",
+    "resolved_url": "https://7e.systemsapproach.org/technology.html",
+    "ok": true,
+    "characters": 60475,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-routing",
+    "url": "https://7e.systemsapproach.org/routing.html",
+    "resolved_url": "https://7e.systemsapproach.org/routing.html",
+    "ok": true,
+    "characters": 72628,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-federation",
+    "url": "https://7e.systemsapproach.org/federation.html",
+    "resolved_url": "https://7e.systemsapproach.org/federation.html",
+    "ok": true,
+    "characters": 78140,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-virtual",
+    "url": "https://7e.systemsapproach.org/virtual.html",
+    "resolved_url": "https://7e.systemsapproach.org/virtual.html",
+    "ok": true,
+    "characters": 72281,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-operations",
+    "url": "https://7e.systemsapproach.org/operations.html",
+    "resolved_url": "https://7e.systemsapproach.org/operations.html",
+    "ok": true,
+    "characters": 65201,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-naming",
+    "url": "https://7e.systemsapproach.org/naming.html",
+    "resolved_url": "https://7e.systemsapproach.org/naming.html",
+    "ok": true,
+    "characters": 47627,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-reliable",
+    "url": "https://7e.systemsapproach.org/reliable.html",
+    "resolved_url": "https://7e.systemsapproach.org/reliable.html",
+    "ok": true,
+    "characters": 67045,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-congestion",
+    "url": "https://7e.systemsapproach.org/congestion.html",
+    "resolved_url": "https://7e.systemsapproach.org/congestion.html",
+    "ok": true,
+    "characters": 86921,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-secure",
+    "url": "https://7e.systemsapproach.org/secure.html",
+    "resolved_url": "https://7e.systemsapproach.org/secure.html",
+    "ok": true,
+    "characters": 79211,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-message",
+    "url": "https://7e.systemsapproach.org/message.html",
+    "resolved_url": "https://7e.systemsapproach.org/message.html",
+    "ok": true,
+    "characters": 97180,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "book-README",
+    "url": "https://7e.systemsapproach.org/README.html",
+    "resolved_url": "https://7e.systemsapproach.org/README.html",
+    "ok": true,
+    "characters": 5767,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "http",
+    "url": "https://www.rfc-editor.org/rfc/rfc9110.html",
+    "resolved_url": "https://www.rfc-editor.org/rfc/rfc9110.html",
+    "ok": true,
+    "characters": 454046,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "http3",
+    "url": "https://www.rfc-editor.org/rfc/rfc9114.html",
+    "resolved_url": "https://www.rfc-editor.org/rfc/rfc9114.html",
+    "ok": true,
+    "characters": 136508,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "sse",
+    "url": "https://html.spec.whatwg.org/multipage/server-sent-events.html",
+    "resolved_url": "https://html.spec.whatwg.org/multipage/server-sent-events.html",
+    "ok": true,
+    "characters": 26208,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "curl",
+    "url": "https://curl.se/docs/manpage.html",
+    "resolved_url": "https://curl.se/docs/manpage.html",
+    "ok": true,
+    "characters": 265600,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "aws-retries",
+    "url": "https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/",
+    "resolved_url": "https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter",
+    "ok": true,
+    "characters": 18,
+    "accessed": "2026-09-20",
+    "usable_text": false
+  },
+  {
+    "id": "aws-vpc",
+    "url": "https://docs.aws.amazon.com/vpc/latest/userguide/how-it-works.html",
+    "resolved_url": "https://docs.aws.amazon.com/vpc/latest/userguide/how-it-works.html",
+    "ok": true,
+    "characters": 9397,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "aws-security",
+    "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html",
+    "resolved_url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-security-groups.html",
+    "ok": true,
+    "characters": 6387,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "aws-nat",
+    "url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html",
+    "resolved_url": "https://docs.aws.amazon.com/vpc/latest/userguide/vpc-nat-gateway.html",
+    "ok": true,
+    "characters": 3933,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "docker",
+    "url": "https://docs.docker.com/engine/network/",
+    "resolved_url": "https://docs.docker.com/engine/network/",
+    "ok": true,
+    "characters": 28108,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "docker-ports",
+    "url": "https://docs.docker.com/engine/network/port-publishing/",
+    "resolved_url": "https://docs.docker.com/engine/network/port-publishing/",
+    "ok": true,
+    "characters": 28714,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "k8s-service",
+    "url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+    "resolved_url": "https://kubernetes.io/docs/concepts/services-networking/service/",
+    "ok": true,
+    "characters": 65659,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "k8s-dns",
+    "url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+    "resolved_url": "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+    "ok": true,
+    "characters": 38804,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "k8s-policy",
+    "url": "https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+    "resolved_url": "https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+    "ok": true,
+    "characters": 47438,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "otel",
+    "url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+    "resolved_url": "https://opentelemetry.io/docs/concepts/signals/traces/",
+    "ok": true,
+    "characters": 23334,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "python-http",
+    "url": "https://docs.python.org/3/library/http.server.html",
+    "resolved_url": "https://docs.python.org/3/library/http.server.html",
+    "ok": true,
+    "characters": 22810,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  },
+  {
+    "id": "nvidia",
+    "url": "https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/overview.html",
+    "resolved_url": "https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/overview.html",
+    "ok": true,
+    "characters": 13995,
+    "accessed": "2026-09-20",
+    "usable_text": true
+  }
+]

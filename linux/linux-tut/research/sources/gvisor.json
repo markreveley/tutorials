@@ -1,0 +1,264 @@
+{
+ "id": "gvisor",
+ "tag": "[gVisor]",
+ "citation": {
+  "authors": "The gVisor Authors (Google)",
+  "title": "gVisor documentation: What is gVisor?; Introduction to gVisor security; Security Model; Performance Guide; Platform Guide; Applications (compatibility)",
+  "venue": "gvisor.dev",
+  "year": "2026 (living documentation; footer '© 2026 The gVisor Authors')",
+  "url": "https://gvisor.dev/docs/"
+ },
+ "fetched_urls": [
+  "https://gvisor.dev/docs/",
+  "https://gvisor.dev/docs/architecture_guide/intro/",
+  "https://gvisor.dev/docs/architecture_guide/security/",
+  "https://gvisor.dev/docs/architecture_guide/performance/",
+  "https://gvisor.dev/docs/user_guide/compatibility/",
+  "https://gvisor.dev/docs/architecture_guide/platforms/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "gVisor is an application kernel, written in Go (memory-safe), implementing a substantial portion of the Linux system call interface in userspace; runsc is its OCI runtime (drop-in for runc with Docker/Kubernetes)",
+   "verdict": "confirmed",
+   "finding": "Confirmed: application kernel, Linux-like interface, memory-safe Go, runs in userspace.",
+   "quote": "gVisor provides a strong layer of isolation between running applications and the host operating system. It is an application kernel that implements a Linux-like interface. Unlike Linux, it is written in a memory-safe language (Go) and runs in userspace.",
+   "location": "gVisor docs, 'What is gVisor?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "planned": "gVisor is an application kernel, written in Go (memory-safe), implementing a substantial portion of the Linux system call interface in userspace; runsc is its OCI runtime (drop-in for runc with Docker/Kubernetes)",
+   "verdict": "confirmed",
+   "finding": "runsc is the OCI runtime; integrates with Docker and Kubernetes. The docs do not use the phrase 'drop-in replacement for runc'; say 'an OCI runtime that integrates with Docker and Kubernetes'. Docker's own docs list gVisor among runtimes that ship their own containerd shim (see oci note).",
+   "quote": "gVisor includes an Open Container Initiative (OCI) runtime called runsc that makes it easy to work with existing container tooling. The runsc runtime integrates with Docker and Kubernetes, making it simple to run sandboxed containers.",
+   "location": "gVisor docs, 'What is gVisor?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "planned": "gVisor is an application kernel, written in Go (memory-safe), implementing a substantial portion of the Linux system call interface in userspace; runsc is its OCI runtime (drop-in for runc with Docker/Kubernetes)",
+   "verdict": "confirmed",
+   "finding": "Scope of reimplementation: 'a large portion of the Linux surface'; the security intro lists syscall interface, memory management, filesystems, network stack, process management, signals, namespaces — a from-scratch Go reimplementation.",
+   "quote": "The gVisor Sentry contains a Go-based, from-scratch reimplementation of the Linux system call interface, memory management, filesystems, a network stack, process management, signal handling, namespaces, etc. gVisor never passes through any system call to the host.",
+   "location": "Introduction to gVisor security > 'How does gVisor provide isolation?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/intro/"
+  },
+  {
+   "planned": "Sentry intercepts application syscalls so the app never talks to the host kernel directly; Gofer mediates filesystem access; the Sentry itself uses a restricted set of host syscalls under seccomp",
+   "verdict": "confirmed",
+   "finding": "Sentry: one per sandbox; intercepts and answers application syscalls; does NOT pass syscalls through; cannot open files itself.",
+   "quote": "It is important to note that the Sentry does not pass system calls through to the host kernel. As a userspace application, the Sentry will make some host system calls to support its operation, but it does not allow the application to directly control the system calls it makes.",
+   "location": "gVisor docs, 'What is gVisor?' > Sentry",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "planned": "Sentry intercepts application syscalls so the app never talks to the host kernel directly; Gofer mediates filesystem access; the Sentry itself uses a restricted set of host syscalls under seccomp",
+   "verdict": "confirmed",
+   "finding": "Gofer: a normal host process, one per container, talks to the Sentry (docs say 9P over a socket or shared memory channel) and mediates all file-system access. The Sentry is started in a restricted seccomp container with no file system access.",
+   "quote": "The Gofer is a standard host process which is started with each container and communicates with the Sentry via the 9P protocol over a socket or shared memory channel. The Sentry process is started in a restricted seccomp container without access to file system resources. The Gofer mediates all access to these resources, providing an additional level of isolation.",
+   "location": "gVisor docs, 'What is gVisor?' > Gofer",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "planned": "Sentry intercepts application syscalls so the app never talks to the host kernel directly; Gofer mediates filesystem access; the Sentry itself uses a restricted set of host syscalls under seccomp",
+   "verdict": "confirmed",
+   "finding": "Sentry's own confinement: syscall filter (prohibits exec, connect and variants, with configuration caveats), mount namespace, user namespace with minimal capabilities, cgroups, pivot_root.",
+   "quote": "The gVisor Sentry runs in a very restricted environment, leveraging all of the Linux kernel security primitives available (system call filtering, namespacing, cgroups, pivot_root(2), etc.). Its system call filter prohibits system calls like exec(2), connect(2), and their respective variants (with caveats depending on sandbox configurations).",
+   "location": "Introduction to gVisor security > 'How does gVisor provide isolation?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/intro/"
+  },
+  {
+   "planned": "Sentry intercepts application syscalls so the app never talks to the host kernel directly; Gofer mediates filesystem access; the Sentry itself uses a restricted set of host syscalls under seccomp",
+   "verdict": "confirmed",
+   "finding": "Cardinality, exact: Sentry is per SANDBOX; Gofer is per CONTAINER.",
+   "quote": "Each sandbox has its own isolated instance of: The Sentry, which is a kernel that runs the containers and intercepts and responds to system calls made by the application. Each container running in the sandbox has its own isolated instance of: A Gofer which provides file system access to the containers.",
+   "location": "gVisor docs, 'What is gVisor?' > 'What are the different components?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "planned": "Trade-offs: syscall-heavy and I/O-heavy workloads pay overhead; not every syscall/feature is implemented (compatibility)",
+   "verdict": "confirmed",
+   "finding": "Trade-off stated in one sentence by the docs: reduced compatibility and higher per-syscall overhead. Syscall-bound apps (data stores, static network services; redis is the worked example) are worst hit.",
+   "quote": "However, this comes at the price of reduced application compatibility and higher per-system call overhead.",
+   "location": "gVisor docs, 'What is gVisor?' > 'How is this different?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "planned": "Trade-offs: syscall-heavy and I/O-heavy workloads pay overhead; not every syscall/feature is implemented (compatibility)",
+   "verdict": "corrected",
+   "finding": "I/O nuance: the Performance Guide says raw disk I/O has NO significant fundamental overhead; the cost is in file-system (VFS) operations — many opens/stats/small files — routed through the Gofer, and in the network stack. So say 'syscall-heavy and file-operation-heavy workloads', not 'I/O-heavy'. (E.g. pip install / git status over many small files is the pattern to expect to be slow; that inference is ours, not the docs'.)",
+   "quote": "In terms of raw disk I/O, gVisor does not introduce significant fundamental overhead. For general file operations, gVisor introduces a small fixed overhead for data that transitions across the sandbox boundary.",
+   "location": "Performance Guide > File system",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/performance/"
+  },
+  {
+   "planned": "Trade-offs: syscall-heavy and I/O-heavy workloads pay overhead; not every syscall/feature is implemented (compatibility)",
+   "verdict": "confirmed",
+   "finding": "Compatibility: not every syscall, /proc file or /sys file is implemented; gVisor 'only implements a subset of the Linux syscall ABI'.",
+   "quote": "However, gVisor does not presently implement every system call, /proc file, or /sys file so some incompatibilities may occur.",
+   "location": "gVisor docs, 'What is gVisor?' > Application",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "planned": "Security model statement: defends against kernel exploits via the syscall surface; what it does NOT protect against (e.g. hardware side channels, network-level policy is still yours)",
+   "verdict": "confirmed",
+   "finding": "Purpose statement.",
+   "quote": "gVisor was created in order to provide additional defense against the exploitation of kernel bugs by untrusted userspace code.",
+   "location": "Security Model (opening paragraph)",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  },
+  {
+   "planned": "Security model statement: defends against kernel exploits via the syscall surface; what it does NOT protect against (e.g. hardware side channels, network-level policy is still yours)",
+   "verdict": "confirmed",
+   "finding": "What gVisor does NOT help with — three named items: (1) attacks on higher-level components before the sandbox enters the picture (e.g. a containerd exploit that starts the container without gVisor); (2) Spectre-style CPU side channels; (3) exploits within the sandboxed workload itself — the attacker still has whatever the sandbox was configured to have access to.",
+   "quote": "Generally speaking, gVisor protects against Linux kernel exploits by separating the sandboxed workload from accessing the host kernel directly. Where gVisor does not help: Attacks in higher-level components of the stack before the sandbox or container runtime even enters the picture, e.g. an exploit in containerd that would cause it to start a container without gVisor.",
+   "location": "Introduction to gVisor security > 'What does gVisor not protect against?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/intro/"
+  },
+  {
+   "planned": "Security model statement: defends against kernel exploits via the syscall surface; what it does NOT protect against (e.g. hardware side channels, network-level policy is still yours)",
+   "verdict": "confirmed",
+   "finding": "Hardware side channels: not protected in general.",
+   "quote": "In general, gVisor does not provide protection against hardware side channels, although it may make exploits that rely on direct access to the host System API more difficult to use.",
+   "location": "Security Model > FAQ > 'Does this stop hardware side channels?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  },
+  {
+   "planned": "Security model statement: defends against kernel exploits via the syscall surface; what it does NOT protect against (e.g. hardware side channels, network-level policy is still yours)",
+   "verdict": "confirmed",
+   "finding": "Network policy and resource limits are the operator's job: gVisor relies on host cgroups for DoS defence and says network policy should be applied at the container level.",
+   "quote": "gVisor similarly relies on the host resource mechanisms (cgroups) for defense against resource exhaustion and denial of service attacks. Network policy controls should be applied at the container level to ensure appropriate network policy enforcement.",
+   "location": "Security Model > 'System ABI, Side Channels and Other Vectors'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "THE line for the o1 Docker-API incident: isolation of the kernel boundary does nothing about a reachable host API.",
+   "quote": "An attacker need not escalate privileges within a container if there’s an exploitable network-accessible service on the host or some other API path. A sandbox is not a substitute for a secure architecture.",
+   "location": "Security Model > Threats > Other Vectors",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  },
+  {
+   "finding": "gVisor positions itself as a third approach — neither syscall filter nor VM.",
+   "quote": "gVisor is not a syscall filter (e.g. seccomp-bpf), nor a wrapper over Linux isolation primitives (e.g. firejail, AppArmor, etc.). gVisor is also not a VM in the everyday sense of the term (e.g. VirtualBox, QEMU).",
+   "location": "gVisor docs, 'What is gVisor?' > 'How is this different?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "finding": "The docs' own memorable gloss.",
+   "quote": "gVisor may be thought of as either a merged guest kernel and VMM, or as seccomp on steroids.",
+   "location": "gVisor docs, 'What is gVisor?' > 'How is this different?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "finding": "Why rule-based sandboxes (seccomp/AppArmor/SELinux) are hard for arbitrary code — relevant to agents running unknown programs.",
+   "quote": "However, in practice it can be extremely difficult (if not impossible) to reliably define a policy for arbitrary, previously unknown applications, making this approach challenging to apply universally.",
+   "location": "gVisor docs, 'What is gVisor?' > 'How is this different?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  },
+  {
+   "finding": "Escape requires two independent exploits in code bases that share no code.",
+   "quote": "In order to break out of a gVisor sandbox, an attacker would need to simultaneously exploit the gVisor Sentry kernel and the host Linux kernel, which do not share any code.",
+   "location": "Introduction to gVisor security > 'How does gVisor provide isolation?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/intro/"
+  },
+  {
+   "finding": "Audit tell: sandboxed processes are not host processes; host `top` does not show them. (And per the AISI k8s docs, inside the sandbox `dmesg | grep gvisor` identifies gVisor.)",
+   "quote": "gVisor keeps track of its own PID table representing the processes in the sandbox. These are not real host processes! Running top(1) on the host will not show them.",
+   "location": "Introduction to gVisor security > 'How does gVisor provide isolation?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/intro/"
+  },
+  {
+   "finding": "Platforms today: Systrap (default; seccomp-bpf used for interception; needs no virtualization, good inside a VM) and KVM (best on bare metal). ptrace is unsupported since systrap became default in mid-2023.",
+   "quote": "systrap replaced ptrace as the default gVisor platform in mid-2023. While ptrace continues to exist in the codebase, it is no longer supported and is expected to eventually be removed entirely.",
+   "location": "Platform Guide > ptrace",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/platforms/"
+  },
+  {
+   "finding": "Platform choice rule of thumb.",
+   "quote": "In general, when running on bare-metal (not inside a VM), the KVM platform will provide the best performance. The systrap platform is a better choice when running inside a VM, or on a machine without virtualization support.",
+   "location": "Platform Guide > Implementations",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/platforms/"
+  },
+  {
+   "finding": "How systrap intercepts syscalls (connects to the course's seccomp and signals pages).",
+   "quote": "The systrap platform relies on seccomp’s SECCOMP_RET_TRAP feature in order to intercept system calls. This makes the kernel send SIGSYS to the triggering thread, which hands over control to gVisor to handle the system call.",
+   "location": "Platform Guide > systrap",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/platforms/"
+  },
+  {
+   "finding": "Is it more secure than a VM? The docs refuse a simple answer.",
+   "quote": "one should not assume that the mere use of virtualization hardware makes a system more or less secure, just as it would be a mistake to make the claim that the use of a unibody alone makes a car safe.",
+   "location": "Security Model > FAQ > 'Is this more or less secure than a Virtual Machine?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  },
+  {
+   "finding": "Inside the sandbox even 'root' with capabilities only manipulates virtualized resources.",
+   "quote": "Even with appropriate capabilities, a user in a gVisor sandbox will only be able to manipulate virtualized system resources (e.g. the system time, kernel settings or filesystem attributes) and not underlying host system resources.",
+   "location": "Security Model > 'What can a sandbox do?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  },
+  {
+   "finding": "The minimal host-syscall set excludes creating sockets and opening files (with stated exceptions: host networking mode; directfs).",
+   "quote": "Make a minimal set of host system calls. The calls do not include the creation of new sockets (unless host networking mode is enabled) or opening files (unless directfs is enabled).",
+   "location": "Security Model > 'What can a sandbox do?'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  },
+  {
+   "finding": "Engineering rules: no syscall passthrough; only common functionality; no CGo; unsafe code confined to *_unsafe.go files; Sentry fuzzed continuously.",
+   "quote": "No system call is passed through directly to the host. Every supported call has an independent implementation in the Sentry, that is unlikely to suffer from identical vulnerabilities that may appear in the host.",
+   "location": "Security Model > 'Principles: Defense-in-Depth'",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/security/"
+  },
+  {
+   "finding": "Two kinds of cost in the Performance Guide: structural (extra layers, Go, memory for the Sentry) vs implementation (immature subsystems, e.g. network stack).",
+   "quote": "gVisor imposes runtime costs over native containers. These costs come in two forms: additional cycles and memory usage, which may manifest as increased latency, reduced throughput or density, or not at all.",
+   "location": "Performance Guide (introduction)",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/performance/"
+  },
+  {
+   "finding": "Who is hurt most by syscall interception cost.",
+   "quote": "This cost will principally impact applications that are system call bound, which tend to be high-performance data stores and static network services. In general, the impact of system call interception will be lower the more work an application does.",
+   "location": "Performance Guide > System calls",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/performance/"
+  },
+  {
+   "finding": "Concrete compatibility gaps an eval engineer may hit: in-sandbox cgroup limits not enforced; cannot mount block-device filesystems (ext4 etc.); iptables only partially supported; io_uring disabled by default (nftables similar); KVM not usable from inside the sandbox.",
+   "quote": "While in-sandbox cgroups (CPU, memory) exist and can be used for resource accounting, resource limits are not enforced within the sandbox.",
+   "location": "Applications (compatibility) > 'What doesn’t work?'",
+   "cite_url": "https://gvisor.dev/docs/user_guide/compatibility/"
+  },
+  {
+   "finding": "Same list, second quote.",
+   "quote": "iptables are only partially supported. The general goal is to support the featureset necessary to be able to run Docker in gVisor, but not necessarily further.",
+   "location": "Applications (compatibility) > 'What doesn’t work?'",
+   "cite_url": "https://gvisor.dev/docs/user_guide/compatibility/"
+  },
+  {
+   "finding": "What does work: regression-tested against Python, Java, Node.js, PHP, Go runtimes; used for arbitrary user workloads by Google Cloud Run and DigitalOcean App Platform.",
+   "quote": "gVisor releases go through the regression tests of popular language runtimes (Python, Java, Node.js, PHP, Go) to ensure continued compatibility with the base libraries of these languages. This means most programs written in these languages will work.",
+   "location": "Applications (compatibility) > 'What works?'",
+   "cite_url": "https://gvisor.dev/docs/user_guide/compatibility/"
+  },
+  {
+   "finding": "The only reliable compatibility test, per the docs.",
+   "quote": "there are (and always will be) unimplemented features and bugs. The only real way to know if it will work is to try.",
+   "location": "Applications (compatibility), introduction",
+   "cite_url": "https://gvisor.dev/docs/user_guide/compatibility/"
+  },
+  {
+   "finding": "When a sandbox adds little: if the data is already inside it.",
+   "quote": "For example, a sandbox may provide minimal benefit for a trusted database, since user data would already be inside the sandbox and there is no need for an attacker to break out in the first place.",
+   "location": "Performance Guide (introduction)",
+   "cite_url": "https://gvisor.dev/docs/architecture_guide/performance/"
+  },
+  {
+   "finding": "Why Go.",
+   "quote": "With Go, there are strong types, built-in bounds checks, no uninitialized variables, no use-after-free, no stack overflow, and a built-in race detector. However, the use of Go has its challenges, and the runtime often introduces performance overhead.",
+   "location": "gVisor docs, 'What is gVisor?' > 'Why Go?'",
+   "cite_url": "https://gvisor.dev/docs/"
+  }
+ ],
+ "teaching_notes": "gVisor's docs are unusually candid about limits, which makes them the best primary source for 'what a sandbox does not do': (1) not hardware side channels; (2) not a compromised higher layer (containerd); (3) not what you deliberately mounted/networked into the sandbox; (4) 'A sandbox is not a substitute for a secure architecture' — a network-reachable host API bypasses it entirely (pair with the o1 incident). Correction to folklore: gVisor is not 'slow at I/O' in general — raw disk I/O is near native; per-syscall cost, VFS-heavy file operations and the network stack are the costs. Folklore 'gVisor uses ptrace': obsolete — systrap is default since mid-2023, ptrace unsupported. The Gofer paragraph on the 'What is gVisor?' page names the '9P protocol'; whether that wording is current for the latest releases was NOT independently verified (unverified lead: gVisor may have moved to a successor protocol), so prefer 'communicates with the Sentry over a socket or shared memory channel' and avoid naming the protocol. For evals: the AISI k8s sandbox uses gVisor by default and warns it makes some cyber tasks 'harder or impossible' (see aisi-sandboxing note) — a sandbox choice that changes the score."
+}

@@ -1,0 +1,92 @@
+{
+  "id": "leaderboard-illusion",
+  "citation": {
+    "authors": "Shivalika Singh, Yiyang Nan, Alex Wang, Daniel D'Souza, Sayash Kapoor, Ahmet Üstün, Sanmi Koyejo, Yuntian Deng, Shayne Longpre, Noah A. Smith, Beyza Ermis, Marzieh Fadaee, Sara Hooker",
+    "title": "The Leaderboard Illusion",
+    "venue": "arXiv preprint arXiv:2504.20879 [cs.AI] (Cohere Labs / Cohere et al.; v1 2025-04-29, v2 2025-05-12)",
+    "year": "2025",
+    "url": "https://arxiv.org/abs/2504.20879"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2504.20879",
+    "https://arxiv.org/pdf/2504.20879"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Undisclosed private testing on Chatbot Arena: some providers tested many model variants privately and only published the best (best-of-N selection bias) — Meta testing 27 variants before Llama 4",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Chatbot Arena had an unstated policy allowing select providers (notably Meta, Google, OpenAI, Amazon) to test multiple private variants in parallel and retract scores. Meta tested 27 private variants on the main leaderboard before the Llama 4 release (in March 2025 alone), plus an additional 16 on the Vision leaderboard. No academic labs tested any private models in the observed period. Simulations show testing just 10 variants yields ~100 points lift in the maximum discovered Arena Score (20 variants ~50 points in another framing); a real-world experiment with two IDENTICAL Aya-Vision-8B checkpoints produced different Arena scores (1069 vs 1052, with 4 models ranked between them).",
+      "quote": "At an extreme, we identify 27 private LLM variants tested by Meta in the lead-up to the Llama-4 release. ... In Figure 7, we simulate the expected distortions to leaderboard Arena rankings and show that testing just 10 variants yields a notable increase of approximately 100 points in the maximum score identified. ... Meta alone testing 27 anonymous models in March alone.",
+      "location": "Abstract; Section 1 key finding 1; Section 3 (Figures 6-9); Section 3.1-3.2"
+    },
+    {
+      "planned": "Sampling asymmetries: proprietary models get more battles/data than open models — confirm numbers",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Estimated share of all Arena data: Google 19.2%, OpenAI 20.4%; OpenAI+Google+Meta+Anthropic together 62.8% (68x the combined share of Allen AI, Stanford, Princeton, and UC Berkeley); 61.4% of all data goes to proprietary providers. A combined 83 open-weight models received only an estimated 29.7%; 41 fully open-source models only 8.9%. Maximum daily sampling rate: up to 34% for Google/OpenAI models vs 3.3% for Reka (lowest), with xAI at 22.0% and Meta at 17.9% — roughly 10x Allen AI's maximum.",
+      "quote": "Providers like Google and OpenAI have received an estimated 19.2% and 20.4% of all data on the arena, respectively. In contrast, a combined 83 open-weight models have only received an estimated 29.7% of the total data. ... At the extreme, Google and OpenAI reach a maximum daily sampling rate of 34%, while Reka registers the lowest at 3.3%.",
+      "location": "Abstract; Section 1 key finding 2 (Figure 4); Section 4.1 (Figure 5); Recommendation 4"
+    },
+    {
+      "planned": "Arena data access advantage: Arena-specific data boosts Arena performance — confirm the 112% relative improvement claim",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with precise framing: in a controlled fine-tuning experiment (fixed training budget, varying arena-data proportion), raising the arena-mix from 0% to 70% more than doubled win-rate vs Llama-3.1-8B-Instruct on ArenaHard from 23.5% to 49.9% — a 112.3% relative gain (30% arena-mix gave 42.7%, an 81.7% relative gain). Judged by gpt-4o-2024-11-20 as LLM-judge. Crucially, gains did NOT generalize: MMLU showed limited/no benefit, evidencing Arena-specific overfitting. Authors call this a conservative estimate.",
+      "quote": "even limited additional data can result in relative performance gains of up to 112% on ArenaHard, a test set from the arena distribution. ... Variant 0_arena scores a win-rate of 23.5%, 30_arena scores a win-rate of 42.7%, and variant 70_arena ... scores a win-rate of 49.9% against Llama-3.1-8B-Instruct. ... The relative gains in win-rates are 81.7% for the 30_arena and 112.3% for the 70_arena variant.",
+      "location": "Abstract; Section 1 key finding 3; Section 4.2 (Figure 10, Table 9)"
+    },
+    {
+      "planned": "Deprecation asymmetries for open models",
+      "verdict": "confirmed",
+      "finding": "Confirmed. Of 243 public models, 205 were silently deprecated (sampling rate cut to near zero without notification) vs only 47 officially listed as deprecated in the FastChat backend. Of the silently deprecated models, 64% are open-weight or fully open-source. Deprecation rates: 87.8% of open-weight and 89% of open-source models deprecated vs 80% of proprietary models. Deprecation can break Bradley-Terry assumptions (transitivity under shifting task distribution; disconnected comparison graphs), making rankings unreliable.",
+      "quote": "out of 243 public models, 205 have been silently deprecated. This is a significantly higher number than the 47 models officially listed as deprecated ... Among the models that are silently deprecated, 64% are open-weight or fully open-source. ... 87.8% of open weights and 89% of open-source models have been deprecated, in contrast to a lower deprecation rate of 80% for proprietary models.",
+      "location": "Section 1 key finding 4; Section 5 (Figure 18); Appendix K"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Best-of-N selective disclosure breaks the statistics: even two IDENTICAL model checkpoints submitted to the Arena got materially different scores, so picking the max of N runs systematically inflates rankings (violates the Bradley-Terry unbiased-sampling assumption).",
+      "quote": "we observe notable differences in final Arena scores between identical checkpoints: 1052 (±21/22) and 1069 (±19/23). As a result, 4 models are positioned between our two identical checkpoints.",
+      "numbers": "Identical Aya-Vision-8B checkpoints: 1052 vs 1069; simulation: 10 private variants ≈ +100 points expected max score, 20 variants ≈ +50 points vs no private testing"
+    },
+    {
+      "point": "A weaker model family with private best-of-N testing can out-rank a stronger family limited to one submission — leaderboard rank can reflect testing strategy, not model quality.",
+      "quote": "a weaker family of models (Family A) enabled with private testing can outperform a stronger family of models (Family B), which is restricted to a single submission. ... despite having a generally stronger model pool, Family B ranks lower than Family A on the leaderboard.",
+      "numbers": "Figure 8 simulation"
+    },
+    {
+      "point": "Suspicious leaderboard churn is a tell for parallel private testing: rivals topping the Arena within days of each other is implausible given model development timelines.",
+      "quote": "Given the time typically required to develop, refine, and test a foundation model, it is unlikely for the same provider to top the leaderboard twice in a single week unless they were testing multiple variants simultaneously.",
+      "numbers": "GPT-4.5 and Grok-3 topped the leaderboard the same day (2025-03-04); Gemini Exp-1114 (Nov 14) -> ChatGPT-4o-20241120 (Nov 20) -> Gemini Exp-1121 (Nov 21, 2024)"
+    },
+    {
+      "point": "Overfitting signature: arena-data fine-tuning gains are in-distribution only — big jumps on ArenaHard, limited benefit on MMLU — so Arena rank measures arena-distribution fit, not general capability (Goodhart's Law, which the paper opens with).",
+      "quote": "while increasing the proportion of Chatbot Arena data within a fixed training budget yielded consistent improvements on the Arena [test set] ... showing limited benefits for other tasks of interest.",
+      "numbers": "ArenaHard win-rate 23.5% -> 49.9% (0% -> 70% arena mix); ArenaHard correlates 98.6% with Arena human-preference rankings"
+    },
+    {
+      "point": "Crowdsourced eval platforms are also data-distribution mechanisms: battle participation determines who harvests user prompts/preferences, compounding advantage over time.",
+      "quote": "OpenAI, Google, Meta, and Anthropic collectively account for 62.8% of the Arena data, which is 68 times more than the combined share of top academic and non-profit labs like Allen AI, Stanford, Princeton, and UC Berkeley.",
+      "numbers": "Sample counts (Figure 4): OpenAI 1.24M, Google 1.17M, Anthropic 741K, Meta 671K vs Allen AI 22K, UC Berkeley 17K, Princeton 11K, Stanford 6K"
+    },
+    {
+      "point": "The paper's five concrete reforms are teachable as benchmark-design principles: prohibit score retraction; transparent limits on private variants (e.g., max 3 concurrent); apply deprecations equally across license types; fair/active sampling (prioritize under-evaluated, high-variance pairs); publish a comprehensive deprecation list.",
+      "quote": "Prohibit score retraction after submission. ... It is critical to enforce a strict and publicly disclosed limit (e.g., maximum 3 model variants tested concurrently per provider).",
+      "numbers": "Section 'Recommendations' items 1-5"
+    },
+    {
+      "point": "Author conflict-of-interest transparency: a subset of authors (Cohere) submit models to the Arena, and their own private-variant experiments (Aya-Vision) appear in the Jan-Mar 2025 scrape — useful for teaching how auditors disclose their position.",
+      "quote": "during the same period, Cohere submitted private variants—these ablations were part of experiments submitted by the authors of this work to measure the lift that could be expected from private testing",
+      "numbers": "Cohere submissions: command-r, command-r-plus, aya-expanse, aya-vision, command-a"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not say Meta tested '27 variants total' as a hard count of everything: 27 is the main-leaderboard count (observed in March 2025); the paper notes an additional 16 private variants on the Vision leaderboard, and calls 27 'a very conservative estimate'.",
+    "The 112% figure is a RELATIVE win-rate gain on ArenaHard (23.5% -> 49.9% absolute, i.e., 112.3%), measured with an LLM-judge (gpt-4o-2024-11-20) against Llama-3.1-8B-Instruct — not a 112% gain in Arena Elo/score, and not on the live Arena itself.",
+    "Two distinct open-model data-share numbers exist; don't conflate them: 83 open-WEIGHT models got 29.7% of data, while 41 fully open-SOURCE models got 8.9%.",
+    "The 19.2%/20.4% Google/OpenAI figures are ESTIMATES based on share of total battles from the authors' scraped sample, not platform-disclosed numbers.",
+    "Deprecation asymmetry is about SILENT deprecation (sampling cut to ~0% without notice): 205 silently deprecated vs 47 officially listed; 64% of silently deprecated models are open-weight/open-source, and rates are 87.8%/89% (open-weight/open-source) vs 80% (proprietary) — note proprietary models are also heavily deprecated, just less so.",
+    "The paper does not claim providers trained on private API battle data — it says disproportionate data access COULD yield even greater gains than the conservative experimental estimate.",
+    "This is an arXiv preprint (v2, May 12, 2025) by authors who are themselves Arena participants (Cohere); they disclose this dual role explicitly."
+  ],
+  "notes_for_authors": "All four planned claims are confirmed with exact numbers from the v2 PDF (arXiv:2504.20879v2, 12 May 2025; full text extracted via pdftotext). Strongest classroom hooks: (1) the identical-checkpoint experiment (1052 vs 1069) as a vivid demonstration of best-of-N bias; (2) the ArenaHard-vs-MMLU divergence as a clean overfitting/Goodhart example; (3) the BT-model assumption violations (unbiased sampling, transitivity, graph connectivity) for a statistics-grounded lesson. Note the affiliation: lead authors are at Cohere/Cohere Labs with academic co-authors (Stanford, Princeton, MIT, UW/AI2, Waterloo); Chatbot Arena (LMArena) publicly disputed some characterizations after release — worth mentioning as live controversy, but verify any LMArena rebuttal claims separately before teaching them."
+}

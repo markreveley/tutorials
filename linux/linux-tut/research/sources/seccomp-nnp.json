@@ -1,0 +1,159 @@
+{
+ "id": "seccomp-nnp",
+ "tag": "[seccomp(2)]",
+ "citation": {
+  "authors": "Linux man-pages project; Linux kernel documentation; Docker Inc.",
+  "title": "seccomp(2); Kernel docs 'Seccomp BPF (SECure COMPuting with filters)' and 'No New Privileges Flag'; Docker Docs 'Seccomp security profiles for Docker'",
+  "venue": "man7.org (man-pages 6.19); docs.kernel.org; docs.docker.com",
+  "year": "2026",
+  "url": "https://man7.org/linux/man-pages/man2/seccomp.2.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man2/seccomp.2.html",
+  "https://docs.kernel.org/userspace-api/seccomp_filter.html",
+  "https://docs.kernel.org/userspace-api/no_new_privs.html",
+  "https://docs.docker.com/engine/security/seccomp/",
+  "https://raw.githubusercontent.com/moby/profiles/main/seccomp/default.json",
+  "https://docs.docker.com/reference/cli/docker/container/run/",
+  "https://man7.org/linux/man-pages/man5/proc_pid_status.5.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "seccomp filter mode lets a process install a BPF filter restricting which system calls it (and its children) may make; reduces kernel attack surface; kernel docs say it is 'not a sandbox' by itself",
+   "verdict": "confirmed",
+   "finding": "seccomp(2) SECCOMP_SET_MODE_FILTER: 'The system calls allowed are defined by a pointer to a Berkeley Packet Filter (BPF) passed via args'; children: 'If fork(2) or clone(2) is allowed by the filter, any child processes will be constrained to the same system call filters as the parent. If execve(2) is allowed, the existing filters will be preserved across a call to execve(2).' Attack-surface wording (kernel doc): 'The resulting set reduces the total kernel surface exposed to the application.' The 'not a sandbox' wording is a section literally titled 'What it isn't'. Filters see only the syscall number and raw argument values — 'BPF programs may not dereference pointers' — so a filter cannot inspect a pathname string.",
+   "quote": "System call filtering isn't a sandbox. It provides a clearly defined mechanism for minimizing the exposed kernel surface. It is meant to be a tool for sandbox developers to use.",
+   "location": "Kernel docs, 'Seccomp BPF (SECure COMPuting with filters)' → 'What it isn't'",
+   "cite_url": "https://docs.kernel.org/userspace-api/seccomp_filter.html#what-it-isn-t"
+  },
+  {
+   "planned": "no_new_privs: once set, execve cannot grant privileges (setuid/setgid bits and file capabilities have no effect); inherited, cannot be unset",
+   "verdict": "confirmed",
+   "finding": "Confirmed verbatim; since Linux 3.5; any task may set it via prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0). Caveat the doc itself gives: it 'does not prevent privilege changes that do not involve execve()' — an already-privileged task can still call setuid(2). It is also the precondition for an unprivileged process to install a seccomp filter (seccomp(2): caller needs CAP_SYS_ADMIN in its user namespace OR no_new_privs set, else EACCES). Visible as 'NoNewPrivs:' in /proc/PID/status (since Linux 4.10).",
+   "quote": "Once the bit is set, it is inherited across fork, clone, and execve and cannot be unset. [...] the setuid and setgid bits will no longer change the uid or gid; file capabilities will not add to the permitted set",
+   "location": "Kernel docs, 'No New Privileges Flag'",
+   "cite_url": "https://docs.kernel.org/userspace-api/no_new_privs.html"
+  },
+  {
+   "planned": "Docker's default seccomp profile is an allowlist that 'disables around 44 system calls out of 300+' — verify the current number and wording; examples of blocked calls (mount, reboot, kexec_load, init_module, keyctl…)",
+   "verdict": "confirmed",
+   "finding": "As of 2026-09-20 the Docker docs STILL say exactly 'disables around 44 system calls out of 300+', and call it 'moderately protective while providing wide application compatibility'. Treat '44' as Docker's own approximate figure and always quote it with 'around': the same page's table 'Significant syscalls blocked by the default profile' currently has 54 rows (explicitly 'significant (but not all)'), and the live profile JSON (moby/profiles main) has defaultAction SCMP_ACT_ERRNO with 361 syscall names allowed unconditionally and 426 distinct names mentioned in any rule — so the exact count of blocked calls depends on architecture, kernel and granted capabilities. Mechanism: allowlist; default action SCMP_ACT_ERRNO → 'Permission Denied' (EPERM; defaultErrnoRet = 1 in the JSON). All five planned examples are in the table: mount ('Deny mounting, already gated by CAP_SYS_ADMIN'), reboot ('Don't let containers reboot the host'), kexec_load, init_module (also finit_module, delete_module), keyctl (also add_key, request_key: 'Prevent containers from using the kernel keyring, which is not namespaced'). Others worth teaching: clone/unshare/setns (new namespaces), ptrace (on kernels < 4.8), bpf, perf_event_open, pivot_root, umount/umount2, swapon/swapoff, open_by_handle_at ('Cause of an old container breakout'), clock_settime/settimeofday/stime ('Time/date is not namespaced'), io_uring_enter/_register/_setup ('Blocked due to security vulnerabilities that can be exploited to break out of containers', moby/moby#46762), personality, userfaultfd, and a newer `socket` row (blocked for AF_ALG citing CVE-2026-31431, and for AF_VSOCK). The profile is capability-aware: many of these are conditionally allowed when the matching capability is added (e.g. with CAP_SYS_ADMIN: mount, umount2, unshare, setns, clone, sethostname…; with CAP_SYS_PTRACE: ptrace, process_vm_readv…; with CAP_SYS_TIME: settimeofday, clock_settime). The docs' profile link now points at github.com/moby/profiles (seccomp/default.json), not moby/moby.",
+   "quote": "The default seccomp profile provides a sane default for running containers with seccomp and disables around 44 system calls out of 300+. It is moderately protective while providing wide application compatibility.",
+   "location": "Docker Docs, 'Seccomp security profiles for Docker' → 'Pass a profile for a container'",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/#pass-a-profile-for-a-container"
+  },
+  {
+   "planned": "--security-opt seccomp=unconfined disables; --privileged disables seccomp",
+   "verdict": "confirmed",
+   "finding": "Both documented. Seccomp page: 'You can pass unconfined to run a container without the default seccomp profile.' Run reference, --privileged list: 'Disables the default seccomp profile'. Also documented: --security-opt seccomp=profile.json (custom) and seccomp=builtin ('Use the default (built-in) seccomp profile for the container. This can be used to enable seccomp for a container running on a daemon with a custom default profile set, or with seccomp disabled (\"unconfined\").'). Docker's advice: 'It is not recommended to change the default seccomp profile.'",
+   "quote": "You can pass `unconfined` to run a container without the default seccomp profile.",
+   "location": "Docker Docs, 'Seccomp security profiles for Docker' → 'Run without the default seccomp profile'",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/#run-without-the-default-seccomp-profile"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "How the Docker profile works (allowlist mechanics).",
+   "quote": "In effect, the profile is an allowlist that denies access to system calls by default and then allows specific system calls. The profile works by defining a `defaultAction` of `SCMP_ACT_ERRNO` and overriding that action only for specific system calls. The effect of `SCMP_ACT_ERRNO` is to cause a `Permission Denied` error.",
+   "location": "Docker Docs, 'Seccomp security profiles for Docker' → 'Pass a profile for a container'",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/"
+  },
+  {
+   "finding": "The blocked-syscall table is explicitly partial.",
+   "quote": "Docker's default seccomp profile is an allowlist which specifies the calls that are allowed. The table below lists the significant (but not all) syscalls that are effectively blocked because they are not on the allowlist.",
+   "location": "Docker Docs, 'Seccomp security profiles for Docker' → 'Significant syscalls blocked by the default profile'",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile"
+  },
+  {
+   "finding": "Selected table rows, verbatim.",
+   "quote": "`mount` Deny mounting, already gated by `CAP_SYS_ADMIN`. | `reboot` Don't let containers reboot the host. Also gated by `CAP_SYS_BOOT`. | `keyctl` Prevent containers from using the kernel keyring, which is not namespaced. | `unshare` Deny cloning new namespaces for processes. Also gated by `CAP_SYS_ADMIN`, with the exception of `unshare --user`.",
+   "location": "Docker Docs, 'Seccomp security profiles for Docker' → blocked-syscalls table",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile"
+  },
+  {
+   "finding": "More table rows relevant to eval sandboxes: clock and io_uring.",
+   "quote": "`clock_settime` Time/date is not namespaced. Also gated by `CAP_SYS_TIME`. | `io_uring_enter` Blocked due to security vulnerabilities that can be exploited to break out of containers. | `open_by_handle_at` Cause of an old container breakout. Also gated by `CAP_DAC_READ_SEARCH`. | `ptrace` Tracing/profiling syscall. Blocked in Linux kernel versions before 4.8 to avoid seccomp bypass.",
+   "location": "Docker Docs, 'Seccomp security profiles for Docker' → blocked-syscalls table",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/#significant-syscalls-blocked-by-the-default-profile"
+  },
+  {
+   "finding": "Availability condition and how to check the kernel.",
+   "quote": "This feature is available only if Docker has been built with `seccomp` and the kernel is configured with `CONFIG_SECCOMP` enabled. To check if your kernel supports `seccomp`: $ grep CONFIG_SECCOMP= /boot/config-$(uname -r)",
+   "location": "Docker Docs, 'Seccomp security profiles for Docker' (intro)",
+   "cite_url": "https://docs.docker.com/engine/security/seccomp/"
+  },
+  {
+   "finding": "Strict mode (the original seccomp): only read, write, _exit, sigreturn.",
+   "quote": "The only system calls that the calling thread is permitted to make are read(2), write(2), _exit(3) (but not exit_group(2)), and sigreturn(2). Other system calls result in the termination of the calling thread, or termination of the entire process with the SIGKILL signal when there is only one thread.",
+   "location": "seccomp(2), DESCRIPTION → SECCOMP_SET_MODE_STRICT"
+  },
+  {
+   "finding": "Why unprivileged filter installation requires no_new_privs (the man page's setuid(2)-returns-0 attack).",
+   "quote": "This requirement ensures that an unprivileged process cannot apply a malicious filter and then invoke a set-user-ID or other privileged program using execve(2), thus potentially compromising that program.",
+   "location": "seccomp(2), DESCRIPTION → SECCOMP_SET_MODE_FILTER"
+  },
+  {
+   "finding": "SECCOMP_RET_ERRNO: the syscall is not executed and an errno is returned — which is why a seccomp-blocked call looks like an ordinary 'Operation not permitted' to the agent rather than a crash.",
+   "quote": "This value results in the SECCOMP_RET_DATA portion of the filter's return value being passed to user space as the errno value without executing the system call.",
+   "location": "seccomp(2), 'Filters' → SECCOMP_RET_ERRNO"
+  },
+  {
+   "finding": "Reading the state from /proc/PID/status: Seccomp 0 = disabled, 1 = strict, 2 = filter; Seccomp_filters = number of filters; NoNewPrivs bit.",
+   "quote": "Seccomp mode of the process (since Linux 3.8, see seccomp(2)). 0 means SECCOMP_MODE_DISABLED; 1 means SECCOMP_MODE_STRICT; 2 means SECCOMP_MODE_FILTER. [...] Seccomp_filters Number of seccomp filters attached to the process (since Linux 5.9, see seccomp(2)).",
+   "location": "proc_pid_status(5)",
+   "cite_url": "https://man7.org/linux/man-pages/man5/proc_pid_status.5.html"
+  },
+  {
+   "finding": "Filters cannot follow pointers (no TOCTOU, but also no filtering on path strings).",
+   "quote": "BPF makes it impossible for users of seccomp to fall prey to time-of-check-time-of-use (TOCTOU) attacks that are common in system call interposition frameworks. BPF programs may not dereference pointers which constrains all filters to solely evaluating the system call arguments directly.",
+   "location": "Kernel docs, 'Seccomp BPF' → Introduction",
+   "cite_url": "https://docs.kernel.org/userspace-api/seccomp_filter.html#introduction"
+  },
+  {
+   "finding": "Docker's no-new-privileges option.",
+   "quote": "To prevent your container processes from gaining additional privileges, you can use the following command: $ docker run --security-opt no-new-privileges -it ubuntu bash This means that commands that raise privileges such as `su` or `sudo` no longer work.",
+   "location": "Docker Docs, docker container run reference, 'Optional security options (--security-opt)'",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#security-opt"
+  },
+  {
+   "finding": "no_new_privs limits: it does not stop non-exec privilege changes.",
+   "quote": "Note that no_new_privs does not prevent privilege changes that do not involve execve(). An appropriately privileged task can still call setuid(2) and receive SCM_RIGHTS datagrams.",
+   "location": "Kernel docs, 'No New Privileges Flag'",
+   "cite_url": "https://docs.kernel.org/userspace-api/no_new_privs.html"
+  },
+  {
+   "finding": "EXECUTED — IMPORTANT ENVIRONMENT CAVEAT: on this machine's Docker Desktop the daemon reports seccomp 'Profile: unconfined', so a DEFAULT container shows Seccomp: 0 (no filter at all). Authors running examples here must not show 'Seccomp: 2' for a plain `docker run` unless they add --security-opt seccomp=builtin. On a stock Linux Docker Engine the docs say the default profile is applied; `docker info` shows which profile a daemon uses.",
+   "quote": "$ docker info | grep -A3 'Security Options'\n Security Options:\n  seccomp\n   Profile: unconfined\n  cgroupns\n$ docker run --rm ubuntu:24.04 grep -E 'NoNewPrivs|Seccomp' /proc/self/status\nNoNewPrivs:\t0\nSeccomp:\t0\nSeccomp_filters:\t0",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — with Docker's built-in profile explicitly requested: filter mode, one filter.",
+   "quote": "$ docker run --rm --security-opt seccomp=builtin ubuntu:24.04 grep -E 'NoNewPrivs|Seccomp' /proc/self/status\nNoNewPrivs:\t0\nSeccomp:\t2\nSeccomp_filters:\t1",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — no-new-privileges sets the bit; --privileged leaves seccomp disabled.",
+   "quote": "$ docker run --rm --security-opt no-new-privileges ubuntu:24.04 grep -E 'NoNewPrivs|Seccomp' /proc/self/status\nNoNewPrivs:\t1\nSeccomp:\t0\nSeccomp_filters:\t0\n$ docker run --rm --privileged ubuntu:24.04 grep -E 'NoNewPrivs|Seccomp' /proc/self/status\nNoNewPrivs:\t0\nSeccomp:\t0\nSeccomp_filters:\t0",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — the built-in profile blocks unshare(CLONE_NEWUSER) that otherwise succeeds for container root: seccomp's effect shown in isolation (capabilities identical in both runs).",
+   "quote": "$ docker run --rm ubuntu:24.04 unshare --user --map-root-user id\nuid=0(root) gid=0(root) groups=0(root)\n$ docker run --rm --security-opt seccomp=builtin ubuntu:24.04 unshare --user --map-root-user id\nunshare: unshare failed: Operation not permitted",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — the profile is capability-aware: with --cap-add SYS_ADMIN the built-in profile allows mount.",
+   "quote": "$ docker run --rm --cap-add SYS_ADMIN --security-opt seccomp=builtin ubuntu:24.04 sh -c 'mount -t tmpfs none /mnt; echo exit=$?'\nexit=0",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "Live profile facts (moby/profiles main, seccomp/default.json, parsed 2026-09-20): defaultAction SCMP_ACT_ERRNO, defaultErrnoRet 1; 37 rule objects; 361 syscall names allowed unconditionally; 426 distinct names in any rule; capability-conditional allow rules for CAP_DAC_READ_SEARCH, CAP_SYS_ADMIN, CAP_SYS_BOOT, CAP_SYS_CHROOT, CAP_SYS_MODULE, CAP_SYS_PACCT, CAP_SYS_PTRACE, CAP_SYS_RAWIO, CAP_SYS_TIME, CAP_SYS_TTY_CONFIG, CAP_SYS_NICE, CAP_SYSLOG, CAP_BPF, CAP_PERFMON.",
+   "quote": "\"defaultAction\": \"SCMP_ACT_ERRNO\", \"defaultErrnoRet\": 1",
+   "location": "github.com/moby/profiles, seccomp/default.json (top of file); counts computed from the JSON",
+   "cite_url": "https://github.com/moby/profiles/blob/main/seccomp/default.json"
+  }
+ ],
+ "teaching_notes": "The '44 out of 300+' line is still Docker's current wording — quote it with 'around' and attribute it to Docker; do not present 44 as a count you can verify (their own table has 54 rows and says it is incomplete; the JSON allowlists ~360+ names). BIGGEST SURPRISE for authors: Docker Desktop on this Mac runs the daemon with seccomp 'Profile: unconfined', so default containers here show 'Seccomp: 0' and e.g. `unshare --user` works; use `--security-opt seccomp=builtin` to demonstrate the real profile, and tell readers to check `docker info`. On this host, `mount` failing in a default container is attributable to the missing CAP_SYS_ADMIN, not seccomp — defence in depth means most dangerous syscalls are gated twice ('already gated by CAP_SYS_ADMIN'). Kernel doc's 'System call filtering isn't a sandbox' is the quotable line. The Docker run reference links no_new_privs to the kernel doc; NoNewPrivs/Seccomp field semantics are in proc_pid_status(5)."
+}

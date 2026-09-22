@@ -1,0 +1,146 @@
+{
+  "id": "pid1",
+  "tag": "[pid_namespaces(7)]",
+  "citation": {
+    "authors": "Linux man-pages project; Docker Inc.; Thomas Orozco (tini)",
+    "title": "pid_namespaces(7) — overview of Linux PID namespaces; docker container run / docker container stop reference; tini README",
+    "venue": "Linux man-pages 6.19; docs.docker.com; github.com/krallin/tini",
+    "year": "2026",
+    "url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+  },
+  "fetched_urls": [
+    "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html",
+    "https://docs.docker.com/reference/cli/docker/container/run/",
+    "https://docs.docker.com/reference/cli/docker/container/stop/",
+    "https://docs.docker.com/engine/containers/multi-service_container/",
+    "https://raw.githubusercontent.com/krallin/tini/master/README.md",
+    "https://man7.org/linux/man-pages/man2/kill.2.html"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "In a PID namespace the first process is PID 1 ('init'); orphans are reparented to it; if it terminates the kernel SIGKILLs all other processes in the namespace",
+      "verdict": "confirmed",
+      "finding": "All three parts verbatim. Refinement on reparenting: orphans go to the namespace init UNLESS a nearer ancestor marked itself a child subreaper with prctl(PR_SET_CHILD_SUBREAPER). After init dies, no new process can be created in that namespace (fork fails with ENOMEM).",
+      "quote": "If the \"init\" process of a PID namespace terminates, the kernel terminates all of the processes in the namespace via a SIGKILL signal. This behavior reflects the fact that the \"init\" process is essential for the correct operation of a PID namespace.",
+      "location": "pid_namespaces(7), DESCRIPTION > The namespace init process; reparenting in > Adoption of orphaned children",
+      "cite_url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+    },
+    {
+      "planned": "Signals for which PID 1 has not installed a handler are not delivered to it from inside the namespace (so an app running as PID 1 ignores SIGTERM unless it handles it); from the parent namespace only SIGKILL/SIGSTOP are forced",
+      "verdict": "confirmed",
+      "finding": "Inside the namespace: only signals with an established handler can be sent to init — this applies EVEN to SIGKILL and even to privileged (root) senders. From an ancestor namespace: same handler-only rule, except SIGKILL and SIGSTOP, which are forcibly delivered. Consequence (executed below): `kill -TERM 1` and `kill -KILL 1` run as root inside a container both return 0 and do nothing to a handler-less PID 1; `docker stop` sends SIGTERM from outside, it is dropped, and after the grace period the daemon's SIGKILL is forced through -> exit code 137.",
+      "quote": "Only signals for which the \"init\" process has established a signal handler can be sent to the \"init\" process by other members of the PID namespace. This restriction applies even to privileged processes, and prevents other members of the PID namespace from accidentally killing the \"init\" process.",
+      "location": "pid_namespaces(7), DESCRIPTION > The namespace init process",
+      "cite_url": "https://man7.org/linux/man-pages/man7/pid_namespaces.7.html"
+    },
+    {
+      "planned": "docker run --init runs an init (tini) as PID 1 that forwards signals and reaps zombies",
+      "verdict": "confirmed",
+      "finding": "Flag text: 'Run an init inside the container that forwards signals and reaps processes' (API 1.25+). The binary is `docker-init`, found on the daemon's PATH, 'backed by tini'. tini README: included in Docker since 1.13; spawns a single child, forwards signals to it, reaps zombies, exits with the child's exit code. Executed: PID 1 shows as `/sbin/docker-init -- sleep 300`.",
+      "quote": "You can use the --init flag to indicate that an init process should be used as the PID 1 in the container. Specifying an init process ensures the usual responsibilities of an init system, such as reaping zombie processes, are performed inside the created container.",
+      "location": "docker container run reference, 'Specify an init process'; option table row for --init",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/"
+    },
+    {
+      "planned": "docker stop sends SIGTERM (or STOPSIGNAL) then SIGKILL after a grace period, default 10 seconds",
+      "verdict": "confirmed",
+      "finding": "Default first signal: the image's STOPSIGNAL / --stop-signal, else SIGTERM. Default grace period: 10 seconds for Linux containers (30 for Windows containers), set by the daemon; per-container default via `docker run --stop-timeout`, per-invocation via `docker stop -t/--timeout`; -1 waits indefinitely. `docker stop -s/--signal` overrides the signal for one invocation. The signal goes to 'the main process inside the container' (PID 1) only.",
+      "quote": "The main process inside the container will receive SIGTERM, and after a grace period, SIGKILL. The first signal can be changed with the STOPSIGNAL instruction in the container's Dockerfile, or the --stop-signal option to docker run and docker create.",
+      "location": "docker container stop reference, Description; default value in 'Stop container with timeout (-t, --timeout)'",
+      "cite_url": "https://docs.docker.com/reference/cli/docker/container/stop/"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "The 10-second default, exact wording.",
+      "quote": "If no default is configured for the container, the Daemon determines the default, and is 10 seconds for Linux containers, and 30 seconds for Windows containers.",
+      "location": "docker container stop reference, 'Stop container with timeout (-t, --timeout)'; same sentence under --stop-timeout in the run reference"
+    },
+    {
+      "finding": "What happens at timeout.",
+      "quote": "If the container does not exit after the timeout elapses, it's forcibly killed with a SIGKILL signal. If you set --timeout to -1, no timeout is applied, and the daemon waits indefinitely for the container to exit.",
+      "location": "docker container stop reference, 'Stop container with timeout (-t, --timeout)'"
+    },
+    {
+      "finding": "Signals from an ancestor namespace: handler-only, except SIGKILL/SIGSTOP which are forced.",
+      "quote": "SIGKILL or SIGSTOP are treated exceptionally: these signals are forcibly delivered when sent from an ancestor PID namespace. Neither of these signals can be caught by the \"init\" process, and so will result in the usual actions associated with those signals (respectively, terminating and stopping the process).",
+      "location": "pid_namespaces(7), DESCRIPTION > The namespace init process"
+    },
+    {
+      "finding": "Definition of the namespace init and its adoption role.",
+      "quote": "The first process created in a new namespace ... has the PID 1, and is the \"init\" process for the namespace (see init(1)). This process becomes the parent of any child processes that are orphaned because a process that resides in this PID namespace terminated",
+      "location": "pid_namespaces(7), DESCRIPTION > The namespace init process"
+    },
+    {
+      "finding": "Reparenting rule including subreapers.",
+      "quote": "When a child process becomes orphaned, it is reparented to the \"init\" process in the PID namespace of its parent (unless one of the nearer ancestors of the parent employed the prctl(2) PR_SET_CHILD_SUBREAPER command to mark itself as the reaper of orphaned descendant processes).",
+      "location": "pid_namespaces(7), DESCRIPTION > Adoption of orphaned children"
+    },
+    {
+      "finding": "After the namespace init exits, fork into the namespace fails with ENOMEM.",
+      "quote": "In this case, a subsequent fork(2) into this PID namespace fail with the error ENOMEM; it is not possible to create a new process in a PID namespace whose \"init\" process has terminated.",
+      "location": "pid_namespaces(7), DESCRIPTION > The namespace init process"
+    },
+    {
+      "finding": "docker-init is tini.",
+      "quote": "The default init process used is the first docker-init executable found in the system path of the Docker daemon process. This docker-init binary, included in the default installation, is backed by tini.",
+      "location": "docker container run reference, 'Specify an init process'"
+    },
+    {
+      "finding": "tini's own statement of what it does and why SIGTERM starts working.",
+      "quote": "It ensures that the *default signal handlers* work for the software you run in your Docker image. For example, with Tini, `SIGTERM` properly terminates your process even if you didn't explicitly install a signal handler for it.",
+      "location": "tini README, 'Why Tini?'",
+      "cite_url": "https://github.com/krallin/tini"
+    },
+    {
+      "finding": "tini mechanics: one child, signal forwarding, zombie reaping, exit-code passthrough; bundled with Docker since 1.13.",
+      "quote": "After spawning your process, Tini will wait for signals and forward those to the child process, and periodically reap zombie processes that may be created within your container. When the \"first\" child process exits ... Tini exits as well, with the exit code of the child process",
+      "location": "tini README, 'Understanding Tini'; Docker 1.13 note under 'Using Tini'",
+      "cite_url": "https://github.com/krallin/tini"
+    },
+    {
+      "finding": "tini zombie risk statement (PID exhaustion).",
+      "quote": "It protects you from software that accidentally creates zombie processes, which can (over time!) starve your entire system for PIDs (and make it unusable).",
+      "location": "tini README, 'Why Tini?'"
+    },
+    {
+      "finding": "By default tini signals only its direct child; `tini -g` signals the child's process group. Relevant when the child is `sh -c '...'`.",
+      "quote": "By default, Tini only kills its immediate child process.",
+      "location": "tini README, 'Process group killing' (-g flag)"
+    },
+    {
+      "finding": "Docker docs on the main process's responsibility and --init vs a full init.",
+      "quote": "The --init flag inserts a tiny init-process into the container as the main process, and handles reaping of all processes when the container exits. Handling such processes this way is superior to using a full-fledged init process such as sysvinit or systemd to handle process lifecycle within your container.",
+      "location": "Docker docs, 'Run multiple processes in a container'",
+      "cite_url": "https://docs.docker.com/engine/containers/multi-service_container/"
+    },
+    {
+      "finding": "--stop-signal default wording from the run reference.",
+      "quote": "The default value is defined by STOPSIGNAL in the image, or SIGTERM if the image has no STOPSIGNAL defined.",
+      "location": "docker container run reference, 'Stop container with signal (--stop-signal)'"
+    },
+    {
+      "finding": "EXECUTED (A): app as PID 1 with no handlers. SigCgt is all zeros; root's `kill -TERM 1` AND `kill -KILL 1` from inside both 'succeed' (rc=0) and do nothing; `docker stop` takes the full 10 s and the container exits 137 (128+9).",
+      "quote": "$ docker run -d --name lt-R2-pid1 ubuntu:24.04 sleep 300\n$ docker exec lt-R2-pid1 ps -o pid,ppid,stat,comm -e\n  PID  PPID STAT COMMAND\n    1     0 Ss   sleep\n    7     0 Rs   ps\n$ docker exec lt-R2-pid1 sh -c 'grep -E \"SigIgn|SigCgt\" /proc/1/status; kill -TERM 1; echo \"kill rc=$?\"; sleep 1; ps -o pid,comm -p 1'\nSigIgn:\t0000000000000000\nSigCgt:\t0000000000000000\nkill rc=0\n  PID COMMAND\n    1 sleep\n$ docker exec lt-R2-pid1 sh -c 'kill -KILL 1; echo \"kill -KILL rc=$?\"; sleep 1; ps -o pid,comm -p 1'\nkill -KILL rc=0\n  PID COMMAND\n    1 sleep\n$ time docker stop lt-R2-pid1      -> took 10s\n$ docker inspect lt-R2-pid1 --format 'ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}}'\nExitCode=137 OOMKilled=false",
+      "location": "executed ubuntu:24.04 (Docker 28.1.1, kernel 6.10.14-linuxkit)"
+    },
+    {
+      "finding": "EXECUTED (B): same with --init. PID 1 is docker-init, the app is PID 7 (an ordinary process, default SIGTERM action applies); `docker stop` returns in under a second and exit code is 143 (128+15).",
+      "quote": "$ docker run -d --init --name lt-R2-init ubuntu:24.04 sleep 300\n$ docker exec lt-R2-init ps -o pid,ppid,stat,args -e\n  PID  PPID STAT COMMAND\n    1     0 Ss   /sbin/docker-init -- sleep 300\n    7     1 S    sleep 300\n    8     0 Rs   ps -o pid,ppid,stat,args -e\n$ time docker stop lt-R2-init      -> took 0s\n$ docker inspect lt-R2-init --format 'ExitCode={{.State.ExitCode}}'\nExitCode=143",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED (C): zombie reaping. An orphaned `sleep 1` is reparented to PID 1; when PID 1 is a program that never calls wait() it stays as a Z entry; with --init it is reaped.",
+      "quote": "$ docker run -d --name lt-R2-z1 ubuntu:24.04 sh -c '(sleep 1 &); exec sleep 30'; sleep 3; docker exec lt-R2-z1 ps -o pid,ppid,stat,comm -e\n  PID  PPID STAT COMMAND\n    1     0 Ss   sleep\n    8     1 Z    sleep\n    9     0 Rs   ps\n$ docker run -d --init --name lt-R2-z2 ubuntu:24.04 sh -c '(sleep 1 &); exec sleep 30'; sleep 3; docker exec lt-R2-z2 ps -o pid,ppid,stat,comm -e\n  PID  PPID STAT COMMAND\n    1     0 Ss   docker-init\n    7     1 S    sleep\n   10     0 Rs   ps",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED observation: processes started by `docker exec` show PPID 0 inside the container — their parent lives outside the PID namespace, so they are not children of the container's PID 1.",
+      "quote": "    7     0 Rs   ps",
+      "location": "executed ubuntu:24.04 (rows above)"
+    }
+  ],
+  "teaching_notes": "This note grounds the single most common 'why does my container take 10 seconds to stop / why did my teardown exit 137' confusion. Key precision for authors: (1) the kernel rule is 'no handler -> signal not delivered to the namespace init', and inside the namespace that covers SIGKILL too, even from root (executed: kill -KILL 1 is a silent no-op); (2) from outside (the Docker daemon, in an ancestor namespace) SIGTERM is still dropped if unhandled, and only SIGKILL/SIGSTOP are forced — that is exactly why docker stop = 10 s wait then 137; (3) 137 therefore does NOT by itself mean OOM — check State.OOMKilled (see 'oom' note); (4) the 10 s default is 'for Linux containers', configurable three ways (--stop-timeout at create, -t at stop, -1 = wait forever); (5) --init is tini under the name docker-init, and it fixes both problems because the app is no longer PID 1. Shell caveat not stated by these sources: `sh -c 'cmd'` as PID 1 means the shell, not cmd, receives the stop signal — authors can only assert this if they run it. kill(2) NOTES (see 'signal-7') has the classic PID-1 sentence for non-namespace contexts."
+}

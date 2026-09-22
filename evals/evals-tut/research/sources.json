@@ -1,0 +1,477 @@
+{
+  "description": "Citation universe for the eval-tut course. Every factual claim in the course must trace to one of these primary sources, verified by fetching the actual source. Each entry lists the claims the course intends to make, which the verification agent must confirm, correct, or reject against the fetched source.",
+  "sources": [
+    {
+      "id": "evals-book",
+      "tier": "core",
+      "title": "Evals for AI Engineers: Systematically Measuring and Improving AI Applications",
+      "authors": "Shreya Shankar, Hamel Husain",
+      "venue": "O'Reilly Media",
+      "urls": ["https://www.oreilly.com/library/view/evals-for-ai-engineers/", "https://learning.oreilly.com/library/view/evals-for-ai-engineers/"],
+      "search_hint": "Evals for AI Engineers Shankar Husain O'Reilly book",
+      "planned_claims": [
+        "The book exists and covers a systematic process for testing and improving LLM applications",
+        "Confirm table of contents / chapter structure to cite as the canonical process: error analysis, building evaluators, judges, CI integration",
+        "Confirm publication status and date"
+      ]
+    },
+    {
+      "id": "maven-course",
+      "tier": "core",
+      "title": "AI Evals for Engineers & PMs (Maven course)",
+      "authors": "Shreya Shankar, Hamel Husain",
+      "venue": "Maven",
+      "urls": ["https://maven.com/parlance-labs/evals"],
+      "planned_claims": [
+        "The course exists, taught by Shankar & Husain",
+        "Confirm current curriculum themes: instrumenting agents, error analysis, designing judges aligned with expert judgment",
+        "Confirm scale claim (~700+ or more engineers/PMs taught)"
+      ]
+    },
+    {
+      "id": "evals-faq",
+      "tier": "core",
+      "title": "Frequently Asked Questions (And Answers) About AI Evals",
+      "authors": "Hamel Husain, Shreya Shankar",
+      "venue": "hamel.dev",
+      "urls": ["https://hamel.dev/blog/posts/evals-faq/"],
+      "planned_claims": [
+        "Binary pass/fail preferred over Likert scales for judge labels — confirm exact position and reasoning",
+        "Position on how many traces to review (error analysis sample sizes / theoretical saturation)",
+        "Position on off-the-shelf eval metrics vs custom evals",
+        "Position on fine-tuning judges vs prompting",
+        "Any stated positions on synthetic data, eval-driven development, who should label (benevolent dictator / principal domain expert)"
+      ]
+    },
+    {
+      "id": "your-ai-product-needs-evals",
+      "tier": "core",
+      "title": "Your AI Product Needs Evals",
+      "authors": "Hamel Husain",
+      "venue": "hamel.dev",
+      "urls": ["https://hamel.dev/blog/posts/evals/"],
+      "planned_claims": [
+        "Argues evaluation systems are the differentiator for AI products; iteration velocity framing",
+        "Three levels of evaluation: unit tests, human & model eval (logging traces), A/B testing — confirm the exact taxonomy",
+        "Lucid/Rechat case study details — confirm specifics",
+        "Confirm the 'remove all friction from looking at data' principle"
+      ]
+    },
+    {
+      "id": "llm-judge-husain",
+      "tier": "core",
+      "title": "Creating a LLM-as-a-Judge That Drives Business Results",
+      "authors": "Hamel Husain",
+      "venue": "hamel.dev",
+      "urls": ["https://hamel.dev/blog/posts/llm-judge/"],
+      "planned_claims": [
+        "Critique shadowing methodology — confirm the steps (principal domain expert, pass/fail + critiques, iterate until agreement)",
+        "Argues for binary pass/fail over Likert scales — confirm reasoning",
+        "The 'find your principal domain expert' / benevolent dictator concept",
+        "Recommended workflow for measuring judge-human agreement over time"
+      ]
+    },
+    {
+      "id": "who-validates",
+      "tier": "core",
+      "title": "Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences (EvalGen)",
+      "authors": "Shreya Shankar, J.D. Zamfirescu-Pereira, Björn Hartmann, Aditya Parameswaran, Ian Arawjo",
+      "venue": "UIST 2024",
+      "urls": ["https://arxiv.org/abs/2404.12272"],
+      "planned_claims": [
+        "Introduces EvalGen, a mixed-initiative interface for generating and validating eval criteria/assertions",
+        "Criteria drift: the act of grading outputs causes users to refine/change their criteria — confirm the exact finding and how it was observed",
+        "Humans need to grade some outputs to define good criteria (catch-22 / 'it depends on the outputs')",
+        "Alignment measured between generated assertions and human grades"
+      ]
+    },
+    {
+      "id": "mt-bench",
+      "tier": "judge",
+      "title": "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena",
+      "authors": "Lianmin Zheng et al.",
+      "venue": "NeurIPS 2023 Datasets and Benchmarks",
+      "urls": ["https://arxiv.org/abs/2306.05685"],
+      "planned_claims": [
+        "Catalogues judge biases: position bias, verbosity bias, self-enhancement bias, limited reasoning/math grading ability — confirm each with the paper's evidence",
+        "GPT-4 judge agreement with human preferences exceeds 80%, comparable to human-human agreement (~81%?) — confirm exact numbers and how agreement was defined",
+        "Position bias measurement: judges favor first position; confirm reported consistency numbers",
+        "Mitigations proposed: swapping positions, few-shot, chain-of-thought, reference-guided grading",
+        "MT-Bench is 80 multi-turn questions across 8 categories; Chatbot Arena crowdsourced battles"
+      ]
+    },
+    {
+      "id": "self-preference",
+      "tier": "judge",
+      "title": "LLM Evaluators Recognize and Favor Their Own Generations",
+      "authors": "Arjun Panickssery, Samuel R. Bowman, Shi Feng",
+      "venue": "NeurIPS 2024",
+      "urls": ["https://arxiv.org/abs/2404.13076"],
+      "planned_claims": [
+        "LLMs show self-preference: rating their own outputs higher than others' of equal quality",
+        "Causal link between self-recognition capability and self-preference strength — confirm the fine-tuning experiment design",
+        "Models can recognize their own generations above chance; fine-tuning to improve recognition increases self-preference — confirm numbers"
+      ]
+    },
+    {
+      "id": "eugene-yan",
+      "tier": "judge",
+      "title": "Eugene Yan's practitioner writing on evals and LLM patterns",
+      "authors": "Eugene Yan",
+      "venue": "eugeneyan.com",
+      "urls": ["https://eugeneyan.com/writing/llm-patterns/", "https://eugeneyan.com/writing/evals/", "https://eugeneyan.com/writing/llm-evaluators/"],
+      "planned_claims": [
+        "Patterns for Building LLM-based Systems: evals as the first pattern; confirm framing",
+        "Positions on classification-style task-specific evals, reference-free vs reference-based evaluation",
+        "LLM-evaluators piece: practical guidance on judge design, alignment with humans, and metric choice — extract the main verified recommendations"
+      ]
+    },
+    {
+      "id": "agents-that-matter",
+      "tier": "agentic",
+      "title": "AI Agents That Matter",
+      "authors": "Sayash Kapoor, Benedikt Stroebl, Zachary S. Siegel, Nitya Nadgir, Arvind Narayanan",
+      "venue": "Princeton / arXiv 2024",
+      "urls": ["https://arxiv.org/abs/2407.01502"],
+      "planned_claims": [
+        "Agent benchmarks often ignore cost; calls for cost-controlled evaluation and accuracy/cost Pareto frontiers — confirm framing and case studies (HumanEval agents vs simple baselines?)",
+        "Simple baselines (retry, warming) can match complex agent architectures at lower cost — confirm specifics",
+        "Overfitting due to inadequate holdout sets in agent benchmarks — confirm which benchmarks were critiqued",
+        "Distinction between model evaluation and downstream/agent evaluation needs",
+        "Joint optimization of accuracy and cost"
+      ]
+    },
+    {
+      "id": "swe-bench",
+      "tier": "agentic",
+      "title": "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?",
+      "authors": "Carlos E. Jimenez, John Yang et al.",
+      "venue": "ICLR 2024",
+      "urls": ["https://arxiv.org/abs/2310.06770"],
+      "planned_claims": [
+        "2,294 task instances from 12 Python repos; resolution judged by held-out FAIL_TO_PASS and PASS_TO_PASS tests — confirm construction details",
+        "Original headline: best model resolved only ~1.96% (Claude 2) — confirm",
+        "Scoring harness details: patch application, test execution — what counts as resolved"
+      ]
+    },
+    {
+      "id": "swe-bench-verified",
+      "tier": "agentic",
+      "title": "SWE-bench Verified",
+      "authors": "OpenAI (with SWE-bench authors)",
+      "venue": "openai.com",
+      "urls": ["https://openai.com/index/introducing-swe-bench-verified/"],
+      "planned_claims": [
+        "Human annotators found a large fraction of original SWE-bench tasks had issues (underspecified issues, unfair tests) — confirm the reported percentages",
+        "500-instance human-validated subset — confirm size and screening criteria",
+        "Performance jumped substantially on Verified vs original — confirm numbers"
+      ]
+    },
+    {
+      "id": "swe-bench-critiques",
+      "tier": "agentic",
+      "title": "SWE-bench contamination / solution-leakage critiques (SWE-Bench+ and/or The SWE-Bench Illusion)",
+      "authors": "Aleithan et al.; and/or Liang et al.",
+      "venue": "arXiv",
+      "urls": ["https://arxiv.org/abs/2410.06992", "https://arxiv.org/abs/2506.12286"],
+      "search_hint": "SWE-Bench+ solution leakage; SWE-Bench Illusion memorization state-of-the-art LLMs",
+      "planned_claims": [
+        "Solution leakage: some issues contain the fix in the issue text or comments — confirm reported rates",
+        "Weak test suites pass incorrect patches — confirm reported rates",
+        "Memorization evidence: models can produce file paths/fixes from issue text alone — confirm experiment and numbers"
+      ]
+    },
+    {
+      "id": "gaia",
+      "tier": "agentic",
+      "title": "GAIA: A Benchmark for General AI Assistants",
+      "authors": "Grégoire Mialon et al.",
+      "venue": "arXiv 2023",
+      "urls": ["https://arxiv.org/abs/2311.12983"],
+      "planned_claims": [
+        "466 questions requiring reasoning, multi-modality, web browsing, tool use; answers are unambiguous strings enabling exact-match scoring — confirm",
+        "Conceptually easy for humans (92% human success) yet hard for advanced AI (GPT-4 with plugins ~15%) — confirm numbers",
+        "Three difficulty levels by required steps/tools; private test set design"
+      ]
+    },
+    {
+      "id": "tau-bench",
+      "tier": "agentic",
+      "title": "tau-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains",
+      "authors": "Shunyu Yao, Noah Shinn, Pedram Razavi, Karthik Narasimhan (Sierra)",
+      "venue": "arXiv 2024",
+      "urls": ["https://arxiv.org/abs/2406.12045"],
+      "planned_claims": [
+        "Simulates user (LLM-simulated) conversations with an agent that has domain-specific API tools and policy guidelines; retail and airline domains — confirm",
+        "Success measured by comparing final database state to goal state — confirm",
+        "pass^k metric: probability all k i.i.d. trials succeed, measuring reliability/consistency — confirm definition and headline finding (e.g., gpt-4o pass^8 < 25% on retail?)",
+        "Agents are markedly less reliable over repeated trials than pass@1 suggests"
+      ]
+    },
+    {
+      "id": "webarena",
+      "tier": "agentic",
+      "title": "WebArena: A Realistic Web Environment for Building Autonomous Agents",
+      "authors": "Shuyan Zhou et al.",
+      "venue": "ICLR 2024",
+      "urls": ["https://arxiv.org/abs/2307.13854"],
+      "planned_claims": [
+        "Self-hosted realistic websites across four domains (e-commerce, forum, gitlab, CMS) plus tools; 812 tasks — confirm",
+        "Functional correctness evaluation (outcome-based) rather than action-matching — confirm how",
+        "Best GPT-4 agent ~14% success vs human ~78% — confirm numbers"
+      ]
+    },
+    {
+      "id": "osworld",
+      "tier": "agentic",
+      "title": "OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments",
+      "authors": "Tianbao Xie et al.",
+      "venue": "NeurIPS 2024",
+      "urls": ["https://arxiv.org/abs/2404.07972"],
+      "planned_claims": [
+        "369 real computer tasks in a real OS VM (Ubuntu, also Windows) with execution-based evaluation scripts per task — confirm",
+        "Humans ~72%, best model ~12% at publication — confirm numbers",
+        "Each task has custom initial state setup and execution-based reward script — confirm harness design"
+      ]
+    },
+    {
+      "id": "terminal-bench",
+      "tier": "agentic",
+      "title": "Terminal-Bench",
+      "authors": "Laude Institute / Stanford",
+      "venue": "tbench.ai",
+      "urls": ["https://www.tbench.ai/", "https://github.com/laude-institute/terminal-bench"],
+      "planned_claims": [
+        "Benchmark of terminal/CLI tasks for agents, each task = instruction + docker environment + verification script — confirm structure",
+        "Confirm current scale (number of tasks) and notable design choices (containerization, test-based verification)"
+      ]
+    },
+    {
+      "id": "agentbench",
+      "tier": "agentic",
+      "title": "AgentBench: Evaluating LLMs as Agents",
+      "authors": "Xiao Liu et al.",
+      "venue": "ICLR 2024",
+      "urls": ["https://arxiv.org/abs/2308.03688"],
+      "planned_claims": [
+        "8 environments spanning code, game, web (OS, DB, KG, card game, puzzles, household, web shopping/browsing) — confirm list",
+        "Large gap between API/commercial models and open-source models at the time — confirm",
+        "Identified failure modes: poor long-term reasoning, instruction following, decision-making — confirm"
+      ]
+    },
+    {
+      "id": "metr",
+      "tier": "agentic",
+      "title": "METR: Measuring AI Ability to Complete Long Tasks (time horizons) + task suites/elicitation methodology",
+      "authors": "Thomas Kwa, Ben West et al. (METR)",
+      "venue": "arXiv / metr.org",
+      "urls": ["https://arxiv.org/abs/2503.14499", "https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/"],
+      "planned_claims": [
+        "50%-task-completion time horizon metric: the human task duration at which the model succeeds 50% of the time — confirm definition",
+        "Time horizon doubling every ~7 months (2019-2024 trend) — confirm trend claim and caveats",
+        "Methodology: human baseliner times, logistic model relating task length to success — confirm",
+        "Note the 50% vs 80% horizon distinction and why reliability threshold matters"
+      ]
+    },
+    {
+      "id": "inspect",
+      "tier": "tooling-primary",
+      "title": "Inspect: An OSS framework for LLM evals (UK AI Security Institute)",
+      "authors": "UK AISI",
+      "venue": "inspect.aisi.org.uk",
+      "urls": ["https://inspect.aisi.org.uk/"],
+      "planned_claims": [
+        "Core architecture: dataset (samples) -> solvers (incl. agents/tools) -> scorers; Task as the unit — confirm exact terminology",
+        "Built-in support for sandboxing (docker), tool use, agent scaffolds, model-graded scorers, human agreement workflows",
+        "Eval logs as first-class artifacts (viewer, .eval format) — confirm",
+        "Confirm scorer list (exact match, model-graded QA/fact, etc.) and reducer/epochs support for repeated trials"
+      ]
+    },
+    {
+      "id": "error-bars",
+      "tier": "stats",
+      "title": "Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations",
+      "authors": "Evan Miller",
+      "venue": "Anthropic / arXiv 2024",
+      "urls": ["https://arxiv.org/abs/2411.00640"],
+      "planned_claims": [
+        "Eval questions are drawn from an underlying distribution; report SEM via CLT — confirm framing",
+        "Clustered standard errors when questions are grouped (e.g., reading passages) — confirm recommendation and example of how much SEs grow",
+        "Paired-difference analysis for model comparisons reduces variance — confirm",
+        "Resample/average per-question (e.g., K samples per question) to reduce variance — confirm",
+        "Power analysis for detecting model differences — confirm recommendation",
+        "Extract the five-ish concrete recommendations the paper makes"
+      ]
+    },
+    {
+      "id": "humaneval",
+      "tier": "stats",
+      "title": "Evaluating Large Language Models Trained on Code (HumanEval / Codex)",
+      "authors": "Mark Chen et al.",
+      "venue": "arXiv 2021",
+      "urls": ["https://arxiv.org/abs/2107.03374"],
+      "planned_claims": [
+        "164 hand-written programming problems with unit tests; functional correctness over text similarity (BLEU fails to distinguish correct/incorrect) — confirm",
+        "pass@k definition and the unbiased estimator: generate n >= k samples, c correct, estimator 1 - C(n-c,k)/C(n,k) — confirm formula exactly",
+        "Why the naive estimator (1-(1-p)^k with empirical p) is biased — confirm paper's explanation",
+        "Codex headline numbers (e.g., 28.8% pass@1, ~70%+ pass@100?) — confirm"
+      ]
+    },
+    {
+      "id": "eleuther-trenches",
+      "tier": "stats",
+      "title": "Lessons from the Trenches on Reproducible Evaluation of Language Models",
+      "authors": "Stella Biderman, Hailey Schoelkopf et al. (EleutherAI)",
+      "venue": "arXiv 2024",
+      "urls": ["https://arxiv.org/abs/2405.14782"],
+      "planned_claims": [
+        "Minor prompt formatting changes cause large score swings — confirm examples/magnitudes",
+        "Implementation/harness differences make cross-paper comparisons unreliable — confirm catalogued issues",
+        "Best practices: share exact prompts and code, report all numbers, use standardized harnesses (lm-evaluation-harness) — confirm recommendations",
+        "Issues catalogued: answer extraction fragility, tokenization differences, log-likelihood vs generative scoring"
+      ]
+    },
+    {
+      "id": "gsm1k",
+      "tier": "contamination",
+      "title": "A Careful Examination of Large Language Model Performance on Grade School Arithmetic (GSM1k)",
+      "authors": "Hugh Zhang et al. (Scale AI)",
+      "venue": "NeurIPS 2024",
+      "urls": ["https://arxiv.org/abs/2405.00332"],
+      "planned_claims": [
+        "Built 1,250 fresh GSM8k-style problems matched on difficulty (human annotators, matched distributions) — confirm construction method",
+        "Some model families dropped up to ~8-13% vs GSM8k (which families?) while frontier models showed minimal drop — confirm exact findings",
+        "Positive correlation between a model's probability of generating GSM8k examples (log-likelihood) and its performance gap — confirm (Spearman r?)",
+        "The replication-with-fresh-instances method as a reusable contamination test"
+      ]
+    },
+    {
+      "id": "livebench",
+      "tier": "contamination",
+      "title": "LiveBench: A Challenging, Contamination-Free LLM Benchmark",
+      "authors": "Colin White et al.",
+      "venue": "ICLR 2025",
+      "urls": ["https://arxiv.org/abs/2406.19314"],
+      "planned_claims": [
+        "Monthly-updated questions from recent sources (math competitions, arXiv, news); objective ground-truth scoring without LLM judges — confirm design",
+        "Why they avoid LLM judges: error rates on hard questions — confirm reasoning",
+        "Question categories and refresh cadence"
+      ]
+    },
+    {
+      "id": "livecodebench",
+      "tier": "contamination",
+      "title": "LiveCodeBench: Holistic and Contamination Free Evaluation of Large Language Models for Code",
+      "authors": "Naman Jain et al.",
+      "venue": "ICLR 2025",
+      "urls": ["https://arxiv.org/abs/2403.07974"],
+      "planned_claims": [
+        "Problems tagged with release dates from LeetCode/AtCoder/CodeForces; evaluate only on post-cutoff problems to detect contamination — confirm",
+        "Demonstrated likely contamination: e.g., DeepSeek models' performance dropped sharply on problems released after model cutoff — confirm which models/numbers",
+        "Holistic: also tests self-repair, code execution, test output prediction — confirm scenario list"
+      ]
+    },
+    {
+      "id": "arc-agi",
+      "tier": "contamination",
+      "title": "ARC-AGI / ARC Prize: public train, public eval, semi-private and private eval sets",
+      "authors": "François Chollet et al.",
+      "venue": "arcprize.org",
+      "urls": ["https://arcprize.org/arc-agi", "https://arcprize.org/guide"],
+      "planned_claims": [
+        "Dataset split architecture: public training, public eval, semi-private eval (for public leaderboard, exposed to third-party APIs), private eval (compute-limited, no internet) — confirm exact split design and rationale",
+        "Rationale: protecting against contamination/overfitting while allowing commercial-API testing — confirm stated reasoning"
+      ]
+    },
+    {
+      "id": "leaderboard-illusion",
+      "tier": "contamination",
+      "title": "The Leaderboard Illusion",
+      "authors": "Shivalika Singh et al. (Cohere Labs et al.)",
+      "venue": "arXiv 2025",
+      "urls": ["https://arxiv.org/abs/2504.20879"],
+      "planned_claims": [
+        "Undisclosed private testing on Chatbot Arena: some providers tested many model variants privately and only published the best (best-of-N selection bias) — confirm scale (e.g., Meta testing 27 variants before Llama 4?)",
+        "Sampling asymmetries: proprietary models get more battles/data than open models — confirm numbers",
+        "Arena data access advantage: estimate of how much Arena-specific data boosts Arena performance — confirm the 112% relative improvement claim if present",
+        "Deprecation asymmetries for open models"
+      ]
+    },
+    {
+      "id": "bigbench-canary",
+      "tier": "contamination",
+      "title": "BIG-bench canary string documentation",
+      "authors": "BIG-bench collaboration (Google)",
+      "venue": "GitHub",
+      "urls": ["https://github.com/google/BIG-bench"],
+      "planned_claims": [
+        "A unique GUID canary string embedded in benchmark files; model builders should filter documents containing it from training data; can later probe models for the string to test ingestion — confirm mechanism and the actual canary GUID convention",
+        "Confirm how the canary is supposed to be used (filtering + post-hoc probing)"
+      ]
+    },
+    {
+      "id": "anthropic-challenges",
+      "tier": "contamination",
+      "title": "Challenges in Evaluating AI Systems",
+      "authors": "Anthropic",
+      "venue": "anthropic.com",
+      "urls": ["https://www.anthropic.com/news/evaluating-ai-systems"],
+      "planned_claims": [
+        "A lab's own accounting of why robust evals are hard — extract the catalogued challenges (MCQ evals like MMLU have errors/sensitivity; third-party frameworks like BIG-bench had engineering hurdles; human evals are expensive/slow; red-teaming subjectivity)",
+        "Confirm specific anecdotes: implementation difficulties with BIG-bench, formatting sensitivity, etc.",
+        "Policy recommendations the post makes (funding for evals, etc.)"
+      ]
+    },
+    {
+      "id": "openai-evals",
+      "tier": "tooling-survey",
+      "title": "OpenAI Evals framework + cookbook entries",
+      "authors": "OpenAI",
+      "venue": "GitHub / cookbook.openai.com",
+      "urls": ["https://github.com/openai/evals", "https://cookbook.openai.com/examples/evaluation/getting_started_with_openai_evals"],
+      "planned_claims": [
+        "Registry of evals in YAML; eval templates (basic match/includes, model-graded) — confirm architecture",
+        "Confirm current maintenance status of the repo"
+      ]
+    },
+    {
+      "id": "promptfoo",
+      "tier": "tooling-survey",
+      "title": "promptfoo documentation",
+      "authors": "promptfoo",
+      "venue": "promptfoo.dev",
+      "urls": ["https://www.promptfoo.dev/docs/intro/"],
+      "planned_claims": [
+        "Declarative config (YAML) of prompts x providers x test cases with assertions; deterministic + model-graded assertion types — confirm core concepts",
+        "Confirm assertion types taxonomy and red-teaming features"
+      ]
+    },
+    {
+      "id": "deepeval-ragas",
+      "tier": "tooling-survey",
+      "title": "DeepEval and Ragas documentation",
+      "authors": "Confident AI; Exploding Gradients",
+      "venue": "deepeval.com / docs.ragas.io",
+      "urls": ["https://deepeval.com/docs/getting-started", "https://docs.ragas.io/en/stable/concepts/metrics/"],
+      "planned_claims": [
+        "DeepEval: pytest-style unit testing for LLM outputs; metric library (G-Eval, faithfulness, answer relevancy, hallucination) — confirm",
+        "Ragas: RAG-specific metric suite — faithfulness, answer relevancy, context precision, context recall — confirm definitions of each metric as documented",
+        "Both rely heavily on LLM-as-judge under the hood — confirm"
+      ]
+    },
+    {
+      "id": "langfuse-braintrust",
+      "tier": "tooling-survey",
+      "title": "Langfuse and Braintrust observability/eval documentation",
+      "authors": "Langfuse; Braintrust",
+      "venue": "langfuse.com / braintrust.dev",
+      "urls": ["https://langfuse.com/docs", "https://www.braintrust.dev/docs/start"],
+      "planned_claims": [
+        "Tracing model: traces, observations/spans, generations; sessions and users — confirm Langfuse data model terminology",
+        "Scores attached to traces; LLM-as-judge evaluators run on production traces — confirm",
+        "Braintrust: experiments comparing eval runs, datasets, scorers (autoevals library), playground — confirm core concepts",
+        "The general concept both teach: offline experiments vs online monitoring on the same scoring infrastructure"
+      ]
+    }
+  ]
+}

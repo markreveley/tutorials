@@ -1,0 +1,335 @@
+### appendix E verify — 2026-09-21
+## HOST: macOS 15.4.1 (Darwin arm64), zsh, run in a scratch directory
+mac$ sw_vers
+ProductName:		macOS
+ProductVersion:		15.4.1
+BuildVersion:		24E263
+[exit status 0]
+mac$ uname -sm
+Darwin arm64
+[exit status 0]
+mac$ echo $SHELL
+/bin/zsh
+[exit status 0]
+mac$ zsh --version
+zsh 5.9 (arm64-apple-darwin24.0)
+[exit status 0]
+mac$ /bin/bash --version | head -1
+GNU bash, version 3.2.57(1)-release (arm64-apple-darwin24)
+[exit status 0]
+mac$ sed --version
+sed: illegal option -- -
+usage: sed script [-EHalnru] [-i extension] [file ...]
+	sed [-EHalnu] [-i extension] [-e script] ... [-f script_file] ... [file ...]
+[exit status 1]
+mac$ printf 'status: fail
+' > r.txt; sed -i 's/fail/pass/' r.txt
+sed: -I or -i may not be used with stdin
+[exit status 1]
+mac$ sed -i '' 's/fail/pass/' r.txt; cat r.txt
+status: pass
+[exit status 0]
+mac$ date -d '2026-01-01' +%s
+date: illegal option -- d
+usage: date [-jnRu] [-I[date|hours|minutes|seconds|ns]] [-f input_fmt]
+            [ -z output_zone ] [-r filename|seconds] [-v[+|-]val[y|m|w|d|H|M|S]]
+            [[[[mm]dd]HH]MM[[cc]yy][.SS] | new_date] [+output_fmt]
+[exit status 1]
+mac$ date -j -f '%Y-%m-%d %H:%M:%S' '2026-01-01 00:00:00' +%s
+1767254400
+[exit status 0]
+mac$ date -d @1767225600
+date: illegal option -- d
+usage: date [-jnRu] [-I[date|hours|minutes|seconds|ns]] [-f input_fmt]
+            [ -z output_zone ] [-r filename|seconds] [-v[+|-]val[y|m|w|d|H|M|S]]
+            [[[[mm]dd]HH]MM[[cc]yy][.SS] | new_date] [+output_fmt]
+[exit status 1]
+mac$ date -u -r 1767225600
+Thu Jan  1 00:00:00 UTC 2026
+[exit status 0]
+mac$ stat -c '%a %U %s' r.txt
+stat: illegal option -- c
+usage: stat [-FLnq] [-f format | -l | -r | -s | -x] [-t timefmt] [file ...]
+[exit status 1]
+mac$ stat -f '%Lp %Su %z' r.txt
+644 mark 13
+[exit status 0]
+mac$ ln -s r.txt link.txt; readlink -f link.txt
+/private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt-e-mac/r.txt
+[exit status 0]
+mac$ realpath link.txt
+/private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt-e-mac/r.txt
+[exit status 0]
+mac$ echo 'exit code 137' | grep -oP '\d+'
+grep: invalid option -- P
+usage: grep [-abcdDEFGHhIiJLlMmnOopqRSsUVvwXxZz] [-A num] [-B num] [-C[num]]
+	[-e pattern] [-f file] [--binary-files=value] [--color=when]
+	[--context[=num]] [--directories=action] [--label] [--line-buffered]
+	[--null] [pattern] [file ...]
+[exit status 2]
+mac$ echo 'exit code 137' | grep -oE '[0-9]+'
+137
+[exit status 0]
+mac$ printf '' | xargs echo ran
+[exit status 0]
+mac$ find -name '*.txt'
+find: illegal option -- n
+usage: find [-H | -L | -P] [-EXdsx] [-f path] path ... [expression]
+       find [-H | -L | -P] [-EXdsx] -f path [path ...] [expression]
+[exit status 1]
+mac$ find . -name '*.txt'
+./mac-out.txt
+./link.txt
+./r.txt
+[exit status 0]
+mac$ echo aGVsbG8K | base64 -d
+hello
+[exit status 0]
+mac$ echo aGVsbG8K | base64 -D
+hello
+[exit status 0]
+mac$ head -c 100 /dev/zero | base64 -w0 | head -c 20
+AAAAAAAAAAAAAAAAAAAA[exit status 0]
+mac$ ls --color=auto
+link.txt
+mac-out.txt
+r.txt
+run.sh
+[exit status 0]
+mac$ ls -G >/dev/null
+[exit status 0]
+mac$ printf 'a
+b
+' | wc -l
+       2
+[exit status 0]
+mac$ which timeout
+timeout not found
+[exit status 1]
+mac$ timeout 1 sleep 5
+(eval):1: command not found: timeout
+[exit status 127]
+mac$ ls /proc
+ls: /proc: No such file or directory
+[exit status 1]
+mac$ which ip ss
+ip not found
+ss not found
+[exit status 1]
+mac$ which ps top lsof netstat ifconfig
+/bin/ps
+/usr/bin/top
+/usr/sbin/lsof
+/usr/sbin/netstat
+/sbin/ifconfig
+[exit status 0]
+mac$ command -v gsed gdate gstat gtimeout greadlink
+[exit status 1]
+mac$ touch Readme.md; ls readme.md README.MD
+readme.md
+README.MD
+[exit status 0]
+mac$ echo one > Notes.txt; echo two > notes.txt; ls; cat Notes.txt
+link.txt
+mac-out.txt
+Notes.txt
+r.txt
+Readme.md
+run.sh
+two
+[exit status 0]
+mac$ which -a bash
+/opt/homebrew/bin/bash
+/bin/bash
+[exit status 0]
+mac$ du -b r.txt
+du: invalid option -- b
+usage: du [-Aclnx] [-H | -L | -P] [-g | -h | -k | -m] [-a | -s | -d depth] [-B blocksize] [-I mask] [-t threshold] [file ...]
+[exit status 64]
+mac$ echo -n | md5sum
+d41d8cd98f00b204e9800998ecf8427e  -
+[exit status 0]
+mac$ echo -n | shasum -a 256
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  -
+[exit status 0]
+
+## LINUX: docker run --rm ubuntu:24.04 bash /linux.sh (root, /tmp)
+$ uname -sm
+Linux aarch64
+[exit status 0]
+$ echo $SHELL; bash --version | head -1
+/bin/bash
+GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu)
+[exit status 0]
+$ sed --version | head -1
+sed (GNU sed) 4.9
+[exit status 0]
+$ printf 'status: fail\n' > r.txt; sed -i 's/fail/pass/' r.txt; cat r.txt
+status: pass
+[exit status 0]
+$ sed -i '' 's/pass/fail/' r.txt
+sed: can't read s/pass/fail/: No such file or directory
+[exit status 2]
+$ date -u -d '2026-01-01' +%s
+1767225600
+[exit status 0]
+$ date -u -d @1767225600
+Thu Jan  1 00:00:00 UTC 2026
+[exit status 0]
+$ date -j -f '%Y-%m-%d' '2026-01-01' +%s
+date: invalid option -- 'j'
+Try 'date --help' for more information.
+[exit status 1]
+$ stat -c '%a %U %s' r.txt
+644 root 13
+[exit status 0]
+$ stat -f '%Lp %Su %z' r.txt
+stat: cannot read file system information for '%Lp %Su %z': No such file or directory
+  File: "r.txt"
+    ID: 751bcca3977947e3 Namelen: 255     Type: overlayfs
+Block size: 4096       Fundamental block size: 4096
+Blocks: Total: 263940461  Free: 262051473  Available: 248625617
+Inodes: Total: 67108864   Free: 66997567
+[exit status 1]
+$ ln -s r.txt link.txt; readlink -f link.txt
+/tmp/r.txt
+[exit status 0]
+$ echo 'exit code 137' | grep -oP '\d+'
+137
+[exit status 0]
+$ printf '' | xargs echo ran
+ran
+[exit status 0]
+$ printf '' | xargs -r echo ran
+[exit status 0]
+$ find -name '*.txt'
+./link.txt
+./r.txt
+[exit status 0]
+$ echo aGVsbG8K | base64 -d
+hello
+[exit status 0]
+$ echo aGVsbG8K | base64 -D
+base64: invalid option -- 'D'
+Try 'base64 --help' for more information.
+[exit status 1]
+$ printf 'a\nb\n' | wc -l
+2
+[exit status 0]
+$ which timeout
+/usr/bin/timeout
+[exit status 0]
+$ timeout 1 sleep 5
+[exit status 124]
+$ ls /proc | head -3
+1
+39
+40
+[exit status 0]
+$ which ip ss ps
+/usr/bin/ps
+[exit status 1]
+$ touch Readme.md; ls readme.md README.MD
+ls: cannot access 'readme.md': No such file or directory
+ls: cannot access 'README.MD': No such file or directory
+[exit status 2]
+$ echo one > Notes.txt; echo two > notes.txt; ls; cat Notes.txt
+Notes.txt
+Readme.md
+link.txt
+notes.txt
+r.txt
+one
+[exit status 0]
+$ printf '#!/bin/bash\r\necho hi\r\n' > crlf.sh; chmod +x crlf.sh; ./crlf.sh
+/linux.sh: line 1: ./crlf.sh: cannot execute: required file not found
+[exit status 127]
+$ bash crlf.sh | cat -A
+hi^M$
+[exit status 0]
+$ cat -A crlf.sh
+#!/bin/bash^M$
+echo hi^M$
+[exit status 0]
+$ sed -i 's/\r$//' crlf.sh; ./crlf.sh
+hi
+[exit status 0]
+
+## CRLF demo, real interactive pty in ubuntu:24.04
+# cd /tmp
+# printf '#!/bin/bash\r\necho hi\r\n' > crlf.sh; chmod +x crlf.sh
+# ./crlf.sh
+bash: ./crlf.sh: cannot execute: required file not found
+# echo $?
+127
+# cat -A crlf.sh
+#!/bin/bash^M$
+echo hi^M$
+# sed -i 's/\r$//' crlf.sh
+# ./crlf.sh
+hi
+
+## architecture (host; busybox:1.36 pulled for both platforms, single timing run each)
+mac$ uname -m
+arm64
+[exit status 0]
+mac$ docker run --rm busybox:1.36 uname -m
+aarch64
+[exit status 0]
+mac$ docker run --rm --platform linux/amd64 busybox:1.36 uname -m
+x86_64
+[exit status 0]
+mac$ time docker run --rm busybox:1.36 sh -c 'i=0; while [ $i -lt 2000000 ]; do i=$((i+1)); done'
+  0.02s user 0.01s system 0% cpu 4.247 total
+[exit status 0]
+mac$ time docker run --rm --platform linux/amd64 busybox:1.36 sh -c 'i=0; while [ $i -lt 2000000 ]; do i=$((i+1)); done'
+  0.02s user 0.02s system 0% cpu 32.367 total
+[exit status 0]
+mac$ docker image inspect --format '{{.Os}}/{{.Architecture}}' ubuntu:24.04
+linux/arm64
+[exit status 0]
+
+## brew info coreutils (caveats, host)
+==> Caveats
+Commands also provided by macOS and the commands dir, dircolors, vdir have been installed with the prefix "g".
+If you need to use these commands with their normal names, you can add a "gnubin" directory to your PATH with:
+  PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
+
+## HOST, second pass (clean scratch dir)
+mac$ date -j -u -f '%Y-%m-%d %H:%M:%S' '2026-01-01 00:00:00' +%s
+1767225600
+[exit status 0]
+mac$ echo one > Notes.txt; echo two > notes.txt; ls; cat Notes.txt
+Notes.txt
+two
+[exit status 0]
+mac$ stat -f %z Notes.txt
+4
+[exit status 0]
+mac$ /bin/bash -c 'declare -A m; m[a]=1; echo ${m[a]}'
+/bin/bash: line 0: declare: -A: invalid option
+declare: usage: declare [-afFirtx] [-p] [name[=value] ...]
+1
+[exit status 0]
+mac$ ZDOTDIR=/private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt-e-mac2/zd HOME=/private/tmp/claude-501/-Users-mark-dev-repos--do/5ad687d9-4ab1-41c4-8190-941ca9d424f6/scratchpad/lt-e-mac2/zd zsh -ic 'echo ran' 2>&1 | grep -v 'compinit\|insecure'
+[.zshrc was read]
+ran
+[exit status 0]
+
+## LINUX, second pass
+# echo one > Notes.txt; echo two > notes.txt; ls; cat Notes.txt
+Notes.txt
+notes.txt
+one
+# declare -A
+1
+
+## homebrew API caveats
+Commands also provided by macOS and the commands dir, dircolors, vdir have been installed with the prefix "g".
+If you need to use these commands with their normal names, you can add a "gnubin" directory to your PATH with:
+  PATH="$HOMEBREW_PREFIX/opt/coreutils/libexec/gnubin:$PATH"
+
+
+## LINUX du -b
+# du -b r.txt
+13	r.txt

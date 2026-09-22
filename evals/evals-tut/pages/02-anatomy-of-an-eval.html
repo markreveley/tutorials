@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anatomy of an Eval · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · Foundations</p>
+    <h1>Anatomy of an eval</h1>
+    <p class="lede">
+      Between "the dataset" and "the score" sits a piece of software full of judgment calls — the
+      harness. Two teams running <em>the same benchmark</em> on <em>the same model</em> can get scores
+      tens of points apart because of decisions buried in that software. This page opens the box.
+    </p>
+
+    <h2 id="the-pipeline">What actually runs</h2>
+    <p>
+      The four-part machine from <a href="01-what-is-an-eval.html">the previous page</a> — task, data,
+      grader, metric — is the logical anatomy. The <span class="term" data-g="harness">harness</span> is
+      the physical one: the program that feeds each sample to the system under test, captures what comes
+      back, applies the grader, and aggregates. Drawn honestly, with the parts that usually go
+      unmentioned in <mark>highlighted boxes</mark>:
+    </p>
+    <div class="diagram">          ┌──────────────────────── HARNESS ─────────────────────────┐
+          │                                                           │
+ dataset ─┼→ ❶ PROMPT TEMPLATE  → ❷ MODEL CALL      → ❸ EXTRACTION  ─┼→ grader
+          │   how the sample       temperature,        pulling "the   │
+          │   becomes a prompt:    max tokens,         answer" out    │
+          │   wording, few-shot    retries, stop       of free text   │
+          │   examples, spacing    sequences                          │
+          │                                                           │
+          │              ❹ SCORING METHOD        ❺ AGGREGATION       │
+          │              compare text? execute    micro vs macro      │
+          │              code? compare token      average, ties,      │
+          │              probabilities?           error handling      │
+          └───────────────────────────────────────────────────────────┘</div>
+    <p>
+      Each numbered box is a decision someone made. None of them sound important. All of them move
+      scores — and the evidence for that comes from teams who run evals at industrial scale.
+    </p>
+
+    <h2 id="decision-1">❶ The prompt template moves scores by tens of points</h2>
+    <p>
+      EleutherAI — maintainers of <code>lm-evaluation-harness</code>, one of the most widely used eval
+      harnesses — documented what happens when the same questions are presented in two common prompt
+      styles ("cloze," where the model completes the answer text, versus MMLU-style, where it picks a
+      letter). For GPT-NeoX-20B on the ARC-Easy benchmark, the cloze format scored
+      <strong>72.4%</strong>; the MMLU-style format scored <strong>26.5%</strong> — barely above
+      chance, a swing of roughly 46 points from formatting
+      alone.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Biderman, Schoelkopf, Sutawika et al., Lessons from the Trenches, §4.1">[Eleuther]</a>
+      Worse for comparability: <em>which</em> style works best varies by model, so prompt choice changes
+      model <em>rankings</em>, not just absolute
+      numbers.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §3.1, Table 1">[Eleuther]</a>
+      The paper notes that sensitivity goes "even down to whitespace usage."
+    </p>
+    <p>
+      Anthropic, writing from a frontier lab's vantage point, reported the same phenomenon at finer
+      grain: changing answer options from <code>(A)</code> to <code>(1)</code>, or <code>(A)</code> to
+      <code>[A]</code>, or adding one extra space before the answer "can lead to a ~5% change in
+      accuracy" on MMLU.<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023, Challenges in Evaluating AI Systems">[Anthropic]</a>
+      Five points is larger than the margin separating headline model releases.
+    </p>
+    <div class="callout">
+      <span class="label">The counterfactual that makes it vivid</span>
+      <p>The EleutherAI authors point out that if MMLU-style prompting had been the standard during the
+      GPT-3 era, their Pile-trained models would have scored near-random — and they "might have wrongly
+      concluded their dataset was garbage."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §4.1">[Eleuther]</a>
+      Research directions live and die on numbers this fragile.</p>
+    </div>
+
+    <h2 id="decision-2-3">❷ Decoding and ❸ extraction: the quiet score-makers</h2>
+    <p>
+      The model call itself has knobs — <span class="term" data-g="temperature">temperature</span>,
+      token limits, retry policy — and they interact with the metric in non-obvious ways. The HumanEval
+      authors found that the optimal temperature <em>depends on which metric you report</em>: low
+      temperature (0.2) maximized pass@1 while high temperature (0.8) maximized pass@100, because when
+      only one of a hundred attempts needs to succeed, diversity beats
+      caution.<a class="cite" href="https://arxiv.org/abs/2107.03374" title="Chen et al. 2021, Figures 5–6">[HumanEval]</a>
+      Headline numbers from the same paper, same model, can come from different decoding settings — and
+      routinely do.
+    </p>
+    <p>
+      Then the harness must find "the answer" inside free-form text. The standard tool is a regex or
+      heuristic parser, which EleutherAI calls "a highly imperfect solution": models answer in different
+      formats, so any fixed pattern silently favors models whose format happens to match — conflating
+      <em>format compliance</em> with
+      <em>correctness</em>.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, Appendix B.4">[Eleuther]</a>
+      A model that says "The answer is B, because…" scores; one that says "B is correct because…" may
+      not, depending on five characters of regex.
+    </p>
+
+    <h2 id="decision-4-5">❹ Scoring method and ❺ aggregation</h2>
+    <p>
+      Multiple-choice questions can be scored two fundamentally different ways: <em>generatively</em>
+      (let the model write an answer, extract, compare) or by
+      <span class="term" data-g="log-likelihood">log-likelihood</span> (ask which option the model
+      assigns the highest probability — no text generated at all). These are different measurements,
+      and empirically they disagree: the EleutherAI paper cites work showing that log-likelihood-scored
+      and generatively-scored versions of the same multiple-choice benchmarks "do not even
+      agree."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §4.1, citing Lyu et al. 2024">[Eleuther]</a>
+      Many model APIs don't expose probabilities, which forces the generative route — meaning published
+      comparisons between API models and open models are sometimes comparing two scoring methods, not
+      two models.
+    </p>
+    <p>
+      Even pure arithmetic hides choices. MMLU has 57 subjects of different sizes: do you average over
+      all questions (micro) or average the 57 per-subject accuracies (macro)? The correct convention is
+      micro, the difference "affects results by several percentage points," and papers usually don't say
+      which they did.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §3.1">[Eleuther]</a>
+      The consequence of all five decision points together: three independent implementations of MMLU
+      (HELM, lm-eval, and the original release) "produce widely different scores and even change the
+      ranking order of models" — same benchmark, same models, different
+      truths.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, §3.1, citing Fourrier et al. 2023">[Eleuther]</a>
+    </p>
+
+    <h2 id="toy-harness">A toy harness, decisions annotated</h2>
+    <p>
+      Here is a minimal but honest harness for a yes/no classification eval. Every comment marks a
+      decision that would change the score:
+    </p>
+    <pre><code>import re
+
+def run_eval(model, dataset):
+    scores = []
+    for sample in dataset:
+        # ❶ template: wording, capitalization, trailing space all matter
+        prompt = f"Q: {sample['question']}\nAnswer yes or no.\nA:"
+
+        # ❷ decoding: temperature 0 here; retries on API error not shown —
+        #    does a third timeout count as a failure or get dropped?
+        text = model.generate(prompt, temperature=0, max_tokens=5)
+
+        # ❸ extraction: this regex accepts "Yes."/"yes" but rejects
+        #    "Definitely yes" — is that a wrong answer or a parsing gap?
+        m = re.match(r"\s*(yes|no)\b", text.lower())
+        predicted = m.group(1) if m else None
+
+        # ❹ scoring: unparseable output counts as wrong (a choice!)
+        scores.append(1 if predicted == sample["answer"] else 0)
+
+    # ❺ aggregation: plain mean — no error bars, no per-slice breakdown
+    return sum(scores) / len(scores)</code></pre>
+    <p>
+      Twenty lines, five judgment calls. Real harnesses make dozens more.
+    </p>
+
+    <h2 id="reading-a-harness">Reading a harness critically</h2>
+    <p>
+      A skill this course will drill repeatedly, especially for agentic benchmarks
+      (<a href="12-swe-bench-case-study.html">Module 4</a>): when you meet a new eval, read its scoring
+      code the way you'd read a contract. The questions, in the order they pay off:
+    </p>
+    <div class="card">
+      <ol>
+        <li><strong>What literally counts as success?</strong> Find the line that assigns the score. Not
+          the README's description — the line of code.</li>
+        <li><strong>What happens to errors and non-answers?</strong> Dropped, counted as failures, or
+          retried? Each choice biases differently.</li>
+        <li><strong>What's the exact prompt?</strong> Few-shot examples, formatting, system prompt. If
+          they're not published, scores can't be reproduced — EleutherAI's first best-practice is
+          "always share your exact prompts."<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, Appendix D">[Eleuther]</a></li>
+        <li><strong>How is the answer extracted?</strong> Run the parser mentally against a correct
+          answer phrased three different ways.</li>
+        <li><strong>How are scores aggregated?</strong> Micro or macro? Are repeated runs averaged? Are
+          there error bars (<a href="16-error-bars.html">Module 5</a>)?</li>
+        <li><strong>Could a trivial system score well?</strong> The control-check question — see below.</li>
+      </ol>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall: the score that was too good</span>
+      <p>Anthropic once measured its models on BBQ, a bias benchmark, and got a bias score of
+      <strong>zero</strong> — apparent perfection. A BBQ developer asked whether they'd run "a simple
+      control to verify whether our models were answering questions at all. We found that they
+      weren't."<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023, Challenges in Evaluating AI Systems">[Anthropic]</a>
+      The harness happily scored non-answers as unbiased. Before celebrating any metric, ask what a
+      broken or trivial system would score on it — if the answer is "the same," the metric isn't
+      measuring what you think.</p>
+    </div>
+
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>None of this means benchmark numbers are meaningless — it means a number is only interpretable
+      <em>together with its harness</em>. "Model X scores 72.4 on ARC-Easy" is incomplete in the way
+      "the trip takes three hours" is incomplete until you know by car or on foot. The fix is hygiene,
+      not despair: pin the harness version, publish prompts and outputs, and never compare numbers
+      across papers without checking the implementations match.<a class="cite" href="https://arxiv.org/abs/2405.14782" title="Lessons from the Trenches, Appendix D">[Eleuther]</a></p>
+    </div>
+
+    <p>
+      Next: the grader box deserves a page of its own —
+      <a href="03-types-of-evaluators.html">the three kinds of graders</a> and how to choose among them.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Stella Biderman, Hailey Schoelkopf, Lintang Sutawika et al. (EleutherAI), "Lessons from the Trenches on Reproducible Evaluation of Language Models," arXiv:2405.14782 (v3). <a href="https://arxiv.org/abs/2405.14782">arxiv.org/abs/2405.14782</a></li>
+        <li>Anthropic, "Challenges in Evaluating AI Systems," anthropic.com, October 2023. <a href="https://www.anthropic.com/news/evaluating-ai-systems">anthropic.com/news/evaluating-ai-systems</a></li>
+        <li>Mark Chen et al., "Evaluating Large Language Models Trained on Code," arXiv:2107.03374, 2021. <a href="https://arxiv.org/abs/2107.03374">arxiv.org/abs/2107.03374</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

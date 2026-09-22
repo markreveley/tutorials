@@ -1,0 +1,128 @@
+{
+ "id": "posix-shell",
+ "tag": "[POSIX]",
+ "citation": {
+  "authors": "The Open Group / IEEE",
+  "title": "The Open Group Base Specifications Issue 8 (IEEE Std 1003.1-2024), Shell Command Language and Base Definitions",
+  "venue": "pubs.opengroup.org",
+  "year": "2024",
+  "url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html"
+ },
+ "fetched_urls": [
+  "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html",
+  "https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html",
+  "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/sh.html",
+  "https://pubs.opengroup.org/onlinepubs/9799919799/functions/stdin.html",
+  "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/unistd.h.html",
+  "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html",
+  "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap04.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "POSIX specifies exit status 127 for command not found and 126 for found-but-not-executable, and >128 for signal termination",
+   "verdict": "confirmed",
+   "finding": "Confirmed in both Issue 7 (POSIX.1-2017) and Issue 8 (POSIX.1-2024). POSIX says only 'greater than 128' for signals; the exact mapping (bash's 128+N) is implementation-defined, and Issue 8 explicitly permits a shell to report a status greater than 255 for a signal death. Otherwise the status is WEXITSTATUS, i.e. the value passed to exit() modulo 256. Issue 7 additionally said word-expansion/redirection failures give a status between 1 and 125.",
+   "quote": "If the command is not found, the exit status shall be 127. Otherwise, if the command name is found, but it is not an executable utility, the exit status shall be 126. Otherwise, if the command terminated due to the receipt of a signal, the shell shall assign it an exit status greater than 128.",
+   "location": "XCU 2.8.2 Exit Status for Commands (Issue 8)",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#tag_19_08_02"
+  },
+  {
+   "planned": "Standard streams: stdin 0, stdout 1, stderr 2",
+   "verdict": "confirmed",
+   "finding": "<unistd.h> defines STDIN_FILENO 0, STDOUT_FILENO 1, STDERR_FILENO 2. In the shell, a redirection with no number refers to fd 0 for `<` and fd 1 for `>`. Also: stderr is never fully buffered at start-up; stdin/stdout are fully buffered if and only if not attached to an interactive device (why output ordering changes when a program is piped to a file).",
+   "quote": "STDERR_FILENO File number of stderr; 2. STDIN_FILENO File number of stdin; 0. STDOUT_FILENO File number of stdout; 1.",
+   "location": "XBD <unistd.h>; XSH stdin/stdout/stderr",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/unistd.h.html"
+  },
+  {
+   "planned": "sh is the portable shell language; bash features (arrays, [[ ]], pipefail historically) are extensions — check whether pipefail was added in POSIX.1-2024",
+   "verdict": "corrected",
+   "finding": "pipefail IS now standard: POSIX.1-2024 (Issue 8) added `set -o pipefail` via Austin Group Defect 789, with the same 'last (rightmost) non-zero' semantics as bash. It is absent from POSIX.1-2017. Arrays remain non-standard (mentioned only as 'shells that support array assignment as an extension'). `[[`, `]]`, `function`, `select`, `namespace`, `time` are words that 'may be recognized as reserved words, in which case the results are unspecified'. Practical caveat (executed): dash on Ubuntu 24.04 / Debian 12 still rejects `set -o pipefail`, so a `#!/bin/sh` script cannot rely on it there; BusyBox ash on alpine:3.20 accepts pipefail and [[ ]] but not arrays.",
+   "quote": "Austin Group Defect 789 is applied, adding -o pipefail.",
+   "location": "XCU 2.15 Special Built-In Utilities, set, CHANGE HISTORY Issue 8; 2.9.2 Pipelines; 2.4 Reserved Words",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#set"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "POSIX.1-2024 pipeline exit status table (pipefail off, no `!`): status of the last (rightmost) command. With pipefail: zero if all commands returned zero, otherwise the status of the last (rightmost) command that returned non-zero. The pipefail setting is sampled when the pipeline STARTS.",
+   "quote": "The shell shall use the pipefail setting at the time it begins execution of the pipeline, not the setting at the time it sets the exit status of the pipeline.",
+   "location": "XCU 2.9.2 Pipelines, Exit Status",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html"
+  },
+  {
+   "fact": "POSIX description of pipefail.",
+   "quote": "Derive the exit status of a pipeline from the exit statuses of all of the commands in the pipeline, not just the last (rightmost) command, as described in 2.9.2 Pipelines.",
+   "location": "XCU 2.15 set, -o pipefail",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#set"
+  },
+  {
+   "fact": "POSIX set -e exceptions (normative, matches bash): failure of an individual command in a multi-command pipeline or of a command-substitution subshell does not exit; -e is ignored in the compound list after while/until/if/elif, in a pipeline beginning with `!`, and for any command of an AND-OR list other than the last.",
+   "quote": "The -e setting shall be ignored when executing the compound list following the while, until, if, or elif reserved word, a pipeline beginning with the ! reserved word, or any command of an AND-OR list other than the last.",
+   "location": "XCU 2.15 set, -e",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#set"
+  },
+  {
+   "fact": "POSIX's own worked example of -e applying per subshell.",
+   "quote": "set -e; (false; echo one) | cat; echo two ... the false command causes the subshell to exit without executing echo one; however, echo two is executed because the exit status of the pipeline (false; echo one) | cat is zero.",
+   "location": "XCU 2.15 set, -e",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html#set"
+  },
+  {
+   "fact": "Exit statuses are 8 bits: for C programs the status equals the value passed to exit() modulo 256.",
+   "quote": "Note that for C programs, this value is equal to the result of performing a modulo 256 operation on the value passed to _Exit(), _exit(), or exit() or returned from main().",
+   "location": "XCU 2.8.2 Exit Status for Commands",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html"
+  },
+  {
+   "fact": "Issue 8 allows a signal death to be reported as a status above 255 (ksh93 does 256+N); only '>128' is portable.",
+   "quote": "Note that shell implementations are permitted to assign an exit status greater than 255 if a command terminates due to a signal.",
+   "location": "XCU 2.8.2 Exit Status for Commands",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html"
+  },
+  {
+   "fact": "The permission-class rule in normative form: owner, group and other classes are mutually exclusive, and a process in the owner class is by definition not in the group class. This is the authoritative wording for 'exactly one class is checked'.",
+   "quote": "A process is in the file group class of a file if the process is not in the file owner class and if the effective group ID or one of the supplementary group IDs of the process matches the group ID associated with the file.",
+   "location": "XBD 3.142 File Group Class (see also 3.149 File Other Class, 3.150 File Owner Class)",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html"
+  },
+  {
+   "fact": "Access is decided by the bit for THE class the process belongs to.",
+   "quote": "Access shall be granted if an alternate access control mechanism is not enabled and the requested access permission bit is set for the class (file owner class, file group class, or file other class) to which the process belongs",
+   "location": "XBD 4.7 File Access Permissions",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap04.html"
+  },
+  {
+   "fact": "Privileged processes: read/write/search always granted; execute only if at least one execute bit is set.",
+   "quote": "If execute permission is requested, access shall be granted if execute permission is granted to at least one user by the file permission bits or by an alternate access control mechanism; otherwise, access shall be denied.",
+   "location": "XBD 4.7 File Access Permissions",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap04.html"
+  },
+  {
+   "fact": "Names live in directories: a directory entry (hard link) associates a filename with a file; link count is the number of directory entries referring to the file.",
+   "quote": "3.104 Directory Entry (or Hard Link): An object that associates a filename with a file. Several directory entries can associate names with the same file. ... 3.188 Link Count: The number of directory entries that refer to a particular file.",
+   "location": "XBD 3.104, 3.188",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html"
+  },
+  {
+   "fact": "A filename may contain any byte except NUL and slash — spaces and newlines are legal, which is why unquoted expansions break.",
+   "quote": "A sequence of bytes consisting of 1 to {NAME_MAX} bytes used to name a file. The bytes composing the name shall not contain the <NUL> or <slash> characters.",
+   "location": "XBD 3.146 Filename",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap03.html"
+  },
+  {
+   "fact": "sh is defined as 'the standard command language interpreter'.",
+   "quote": "sh — shell, the standard command language interpreter",
+   "location": "XCU sh, NAME",
+   "cite_url": "https://pubs.opengroup.org/onlinepubs/9799919799/utilities/sh.html"
+  },
+  {
+   "fact": "Observed shell support on course images.",
+   "quote": "ubuntu:24.04: sh -c 'set -o pipefail' -> sh: 1: set: Illegal option -o pipefail ; sh -c '[[ a == a ]]' -> sh: 1: [[: not found ; sh -c 'a=(1 2)' -> Syntax error: \"(\" unexpected\nalpine:3.20 (BusyBox v1.36.1 ash): set -o pipefail; false | true -> status 1 ; [[ a == a ]] works ; a=(1 2) -> sh: syntax error: unexpected \"(\" (status 2)",
+   "location": "executed ubuntu:24.04 and alpine:3.20"
+  }
+ ],
+ "teaching_notes": "Cite Issue 8 (2024) as canonical; Issue 7 (2017) was also fetched for comparison. The most valuable correction: 'pipefail is a bashism' is out of date — it has been in POSIX since the 2024 edition (Defect 789) — but dash on the reference system still lacks it, so the practical advice ('use #!/bin/bash if you need pipefail') stands. POSIX only guarantees '>128' for signal deaths; 128+N is bash/dash behaviour. This source is also the normative home of the 'one permission class' rule (XBD 3.142/3.149/3.150 + 4.7), which the chmod-umask note cross-references."
+}

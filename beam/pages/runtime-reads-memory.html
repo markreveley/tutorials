@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How the Runtime Reads It</title>
+<link rel="stylesheet" href="../assets/style.css">
+<style>
+  .decode { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  @media(max-width:680px){ .decode{ grid-template-columns:1fr; } }
+  .wordbox { font-family:var(--mono); font-size:13px; }
+  .steps { list-style:none; padding:0; margin:0; }
+  .steps li { padding:9px 12px; border:1px solid var(--line); border-radius:7px; margin:7px 0;
+              background:var(--bg-2); color:var(--ink-faint); transition:all .25s; font-size:13.5px; }
+  .steps li.on { border-color:var(--accent); color:var(--ink); background:var(--bg-3); }
+  .steps li.done { color:var(--ink-soft); }
+  .heapobj { font-family:var(--mono); font-size:12.5px; border:1px solid var(--boxed); border-radius:8px;
+             background:var(--bg-2); padding:8px 11px; opacity:.25; transition:opacity .35s; }
+  .heapobj.show { opacity:1; }
+  .heapobj .hdr { color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:4px; margin-bottom:4px; }
+  .stack-os { border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:22px 0; font-family:var(--mono); font-size:13px; }
+  .stack-os .row { padding:12px 16px; border-bottom:1px solid var(--line); }
+  .stack-os .row:last-child{border-bottom:none;}
+  .stack-os .l0 { background:#0b0e13; color:var(--ink-faint); }
+  .stack-os .l1 { background:var(--bg-2); color:var(--accent); }
+  .stack-os .l2 { background:var(--bg-3); }
+  .stack-os .procs { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+  .stack-os .p { border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:11.5px; color:var(--ink-soft); background:var(--bg-2); }
+  .stack-os .p b { color:var(--imm); }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Rung 6 · the metal</p>
+    <h1>How the Runtime Reads It</h1>
+    <p class="lede">
+      We've built values up from bits. Now run the tape backwards: given a word in a register or a slot, what
+      does the BEAM actually <em>do</em> to make sense of it? And where does this program get memory in the
+      first place? This is where "the runtime" stops being a vague word.
+    </p>
+
+    <h2>Decoding a word, step by step</h2>
+    <p>
+      At execution time the BEAM is a native program inspecting one word at a time, reading its
+      <span style="color:var(--tag)">tag</span>, and branching. Step through a few:
+    </p>
+
+    <div class="viz">
+      <div class="viz-head"><span class="title">the VM's decode loop</span></div>
+      <div class="viz-body">
+        <div class="controls">
+          <div class="seg" id="caseSeg">
+            <button data-c="boxed" class="on">a boxed pointer</button>
+            <button data-c="small">a small int</button>
+            <button data-c="atom">an atom</button>
+            <button data-c="cons">a list ptr</button>
+          </div>
+          <button class="btn primary" id="stepBtn">Step →</button>
+          <button class="btn" id="rstBtn">restart</button>
+        </div>
+        <div class="decode">
+          <div>
+            <div class="wordbox" id="wordView"></div>
+            <div class="heapobj" id="heapView" style="margin-top:14px">
+              <div class="hdr" id="heapHdr">heap object</div>
+              <div id="heapBody"></div>
+            </div>
+          </div>
+          <ol class="steps" id="stepList"></ol>
+        </div>
+        <div class="readout" id="decodeOut"></div>
+      </div>
+      <div class="viz-foot">Decode order per BEAM Book Ch.4: primary tag → (immediate decoded in place | pointer masked &amp; followed → header read).</div>
+    </div>
+
+    <div class="callout">
+      <span class="label">Two different "type" mechanisms</span>
+      Immediates are typed by their <strong>tag bits</strong> alone — a hardcoded <code>switch</code> in the C
+      emulator, no lookup. Boxed objects need a second read: the <strong>header word</strong> encodes the exact
+      subtype + arity directly in its bits (again, hardcoded interpretation — <em>not</em> a table). The only
+      genuine table is the <a href="atoms-and-atom-table.html">atom table</a>, which exists solely to map a
+      compact index to a variable-length name.
+    </div>
+
+    <h2>So what <em>is</em> "the runtime"? A program.</h2>
+    <p>
+      The BEAM runtime is a <strong>native executable — a C program</strong> compiled for your OS and CPU.
+      "Running Elixir" launches this program; it loads your compiled <code>.beam</code> bytecode and executes
+      it, providing the entire managed world: the tagged-value model, garbage collection, the
+      lightweight-process scheduler, message passing, the atom table, timers, I/O. Strictly, <strong>BEAM</strong>
+      is the abstract machine (Bogdan/Björn's Erlang Abstract Machine); the <strong>emulator</strong> is the
+      concrete C program that emulates it — the way an NES emulator is a real program emulating an abstract
+      console. <strong>ERTS</strong> (Erlang Run-Time System) is the whole bundle: emulator + allocators +
+      schedulers + built-ins <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.5</a>.
+    </p>
+
+    <h2>Where the memory comes from — two levels</h2>
+    <p>
+      The BEAM doesn't conjure memory; it's an ordinary OS process. The OS hands it a virtual address space
+      (via <code>mmap</code>/<code>malloc</code>); the BEAM grabs big regions and then plays "operating system"
+      to its own world, sub-allocating <strong>per-process heaps</strong> and boxed objects inside what it
+      owns. "Reading memory" is just normal C pointer dereferencing inside that owned space.
+    </p>
+
+    <div class="stack-os">
+      <div class="row l0">OS — gives the BEAM process a virtual address space (mmap / malloc)</div>
+      <div class="row l1">BEAM / ERTS — one native process; sub-manages that space with its own allocators</div>
+      <div class="row l2">
+        Lightweight Erlang processes — millions possible, each its own isolated memory:
+        <div class="procs">
+          <div class="p">proc &lt;0.1.0&gt;<br><b>stack ↔ heap</b><br>mailbox · PCB</div>
+          <div class="p">proc &lt;0.2.0&gt;<br><b>stack ↔ heap</b><br>mailbox · PCB</div>
+          <div class="p">proc &lt;0.3.0&gt;<br><b>stack ↔ heap</b><br>mailbox · PCB</div>
+        </div>
+      </div>
+    </div>
+
+    <p>
+      A BEAM process is "four blocks of memory: a stack, a heap, a message area, and the Process Control Block"
+      <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.3.2</a>. The stack and
+      heap share one region and <strong>grow toward each other</strong> <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.3</a>.
+      Two design consequences follow directly from <em>private</em> heaps:
+    </p>
+    <ul>
+      <li><strong>Per-process garbage collection.</strong> The GC is a "per process copying generational"
+          collector <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.3</a>. When
+          one process collects, it pauses only <em>itself</em> — no global stop-the-world across millions of
+          processes. This is a big reason for the BEAM's low, predictable latency.</li>
+      <li><strong>Message passing copies.</strong> Because a process can only safely reference its own heap,
+          sending a message generally <em>copies</em> the data into the receiver's heap. The big exception:
+          large binaries (&gt;64 bytes) live off-heap in a shared, reference-counted area and are passed by
+          reference <a class="cite" href="https://blog.stenmans.org/theBeamBook" target="_blank">Ch.4.5</a>.
+          So "no copying, just sharing" is a <em>within-process</em> guarantee.</li>
+    </ul>
+
+    <div class="callout aha">
+      <span class="label">The whole ladder in one breath</span>
+      Your Elixir is compiled to register-machine bytecode. Its instructions build values as tagged words —
+      immediates inline, boxed terms as pointers to header-led heap blocks. The BEAM, a native program holding
+      memory from the OS, executes those instructions by reading tags, masking pointers, and following them,
+      all inside per-process heaps it collects independently. Nothing "out there somewhere" — every layer has
+      an address.
+    </div>
+
+    <div class="pager" data-pager></div>
+    <p class="src-note">Verified against The BEAM Book — Ch.3 (Processes / PCB / GC), Ch.4 (tags &amp; binaries), Ch.5 (the BEAM VM), Ch.11 (memory subsystem).</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/app.js"></script>
+<script>
+WIKI.mount('runtime-reads-memory');
+
+const CASES = {
+  boxed: {
+    word: `<div class="word2" style="display:inline-flex"><span class="ptr" style="color:var(--boxed)">…1010&nbsp;0001&nbsp;0010&nbsp;0100&nbsp;</span><span class="tg" style="color:var(--tag)">10</span></div>`,
+    steps: [
+      'Read the primary tag (low 2 bits): <b>10</b>.',
+      '<b>10 = boxed.</b> Don\'t read it as a value — it\'s a pointer. Go dereference.',
+      'Mask off the tag: <code>AND …1100</code> → clean aligned address.',
+      'Follow the pointer to the heap block.',
+      'Read the <b>header word</b> there: subtag 0000, arity 4.',
+      '∴ this is a <b>tuple of arity 4</b>. Now its slots can be processed.'
+    ],
+    heap: { hdr:'header · tuple/4', body:'slot0 · slot1 · slot2 · slot3', revealAt:3 },
+    done: 'Boxed pointers take <b>two</b> reads to type: the tag says "go look", the header says "what".'
+  },
+  small: {
+    word: `<div class="word2" style="display:inline-flex"><span class="ix" style="color:var(--imm)">…0000&nbsp;0010&nbsp;1010&nbsp;</span><span class="tg" style="color:var(--tag)">1111</span></div>`,
+    steps: [
+      'Read the primary tag (low 2 bits): <b>11</b>.',
+      '<b>11 = immediate.</b> Read the sub-tag: <b>11</b> → small integer.',
+      'The remaining 60 bits <i>are</i> the value: <b>42</b>.',
+      'Done — no heap, no dereference.'
+    ],
+    heap: null,
+    done: 'Immediates are typed and valued in a <b>single</b> read. Nothing to follow.'
+  },
+  atom: {
+    word: `<div class="word2" style="display:inline-flex"><span class="ix" style="color:var(--imm)">…idx 137&nbsp;</span><span class="tg" style="color:var(--tag)">00&nbsp;10&nbsp;11</span></div>`,
+    steps: [
+      'Read the primary tag: <b>11</b> → immediate.',
+      'Sub-tags <b>10&nbsp;11</b> → immediate-2; then <b>00</b> → atom.',
+      'Remaining bits = table index <b>137</b>.',
+      'Identity is settled by the index alone. (The name is fetched from the atom table only if needed, e.g. to print.)'
+    ],
+    heap: null,
+    done: 'Atom equality = index equality. One word, one comparison.'
+  },
+  cons: {
+    word: `<div class="word2" style="display:inline-flex"><span class="ptr" style="color:var(--boxed)">…0101&nbsp;1111&nbsp;0011&nbsp;1010&nbsp;0&nbsp;</span><span class="tg" style="color:var(--tag)">01</span></div>`,
+    steps: [
+      'Read the primary tag: <b>01</b>.',
+      '<b>01 = list (cons) pointer.</b> Its own tag identifies it — no header needed.',
+      'Mask off the tag and follow to the cons cell.',
+      'The cell is just two words: <b>head</b> (the value) and <b>tail</b> (next cell, or []).'
+    ],
+    heap: { hdr:'cons cell (no header word)', body:'head · tail →', revealAt:2 },
+    done: 'Lists get their own primary tag so each cell skips a header — 33% leaner than a boxed 2-tuple.'
+  }
+};
+
+let curCase='boxed', step=0;
+function renderCase(){
+  const c=CASES[curCase];
+  document.getElementById('wordView').innerHTML='<div style="color:var(--ink-faint);font-size:11px;margin-bottom:6px">the word being decoded</div>'+c.word;
+  const list=document.getElementById('stepList'); list.innerHTML='';
+  c.steps.forEach((s,i)=>{
+    const li=document.createElement('li');
+    li.innerHTML=s;
+    li.className = i<step?'done': (i===step-1?'on':'');
+    list.appendChild(li);
+  });
+  // heap reveal
+  const hv=document.getElementById('heapView');
+  if(c.heap){
+    hv.style.display='';
+    document.getElementById('heapHdr').textContent=c.heap.hdr;
+    document.getElementById('heapBody').textContent=c.heap.body;
+    hv.classList.toggle('show', step>c.heap.revealAt);
+  } else { hv.style.display='none'; }
+  document.getElementById('decodeOut').innerHTML = step>=c.steps.length ? c.done :
+    'Press <b>Step</b> to advance the decode.';
+  document.getElementById('stepBtn').disabled = step>=c.steps.length;
+}
+document.getElementById('stepBtn').onclick=()=>{ step++; renderCase(); };
+document.getElementById('rstBtn').onclick=()=>{ step=0; renderCase(); };
+document.getElementById('caseSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#caseSeg button').forEach(x=>x.classList.toggle('on',x===b));
+  curCase=b.dataset.c; step=0; renderCase();
+});
+renderCase();
+</script>
+</body>
+</html>

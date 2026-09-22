@@ -1,0 +1,173 @@
+{
+  "id": "proc-5",
+  "tag": "[proc(5)]",
+  "citation": {
+    "authors": "Linux man-pages project; Linux kernel documentation",
+    "title": "proc(5) and sub-pages: proc_pid_environ(5), proc_pid_cmdline(5), proc_pid_fd(5), proc_pid_cwd(5), proc_pid_exe(5), proc_pid_status(5), proc_loadavg(5), proc_meminfo(5); ptrace(2) 'Ptrace access mode checking'; kernel 'The /proc Filesystem'",
+    "venue": "Linux man-pages 6.19 (man7.org); docs.kernel.org",
+    "year": "2026",
+    "url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+  },
+  "fetched_urls": [
+    "https://man7.org/linux/man-pages/man5/proc.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_pid_environ.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_pid_cmdline.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_pid_cwd.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_pid_exe.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_pid_status.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_loadavg.5.html",
+    "https://man7.org/linux/man-pages/man5/proc_meminfo.5.html",
+    "https://man7.org/linux/man-pages/man2/ptrace.2.html",
+    "https://man7.org/linux/man-pages/man1/uptime.1.html",
+    "https://docs.kernel.org/filesystems/proc.html"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "/proc is a pseudo-filesystem exposing kernel data structures; /proc/PID/ directories per process",
+      "verdict": "confirmed",
+      "finding": "Verbatim. Commonly mounted at /proc; most files read-only, some writable to change kernel variables. One /proc/pid subdirectory per process (with task/tid per thread); /proc/self is a magic symlink to the accessing process's own directory.",
+      "quote": "The proc filesystem is a pseudo-filesystem which provides an interface to kernel data structures. It is commonly mounted at /proc. ... Most of the files in the proc filesystem are read-only, but some files are writable, allowing kernel variables to be changed.",
+      "location": "proc(5), DESCRIPTION; Overview for /proc/pid and /proc/self",
+      "cite_url": "https://man7.org/linux/man-pages/man5/proc.5.html"
+    },
+    {
+      "planned": "/proc/PID/environ holds the INITIAL environment set at exec, NUL-separated; readable subject to ptrace access mode check (same user or root)",
+      "verdict": "corrected",
+      "finding": "Initial-environment and NUL-separation confirmed: changes made after execve (putenv, export in a running shell) do NOT appear. Access: governed by a ptrace access mode PTRACE_MODE_READ_FSCREDS check. 'Same user or root' is imprecise: ptrace(2) requires EITHER the target's real, effective AND saved UIDs (and GIDs) all match the caller's, OR the caller has CAP_SYS_PTRACE in the target's user namespace; plus the target must be 'dumpable' unless the caller has CAP_SYS_PTRACE; plus LSM checks. 'Root' only works because root normally has CAP_SYS_PTRACE. Docker's default capability set drops CAP_SYS_PTRACE, so root INSIDE a default container CANNOT read another user's /proc/PID/environ (executed below: Permission denied; works with --cap-add SYS_PTRACE). File mode is -r-------- owned by the process's user.",
+      "quote": "This file contains the initial environment that was set when the currently executing program was started via execve(2). The entries are separated by null bytes ('\\0'), and there may be a null byte at the end. ... If, after an execve(2), the process modifies its environment ... this file will not reflect those changes.",
+      "location": "proc_pid_environ(5), DESCRIPTION; access rule in same section + ptrace(2) 'Ptrace access mode checking' step (3)",
+      "cite_url": "https://man7.org/linux/man-pages/man5/proc_pid_environ.5.html"
+    },
+    {
+      "planned": "/proc/PID/cmdline is world-readable by default → secrets passed as command-line arguments are visible to every user via ps; hidepid mount option can restrict",
+      "verdict": "confirmed",
+      "finding": "proc_pid_cmdline(5) itself states no access rule (unlike environ/fd/cwd/exe, it has NO ptrace-check sentence). World-readability follows from proc(5): with hidepid=0 (the default) 'Everybody may access all /proc/pid directories', and hidepid=1 is described as protecting 'Sensitive files such as /proc/pid/cmdline and /proc/pid/status' against other users. The kernel doc spells out the secrets consequence. Executed: mode -r--r--r--; user nobody reads root's PID 1 cmdline including a fake token, and sees it in `ps`. hidepid values: 0 default; 1 = cannot access others' /proc/pid contents (dirs still visible); 2 = others' /proc/pid dirs invisible; kernel docs add names off/noaccess/invisible and hidepid=ptraceable (4); gid= exempts a group. Docker's default /proc mount has no hidepid (executed: 'proc /proc proc rw,nosuid,nodev,noexec,relatime').",
+      "quote": "As an additional bonus, as /proc/<pid>/cmdline is unaccessible for other users, poorly written programs passing sensitive information via program arguments are now protected against local eavesdroppers.",
+      "location": "docs.kernel.org 'The /proc Filesystem', ch. 4 Configuring procfs > Mount options (hidepid=noaccess); proc(5) Mount options > hidepid",
+      "cite_url": "https://docs.kernel.org/filesystems/proc.html"
+    },
+    {
+      "planned": "/proc/PID/fd is a directory of symlinks to open files; /proc/PID/cwd, /proc/PID/exe, /proc/PID/status fields (Uid, Gid, VmRSS, CapEff, NoNewPrivs, Seccomp)",
+      "verdict": "confirmed",
+      "finding": "fd/: one entry per open fd, named by number, symlink to the file; pipes/sockets appear as 'type:[inode]' (e.g. socket:[2248868]), inode-less fds as 'anon_inode:[eventpoll]' etc. cwd: symlink to current working directory. exe: symlink to the executed binary; ' (deleted)' appended if unlinked. Reading fd/, cwd, exe links requires the ptrace READ check (executed: nobody gets 'Permission denied' on root's cwd, and fd/ is dr-x------). status: Uid/Gid lines hold FOUR values each — real, effective, saved set, filesystem; VmRSS = resident set size (= RssAnon+RssFile+RssShmem, flagged 'inaccurate'); CapInh/CapPrm/CapEff/CapBnd/CapAmb hex masks; NoNewPrivs bit (since 4.10); Seccomp 0=disabled, 1=strict, 2=filter (since 3.8); Seccomp_filters count (since 5.9). status is world-readable (-r--r--r--).",
+      "quote": "This is a subdirectory containing one entry for each file which the process has open, named by its file descriptor, and which is a symbolic link to the actual file. Thus, 0 is standard input, 1 standard output, 2 standard error, and so on.",
+      "location": "proc_pid_fd(5), DESCRIPTION; proc_pid_cwd(5); proc_pid_exe(5); proc_pid_status(5) field list",
+      "cite_url": "https://man7.org/linux/man-pages/man5/proc_pid_fd.5.html"
+    },
+    {
+      "planned": "/proc/loadavg: 1, 5, 15 minute load averages count runnable AND uninterruptible (D state) tasks",
+      "verdict": "confirmed",
+      "finding": "First three fields: jobs in the run queue (state R) or waiting for disk I/O (state D), averaged over 1, 5, 15 minutes. Fourth field 'runnable/total' scheduling entities; fifth = most recently created PID. uptime(1) adds: not normalized for CPU count. Executed in a container: /proc/loadavg shows the HOST's (VM's) load, not the container's.",
+      "quote": "The first three fields in this file are load average figures giving the number of jobs in the run queue (state R) or waiting for disk I/O (state D) averaged over 1, 5, and 15 minutes. They are the same as the load average numbers given by uptime(1) and other programs.",
+      "location": "proc_loadavg(5), DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man5/proc_loadavg.5.html"
+    },
+    {
+      "planned": "/proc/meminfo MemAvailable definition vs MemFree",
+      "verdict": "confirmed",
+      "finding": "MemAvailable (since Linux 3.14): estimate of memory available for starting new applications without swapping; kernel docs: computed from MemFree, SReclaimable, the file LRU lists and per-zone low watermarks. MemFree: literally unused RAM (man page: 'The sum of LowFree+HighFree'; kernel doc: 'Total free RAM'). Cached = page cache. MemTotal = usable RAM (physical minus reserved bits and kernel binary). Executed: inside a `--memory 64m` container /proc/meminfo still reports the HOST total (MemTotal 8025424 kB) — meminfo is not cgroup-aware; the limit is only visible in /sys/fs/cgroup/memory.max.",
+      "quote": "MemAvailable %lu (since Linux 3.14) An estimate of how much memory is available for starting new applications, without swapping.",
+      "location": "proc_meminfo(5), DESCRIPTION; fuller formula in docs.kernel.org 'The /proc Filesystem' > meminfo",
+      "cite_url": "https://man7.org/linux/man-pages/man5/proc_meminfo.5.html"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "The exact ptrace access rule used for environ/fd/cwd/exe (step 3 of 6).",
+      "quote": "Deny access if neither of the following is true: The real, effective, and saved-set user IDs of the target match the caller's user ID, and the real, effective, and saved-set group IDs of the target match the caller's group ID. The caller has the CAP_SYS_PTRACE capability in the user namespace of the target.",
+      "location": "ptrace(2), 'Ptrace access mode checking', algorithm step (3)",
+      "cite_url": "https://man7.org/linux/man-pages/man2/ptrace.2.html"
+    },
+    {
+      "finding": "ptrace(2) explicitly lists reading /proc/pid/environ as a PTRACE_MODE_READ operation; the dumpable attribute is a further gate (step 4), and LSMs such as Yama/SELinux a further one (step 5).",
+      "quote": "PTRACE_MODE_READ For \"read\" operations or other operations that are less dangerous, such as: get_robust_list(2); kcmp(2); reading /proc/pid/auxv, /proc/pid/environ, or /proc/pid/stat; or readlink(2) of a /proc/pid/ns/* file.",
+      "location": "ptrace(2), 'Ptrace access mode checking'"
+    },
+    {
+      "finding": "cmdline is NOT a trustworthy record: a process can rewrite its argv strings and the change shows up; zombies have an empty cmdline.",
+      "quote": "If, after an execve(2), the process modifies its argv strings, those changes will show up here. ... Think of this file as the command line that the process wants you to see.",
+      "location": "proc_pid_cmdline(5), DESCRIPTION"
+    },
+    {
+      "finding": "cmdline format: NUL-separated strings with a trailing NUL; empty for a zombie.",
+      "quote": "This read-only file holds the complete command line for the process, unless the process is a zombie. In the latter case, there is nothing in this file: that is, a read on this file will return 0 characters.",
+      "location": "proc_pid_cmdline(5), DESCRIPTION"
+    },
+    {
+      "finding": "The idiomatic way to print environ, from the man page itself.",
+      "quote": "$ cat /proc/1/environ | tr '\\000' '\\n'",
+      "location": "proc_pid_environ(5), DESCRIPTION"
+    },
+    {
+      "finding": "hidepid semantics, man-page wording.",
+      "quote": "0 Everybody may access all /proc/pid directories. This is the traditional behavior, and the default if this mount option is not specified. 1 Users may not access files and subdirectories inside any /proc/pid directories but their own (the /proc/pid directories themselves remain visible). Sensitive files such as /proc/pid/cmdline and /proc/pid/status are now protected against other users.",
+      "location": "proc(5), DESCRIPTION > Mount options > hidepid=n (since Linux 3.3)"
+    },
+    {
+      "finding": "hidepid=2 hides the directories too, but existence can still be probed with kill -0.",
+      "quote": "This doesn't hide the fact that a process with a specific PID value exists (it can be learned by other means, for example, by \"kill -0 $PID\"), but it hides a process's UID and GID, which could otherwise be learned by employing stat(2) on a /proc/pid directory.",
+      "location": "proc(5), Mount options > hidepid=2"
+    },
+    {
+      "finding": "/dev/stdin, /dev/stdout, /dev/stderr and /dev/fd are symlinks into /proc/self/fd.",
+      "quote": "Most systems provide symbolic links /dev/stdin, /dev/stdout, and /dev/stderr, which respectively link to the files 0, 1, and 2 in /proc/self/fd.",
+      "location": "proc_pid_fd(5), DESCRIPTION"
+    },
+    {
+      "finding": "exe of a deleted/replaced binary.",
+      "quote": "If the pathname has been unlinked, the symbolic link will contain the string ' (deleted)' appended to the original pathname.",
+      "location": "proc_pid_exe(5), DESCRIPTION"
+    },
+    {
+      "finding": "status: State values; Uid/Gid four-value layout; Name truncated to 16 bytes incl. NUL (15 visible chars); PPid; TracerPid (non-zero = being strace'd/debugged); NSpid shows the PID in each nested PID namespace; SigBlk/SigIgn/SigCgt hex masks of blocked/ignored/caught signals (SigCgt all zeros = no handlers, used in the PID 1 demo); Threads; voluntary/nonvoluntary_ctxt_switches.",
+      "quote": "State Current state of the process. One of \"R (running)\", \"S (sleeping)\", \"D (disk sleep)\", \"T (stopped)\", \"t (tracing stop)\", \"Z (zombie)\", or \"X (dead)\". ... Uid, Gid Real, effective, saved set, and filesystem UIDs (GIDs).",
+      "location": "proc_pid_status(5), DESCRIPTION (field list)"
+    },
+    {
+      "finding": "Seccomp field values.",
+      "quote": "Seccomp Seccomp mode of the process (since Linux 3.8, see seccomp(2)). 0 means SECCOMP_MODE_DISABLED; 1 means SECCOMP_MODE_STRICT; 2 means SECCOMP_MODE_FILTER.",
+      "location": "proc_pid_status(5), DESCRIPTION"
+    },
+    {
+      "finding": "Load average is not normalized by CPU count.",
+      "quote": "Load averages are not normalized for the number of CPUs in a system, so a load average of 1 means a single CPU system is loaded all the time while on a 4 CPU system it means it was idle 75% of the time.",
+      "location": "uptime(1), DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man1/uptime.1.html"
+    },
+    {
+      "finding": "Kernel-doc MemAvailable formula and caveat.",
+      "quote": "An estimate of how much memory is available for starting new applications, without swapping. Calculated from MemFree, SReclaimable, the size of the file LRU lists, and the low watermarks in each zone. The estimate takes into account that the system needs some page cache to function well",
+      "location": "docs.kernel.org 'The /proc Filesystem' > meminfo",
+      "cite_url": "https://docs.kernel.org/filesystems/proc.html"
+    },
+    {
+      "finding": "EXECUTED: file modes and Docker's /proc mount options (no hidepid).",
+      "quote": "$ docker run --rm ubuntu:24.04 sh -c 'ls -l /proc/1/environ /proc/1/cmdline /proc/1/status; ls -ld /proc/1/fd; grep \"^proc \" /proc/mounts'\n-r--r--r-- 1 root root 0 Sep 21 06:07 /proc/1/cmdline\n-r-------- 1 root root 0 Sep 21 06:07 /proc/1/environ\n-r--r--r-- 1 root root 0 Sep 21 06:07 /proc/1/status\ndr-x------ 2 root root 3 Sep 21 06:07 /proc/1/fd\nproc /proc proc rw,nosuid,nodev,noexec,relatime 0 0\nproc /proc/bus proc ro,nosuid,nodev,noexec,relatime 0 0\n…",
+      "location": "executed ubuntu:24.04 (Docker 28.1.1, kernel 6.10.14-linuxkit)"
+    },
+    {
+      "finding": "EXECUTED: an unprivileged user sees root's command line (incl. a token placed in argv) but not its environment or cwd.",
+      "quote": "$ docker run -d --name lt-R2-proc -e API_KEY=s3cret ubuntu:24.04 bash -c 'sleep 300; : --token=hunter2'\n$ docker exec -u nobody lt-R2-proc sh -c 'id; tr \"\\0\" \" \" < /proc/1/cmdline; echo; cat /proc/1/environ; echo \"rc=$?\"; ls -l /proc/1/cwd; ps -eo user,pid,args | head -3'\nuid=65534(nobody) gid=65534(nogroup) groups=65534(nogroup)\nbash -c sleep 300; : --token=hunter2 \ncat: /proc/1/environ: Permission denied\nrc=1\nls: cannot read symbolic link '/proc/1/cwd': Permission denied\nlrwxrwxrwx 1 root root 0 Sep 21 06:08 /proc/1/cwd\nUSER       PID COMMAND\nroot         1 bash -c sleep 300; : --token=hunter2\nroot         7 sleep 300",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: root in a DEFAULT Docker container cannot read another user's environ (no CAP_SYS_PTRACE; CapEff 00000000a80425fb); with --cap-add SYS_PTRACE it can.",
+      "quote": "$ docker exec -d -u nobody -e USERSECRET=u1 lt-R2-proc sleep 200\n$ docker exec lt-R2-proc sh -c 'p=$(pgrep -u nobody sleep); echo pid=$p; tr \"\\0\" \"\\n\" < /proc/$p/environ | grep USERSECRET; echo rc=$?; grep CapEff /proc/self/status'\npid=20\nsh: 1: cannot open /proc/20/environ: Permission denied\nrc=1\nCapEff:\t00000000a80425fb\n# same container started with --cap-add SYS_PTRACE:\nUSERSECRET=u1\nrc=0",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: environ is the exec-time snapshot. A running bash that exports LATER and changes SECRET still shows the original in its own /proc/$$/environ; a child exec'd afterwards shows the new values.",
+      "quote": "$ docker run --rm -e SECRET=abc ubuntu:24.04 bash -c 'export LATER=xyz; SECRET=changed; tr \"\\0\" \"\\n\" < /proc/$$/environ | grep -E \"SECRET|LATER\"; echo \"---child:\"; bash -c \"tr \\\"\\\\0\\\" \\\"\\\\n\\\" < /proc/\\$\\$/environ | grep -E \\\"SECRET|LATER\\\"\"'\nSECRET=abc\n---child:\nLATER=xyz\nSECRET=changed",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: /proc/meminfo, free, nproc and /proc/loadavg are NOT cgroup-aware. In a 64 MiB / 0.5-CPU container they report the host VM (7.8 GiB, 10 CPUs).",
+      "quote": "$ docker run --rm --memory 64m ubuntu:24.04 sh -c 'grep -E \"MemTotal|MemAvailable\" /proc/meminfo; free -m; cat /sys/fs/cgroup/memory.max; nproc; cat /proc/loadavg'\nMemTotal:        8025424 kB\nMemAvailable:    7347236 kB\n               total        used        free      shared  buff/cache   available\nMem:            7837         662        6821           0         510        7174\nSwap:           1023           0        1023\n67108864\n10\n1.41 0.46 0.17 7/338 11\n$ docker run --rm --cpus 0.5 ubuntu:24.04 nproc\n10",
+      "location": "executed ubuntu:24.04"
+    }
+  ],
+  "teaching_notes": "The secrets story for an evals engineer, fully sourced: argv is public (cmdline mode 0444, shown by ps to every user, and hidepid is off by default including in Docker); the environment is private-ish (mode 0400 + ptrace READ check) but is an exec-time snapshot that any same-UID process — i.e. the agent, if it runs as the same user as the harness shim — can read. Biggest correction: 'same user or root' should be 'all three of the target's UIDs match yours, or you hold CAP_SYS_PTRACE' — and container root by default does not, which we demonstrated. Second: cmdline is writable by the process ('the command line that the process wants you to see'), so it is evidence, not proof. Third: /proc/meminfo, free, nproc and loadavg describe the host, not the container's cgroup — a classic cause of agents/programs over-allocating and being OOM-killed; read /sys/fs/cgroup instead (see 'oom'). Note the man7 proc(5) page is now split into ~90 sub-pages; cite the sub-page URL for each file."
+}

@@ -1,0 +1,103 @@
+{
+  "id": "langfuse-braintrust",
+  "citation": {
+    "authors": "Langfuse; Braintrust",
+    "title": "Langfuse and Braintrust documentation",
+    "venue": "langfuse.com / braintrust.dev",
+    "year": "accessed 2026-06-10",
+    "url": "https://langfuse.com/docs | https://www.braintrust.dev/docs/start"
+  },
+  "fetched_urls": [
+    "https://langfuse.com/docs",
+    "https://langfuse.com/docs/tracing",
+    "https://langfuse.com/docs/tracing/overview",
+    "https://langfuse.com/docs/observability/data-model",
+    "https://langfuse.com/docs/tracing-features/sessions",
+    "https://langfuse.com/docs/tracing-features/users",
+    "https://langfuse.com/docs/sdk/python/low-level-sdk",
+    "https://langfuse.com/docs/scores/overview",
+    "https://langfuse.com/docs/scores/model-based-evals",
+    "https://langfuse.com/docs/scores/manually",
+    "https://langfuse.com/docs/evaluation/overview",
+    "https://www.braintrust.dev/docs/start",
+    "https://www.braintrust.dev/docs/guides/evals",
+    "https://www.braintrust.dev/docs/guides/evals/write",
+    "https://www.braintrust.dev/docs/guides/datasets",
+    "https://www.braintrust.dev/docs/guides/scorers",
+    "https://www.braintrust.dev/docs/reference/autoevals",
+    "https://www.braintrust.dev/docs/guides/playground",
+    "https://www.braintrust.dev/docs/guides/logging"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Langfuse tracing data model: traces, observations (spans/generations/events), sessions, users — confirm exact terminology",
+      "verdict": "confirmed",
+      "finding": "All four top-level categories are real and use exactly these names. Observations are the parent type; the three concrete subtypes are Span, Generation, and Event. The hierarchy is: Session (optional) → Trace → Observation (nested, any depth).",
+      "quote": "Observations are the individual steps within a trace. [...] A generic OTel span in Langfuse, designed for non-LLM operations [Span]. A specialized type of OTel span in Langfuse, designed specifically for Large Language Model (LLM) calls [Generation]. A Langfuse-event tracks a point in time action [Event]. Sessions are used to group traces that are part of the same user interaction.",
+      "location": "https://langfuse.com/docs/observability/data-model and https://langfuse.com/docs/sdk/python/low-level-sdk"
+    },
+    {
+      "planned": "Langfuse: scores attached to traces; LLM-as-judge evaluators can run on production traces — confirm",
+      "verdict": "corrected",
+      "finding": "Both parts are true, but the scope of score attachment is broader than stated: scores attach to traces, sessions, AND observations — not traces alone. LLM-as-a-Judge on production traces is confirmed. The recommended modern approach targets observation-level evaluators rather than trace-level for production.",
+      "quote": "With Langfuse you can capture all your LLM evaluations in one place. You can combine a variety of different evaluation metrics like model-based evaluations (LLM-as-a-Judge), human annotations or fully custom evaluation workflows via API/SDKs. [...] collaboratively annotate traces, sessions and observations with evaluation scores. [...] Teams typically use Experiments during development to validate changes, then deploy Observation-level evaluators in production for scalable, precise monitoring.",
+      "location": "https://langfuse.com/docs/scores/overview and https://langfuse.com/docs/scores/model-based-evals"
+    },
+    {
+      "planned": "Braintrust: experiments comparing eval runs, datasets, scorers (autoevals library), playground — confirm core concepts",
+      "verdict": "confirmed",
+      "finding": "All four concepts are real and well-defined. Experiments are immutable snapshots. Datasets are versioned. Scorers return 0–1 numeric scores. Autoevals is a separate library of pre-built scorers. The Playground is a no-code browser workspace that is explicitly ephemeral (overwrites previous results), distinct from experiments which are permanent.",
+      "quote": "An experiment is an immutable snapshot of an evaluation run — permanently stored, comparable over time, and shareable across your team. [...] versioned collections of test cases that you use to run evaluations and track improvements over time [Datasets]. [...] Scorers return a numeric score between 0 and 1, measuring qualities like factual accuracy, helpfulness, or correct formatting. [...] Pre-built, battle-tested scorers for common evaluation tasks like factuality checking, semantic similarity, and format validation [Autoevals]. [...] a no-code workspace for rapidly iterating on prompts, models, scorers, and datasets [Playground].",
+      "location": "https://www.braintrust.dev/docs/guides/evals/write, /guides/datasets, /guides/scorers, /reference/autoevals, /guides/playground"
+    },
+    {
+      "planned": "The general concept both teach: offline experiments vs online monitoring on the same scoring infrastructure — confirm whether the docs frame it this way",
+      "verdict": "confirmed",
+      "finding": "Both platforms explicitly frame this duality using 'offline' and 'online' terminology. Langfuse uses those exact words. Braintrust emphasizes shared data structures and instrumentation code, framing it as a single unified loop rather than two separate systems. Neither platform uses the phrase 'same scoring infrastructure' verbatim, but both convey the concept.",
+      "quote": "Langfuse: 'It happens both online, on live production traces, and offline, before you ship a change.' Braintrust: 'Logs use the same data structure as experiments, which means: Instrumentation code works for both logging and evaluation [...] Scores and feedback apply to both logs and experiments [...] Production data seamlessly becomes evaluation datasets.'",
+      "location": "https://langfuse.com/docs/evaluation/overview and https://www.braintrust.dev/docs/guides/logging"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Langfuse Generations are a specialised observation subtype that captures LLM-specific fields unavailable on plain Spans: model name, model parameters, token usage details (usage_details), and cost details (cost_details). This makes cost and latency attribution per LLM call automatic.",
+      "quote": "A specialized type of OTel span in Langfuse, designed specifically for Large Language Model (LLM) calls [...] includes enhanced fields such as model, model_parameters, usage_details (token counts), and cost_details.",
+      "numbers": "N/A"
+    },
+    {
+      "point": "In Langfuse, observations can be arbitrarily nested inside a single trace, enabling accurate representation of agent loops, RAG pipelines, and tool-call trees with correct parent-child timing.",
+      "quote": "Observations can be nested, creating hierarchical structures within a single trace.",
+      "numbers": "N/A"
+    },
+    {
+      "point": "Braintrust's autoevals library defaults to OpenAI's API for LLM-as-a-judge scoring. Teams using other providers must configure environment variables to redirect requests. This is a practical deployment consideration that often catches teams off-guard.",
+      "quote": "By default, it uses your OPENAI_API_KEY environment variable to authenticate with OpenAI's API, though it can route requests to other AI providers through environment configuration.",
+      "numbers": "N/A"
+    },
+    {
+      "point": "Braintrust Datasets are versioned, allowing experiments to pin to a specific dataset version. This means you can compare two experiments run weeks apart and know they used identical test cases — critical for trustworthy longitudinal benchmarking.",
+      "quote": "Every change is tracked, so experiments can pin to specific versions.",
+      "numbers": "N/A"
+    },
+    {
+      "point": "Braintrust's online scoring (production monitoring) runs asynchronously with no latency impact on the live application. This means the same scorer logic used in offline experiments can be applied to production traffic without a performance penalty.",
+      "quote": "apply them continuously with online scoring on production traces [...] running asynchronously with no impact on latency.",
+      "numbers": "N/A"
+    },
+    {
+      "point": "Langfuse Experiments are used for offline evaluation, while Langfuse also supports online evaluation via model-based evaluators on live production traces. The recommended modern pattern is observation-level evaluators (not trace-level) for production because they complete 'in seconds, not minutes'.",
+      "quote": "Teams typically use Experiments during development to validate changes, then deploy Observation-level evaluators in production for scalable, precise monitoring. [...] Observations (Recommended): Individual operations complete evaluation in seconds, not minutes.",
+      "numbers": "N/A"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Spans and Generations in Langfuse are NOT synonyms. Generations are a specialised subtype of observations designed for LLM calls with extra cost/token fields; Spans are generic non-LLM operations.",
+    "Langfuse scores are NOT attached to traces only — they can attach to traces, sessions, AND individual observations.",
+    "The Braintrust Playground is NOT an experiment. Playground runs are ephemeral and overwrite previous results; experiments are immutable snapshots. Promoting a playground configuration to an experiment is a deliberate user action.",
+    "Autoevals is a standalone open-source library, not a hosted Braintrust service. It uses OpenAI by default for LLM-as-judge scoring and requires separate API key configuration.",
+    "Sessions in Langfuse are OPTIONAL and sit above traces in the hierarchy. They are not required for basic tracing.",
+    "Neither platform's docs use the phrase 'same scoring infrastructure' — Braintrust emphasises 'same data structure' and 'same instrumentation code'; Langfuse uses 'online' and 'offline' as the framing."
+  ],
+  "notes_for_authors": "The four planned claims are all accurate in substance. One correction: the 'scores attached to traces' framing should be widened to 'scores attached to traces, sessions, and observations' to match the actual Langfuse API. Claim 4 (shared infrastructure) is accurate but the exact language differs between platforms: Langfuse uses 'online/offline', Braintrust emphasises 'same data structure'. Worth noting that Langfuse's recommended production eval pattern has shifted from trace-level to observation-level evaluators — course examples should reflect this. Braintrust autoevals' OpenAI dependency is a common practical stumbling block worth flagging to learners."
+}

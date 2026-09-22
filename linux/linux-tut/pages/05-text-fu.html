@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Text-Fu: Reading Logs at Scale · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 1 · The Shell</p>
+    <h1>Text-fu: reading logs at scale</h1>
+    <p class="lede">
+      An eval run leaves behind thousands of lines of text: one result record per rollout, plus
+      transcripts and container logs. A dozen small programs, joined by pipes, let you ask those
+      files questions — which model, which task, which exit code, how often — in seconds, from any
+      box you can get a shell on. This page teaches that toolkit on a real results file.
+    </p>
+
+    <h2 id="philosophy">Filter, extract, aggregate</h2>
+    <p>
+      <a href="04-streams-pipes-redirection.html">Page 4</a> showed that a
+      <span class="term" data-g="pipe">pipe</span> connects one program's output to the next one's
+      input. The Unix text tools are built for that: each reads lines, does one small thing, and
+      writes lines. Almost every useful question about a log is three stages:
+    </p>
+    <div class="diagram">  FILTER                 EXTRACT                  AGGREGATE
+  keep the lines         keep the part of         count, sort,
+  you care about         each line you need       sum
+
+  grep, jq select()      cut, awk, grep -o,       sort | uniq -c | sort -rn
+  awk '$4 == 137'        jq -r .field, sed        wc -l, awk '{s += $1} END …'</div>
+    <p>
+      Build pipelines one stage at a time, looking at the output of each stage (through
+      <code>| head</code>) before adding the next. When a pipeline gives a wrong answer, it is
+      almost always because an early stage let through something you didn't expect.
+    </p>
+
+    <h3 id="the-data">The data</h3>
+    <p>
+      The course's running example, wordfreq-bench, comes with a generator that prints a results
+      file for an imaginary run: 3 models × 8 tasks × 8 epochs, fixed random seed, so your numbers
+      will match this page exactly. The format is
+      <span class="term" data-g="jsonl">JSONL</span> — one JSON object per line — which is what most
+      harnesses write, because a line-per-record file can be appended to safely and read by
+      line-oriented tools. In the container lab (with <code>python3</code> and <code>jq</code>
+      installed, and <code>gen_results.py</code> copied in — see the lab):
+    </p>
+<pre class="term"><code><span class="p">$</span> python3 gen_results.py &gt; results.jsonl
+<span class="p">$</span> wc -l results.jsonl
+<span class="o">192 results.jsonl</span>
+<span class="p">$</span> head -n 2 results.jsonl
+<span class="o">{"task": "wordfreq", "model": "model-a", "epoch": 1, "exit_code": 0, "passed": true, "stderr_tail": "", "duration_s": 72.7}
+{"task": "wordfreq", "model": "model-a", "epoch": 2, "exit_code": 0, "passed": true, "stderr_tail": "", "duration_s": 87.4}</span>
+<span class="p">$</span> tail -n 1 results.jsonl
+<span class="o">{"task": "symlinks", "model": "model-c", "epoch": 8, "exit_code": 2, "passed": false, "stderr_tail": "E: Could not get lock /var/lib/dpkg/lock-frontend", "duration_s": 77.1}</span></code></pre>
+    <p>
+      Three commands, three habits. <code>wc -l</code> counts lines, so on JSONL it counts records
+      (strictly, it counts newline characters<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html" title="GNU Coreutils manual, 6.1 wc">[Coreutils]</a>):
+      192 = 3 × 8 × 8, so nothing is missing. <code>head</code> and <code>tail</code> show the first
+      and last 10 lines unless told otherwise with <code>-n</code>. Each record carries the
+      <span class="term" data-g="exit-status">exit status</span> of the task's test command, a
+      pass flag, the last line of <span class="term" data-g="stderr">stderr</span>, and the
+      duration. For a file that is still being written, <code>tail -f</code> keeps printing new
+      lines as they arrive (<kbd>Ctrl</kbd>+<kbd>C</kbd> to stop) — the normal way to watch a run.
+    </p>
+
+    <h2 id="grep">grep: keep the lines that match</h2>
+    <p>
+      <span class="term" data-g="grep"><code>grep PATTERN file</code></span> prints the lines
+      containing the pattern. The flags worth knowing change what it prints <em>instead</em>:
+    </p>
+<pre class="term"><code><span class="p">$</span> grep -c '"passed": true' results.jsonl     <span class="c"># -c: count matching lines</span>
+<span class="o">106</span>
+<span class="p">$</span> grep -c -v '"passed": true' results.jsonl  <span class="c"># -v: invert — lines that do NOT match</span>
+<span class="o">86</span>
+<span class="p">$</span> grep -n Killed results.jsonl | head -n 1   <span class="c"># -n: prefix the line number</span>
+<span class="o">87:{"task": "logrotate", "model": "model-b", "epoch": 7, "exit_code": 137, "passed": false, "stderr_tail": "Killed", "duration_s": 182.7}</span>
+<span class="p">$</span> grep -o '"exit_code": [0-9]*' results.jsonl | head -n 2   <span class="c"># -o: only the matched part</span>
+<span class="o">"exit_code": 0
+"exit_code": 0</span></code></pre>
+    <p>
+      <code>-o</code> is what turns grep from a filter into an extractor. The pattern
+      <code>[0-9]*</code> is a <span class="term" data-g="regex">regular expression</span>: "any run
+      of digits". This page uses only a few (<code>[0-9]</code>, <code>^</code> for start of line,
+      <code>.</code> for any character, and <code>-E</code> with <code>a|b</code> for alternatives);
+      <a href="../appendices/d-regex.html">Appendix D</a> covers the rest. Always put patterns in
+      single quotes, so the shell passes them through untouched.
+    </p>
+    <p>
+      The remaining flags are for searching many files and for context. <code>-i</code> ignores
+      case; <code>-r</code> searches a directory tree; <code>-l</code> lists only the names of files
+      that match; <code>-A 2</code>, <code>-B 1</code>, <code>-C 3</code> print lines <em>after</em>,
+      <em>before</em>, or <em>around</em> each match — essential for multi-line logs, where the line
+      you can search for is not the line you need to read. For example, what has been installed in
+      this box with <code>apt-get</code>, and when?
+    </p>
+<pre class="term"><code><span class="p">$</span> grep -rl dpkg /var/log 2&gt;/dev/null
+<span class="o">/var/log/bootstrap.log
+/var/log/apt/history.log
+/var/log/dpkg.log</span>
+<span class="p">$</span> grep -B 1 -A 2 'Commandline: apt-get install -y' /var/log/apt/history.log | cut -c 1-90
+<span class="o">Start-Date: 2026-09-21  11:02:46
+Commandline: apt-get install -y -qq --no-install-recommends python3 jq
+Install: python3.12:arm64 (3.12.3-1ubuntu0.17, automatic), netbase:arm64 (6.4, automatic),
+End-Date: 2026-09-21  11:02:48</span></code></pre>
+    <p>
+      Run inside a finished task container, that is a forensic record of what an
+      <span class="term" data-g="agent">agent</span> installed
+      (<a href="13-services-and-logs.html">page 13</a>). <code>cut -c 1-90</code> kept only the
+      first 90 characters of each line — the standing fix for log lines too long to read.
+    </p>
+
+    <h2 id="count-idiom">sort | uniq -c | sort -rn</h2>
+    <p>
+      The most useful idiom in log analysis answers "how many of each?". <code>uniq -c</code>
+      collapses repeated lines and prefixes a count — but it only notices repeats that are
+      <em>adjacent</em>,<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#uniq-invocation" title="GNU Coreutils manual, 7.3 uniq: repeated lines are detected only if adjacent">[Coreutils]</a>
+      because it reads one line at a time and compares it with the previous one. Without a
+      <code>sort</code> first it counts runs, not totals:
+    </p>
+<pre class="term"><code><span class="p">$</span> grep -o '"exit_code": [0-9]*' results.jsonl | uniq -c | head -n 3
+<span class="o">      6 "exit_code": 0
+      1 "exit_code": 1
+      2 "exit_code": 0</span>
+<span class="p">$</span> grep -o '"exit_code": [0-9]*' results.jsonl | sort | uniq -c | sort -rn
+<span class="o">    106 "exit_code": 0
+     56 "exit_code": 1
+      9 "exit_code": 127
+      8 "exit_code": 124
+      5 "exit_code": 137
+      4 "exit_code": 2
+      4 "exit_code": 126</span></code></pre>
+    <p>
+      <code>sort</code> brings identical lines together, <code>uniq -c</code> counts them, and
+      <code>sort -rn</code> orders the counts numerically (<code>-n</code>), largest first
+      (<code>-r</code>). Without <code>-n</code>, sort compares text, and <code>100</code> sorts
+      before <code>9</code>. The other sort flags you will use: <code>-k</code> picks the column to
+      sort by, <code>-t</code> sets the column separator, <code>-u</code> drops duplicates.
+    </p>
+    <p>
+      Already this is a finding. A third of the failures (30 of 86) are not exit 1 ("the tests ran and
+      failed") but 127, 124, 137, 126 — codes that <a href="10-signals-exit-codes.html">page 10</a>
+      decodes as <em>command not found</em>, <em>timed out</em>, <em>killed</em>, <em>not
+      executable</em>. Those describe the box as much as the model.
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p><strong>Sort order depends on the locale.</strong> <code>sort</code> (and
+      <code>uniq</code>, and the order of <code>ls</code>) compare using the rules of the language
+      setting in the environment.<a class="cite" href="https://www.gnu.org/software/coreutils/manual/coreutils.html#sort-invocation" title="GNU Coreutils manual, 7.1 sort, footnote on LC_ALL=C">[Coreutils]</a>
+      The same file, the same command, two environments:</p>
+<pre class="term"><code><span class="p">$</span> LC_ALL=C sort mixed.txt | tr '\n' ' '
+<span class="o">10 9 A B _x a b</span>
+<span class="p">$</span> LC_ALL=en_US.UTF-8 sort mixed.txt | tr '\n' ' '
+<span class="o">10 9 a A b B _x</span></code></pre>
+      <p>The stock <code>ubuntu:24.04</code> image has only the <code>C</code> locales, so this
+      difference appears when the same script runs on a developer's Mac, a CI host, or an image
+      with locales installed (we generated <code>en_US.UTF-8</code> to show it). A grader that
+      compares an agent's sorted output with an expected file is comparing two locales unless both
+      sides pin one. Write <code>LC_ALL=C sort</code> in anything whose output is compared or
+      published; the manual notes that setting <code>LC_COLLATE</code> alone does nothing if
+      <code>LC_ALL</code> is set.</p>
+    </div>
+
+    <h2 id="jq">jq: grep, cut and group-by for JSON</h2>
+    <p>
+      grepping JSON works until a value contains a quote, a field moves, or a writer drops the space
+      after the colon. <span class="term" data-g="jq"><code>jq</code></span> parses the JSON
+      instead. Its input is "a sequence of whitespace-separated JSON values", each passed through
+      your filter in turn<a class="cite" href="https://jqlang.org/manual/#invoking-jq" title="jq Manual, Invoking jq">[jq Manual]</a>
+      — which is exactly a JSONL file. It is not in the base image:
+      <code>apt-get install jq</code>. Four pieces cover most needs:
+    </p>
+    <table>
+      <tr><th>Piece</th><th>Does</th></tr>
+      <tr><td><code>.field</code></td><td>Extracts a field from each record (<code>null</code> if absent — no error, so typos are silent).<a class="cite" href="https://jqlang.org/manual/" title="jq Manual, Basic filters: Object Identifier-Index">[jq Manual]</a></td></tr>
+      <tr><td><code>select(cond)</code></td><td>Passes the record through unchanged if the condition is true, else prints nothing.</td></tr>
+      <tr><td><code>-r</code></td><td>Raw output: strings without JSON quotes, ready for <code>sort</code> and <code>uniq</code>.</td></tr>
+      <tr><td><code>-c</code></td><td>Compact output: one record per line (the default is pretty-printed).</td></tr>
+    </table>
+<pre class="term"><code><span class="p">$</span> jq -c 'select(.exit_code == 137)' results.jsonl | head -n 1
+<span class="o">{"task":"logrotate","model":"model-b","epoch":7,"exit_code":137,"passed":false,"stderr_tail":"Killed","duration_s":182.7}</span>
+<span class="p">$</span> jq -r 'select(.passed) | .model' results.jsonl | sort | uniq -c
+<span class="o">     45 model-a
+     34 model-b
+     27 model-c</span></code></pre>
+    <p>
+      Inside the quotes, <code>|</code> is jq's own pipe: filter, then extract. Outside, the shell's
+      pipe takes over for the aggregate stage. Each model had 64 rollouts, so that is the first
+      question answered: pass rates of 45/64, 34/64 and 27/64.
+    </p>
+    <p>
+      To aggregate <em>inside</em> jq, <code>-s</code> ("slurp") reads the whole input into one
+      array and runs the filter once,<a class="cite" href="https://jqlang.org/manual/#invoking-jq" title="jq Manual, Invoking jq: --slurp">[jq Manual]</a>
+      which makes <code>group_by</code>, <code>length</code> and <code>add</code> available:
+    </p>
+<pre class="term"><code><span class="p">$</span> jq -sc 'group_by(.model) | map({model: .[0].model, n: length, passed: (map(select(.passed)) | length)})' results.jsonl
+<span class="o">[{"model":"model-a","n":64,"passed":45},{"model":"model-b","n":64,"passed":34},{"model":"model-c","n":64,"passed":27}]</span>
+<span class="p">$</span> jq length results.jsonl | head -n 1
+<span class="o">7</span>
+<span class="p">$</span> jq -s length results.jsonl
+<span class="o">192</span></code></pre>
+    <p>
+      The last two are a classic trap: without <code>-s</code>, <code>length</code> is applied to
+      each record and reports its seven keys. A second trap: jq stops at the first malformed line,
+      having already printed results for the lines before it. It exited with status 5 when we fed
+      it one — so check jq's exit status before trusting a count from a file a crashed process was
+      writing.
+    </p>
+
+    <h2 id="columns">cut, tr, awk, sed: columns and substitutions</h2>
+    <p>
+      Plenty of logs are not JSON. To practise on columns, flatten the results into
+      space-separated text with jq's string interpolation:
+    </p>
+<pre class="term"><code><span class="p">$</span> jq -r '"\(.task) \(.model) \(.epoch) \(.exit_code) \(.duration_s)"' results.jsonl &gt; runs.txt
+<span class="p">$</span> head -n 2 runs.txt
+<span class="o">wordfreq model-a 1 0 72.7
+wordfreq model-a 2 0 87.4</span>
+<span class="p">$</span> cut -d ' ' -f 1,4 runs.txt | head -n 1        <span class="c"># fields 1 and 4, delimiter = one space</span>
+<span class="o">wordfreq 0</span>
+<span class="p">$</span> tr ' ' ',' &lt; runs.txt | head -n 1             <span class="c"># translate characters: instant CSV</span>
+<span class="o">wordfreq,model-a,1,0,72.7</span></code></pre>
+    <p>
+      <code>cut</code> is rigid — one delimiter character exactly, so columns padded with several
+      spaces defeat it. <span class="term" data-g="awk"><code>awk</code></span> splits on any run of
+      whitespace, names the pieces <code>$1</code>, <code>$2</code>, …, and runs a tiny program of
+      the form <code>condition {action}</code> on every line. Learn four shapes and stop:
+    </p>
+<pre class="term"><code><span class="p">$</span> awk '{print $2, $5}' runs.txt | head -n 1                    <span class="c"># pick columns</span>
+<span class="o">model-a 72.7</span>
+<span class="p">$</span> awk '$4 == 137' runs.txt | head -n 2                         <span class="c"># filter on a column; default action: print</span>
+<span class="o">logrotate model-b 7 137 182.7
+jsonfix model-b 8 137 169.5</span>
+<span class="p">$</span> awk '$4 == 0 {s += $5; n++} END {print n, s / n}' runs.txt   <span class="c"># sum and average</span>
+<span class="o">106 52.5283</span>
+<span class="p">$</span> awk -F: '{print $1, $7}' /etc/passwd | tail -n 1             <span class="c"># -F sets the separator</span>
+<span class="o">learner /bin/bash</span></code></pre>
+    <p>
+      Passing rollouts took 52.5 seconds on average. For a median there is no built-in, but a sorted
+      column and a line number will do: with 192 values the median sits between the 96th and 97th.
+      <span class="term" data-g="sed"><code>sed</code></span> prints line ranges with
+      <code>-n 'A,Bp'</code>:
+    </p>
+<pre class="term"><code><span class="p">$</span> jq '.duration_s' results.jsonl | sort -n | sed -n '96,97p'
+<span class="o">67.0
+67.3</span>
+<span class="p">$</span> jq '.duration_s' results.jsonl | sort -n | tail -n 2
+<span class="o">300.0
+300.0</span></code></pre>
+    <p>
+      The median is about 67 seconds; the maximum is a suspiciously round 300.0, and
+      <code>jq -r 'select(.exit_code == 124) | .duration_s' results.jsonl | sort | uniq -c</code>
+      confirms all eight exit-124 rows sit at exactly 300.0 — the harness's time limit, not a
+      property of the model's solution. sed's other job is substitution:
+      <code>sed 's/model-/m/' runs.txt</code> prints each line with the first <code>model-</code>
+      replaced by <code>m</code>. Adding <code>-i</code> edits the file in place. That is the one
+      sed flag that differs on the reader's Mac: BSD sed wants <code>-i ''</code>, and the GNU
+      spelling fails there with <code>invalid command code</code>
+      (<a href="../appendices/e-macos-vs-linux.html">Appendix E</a>). Agents trained on both
+      spellings get this wrong in both directions; in a transcript it is a Linux-fluency slip, not
+      an environment fault.
+    </p>
+
+    <h2 id="worked">Worked example: first-pass error analysis</h2>
+    <p>
+      Pass rate per model and the exit-code table are done. Three questions remain.
+    </p>
+    <h3 id="never-pass">Which tasks never pass?</h3>
+<pre class="term"><code><span class="p">$</span> jq -r 'select(.passed) | .task' results.jsonl | sort -u
+<span class="o">csvsum
+dedupe
+jsonfix
+logrotate
+pathwalk
+tzparse
+wordfreq</span></code></pre>
+    <p>
+      Seven names; there are eight tasks. <code>symlinks</code> is missing: 0 passes in 24 rollouts
+      across three models, while the next-hardest task, <code>tzparse</code>, passes 9 of 24.
+      <strong>Observed:</strong> no model ever passes it. <strong>Hypotheses:</strong> it is very
+      hard, or it is broken (a test that cannot pass). The results file cannot tell these apart.
+      The discriminating test is to run the task's
+      <span class="term" data-g="oracle-solution">oracle solution</span> through the same grader:
+      if the reference answer fails too, the task is measuring nothing and its 24 rows belong in
+      neither numerator nor denominator.
+    </p>
+    <h3 id="why-fail">Why do rollouts fail?</h3>
+    <p>
+      The brief for this analysis might say: grep the stderr tails for <code>Killed</code>,
+      <code>Permission denied</code>, <code>command not found</code>.
+    </p>
+<pre class="term"><code><span class="p">$</span> grep -E -o 'Killed|Permission denied|command not found|No space left' results.jsonl | sort | uniq -c | sort -rn
+<span class="o">      9 command not found
+      9 Permission denied
+      7 No space left
+      5 Killed</span></code></pre>
+    <p>
+      Quick, and subtly wrong: keyword buckets merge things that differ. Pair the exit code with
+      the whole message instead:
+    </p>
+<pre class="term"><code><span class="p">$</span> jq -r 'select(.passed | not) | "\(.exit_code)\t\(.stderr_tail)"' results.jsonl | cut -c 1-60 | sort | uniq -c | sort -rn
+<span class="o">     37 1	AssertionError: Lists differ: [('The', 3)] != [('the', 7)]
+      9 127	bash: line 1: pytest: command not found
+      8 124
+      7 1	OSError: [Errno 28] No space left on device
+      7 1	ModuleNotFoundError: No module named 'wordfreq'
+      5 137	Killed
+      5 1	PermissionError: [Errno 13] Permission denied: '/opt/grade
+      4 2	E: Could not get lock /var/lib/dpkg/lock-frontend
+      4 126	bash: line 1: ./run.sh: Permission denied</span></code></pre>
+    <p>
+      "Permission denied" was two different events: a script without its execute bit (exit 126),
+      and a test process refused access to a file under <code>/opt/grader</code>
+      (<a href="08-permissions.html">page 8</a>) — five rollouts whose tests could not read their
+      own expected output. Also visible: exit code 1 covers three unrelated causes, and eight
+      timeouts left no stderr at all. Only 37 of 86 failures are the tests delivering a verdict on
+      the model's code.
+    </p>
+
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p><strong>This is first-pass <span class="term" data-g="error-analysis">error
+      analysis</span></strong> — reading failures and sorting them into categories before trusting
+      any aggregate (the sibling course's
+      <a href="../../../evals/evals-tut/pages/04-error-analysis.html">page 4</a> gives the full
+      method). At the terminal its first product is a split between rollouts where the test
+      delivered a verdict and rollouts where something else ended the run. Count a verdict as "pass,
+      or an AssertionError", and report three quantities, not one:</p>
+<pre class="term"><code><span class="p">$</span> jq -r '[.model, .passed, (.stderr_tail | startswith("AssertionError"))] | @tsv' results.jsonl \
+    | awk '{n[$1]++; if ($2 == "true") p[$1]++; if ($2 == "true" || $3 == "true") v[$1]++}
+           END {for (m in n) printf "%s scheduled=%d verdicts=%d passed=%d  passed/scheduled=%.1f%%  passed/verdicts=%.1f%%  verdicts/scheduled=%.1f%%\n",
+                m, n[m], v[m], p[m], 100*p[m]/n[m], 100*p[m]/v[m], 100*v[m]/n[m]}' | sort
+<span class="o">model-a scheduled=64 verdicts=55 passed=45  passed/scheduled=70.3%  passed/verdicts=81.8%  verdicts/scheduled=85.9%
+model-b scheduled=64 verdicts=48 passed=34  passed/scheduled=53.1%  passed/verdicts=70.8%  verdicts/scheduled=75.0%
+model-c scheduled=64 verdicts=40 passed=27  passed/scheduled=42.2%  passed/verdicts=67.5%  verdicts/scheduled=62.5%</span></code></pre>
+      <p>The gap between model-b and model-c is 11 points on one denominator and 3 on the other.
+      Neither is "the" answer: a quarter to a third of rollouts never reached a verdict, and the
+      rate differs by model — which is itself a finding. Non-verdict endings are observations about
+      the <em>run</em> until a transcript shows otherwise: <code>pytest: command not found</code>
+      could be a bad image or an agent that broke its own <code>PATH</code>; a timeout could be a
+      slow box or a model stuck in a loop. Decide the primary metric before looking, publish all
+      three columns, and never let the non-verdict rows silently vanish.</p>
+    </div>
+
+    <h2 id="xargs">xargs: from a list of names to a command</h2>
+    <p>
+      Real runs produce a directory of logs, not one file.
+      <span class="term" data-g="xargs"><code>xargs</code></span> reads names from stdin and
+      appends them as arguments to a command — the bridge from <code>find</code>
+      (<a href="03-files-and-the-tree.html#find">page 3</a>) to everything on this page. By default
+      it splits its input on whitespace, and file names may legally contain spaces:
+    </p>
+<pre class="term"><code><span class="p">$</span> mkdir -p logs; cp results.jsonl "logs/run 1.jsonl"; cp results.jsonl logs/run2.jsonl
+<span class="p">$</span> find logs -name '*.jsonl' | xargs wc -l
+<span class="o">  192 logs/run2.jsonl
+  192 total
+wc: logs/run: No such file or directory
+wc: 1.jsonl: No such file or directory</span>
+<span class="p">$</span> find logs -name '*.jsonl' -print0 | xargs -0 wc -l
+<span class="o">  192 logs/run2.jsonl
+  192 logs/run 1.jsonl
+  384 total</span></code></pre>
+    <p>
+      The first version reported a total that silently left out half the data. <code>-print0</code>
+      and <code>-0</code> make both sides use a zero byte — the one character a file name cannot
+      contain — as the separator. Use the pair always; it costs nothing.
+    </p>
+
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p><strong>When to stop and open Python.</strong> The terminal is for the first ten minutes:
+      is the file complete, what are the categories, which tasks are broken, is anything absurd? A
+      rule of thumb: as soon as the question needs more than one join between files, or any
+      statistics — a confidence interval, a comparison between models — move to pandas. Shell
+      pipelines have no types, no tests, and fail silently (every pitfall above). A pass-rate
+      difference read off <code>uniq -c</code> has no error bar; the sibling course's
+      <a href="../../../evals/evals-tut/pages/16-error-bars.html">page 16</a> explains why that
+      matters with 64 samples per model.</p>
+    </div>
+
+    <p>
+      <strong>Depth triage.</strong> Learn to use: <code>grep</code> with the flags above,
+      <code>sort | uniq -c | sort -rn</code>, <code>head</code>/<code>tail</code>/<code>wc -l</code>,
+      jq's <code>.field</code>/<code>select</code>/<code>-r</code>/<code>-c</code>/<code>-s</code>,
+      awk's four shapes, sed's <code>s///</code> and <code>-n 'A,Bp'</code>,
+      <code>find -print0 | xargs -0</code>. Recognise when an agent writes them: awk programs with
+      loops and arrays (like the accounting command above — note how quickly it became hard to
+      read), sed with hold space or multi-line scripts, jq's <code>reduce</code> and
+      <code>path()</code>. Leave those to Python in your own work.
+    </p>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A teammate's summary of the run above reads: "model-a 81.8%, model-b 70.8%, model-c 67.5%.
+      Infrastructure failures were excluded." You have <code>results.jsonl</code> and ten minutes
+      before the numbers go into a slide. What do you check, and what do you ask for?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Establish what was done.</strong> Those figures are
+      <code>passed / verdicts</code>. Excluded: 9, 16 and 24 rollouts respectively — 14%, 25% and
+      37.5% of each model's sample. An exclusion that large, and that unequal, is not a footnote.
+      Ask whether the exclusion rule was written down before anyone looked at the results, and what
+      exactly it was (by exit code? by stderr keyword? The keyword route merged two different
+      "Permission denied" events).</p>
+      <p><strong>Evidence vs hypothesis.</strong> "Infrastructure failure" is a hypothesis about
+      each excluded row. What is observed is an exit code and one line of stderr. Discriminating
+      evidence is in the transcripts: did <code>pytest</code> exist at the start of the rollout
+      (image defect) or did the agent uninstall or shadow it (model behaviour)? Did the timed-out
+      rollouts stall on an interactive prompt, a slow box, or a loop? If weaker models trigger more
+      "infrastructure" failures, some of those failures are probably the model's, and excluding
+      them flatters the weaker model most — here it shrinks the b–c gap from 11 points to 3.</p>
+      <p><strong>What to ask for.</strong> All three quantities on the slide
+      (<code>passed/scheduled</code>, <code>passed/verdicts</code>,
+      <code>verdicts/scheduled</code>); the <code>symlinks</code> task run against its oracle
+      solution and, if broken, removed for every model alike; and a rerun of the rows that were
+      genuine environment defects, rather than deleting them.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab.</strong> As root: <code>apt-get update &amp;&amp; apt-get install -y
+      python3 jq</code>. From your Mac, copy the generator in:
+      <code>docker cp research/wordfreq-bench/gen_results.py lt-lab:/home/learner/</code>. Then
+      <code>su - learner</code> and <code>python3 gen_results.py &gt; results.jsonl</code>. The seed
+      is fixed: your numbers should equal the ones below.</p>
+      <ol>
+        <li>
+          <p>Confirm the file is complete (192 records), count the passes with <code>grep -c</code>,
+          and count model-a's passes using two greps in a pipe.</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> wc -l results.jsonl
+<span class="o">192 results.jsonl</span>
+<span class="p">$</span> grep -c '"passed": true' results.jsonl
+<span class="o">106</span>
+<span class="p">$</span> grep 'model-a' results.jsonl | grep -c '"passed": true'
+<span class="o">45</span></code></pre>
+          </details>
+        </li>
+        <li>
+          <p>Predict, then run: what does <code>printf '10\n9\n100\n' | sort</code> print, and what
+          changes with <code>sort -n</code>? Then predict the output of
+          <code>printf 'b\na\nb\nb\na\n' | uniq -c</code>.</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> printf '10\n9\n100\n' | sort | tr '\n' ' '
+<span class="o">10 100 9</span>
+<span class="p">$</span> printf '10\n9\n100\n' | sort -n | tr '\n' ' '
+<span class="o">9 10 100</span>
+<span class="p">$</span> printf 'b\na\nb\nb\na\n' | uniq -c
+<span class="o">      1 b
+      1 a
+      2 b
+      1 a</span></code></pre>
+          <p>Text comparison goes character by character, so <code>1</code> &lt; <code>9</code>
+          decides it. <code>uniq</code> only merges adjacent lines; with <code>sort</code> first
+          you get <code>2 a</code> / <code>3 b</code>.</p>
+          </details>
+        </li>
+        <li>
+          <p>Which model has the most rollouts that ended in a timeout (124) or a kill (137)? Use
+          jq to filter and the counting idiom to aggregate.</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> jq -r 'select(.exit_code == 124 or .exit_code == 137) | .model' results.jsonl | sort | uniq -c
+<span class="o">      2 model-a
+      5 model-b
+      6 model-c</span></code></pre>
+          </details>
+        </li>
+        <li>
+          <p>Nine rollouts died with <code>pytest: command not found</code>. If one task's image
+          were missing pytest, they would cluster on that task. Do they?</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> jq -r 'select(.exit_code == 127) | .task' results.jsonl | sort | uniq -c | sort -rn
+<span class="o">      2 wordfreq
+      2 pathwalk
+      2 jsonfix
+      1 tzparse
+      1 symlinks
+      1 logrotate</span></code></pre>
+          <p>No: six tasks, never more than two each. Observed: the failure is spread across
+          tasks, and the same tasks pass in other epochs. That rules out "this task's image lacks
+          pytest" and leaves hypotheses such as an agent damaging its own environment or a
+          per-rollout setup step that sometimes fails — the next evidence is the transcript of one
+          of the nine.</p>
+          </details>
+        </li>
+        <li>
+          <p><strong>Eval task.</strong> You have established (by running its oracle solution) that
+          the <code>symlinks</code> task is broken. Recompute each model's
+          <code>passed / scheduled</code> without it, in one pipeline.</p>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> jq -r 'select(.task != "symlinks") | "\(.model) \(.passed)"' results.jsonl \
+    | awk '{n[$1]++; if ($2 == "true") p[$1]++} END {for (m in n) printf "%s %d/%d = %.1f%%\n", m, p[m], n[m], 100 * p[m] / n[m]}' | sort
+<span class="o">model-a 45/56 = 80.4%
+model-b 34/56 = 60.7%
+model-c 27/56 = 48.2%</span></code></pre>
+          <p>Every model gains about ten points and the ranking is unchanged — a broken task
+          depresses all scores, which is why it is removed for everyone and the removal is
+          reported. (This awk is at the edge of what belongs in a shell; the pandas version is
+          three readable lines.)</p>
+          </details>
+        </li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Free Software Foundation, <em>GNU Coreutils manual</em>: §6.1 wc, §7.1 sort (locale footnote), §7.3 uniq, §5 head/tail. <a href="https://www.gnu.org/software/coreutils/manual/coreutils.html">gnu.org/software/coreutils/manual/coreutils.html</a>. Ubuntu 24.04 ships coreutils 9.4.</li>
+        <li>jq contributors, <em>jq Manual</em> (identical passages in 1.7, the version Ubuntu 24.04 installs). <a href="https://jqlang.org/manual/">jqlang.org/manual</a></li>
+        <li>Everything else on this page is executed mechanics: all output was produced in an <code>ubuntu:24.04</code> container as a non-root user from the course's <code>research/wordfreq-bench/gen_results.py</code>; the record is in <code>research/verify/05-text-fu.txt</code>. The macOS <code>sed -i</code> error was produced on a Mac.</li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

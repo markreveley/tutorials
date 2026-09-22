@@ -1,0 +1,171 @@
+{
+ "id": "docker-storage",
+ "tag": "[Docker: storage]",
+ "citation": {
+  "authors": "Docker Inc.",
+  "title": "Storage; Volumes; Bind mounts; tmpfs mounts",
+  "venue": "Docker Docs",
+  "year": "2026 (living document)",
+  "url": "https://docs.docker.com/engine/storage/"
+ },
+ "fetched_urls": [
+  "https://docs.docker.com/engine/storage/ (as .md)",
+  "https://docs.docker.com/engine/storage/volumes/ (as .md)",
+  "https://docs.docker.com/engine/storage/bind-mounts/ (as .md)",
+  "https://docs.docker.com/engine/storage/tmpfs/ (as .md)"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Volumes vs bind mounts vs tmpfs mounts: definitions, lifecycle (volumes persist after container removal; anonymous volumes and --rm)",
+   "verdict": "confirmed",
+   "finding": "Volumes: 'persistent storage mechanisms managed by the Docker daemon', retain data after containers are removed, not removed automatically when unused (docker volume prune). Bind mounts: 'a direct link between a host system path and a container'. tmpfs: in host memory, lost when the container stops. Anonymous volumes persist like named ones EXCEPT when the container was created with --rm, in which case they are destroyed with it. The overview page now lists FIVE mount types: volume, bind, tmpfs, image mounts (new; read-only, needs containerd image store) and named pipes (Windows).",
+   "quote": "Volumes are persistent storage mechanisms managed by the Docker daemon. They retain data even after the containers using them are removed. [...] Bind mounts create a direct link between a host system path and a container, allowing access to files or directories stored anywhere on the host.",
+   "location": "Storage > Storage mount options > Volume mounts / Bind mounts",
+   "cite_url": "https://docs.docker.com/engine/storage/#storage-mount-options"
+  },
+  {
+   "planned": "Bind mounts are read-write by default: container processes can modify the HOST filesystem (docs' warning wording); readonly / :ro option; bind mount obscures existing container contents at the mount point",
+   "verdict": "confirmed",
+   "finding": "Exact wording: 'Bind mounts have write access to files on the host by default.' followed by the side-effect warning. Read-only via `readonly` or `ro` (--mount type=bind,...,readonly  or  -v host:ctr:ro). Obscuring confirmed: pre-existing files at the mount point 'are obscured by the mount'. All three verified by execution (extra_findings).",
+   "quote": "Bind mounts have write access to files on the host by default. One side effect of using bind mounts is that you can change the host filesystem via processes running in a container, including creating, modifying, or deleting important system files or directories. This capability can have security implications.",
+   "location": "Bind mounts > Considerations and constraints",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints"
+  },
+  {
+   "planned": "tmpfs mounts: memory only, not shared between containers, Linux only; size option",
+   "verdict": "confirmed",
+   "finding": "All confirmed, with two important additions: (1) tmpfs data may be swapped to disk ('may be written to a swap file, and thereby persisted'), so 'memory only' is not an absolute guarantee; (2) tmpfs usage counts against the container's memory cgroup limit - filling it can OOM the container. Size: --tmpfs /path:size=64m or --mount type=tmpfs,dst=/path,tmpfs-size=<bytes>; if unset the default max is 50% of host RAM; default mode 1777.",
+   "quote": "- Unlike volumes and bind mounts, you can't share tmpfs mounts between containers. - This functionality is only available if you're running Docker on Linux. - Data on a tmpfs mount counts toward the container memory limit. A large `size=` value does not raise that limit.",
+   "location": "tmpfs mounts > Limitations of tmpfs mounts",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/#limitations-of-tmpfs-mounts"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Writable container layer: default location of all writes; lost with the container.",
+   "quote": "By default all files created inside a container are stored on a writable container layer that sits on top of the read-only, immutable image layers. Data written to the container layer doesn't persist when the container is destroyed.",
+   "location": "Storage > Container layer basics",
+   "cite_url": "https://docs.docker.com/engine/storage/#container-layer-basics"
+  },
+  {
+   "finding": "Volume lifecycle.",
+   "quote": "A volume's contents exist outside the lifecycle of a given container. When a container is destroyed, the writable layer is destroyed with it. [...] When no running container is using a volume, the volume is still available to Docker and isn't removed automatically.",
+   "location": "Volumes > A volume's lifecycle",
+   "cite_url": "https://docs.docker.com/engine/storage/volumes/#a-volumes-lifecycle"
+  },
+  {
+   "finding": "Anonymous volumes and --rm (exact).",
+   "quote": "Just like named volumes, anonymous volumes persist even if you remove the container that uses them, except if you use the `--rm` flag when creating the container, in which case the anonymous volume associated with the container is destroyed.",
+   "location": "Volumes > Named and anonymous volumes",
+   "cite_url": "https://docs.docker.com/engine/storage/volumes/#named-and-anonymous-volumes"
+  },
+  {
+   "finding": "State leak hazard for eval resets: NAMED volumes survive container removal and --rm, so state can carry from one run/epoch to the next unless the volume is removed.",
+   "quote": "this command creates an anonymous `/foo` volume. When you remove the container, the Docker Engine removes the `/foo` volume but not the `awesome` volume. $ docker run --rm -v /foo -v awesome:/bar busybox top",
+   "location": "Volumes > Remove anonymous volumes",
+   "cite_url": "https://docs.docker.com/engine/storage/volumes/#remove-anonymous-volumes"
+  },
+  {
+   "finding": "Empty volume mounted over existing directory gets the directory's files COPIED in (volumes only, not bind mounts); non-empty volume obscures.",
+   "quote": "If you mount an _empty volume_ into a directory in the container in which files or directories exist, these files or directories are propagated (copied) into the volume by default.",
+   "location": "Volumes > Mounting a volume over existing data",
+   "cite_url": "https://docs.docker.com/engine/storage/volumes/#mounting-a-volume-over-existing-data"
+  },
+  {
+   "finding": "Obscuring wording (same paragraph appears on volumes, bind mounts and tmpfs pages).",
+   "quote": "If you bind mount file or directory into a directory in the container in which files or directories exist, the pre-existing files are obscured by the mount. [...] With containers, there's no straightforward way of removing a mount to reveal the obscured files again.",
+   "location": "Bind mounts > Bind-mounting over existing data",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#bind-mounting-over-existing-data"
+  },
+  {
+   "finding": "Bind mount definition vs volume.",
+   "quote": "When you use a bind mount, a file or directory on the host machine is mounted from the host into a container. By contrast, when you use a volume, a new directory is created within Docker's storage directory on the host machine.",
+   "location": "Bind mounts (intro)",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/"
+  },
+  {
+   "finding": "Read-only option.",
+   "quote": "You can use the `readonly` or `ro` option to prevent the container from writing to the mount.",
+   "location": "Bind mounts > Considerations and constraints",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints"
+  },
+  {
+   "finding": "Bind mounts resolve on the DAEMON host; on Docker Desktop that is a Linux VM (relevant to Mac readers).",
+   "quote": "Bind mounts are created to the Docker daemon host, not the client. [...] For Docker Desktop, the daemon runs inside a Linux VM, not directly on the native host. Docker Desktop has built-in mechanisms that transparently handle bind mounts",
+   "location": "Bind mounts > Considerations and constraints",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints"
+  },
+  {
+   "finding": "-v auto-creates a missing host path as a directory; --mount errors instead (unless bind-create-src).",
+   "quote": "If you use `--volume` to bind-mount a file or directory that does not yet exist on the Docker host, Docker automatically creates the directory on the host for you. It's always created as a directory. [...] By default, `--mount` does not automatically create a directory [...] Instead, it produces an error",
+   "location": "Bind mounts > Syntax",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#syntax"
+  },
+  {
+   "finding": "Syntax summary: --mount type=bind,src=<host>,dst=<ctr>[,readonly][,bind-propagation=...]; -v <host>:<ctr>[:ro,z,Z,rprivate...]; --mount preferred.",
+   "quote": "In general, `--mount` is preferred. The main difference is that the `--mount` flag is more explicit and supports all the available options.",
+   "location": "Bind mounts > Syntax",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#syntax"
+  },
+  {
+   "finding": "Read-only bind mounts are recursively read-only only on kernel >= 5.12; older kernels leave submounts read-write.",
+   "quote": "Recursive read-only mounts require Linux kernel version 5.12 or later. If you're running an older kernel version, submounts are automatically mounted as read-write by default.",
+   "location": "Bind mounts > Recursive mounts",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#recursive-mounts"
+  },
+  {
+   "finding": "Docker's own use of bind mounts: /etc/resolv.conf.",
+   "quote": "This is how Docker provides DNS resolution to containers by default, by mounting `/etc/resolv.conf` from the host machine into each container.",
+   "location": "Bind mounts > When to use bind mounts",
+   "cite_url": "https://docs.docker.com/engine/storage/bind-mounts/#when-to-use-bind-mounts"
+  },
+  {
+   "finding": "tmpfs definition and lifetime.",
+   "quote": "As opposed to volumes and bind mounts, a tmpfs mount is temporary, and only persisted in the host memory. When the container stops, the tmpfs mount is removed, and files written there won't be persisted.",
+   "location": "tmpfs mounts (intro)",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/"
+  },
+  {
+   "finding": "tmpfs counts against the memory limit.",
+   "quote": "Because tmpfs stores data in memory, that usage counts against the container's memory cgroup limit (`--memory` / Compose `mem_limit`). Setting a large `tmpfs-size` (or host-mounted tmpfs) does not give the container extra RAM outside that limit - filling the mount can still OOM the container.",
+   "location": "tmpfs mounts (intro)",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/"
+  },
+  {
+   "finding": "tmpfs may hit swap.",
+   "quote": "tmpfs mounts in Docker map directly to tmpfs in the Linux kernel. As such, the temporary data may be written to a swap file, and thereby persisted to the filesystem.",
+   "location": "tmpfs mounts (IMPORTANT box)",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/"
+  },
+  {
+   "finding": "tmpfs size/mode defaults.",
+   "quote": "| `tmpfs-size` | Size of the tmpfs mount in bytes. If unset, the default maximum size of a tmpfs volume is 50% of the host's total RAM. | `tmpfs-mode` | File mode of the tmpfs in octal. For instance, `700` or `0770`. Defaults to `1777` or world-writable. |",
+   "location": "tmpfs mounts > Options for --mount",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/#options-for---mount"
+  },
+  {
+   "finding": "--tmpfs option syntax example.",
+   "quote": "$ docker run --tmpfs /data:noexec,size=1024,mode=1777",
+   "location": "tmpfs mounts > Options for --tmpfs",
+   "cite_url": "https://docs.docker.com/engine/storage/tmpfs/#options-for---tmpfs"
+  },
+  {
+   "finding": "EXECUTED: bind mount is read-write by default - a container (as root) rewrote a host file; :ro blocks it with the exact error shown.",
+   "quote": "$ echo host > $S/f.txt\n$ docker run --rm -v \"$S\":/data ubuntu:24.04 sh -c 'echo changed-by-container > /data/f.txt'\n$ cat $S/f.txt\nchanged-by-container\n$ docker run --rm -v \"$S\":/data:ro ubuntu:24.04 sh -c 'echo again > /data/f.txt; echo \"exit=$?\"'\nsh: 1: cannot create /data/f.txt: Read-only file system\nexit=2",
+   "location": "executed ubuntu:24.04 (host = macOS via Docker Desktop)"
+  },
+  {
+   "finding": "EXECUTED: a bind mount obscures what the image had at the mount point (/usr/share had 41 entries; after mounting only the host dir's file is visible).",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c 'ls /usr/share | wc -l'\n41\n$ docker run --rm --mount type=bind,src=\"$S\",dst=/usr/share,readonly ubuntu:24.04 ls /usr/share\nf.txt",
+   "location": "executed ubuntu:24.04"
+  },
+  {
+   "finding": "EXECUTED: docker inspect shows the mount's mode; RW:false for :ro; --tmpfs appears under HostConfig.Tmpfs not .Mounts.",
+   "quote": "$ docker run -d --name lt-R5-m -v \"$S\":/data:ro --tmpfs /tmp ubuntu:24.04 sleep 60\n$ docker inspect --format '{{json .Mounts}} {{json .HostConfig.Tmpfs}}' lt-R5-m\n[{\"Type\":\"bind\",\"Source\":\"/host/path\",\"Destination\":\"/data\",\"Mode\":\"ro\",\"RW\":false,\"Propagation\":\"rprivate\"}] {\"/tmp\":\"\"}",
+   "location": "executed ubuntu:24.04 (host path tidied to /host/path)"
+  }
+ ],
+ "teaching_notes": "The sentence to quote for the eval-integrity point is 'Bind mounts have write access to files on the host by default.' Surprises worth teaching: (1) tmpfs is not strictly 'memory only' - it can be swapped, and it counts against --memory (a big tmpfs + small memory limit = OOM); (2) named volumes survive --rm and container deletion - a classic cross-run state leak in eval harnesses; (3) an EMPTY volume mounted over an image directory gets the image's files copied in, whereas a bind mount always obscures; (4) -v silently creates a missing host path as a root-owned directory while --mount errors; (5) the overview now lists five mount types (image mounts are new). Audit tip verified: docker inspect .Mounts shows RW true/false, but --tmpfs mounts are listed under HostConfig.Tmpfs."
+}

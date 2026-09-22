@@ -1,0 +1,121 @@
+{
+  "id": "procps",
+  "tag": "[ps(1)]",
+  "citation": {
+    "authors": "procps-ng project",
+    "title": "ps(1), top(1), free(1), uptime(1), pgrep(1)/pkill(1)",
+    "venue": "procps-ng man pages as rendered on man7.org; Ubuntu 24.04 ships procps-ng 4.0.4",
+    "year": "2026",
+    "url": "https://man7.org/linux/man-pages/man1/ps.1.html"
+  },
+  "fetched_urls": [
+    "https://man7.org/linux/man-pages/man1/ps.1.html",
+    "https://man7.org/linux/man-pages/man1/top.1.html",
+    "https://man7.org/linux/man-pages/man1/free.1.html",
+    "https://man7.org/linux/man-pages/man1/uptime.1.html",
+    "https://man7.org/linux/man-pages/man1/pgrep.1.html"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "ps process state codes: R running/runnable, S interruptible sleep, D uninterruptible sleep, Z zombie, T stopped; ps aux vs ps -ef columns (RSS in KiB, VSZ, STAT, TTY '?')",
+      "verdict": "confirmed",
+      "finding": "State codes verbatim: D uninterruptible sleep (usually I/O); I idle kernel thread; R running or runnable (on run queue); S interruptible sleep; T stopped by job control signal; t stopped by debugger during tracing; X dead; Z defunct ('zombie'). BSD-format modifiers: < high-priority, N low-priority, L pages locked, s session leader, l multi-threaded, + foreground process group. RSS is in kibibytes; VSZ in KiB (1024-byte units). Columns (executed, procps-ng 4.0.4): `ps aux` = USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND; `ps -ef` = UID PID PPID C STIME TTY TIME CMD — so -ef gives PPID but no memory/state, aux gives memory/state but no PPID. TTY '?': the man page does not define the '?' glyph; executed output shows '?' for processes with no controlling terminal (all container processes started without -t).",
+      "quote": "D uninterruptible sleep (usually I/O) / R running or runnable (on run queue) / S interruptible sleep (waiting for an event to complete) / T stopped by job control signal / ... / Z defunct (\"zombie\") process, terminated but not reaped by its parent",
+      "location": "ps(1), PROCESS STATE CODES; rss/vsz in STANDARD FORMAT SPECIFIERS",
+      "cite_url": "https://man7.org/linux/man-pages/man1/ps.1.html"
+    },
+    {
+      "planned": "free: 'available' column is the estimate of memory available for new applications, not 'free'; buff/cache is reclaimable",
+      "verdict": "corrected",
+      "finding": "'available' confirmed verbatim (= MemAvailable). free = MemFree (unused). buff/cache = Buffers + Cached + SReclaimable. 'buff/cache is reclaimable' is too strong: the man page says 'available' exists precisely because 'not all reclaimable memory slabs will be reclaimed due to items being in use' and the page cache is only partly droppable. Say 'much of buff/cache can be reclaimed; read the available column'. Also: 'used' is now calculated as total - available (procps-ng 4), not total - free - buffers - cache.",
+      "quote": "available Estimation of how much memory is available for starting new applications, without swapping. Unlike the data provided by the cache or free fields, this field takes into account page cache and also that not all reclaimable memory slabs will be reclaimed due to items being in use",
+      "location": "free(1), DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man1/free.1.html"
+    },
+    {
+      "planned": "top summary fields: load average, us/sy/id/wa/st CPU states",
+      "verdict": "confirmed",
+      "finding": "Line 1: time, uptime, users, load average over 1, 5, 15 minutes. Task line: total/running/sleeping/stopped/zombie. CPU line (eight fields): us un-niced user, sy kernel, ni niced user, id idle, wa waiting for I/O completion, hi hardware interrupts, si software interrupts, st stolen from this VM by the hypervisor. Batch mode for scripts/agents: `top -b -n 1`.",
+      "quote": "us : time running un-niced user processes / sy : time running kernel processes / ... / id : time spent in the kernel idle handler / wa : time waiting for I/O completion / ... / st : time stolen from this vm by the hypervisor",
+      "location": "top(1), 2. SUMMARY Display > 2b. TASK and CPU States; load average in 2a. UPTIME and LOAD Averages",
+      "cite_url": "https://man7.org/linux/man-pages/man1/top.1.html"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "ps accepts three option styles, which is why `ps aux` (BSD, no dash) and `ps -ef` (Unix, dash) coexist and `ps -aux` is a different thing.",
+      "quote": "This version of ps accepts several kinds of options. Unix options, which may be grouped and must be preceded by a dash. BSD options, which may be grouped and must not be used with a dash. GNU long options, which are preceded by two dashes.",
+      "location": "ps(1), DESCRIPTION"
+    },
+    {
+      "finding": "Man page's own canonical invocations.",
+      "quote": "To see every process on the system using standard syntax: ps -e / ps -ef / ps -eF / ps -ely. To see every process on the system using BSD syntax: ps ax / ps axu",
+      "location": "ps(1), EXAMPLES"
+    },
+    {
+      "finding": "`ps -aux` warning.",
+      "quote": "If that user doesn't exist, then ps will assume you really meant \"ps aux\".",
+      "location": "ps(1), NOTES (about 'ps -aux')"
+    },
+    {
+      "finding": "RSS, VSZ, %CPU, %MEM definitions. %CPU is lifetime-average (cputime/realtime), NOT current usage — unlike top. %MEM is relative to the machine's physical memory, not a cgroup limit.",
+      "quote": "rss RSS resident set size, the non-swapped physical memory that a task has used (in kibibytes). ... %cpu ... Currently, it is the CPU time used divided by the time the process has been running (cputime/realtime ratio), expressed as a percentage. It will not add up to 100% unless you are lucky.",
+      "location": "ps(1), STANDARD FORMAT SPECIFIERS"
+    },
+    {
+      "finding": "STAT vs S: stat is multi-character (state + modifiers like 'Ss', 'R+'); s/state gives only the first character. TIME is cumulative CPU time, not wall time.",
+      "quote": "stat STAT multi-character process state. ... time TIME cumulative CPU time, \"[DD-]HH:MM:SS\" format.",
+      "location": "ps(1), STANDARD FORMAT SPECIFIERS"
+    },
+    {
+      "finding": "top's task-state buckets map to ps codes: running R; sleeping S + others; d-sleep D; stopped T+t; zombie Z.",
+      "quote": "running R / sleep S + any remaining / d-sleep D / stopped T + t / zombie Z",
+      "location": "top(1), 2b. TASK and CPU States"
+    },
+    {
+      "finding": "top batch mode.",
+      "quote": "-b, --batch Starts top in Batch mode, which could be useful for sending output from top to other programs or to a file. In this mode, top will not accept input and runs until the iterations limit you've set with the '-n' command-line option or until killed.",
+      "location": "top(1), COMMAND-LINE Options"
+    },
+    {
+      "finding": "free reads /proc/meminfo (hence is not cgroup-aware — see 'proc-5'); column definitions.",
+      "quote": "The information is gathered by parsing /proc/meminfo. ... used Used or unavailable memory (calculated as total - available) / free Unused memory (MemFree and SwapFree in /proc/meminfo) / ... cache Memory used by the page cache and slabs (Cached and SReclaimable in /proc/meminfo) / buff/cache Sum of buffers and cache",
+      "location": "free(1), DESCRIPTION"
+    },
+    {
+      "finding": "Load average definition from uptime(1): runnable OR uninterruptible; not normalized per CPU.",
+      "quote": "System load averages is the average number of processes that are either in a runnable or uninterruptible state. A process in a runnable state is either using the CPU or waiting to use the CPU. A process in uninterruptible state is waiting for some I/O access, eg waiting for disk.",
+      "location": "uptime(1), DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man1/uptime.1.html"
+    },
+    {
+      "finding": "pgrep/pkill: pkill sends SIGTERM by default; matching is against the process NAME, limited to 15 characters, unless -f (full command line). Options: -u effective user, -U real user, -P parent PID, -x exact, -l/-a list name/full command line, -f full.",
+      "quote": "The process name used for matching is limited to the 15 characters present in the output of /proc/pid/stat. Use the -f option to match against the complete command line, /proc/pid/cmdline.",
+      "location": "pgrep(1), NOTES; 'pkill will send the specified signal (by default SIGTERM) to each process' in DESCRIPTION",
+      "cite_url": "https://man7.org/linux/man-pages/man1/pgrep.1.html"
+    },
+    {
+      "finding": "pgrep criteria are ANDed across options, ORed within a comma list; pgrep never matches itself.",
+      "quote": "$ pgrep -u root sshd will only list the processes whose name include sshd AND owned by root. On the other hand, $ pgrep -u root,daemon will list the processes owned by root OR daemon.",
+      "location": "pgrep(1), DESCRIPTION"
+    },
+    {
+      "finding": "EXECUTED: real column headers and TTY '?' on Ubuntu 24.04 (procps-ng 4.0.4).",
+      "quote": "$ docker run --rm ubuntu:24.04 sh -c 'ps aux; echo; ps -ef'\nUSER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\nroot         1  0.0  0.0   2380  1300 ?        Ss   06:14   0:00 sh -c ps aux; echo; ps -ef; …\nroot         7  0.0  0.0   7628  3516 ?        R    06:14   0:00 ps aux\n\nUID        PID  PPID  C STIME TTY          TIME CMD\nroot         1     0  0 06:14 ?        00:00:00 sh -c ps aux; echo; ps -ef; …\nroot         8     1  0 06:14 ?        00:00:00 ps -ef",
+      "location": "executed ubuntu:24.04 (ps from procps-ng 4.0.4; package procps 2:4.0.4-4ubuntu3.3)"
+    },
+    {
+      "finding": "EXECUTED: free -h and top -bn1 headers on Ubuntu 24.04 (values are the Docker VM's, not the container's).",
+      "quote": "$ docker run --rm ubuntu:24.04 sh -c 'free -h; top -bn1 | head -5'\n               total        used        free      shared  buff/cache   available\nMem:           7.7Gi       714Mi       6.5Gi       752Ki       652Mi       7.0Gi\nSwap:          1.0Gi          0B       1.0Gi\ntop - 06:14:03 up 13 min,  0 user,  load average: 0.94, 0.74, 0.40\nTasks:   3 total,   1 running,   2 sleeping,   0 stopped,   0 zombie\n%Cpu(s):  2.8 us,  0.0 sy,  0.0 ni, 96.3 id,  0.9 wa,  0.0 hi,  0.0 si,  0.0 st \nMiB Mem :   7837.3 total,   6630.1 free,    715.2 used,    652.1 buff/cache     \nMiB Swap:   1024.0 total,   1024.0 free,      0.0 used.   7122.1 avail Mem",
+      "location": "executed ubuntu:24.04"
+    },
+    {
+      "finding": "EXECUTED: availability differs by base image. ubuntu:24.04 includes procps; debian:bookworm-slim has NO ps/free/top/pgrep/uptime (only the shell's builtin kill); alpine:3.20 has BusyBox applets whose `ps` ignores aux/-ef formatting and prints only PID USER TIME COMMAND.",
+      "quote": "$ docker run --rm debian:bookworm-slim sh -c 'for c in ps free top kill pgrep uptime; do printf \"%s: \" $c; command -v $c || echo MISSING; done'\nps: MISSING\nfree: MISSING\ntop: MISSING\nkill: kill\npgrep: MISSING\nuptime: MISSING\n$ docker run --rm alpine:3.20 sh -c 'ls -l $(command -v ps); ps aux | head -3'\nlrwxrwxrwx    1 root     root            12 Apr 15 16:14 /bin/ps -> /bin/busybox\nPID   USER     TIME  COMMAND\n    1 root      0:00 sh -c …\n   11 root      0:00 ps aux",
+      "location": "executed debian:bookworm-slim and alpine:3.20"
+    }
+  ],
+  "teaching_notes": "Useful corrections: (1) 'buff/cache is reclaimable' overstates — the available column exists because only part of it is; and procps-ng 4 defines used = total - available; (2) ps %CPU is a lifetime average, so a process that just started spinning shows low %CPU in ps but 100% in top; (3) ps(1) never defines '?' in the TTY column — assert it only via the executed output; (4) there is also state I (idle kernel thread) and lower-case t (tracing stop — what a process under strace shows). Practical for agentic evals: ps is frequently ABSENT (debian slim, many python:*-slim images) or is BusyBox (Alpine), so an agent's `ps aux | grep` may fail or print different columns; /proc is the fallback (see 'proc-5'). free/top/uptime inside a container show the host's memory and load, not the cgroup's. pkill's 15-character name limit explains 'pkill my-long-process-name' silently matching nothing; use -f."
+}

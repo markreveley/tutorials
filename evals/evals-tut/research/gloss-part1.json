@@ -1,0 +1,408 @@
+{
+  "eval": {
+    "name": "Eval",
+    "short": "A repeatable test that measures how well an AI system performs a task, by running it on a set of inputs and scoring the outputs.",
+    "def": "An eval (short for evaluation) is a repeatable measurement of how well an AI system does something: you run the system on a fixed set of inputs, score each output, and aggregate the scores into a number you can track over time. Evals exist because LLM outputs vary — you can't tell whether a prompt change helped by eyeballing a few responses, so you need a measurement you can rerun and compare. The term covers everything from public <a href='pages/01-what-is-an-eval.html'>benchmarks</a> that compare models to small in-house test suites that check one product feature.",
+    "also": "evaluation",
+    "see": ["benchmark", "metric", "dataset", "grader", "capability-eval", "product-eval"]
+  },
+  "benchmark": {
+    "name": "Benchmark",
+    "short": "A standardized, published eval — a fixed dataset plus scoring rules — that lets different models or systems be compared on the same task.",
+    "def": "A benchmark is an eval that has been standardized and published so that anyone can run it and compare results: a fixed <a href='pages/02-anatomy-of-an-eval.html'>dataset</a>, fixed scoring rules, and usually a public <a href='pages/23-leaderboard-illusion.html'>leaderboard</a>. Standardization is the whole point — if two labs score their models on different questions with different rules, the numbers can't be compared. The fixity that makes benchmarks comparable is also their weakness: once a test is public and fixed, models can be trained on it (<a href='pages/21-contamination.html'>contamination</a>) or tuned to it, so a benchmark score can drift away from measuring the ability it was built for.",
+    "see": ["eval", "leaderboard", "capability-eval", "dataset"]
+  },
+  "metric": {
+    "name": "Metric",
+    "short": "The number an eval produces — a rule for turning many individual scored outputs into a single summary figure, like percent passed.",
+    "def": "A metric is the rule that turns many individual scores into one summary number — most commonly the fraction of samples that passed, but also averages, agreement rates, or cost-adjusted figures. The metric exists because a pile of per-sample judgments isn't actionable; you need a single figure to compare run A against run B. Choosing the metric is a real design decision: it decides what counts as better, and a system optimized against a metric will exploit whatever the metric fails to measure. See <a href='pages/02-anatomy-of-an-eval.html'>Anatomy of an Eval</a>.",
+    "see": ["eval", "grader", "pass-at-k", "binary-judgment"]
+  },
+  "dataset": {
+    "name": "Dataset",
+    "short": "The collection of test cases an eval runs on — each one an input (and often an expected answer) that the system under test must handle.",
+    "def": "In evals, the dataset is the collection of test cases the system is run against. Each case (a <a href='pages/02-anatomy-of-an-eval.html'>sample</a>) holds at minimum an input, and often a reference answer or grading instructions. The dataset defines what your eval actually measures: if it doesn't contain the hard cases your users hit, your score can be high while your product fails. That's why building the dataset — from real logged failures, expert-written cases, or <a href='pages/05-from-failures-to-evals.html'>synthetic data</a> — is usually the most important and most neglected part of an eval.",
+    "also": "test set, eval set",
+    "see": ["sample", "golden-dataset", "ground-truth", "synthetic-data", "train-test-split"]
+  },
+  "sample": {
+    "name": "Sample",
+    "short": "One test case in an eval dataset: a single input, plus whatever the grader needs to score the system's output on it (often a reference answer).",
+    "def": "A sample is one row of an eval <a href='pages/02-anatomy-of-an-eval.html'>dataset</a>: a single input the system must handle, bundled with whatever the <a href='pages/03-types-of-evaluators.html'>grader</a> needs to score the result — a reference answer, a checklist, or grading instructions. The eval score is just an aggregate over samples, which is why both the number and the quality of samples matter: too few and the score is mostly noise; unrepresentative ones and the score measures the wrong thing. (Statisticians use 'sample' to mean a whole subset drawn from a population; in eval tooling it almost always means one test case.)",
+    "also": "test case, example, item",
+    "see": ["dataset", "ground-truth", "golden-dataset"]
+  },
+  "trace": {
+    "name": "Trace",
+    "short": "The complete logged record of one LLM or agent interaction — the inputs, the model's outputs, and any intermediate steps like tool calls.",
+    "def": "A trace is the complete logged record of one interaction with an LLM system: the user's input, the prompts actually sent to the model, every intermediate step (tool calls, retrieved documents, agent turns), and the final output. Traces exist because the final answer alone doesn't tell you <em>why</em> something failed — the bug might be in retrieval, in a tool call, or in the prompt the user never sees. Reading traces is the core activity of <a href='pages/04-error-analysis.html'>error analysis</a>, and capturing them in production is the job of <a href='pages/26-observability.html'>tracing and observability</a> tools.",
+    "see": ["error-analysis", "open-coding", "annotation", "online-eval"]
+  },
+  "harness": {
+    "name": "Harness",
+    "short": "The software that runs an eval end to end: it feeds each test case to the system, collects outputs, applies the grader, and reports the metric.",
+    "def": "A harness is the software that runs an eval end to end: it loads the <a href='pages/02-anatomy-of-an-eval.html'>dataset</a>, sends each sample to the system under test, collects the outputs, applies the <a href='pages/03-types-of-evaluators.html'>grader</a>, and aggregates the results into a report. The harness exists so an eval is reproducible — running hundreds of cases by hand isn't, and small differences in how prompts are formatted or answers are parsed can change scores, so the harness pins those details down. Examples range from a short Python script to full frameworks like <a href='pages/24-inspect.html'>Inspect</a>.",
+    "also": "evaluation framework",
+    "see": ["grader", "metric", "model-graded-scorer", "dataset"]
+  },
+  "grader": {
+    "name": "Grader",
+    "short": "The component of an eval that scores a single output — it can be code (string match, test suite), a human reviewer, or another LLM acting as judge.",
+    "def": "The grader is the part of an eval that looks at one output and decides how good it is. It can be code (an exact-match check, a regex, a unit-test suite), a human reviewer, or another LLM (an <a href='pages/08-llm-as-judge.html'>LLM judge</a>). The grader exists because raw model outputs are just text — something has to turn 'here's what the model said' into 'pass' or 'fail' before you can compute a <a href='pages/02-anatomy-of-an-eval.html'>metric</a>. Your eval is only as trustworthy as its grader, which is why <a href='pages/06-validating-the-grader.html'>validating the grader</a> is a step in its own right.",
+    "also": "scorer, evaluator",
+    "see": ["llm-as-judge", "model-graded-scorer", "ground-truth", "judge-alignment"]
+  },
+  "ground-truth": {
+    "name": "Ground Truth",
+    "short": "The known-correct answer for a test case, used as the standard the system's output is compared against during grading.",
+    "def": "Ground truth is the known-correct answer for a test case — the standard a <a href='pages/03-types-of-evaluators.html'>grader</a> compares the system's output against. The term exists because grading needs an anchor: 'is this output right?' is only answerable if something defines 'right.' For some tasks ground truth is objective (the answer to a math problem); for others it's really just a trusted human's judgment, which is why building ground-truth labels often means structured <a href='pages/04-error-analysis.html'>annotation</a> by a domain expert rather than looking answers up.",
+    "also": "gold label, reference answer",
+    "see": ["reference-based", "golden-dataset", "annotation", "principal-domain-expert"]
+  },
+  "reference-based": {
+    "name": "Reference-Based Evaluation",
+    "short": "Grading that compares the system's output against a known-correct reference answer — possible only when each test case has one.",
+    "def": "Reference-based evaluation grades an output by comparing it to a known-correct reference answer (<a href='pages/03-types-of-evaluators.html'>ground truth</a>) attached to the test case. The comparison can be strict (exact match, passing a test suite) or loose (an LLM judge checking that the output says the same thing as the reference). It's the most trustworthy kind of grading when references exist — but many real tasks ('write a friendly support reply') have no single correct answer, which is what forces the alternative, <a href='pages/03-types-of-evaluators.html'>reference-free</a> evaluation.",
+    "see": ["reference-free", "ground-truth", "reference-guided-grading", "grader"]
+  },
+  "reference-free": {
+    "name": "Reference-Free Evaluation",
+    "short": "Grading an output on its own merits — against criteria, a rubric, or judge instructions — without comparing it to a stored correct answer.",
+    "def": "Reference-free evaluation grades an output without a stored correct answer, judging it directly against criteria: does it follow the instructions, is it grounded in the provided documents, does it meet the <a href='pages/08-llm-as-judge.html'>rubric</a>? It exists because most product tasks are open-ended — there are many acceptable support replies, summaries, or plans, so no single reference can be written down. The cost is that quality now lives entirely in the grading criteria and the <a href='pages/06-validating-the-grader.html'>grader's judgment</a>, both of which must themselves be validated against human experts.",
+    "see": ["reference-based", "llm-as-judge", "rubric", "judge-alignment"]
+  },
+  "offline-eval": {
+    "name": "Offline Eval",
+    "short": "An eval run on a fixed test set before deployment — in development or CI — as opposed to measuring the live system on real user traffic.",
+    "def": "An offline eval runs the system on a fixed <a href='pages/02-anatomy-of-an-eval.html'>dataset</a> outside of production — during development, in CI, before a release. Because the inputs are fixed and the run is repeatable, offline evals are ideal for comparing two versions of a system and for <a href='pages/07-evals-in-the-lifecycle.html'>regression testing</a>. Their blind spot is the real world: a fixed test set can't contain the inputs users will invent next week, which is why mature teams pair offline evals with <a href='pages/26-observability.html'>online evaluation</a> of live traffic.",
+    "see": ["online-eval", "regression-testing", "golden-dataset", "a-b-test"]
+  },
+  "online-eval": {
+    "name": "Online Eval",
+    "short": "Evaluation of a live system on real user traffic — scoring production outputs, tracking user signals, or running A/B tests.",
+    "def": "An online eval measures the system in production, on real user traffic: scoring a slice of live outputs with an <a href='pages/08-llm-as-judge.html'>LLM judge</a>, tracking user signals like thumbs-down or retries, or running an <a href='pages/07-evals-in-the-lifecycle.html'>A/B test</a>. It exists because <a href='pages/26-observability.html'>offline test sets</a> always lag reality — users find inputs you never wrote test cases for. The trade-off is control: traffic isn't repeatable and there's usually no ground truth, so online results are noisier and need <a href='pages/26-observability.html'>tracing infrastructure</a> to be usable.",
+    "also": "production evaluation, online monitoring",
+    "see": ["offline-eval", "a-b-test", "trace", "guardrail"]
+  },
+  "capability-eval": {
+    "name": "Capability Eval",
+    "short": "An eval that measures what a model can do in general (math, coding, reasoning), used to compare models — as opposed to testing one product.",
+    "def": "A capability eval measures a model's general abilities — math, coding, reasoning, instruction-following — independent of any particular application. Public <a href='pages/01-what-is-an-eval.html'>benchmarks</a> are capability evals: they exist to answer 'which model is stronger?' for model builders and model choosers. The crucial caveat for practitioners is that capability scores don't transfer to your product: a model that tops coding leaderboards can still fail at your specific support-bot task, which is what <a href='pages/01-what-is-an-eval.html'>product evals</a> are for.",
+    "see": ["product-eval", "benchmark", "leaderboard", "human-baseline"]
+  },
+  "product-eval": {
+    "name": "Product Eval",
+    "short": "An eval built around one specific application and its real failure modes, measuring whether that product works for its users — not the model in general.",
+    "def": "A product eval measures whether <em>your application</em> works: your prompts, your retrieval, your users' actual inputs, scored against what quality means for your domain. It exists because <a href='pages/01-what-is-an-eval.html'>capability evals</a> answer the wrong question for builders — knowing a model is good at competition math says nothing about whether your contract-summarizer hallucinates clause numbers. Product evals are built bottom-up: <a href='pages/04-error-analysis.html'>error analysis</a> on real traces reveals the failure modes, and those become the test cases and grading criteria.",
+    "also": "application-specific eval, task-specific eval",
+    "see": ["capability-eval", "error-analysis", "failure-mode", "principal-domain-expert"]
+  },
+  "golden-dataset": {
+    "name": "Golden Dataset",
+    "short": "A small, carefully curated set of test cases with trusted labels — the high-quality core test set a team maintains and runs against every change.",
+    "def": "A golden dataset is a curated set of test cases whose labels you genuinely trust — typically reviewed by a domain expert rather than labeled in bulk. It exists because eval results are only as good as the labels behind them: a large sloppy test set tells you less than a small one where every pass/fail is correct. Teams treat the golden set as a maintained asset, running it on every change as a <a href='pages/07-evals-in-the-lifecycle.html'>regression test</a> and adding new cases as fresh failure modes surface in production.",
+    "also": "golden set, gold set",
+    "see": ["dataset", "ground-truth", "regression-testing", "annotation"]
+  },
+  "train-test-split": {
+    "name": "Train/Test Split",
+    "short": "Keeping the data you optimize on separate from the data you measure on, so your score reflects performance on unseen inputs rather than memorization.",
+    "def": "A train/test split keeps the data you optimize against separate from the data you measure with. The reason is simple once seen: if you tune your prompts (or train a model) on the same cases you score on, the score measures how well you fit those specific cases, not how the system handles new inputs — the eval equivalent of grading students on the exact questions they practiced. In eval work this shows up as keeping a <a href='pages/05-from-failures-to-evals.html'>holdout set</a> you never iterate against, and at benchmark scale as the fight against <a href='pages/21-contamination.html'>contamination</a>.",
+    "also": "holdout split",
+    "see": ["dataset", "golden-dataset", "regression-testing"]
+  },
+  "regression-testing": {
+    "name": "Regression Testing",
+    "short": "Re-running your eval suite after every change to catch things that used to work but broke — the LLM equivalent of a software test suite in CI.",
+    "def": "Regression testing means re-running your eval suite after every change — a new prompt, a model upgrade, a retrieval tweak — to catch cases that used to pass and now fail. It matters more for LLM systems than for ordinary software because changes are non-local: editing a prompt to fix one behavior can silently break an unrelated one, and there's no compiler to warn you. The practice is to wire evals into CI so every change gets scored against the <a href='pages/07-evals-in-the-lifecycle.html'>golden dataset</a> before it ships.",
+    "also": "regression eval",
+    "see": ["golden-dataset", "offline-eval", "eval-driven-development", "harness"]
+  },
+  "guardrail": {
+    "name": "Guardrail",
+    "short": "A check that runs in production at request time and blocks or fixes bad outputs before users see them — enforcement, as opposed to measurement.",
+    "def": "A guardrail is a check that runs in production, at request time, and acts on the result: blocking an unsafe response, stripping leaked personal data, or forcing a retry when an output fails validation. The contrast with an eval is timing and purpose — an eval measures quality across many cases to inform development, while a guardrail enforces a rule on a single live request before the user sees it. Because guardrails sit in the response path, they must be fast and cheap, so they tend to be simple checks rather than full <a href='pages/07-evals-in-the-lifecycle.html'>judge-style grading</a>.",
+    "see": ["online-eval", "grader", "eval-driven-development"]
+  },
+  "a-b-test": {
+    "name": "A/B Test",
+    "short": "An experiment that splits live users between two versions of a system and compares real outcomes, to measure which version actually works better.",
+    "def": "An A/B test randomly splits live traffic between two versions of a system — say, the old prompt and the new one — and compares real outcomes: task completion, retries, thumbs-down rates. Randomization is what makes it trustworthy: because users are assigned to versions by chance, any systematic difference in outcomes is attributable to the change itself rather than to who happened to use it. In the eval lifecycle it's the final check that offline gains are real — see <a href='pages/07-evals-in-the-lifecycle.html'>Evals in the Development Lifecycle</a>.",
+    "also": "split test, online experiment",
+    "see": ["online-eval", "offline-eval"]
+  },
+  "leaderboard": {
+    "name": "Leaderboard",
+    "short": "A public ranking of models by their scores on a benchmark or rating system, used to compare models — and gamed for the same reason.",
+    "def": "A leaderboard is a public ranking of models by their scores on some <a href='pages/01-what-is-an-eval.html'>benchmark</a> or rating system. It exists because buyers and researchers want a quick answer to 'which model is best?' — and that demand is exactly what distorts it: when rank confers prestige and revenue, labs optimize for the leaderboard's specific test, and the ranking drifts away from general quality. How that plays out in practice is the subject of <a href='pages/23-leaderboard-illusion.html'>The Political Economy of Leaderboards</a>.",
+    "see": ["benchmark", "arena-rating", "capability-eval"]
+  },
+  "arena-rating": {
+    "name": "Arena Rating",
+    "short": "A model ranking built from crowdsourced head-to-head battles: users compare two anonymous model responses, and votes feed an Elo-style rating.",
+    "def": "An arena rating ranks models through crowdsourced head-to-head battles, in the style of Chatbot Arena: a user sends a prompt, two anonymous models answer side by side, the user votes for the better one, and the votes feed an Elo-style rating system (borrowed from chess) that converts win/loss records into scores. The approach exists to escape fixed test sets — real users ask real questions, and anonymity is meant to stop brand bias. Its weaknesses are that casual voters reward surface qualities like confidence and formatting, and the ranking process itself can be <a href='pages/23-leaderboard-illusion.html'>gamed by participants</a>.",
+    "also": "Elo rating, Chatbot Arena ranking",
+    "see": ["leaderboard", "pairwise-comparison", "verbosity-bias"]
+  },
+  "human-baseline": {
+    "name": "Human Baseline",
+    "short": "The score humans achieve on the same eval, measured so model scores have a meaningful reference point — 80% means little until you know what people get.",
+    "def": "A human baseline is the score people achieve on the same eval, measured under comparable conditions. It exists because raw model scores have no scale: 70% is meaningless until you know whether experts score 95% or struggle to reach 50%. Baselines need care to be fair — whose performance (crowd workers or domain experts), with how much time and what tools — and a sloppy baseline makes 'superhuman' claims easy and hollow. They also define ceilings: when a model exceeds the human baseline, the benchmark stops being able to measure further progress.",
+    "see": ["benchmark", "capability-eval", "metric"]
+  },
+  "llm": {
+    "name": "LLM (Large Language Model)",
+    "short": "An AI model trained on huge amounts of text to predict the next token, which makes it able to generate and follow instructions in natural language.",
+    "def": "A large language model is an AI model trained on vast amounts of text to predict the next <a href='pages/01-what-is-an-eval.html'>token</a> given everything before it. That one objective, at scale, yields a system that can answer questions, write code, and follow instructions — without being explicitly programmed for any of those tasks. The same origin explains why evals are hard: an LLM's outputs are probabilistic and open-ended rather than deterministic and enumerable, so 'does it work?' becomes a measurement problem instead of a checklist.",
+    "also": "large language model, language model",
+    "see": ["token", "temperature", "prompt", "hallucination", "context-window"]
+  },
+  "token": {
+    "name": "Token",
+    "short": "The unit of text an LLM reads and writes — a word fragment, word, or symbol. Models process, price, and limit text in tokens, not characters.",
+    "def": "A token is the unit an LLM actually reads and writes: a chunk of text — often a word, sometimes a fragment like <code>ing</code> or a punctuation mark — produced by splitting text with a fixed vocabulary. Models work in tokens because a fixed vocabulary of chunks handles any input, including words never seen in training. Tokens matter for evals because everything is denominated in them: API pricing, <a href='pages/01-what-is-an-eval.html'>context window</a> limits, and output truncation — and some judge techniques like <a href='pages/08-llm-as-judge.html'>G-Eval</a> work with the probabilities the model assigns to individual tokens.",
+    "see": ["llm", "context-window", "temperature", "g-eval"]
+  },
+  "temperature": {
+    "name": "Temperature",
+    "short": "A setting controlling how random an LLM's output is: 0 makes it pick the most likely next token nearly every time; higher values add variety.",
+    "def": "Temperature is a sampling setting that controls how random an LLM's output is. The model produces a probability for every possible next <a href='pages/01-what-is-an-eval.html'>token</a>; at temperature 0 it (nearly) always picks the most likely one, while higher values let less likely tokens through, producing more varied — and less repeatable — text. Evals care because temperature trades repeatability for realism: low temperature makes runs comparable, but if your product runs at a higher temperature, evaluating only at 0 misses the variability your users actually see, which is one reason for repeated trials and metrics like <a href='pages/18-pass-at-k.html'>pass@k</a>.",
+    "see": ["llm", "token", "pass-at-k"]
+  },
+  "context-window": {
+    "name": "Context Window",
+    "short": "The maximum amount of text (in tokens) an LLM can consider at once — everything it must work with has to fit, or get cut.",
+    "def": "The context window is the maximum amount of text, measured in <a href='pages/01-what-is-an-eval.html'>tokens</a>, that an LLM can consider in one request: the system prompt, the conversation so far, any retrieved documents, and the response being generated all share it. It exists because the model's architecture processes a bounded sequence — beyond the limit, text must be dropped or summarized. For evals this is a real failure source: long inputs can silently push instructions or evidence out of the window, and a model's effective use of a long context is itself something worth testing.",
+    "see": ["token", "rag", "prompt", "llm"]
+  },
+  "prompt": {
+    "name": "Prompt",
+    "short": "The text given to an LLM to produce a response — instructions, context, and the user's request. The main thing builders change and evals measure.",
+    "def": "A prompt is the text sent to an LLM to elicit a response: instructions, examples, supporting context, and the user's actual request. It's the primary lever LLM application builders have — most 'development' on an LLM product is prompt revision — which makes it the main thing <a href='pages/01-what-is-an-eval.html'>evals</a> measure the effect of. Prompts also matter on the grading side: an <a href='pages/08-llm-as-judge.html'>LLM judge</a> is itself just a model plus a carefully designed prompt, with all the same sensitivities.",
+    "see": ["system-prompt", "few-shot", "llm", "eval-driven-development"]
+  },
+  "system-prompt": {
+    "name": "System Prompt",
+    "short": "The standing instructions a developer gives an LLM before any user input — defining its role, rules, and style for every conversation.",
+    "def": "A system prompt is the standing instruction block a developer places before any user input: who the model should be, what rules it must follow, what format to answer in. The separate slot exists to mark authority — APIs distinguish developer instructions from user messages so the model can weight them differently and (imperfectly) resist user attempts to override them. In an LLM product the system prompt is core logic, so changes to it are exactly what <a href='pages/07-evals-in-the-lifecycle.html'>regression testing</a> with evals is meant to keep safe.",
+    "see": ["prompt", "regression-testing", "llm"]
+  },
+  "fine-tuning": {
+    "name": "Fine-Tuning",
+    "short": "Further training an existing LLM on examples of a specific task so the desired behavior is baked into its weights, rather than instructed via prompts.",
+    "def": "Fine-tuning is additional training applied to an existing LLM using examples of the behavior you want — input/output pairs from your task — so the behavior is baked into the model's weights instead of requested in every <a href='pages/01-what-is-an-eval.html'>prompt</a>. Teams reach for it when prompting hits a ceiling: a format too intricate to describe, a tone too subtle to instruct, or prompts grown too long and costly. It raises the stakes for evals because the training examples must be held apart from the test set (<a href='pages/05-from-failures-to-evals.html'>train/test split</a>) — otherwise the eval just measures memorization of its own answers.",
+    "see": ["train-test-split", "prompt", "synthetic-data"]
+  },
+  "rag": {
+    "name": "RAG (Retrieval-Augmented Generation)",
+    "short": "An architecture where the system first retrieves relevant documents and then has the LLM answer using them — grounding responses in real sources.",
+    "def": "Retrieval-augmented generation is an architecture where the system first searches a document store for material relevant to the user's question, then includes those documents in the <a href='pages/01-what-is-an-eval.html'>prompt</a> so the LLM answers from them. It exists because models only know their training data — RAG gives them your private, current documents without retraining, and grounding answers in retrieved text reduces <a href='pages/01-what-is-an-eval.html'>hallucination</a>. For evals it splits one question into two: did retrieval find the right documents, and did the model answer faithfully from them? Each step gets its own metrics — see <a href='pages/25-tooling-survey.html'>The Tooling Landscape</a>.",
+    "also": "retrieval-augmented generation",
+    "see": ["hallucination", "context-window", "trace"]
+  },
+  "hallucination": {
+    "name": "Hallucination",
+    "short": "When an LLM states something false with full confidence — fabricated facts, citations, or details — because it generates plausible text, not verified text.",
+    "def": "A hallucination is an LLM output that's confidently stated but false — an invented fact, a citation to a paper that doesn't exist, a detail not in the source document. It happens because the model generates <em>plausible</em> text, not <em>verified</em> text: next-token prediction has no built-in step that checks claims against reality, so fluent fabrication is a natural output mode rather than a rare glitch. Hallucination is among the most common <a href='pages/04-error-analysis.html'>failure modes</a> teams find in error analysis, and detecting it — especially against retrieved sources in <a href='pages/25-tooling-survey.html'>RAG systems</a> — is a major use of evals.",
+    "also": "confabulation, fabrication",
+    "see": ["rag", "failure-mode", "ground-truth", "llm"]
+  },
+  "error-analysis": {
+    "name": "Error Analysis",
+    "short": "The practice of reading your system's real outputs one by one, noting what went wrong, and grouping the notes into failure categories worth fixing and testing.",
+    "def": "Error analysis is the practice of actually reading your system's outputs — real <a href='pages/04-error-analysis.html'>traces</a>, one at a time — writing a note about whatever went wrong in each, and then grouping those notes into recurring failure categories. It exists because you cannot decide what to test before knowing how your system actually fails, and intuition about that is reliably wrong: the failures that matter are discovered in the data, not predicted from the armchair. The notes become a <a href='pages/04-error-analysis.html'>failure taxonomy</a>, and the taxonomy tells you which evals to build. Most practitioners call this the highest-leverage activity in all of eval work.",
+    "see": ["open-coding", "axial-coding", "failure-taxonomy", "trace", "annotation"]
+  },
+  "open-coding": {
+    "name": "Open Coding",
+    "short": "Reading traces and writing a free-form note about what's wrong with each one, without predefined categories — letting failure patterns emerge from the data.",
+    "def": "Open coding is the first pass of <a href='pages/04-error-analysis.html'>error analysis</a>: read each trace and write a short free-form note about what's wrong with it — no predefined categories, no checklist. The term comes from grounded theory, a qualitative research method built on the idea that categories should emerge from the data rather than be imposed on it. The 'open' discipline matters because predefined categories smuggle in your assumptions: if you start with a checklist, you only find the failures you already expected, and the surprising ones — usually the important ones — slip through unnamed.",
+    "also": "a term from grounded theory",
+    "see": ["axial-coding", "error-analysis", "annotation", "theoretical-saturation"]
+  },
+  "axial-coding": {
+    "name": "Axial Coding",
+    "short": "The second pass of error analysis: grouping the free-form notes from open coding into a small set of named, recurring failure categories.",
+    "def": "Axial coding is the second pass of <a href='pages/04-error-analysis.html'>error analysis</a>: take the pile of free-form notes produced by <a href='pages/04-error-analysis.html'>open coding</a> and group them into a small set of named categories — 'hallucinated order status,' 'ignored formatting instruction,' and so on. Like open coding, the term comes from grounded theory. The step exists because raw notes aren't actionable: only once failures are grouped and counted can you see which mode is most common, decide what to fix first, and turn each category into a targeted eval.",
+    "also": "a term from grounded theory",
+    "see": ["open-coding", "failure-taxonomy", "failure-mode", "error-analysis"]
+  },
+  "failure-mode": {
+    "name": "Failure Mode",
+    "short": "A recurring, named way your system goes wrong — like 'invents citations' or 'ignores length limits' — specific enough to count and test for.",
+    "def": "A failure mode is a recurring, named way your system goes wrong — 'invents citations,' 'ignores the length limit,' 'answers in the wrong language.' The name matters: until a pattern of failures has a label, you can't count how often it happens, prioritize it against other problems, or write an eval that targets it. Failure modes are discovered through <a href='pages/04-error-analysis.html'>error analysis</a> rather than brainstormed in advance, and the full catalog of them for a system is its <a href='pages/04-error-analysis.html'>failure taxonomy</a>.",
+    "see": ["failure-taxonomy", "error-analysis", "axial-coding", "product-eval"]
+  },
+  "failure-taxonomy": {
+    "name": "Failure Taxonomy",
+    "short": "The organized catalog of a system's failure modes, with counts — showing which problems are common and which evals are worth building.",
+    "def": "A failure taxonomy is the organized catalog of a system's <a href='pages/04-error-analysis.html'>failure modes</a>, usually with counts of how often each appears in reviewed traces. It's the deliverable of <a href='pages/04-error-analysis.html'>error analysis</a> and the input to everything after: the counts tell you which problems are frequent enough to fix, and each category points at a specific eval to build. A taxonomy is also a living document — fix the top failure modes and new ones surface, so teams revisit it as the system and its users evolve.",
+    "see": ["failure-mode", "error-analysis", "axial-coding", "eval-driven-development"]
+  },
+  "theoretical-saturation": {
+    "name": "Theoretical Saturation",
+    "short": "The point in trace review when new traces stop revealing new failure types — the signal that you've seen enough and can stop coding.",
+    "def": "Theoretical saturation is the stopping signal for <a href='pages/04-error-analysis.html'>trace review</a>: the point where reading additional traces keeps turning up failures you've already categorized, and nothing new. The term comes from grounded theory, where it answers the question every qualitative researcher faces — 'how much data is enough?' — without picking an arbitrary number in advance: you stop when the data stops teaching you. In practice teams review traces in batches and watch for the batch where every note lands in an existing category.",
+    "also": "a term from grounded theory",
+    "see": ["open-coding", "error-analysis", "failure-taxonomy"]
+  },
+  "criteria-drift": {
+    "name": "Criteria Drift",
+    "short": "The phenomenon that grading outputs changes your grading criteria — reviewing examples surfaces standards you didn't know you had.",
+    "def": "Criteria drift is the observed phenomenon that the act of grading outputs changes the grader's own criteria: you start labeling with one standard, and seeing concrete examples surfaces requirements you didn't know you had — an output is technically correct but you realize the tone is wrong, so 'tone' quietly joins the criteria. The term comes from the EvalGen study of how people actually build evals. Its practical consequence is that grading criteria can't be fully specified up front; they must be developed <em>by</em> labeling, and <a href='pages/06-validating-the-grader.html'>graders need re-validation</a> as the criteria settle.",
+    "see": ["annotation", "judge-alignment", "rubric", "error-analysis"]
+  },
+  "principal-domain-expert": {
+    "name": "Principal Domain Expert",
+    "short": "The single designated expert whose judgment officially defines quality for a product eval — one trusted voice instead of a committee's averaged opinions.",
+    "def": "The principal domain expert is the one designated person whose judgment officially defines quality for a product eval — Hamel Husain's term. Designating a single expert solves a real problem: when several reviewers share labeling, they disagree, and averaging their conflicting standards bakes noise into your <a href='pages/03-types-of-evaluators.html'>ground truth</a>; a single consistent voice gives the eval a coherent standard to aim at. The expert's pass/fail labels and written critiques become the target an <a href='pages/10-aligning-judges.html'>LLM judge is aligned to</a> via critique shadowing.",
+    "also": "a term from Hamel Husain",
+    "see": ["critique-shadowing", "judge-alignment", "ground-truth", "inter-annotator-agreement"]
+  },
+  "critique-shadowing": {
+    "name": "Critique Shadowing",
+    "short": "Building an LLM judge by having it shadow a human expert: the expert labels outputs pass/fail with written critiques, and the judge prompt is iterated until it agrees.",
+    "def": "Critique shadowing is an iterative process for building a trustworthy <a href='pages/08-llm-as-judge.html'>LLM judge</a>, described by Hamel Husain: a domain expert labels real outputs pass/fail and writes a short critique explaining each call; you draft a judge prompt (using some labeled examples as few-shot demonstrations), run it on held-out labeled cases, study the disagreements, and revise — repeating until the judge tracks the expert. The expert's critiques are the key ingredient: they capture <em>why</em> outputs fail, which is exactly what the judge prompt needs to encode. The process is the subject of <a href='pages/10-aligning-judges.html'>Aligning Judges with Human Experts</a>.",
+    "see": ["principal-domain-expert", "judge-alignment", "llm-as-judge", "binary-judgment", "few-shot"]
+  },
+  "binary-judgment": {
+    "name": "Binary Judgment",
+    "short": "Grading each output as simply pass or fail instead of on a numeric scale — a forced clear decision that graders can apply consistently.",
+    "def": "A binary judgment grades each output as simply pass or fail, rather than on a numeric scale. The case for it is consistency: people (and LLM judges) can rarely agree on what separates a 4 from a 5 on a <a href='pages/05-from-failures-to-evals.html'>Likert scale</a>, and disagreement you can't resolve is just noise in your metric — whereas 'would you ship this answer?' forces a decision graders can make repeatably. Pass/fail also aggregates cleanly (percent passing) and pairs naturally with a written critique explaining each failure, which preserves the nuance the scale was supposed to capture.",
+    "also": "pass/fail grading",
+    "see": ["likert-scale", "critique-shadowing", "metric", "inter-annotator-agreement"]
+  },
+  "likert-scale": {
+    "name": "Likert Scale",
+    "short": "A numeric rating scale (e.g. 1–5) for grading outputs. Familiar from surveys, but adjacent points are hard to tell apart consistently.",
+    "def": "A Likert scale rates each output on an ordered numeric scale — 1 to 5, 1 to 10 — and is the format most people reach for first because it's familiar from surveys and feels more informative than pass/fail. The trouble is that the extra resolution is largely illusory: no one can define the boundary between a 3 and a 4 in a way two graders apply identically, so the middle of the scale fills with inconsistent judgments, and averages over them are built on noise. That's why eval practitioners widely prefer <a href='pages/05-from-failures-to-evals.html'>binary judgments</a> with written critiques.",
+    "also": "rating scale, 1–5 scale",
+    "see": ["binary-judgment", "inter-annotator-agreement", "single-answer-grading"]
+  },
+  "annotation": {
+    "name": "Annotation",
+    "short": "Humans labeling data — marking outputs pass/fail, tagging failure types, writing critiques — to create the ground truth that evals and judges are built on.",
+    "def": "Annotation is the work of humans labeling data: marking outputs pass or fail, tagging which <a href='pages/04-error-analysis.html'>failure mode</a> a trace exhibits, writing critiques. It's the source of nearly all <a href='pages/03-types-of-evaluators.html'>ground truth</a> — somebody's judgment, recorded — which makes its quality the ceiling on everything built from it, including <a href='pages/10-aligning-judges.html'>LLM judges</a> validated against the labels. Good annotation practice is deliberate: clear guidelines, a designated expert or measured <a href='pages/04-error-analysis.html'>inter-annotator agreement</a>, and tooling that makes labeling fast enough to actually happen.",
+    "also": "labeling, data labeling",
+    "see": ["ground-truth", "inter-annotator-agreement", "principal-domain-expert", "open-coding"]
+  },
+  "inter-annotator-agreement": {
+    "name": "Inter-Annotator Agreement",
+    "short": "How often independent human labelers give the same label to the same item — a check on whether your grading criteria are well-defined at all.",
+    "def": "Inter-annotator agreement measures how often independent human labelers assign the same label to the same item. It matters because it tests the criteria, not just the people: if trained annotators reading the same guidelines disagree constantly, the task itself is underspecified, and no grader — human or <a href='pages/08-llm-as-judge.html'>LLM judge</a> — can be 'right' against such labels. Agreement is usually reported with chance-corrected statistics like <a href='appendices/e-agreement-metrics.html'>Cohen's kappa</a>, because two labelers using a 90/10 label split will agree often by luck alone. Low agreement is a signal to sharpen definitions or switch to <a href='pages/05-from-failures-to-evals.html'>binary judgments</a>.",
+    "also": "IAA, inter-rater reliability",
+    "see": ["annotation", "binary-judgment", "judge-alignment", "principal-domain-expert"]
+  },
+  "synthetic-data": {
+    "name": "Synthetic Data",
+    "short": "Test cases generated by an LLM rather than collected from real usage — a way to get coverage of inputs you don't have enough real examples of.",
+    "def": "Synthetic data is test data generated by an LLM rather than collected from real users — for evals, typically test inputs: rare edge cases, adversarial phrasings, or coverage of scenarios you have no logs for yet. It exists because real data is scarce exactly when you need evals most (before launch) and rarely covers the long tail. The standing caveats: generated inputs drift toward what the model finds typical rather than what real users do, so synthetic cases need human review, and grading labels should not be generated by the same model being evaluated. See <a href='pages/05-from-failures-to-evals.html'>From Failure Modes to Evals</a>.",
+    "see": ["dataset", "golden-dataset", "self-preference"]
+  },
+  "eval-driven-development": {
+    "name": "Eval-Driven Development",
+    "short": "Building LLM products with evals at the center of the loop: define failure, build the measure, then iterate on prompts and models against the score.",
+    "def": "Eval-driven development builds LLM products around a measurement loop: discover failures through <a href='pages/04-error-analysis.html'>error analysis</a>, turn them into evals, then iterate on prompts, retrieval, and model choice against the scores — analogous to test-driven development in software. The reason it works is iteration velocity: without evals every change requires manual eyeballing and gut calls, while with them you can try ten prompt variants in an afternoon and know which one won. The full loop — including <a href='pages/07-evals-in-the-lifecycle.html'>CI, monitoring, and feeding production failures back into the eval set</a> — is what makes LLM development systematic instead of vibes-based.",
+    "also": "EDD",
+    "see": ["regression-testing", "error-analysis", "golden-dataset", "metric"]
+  },
+  "llm-as-judge": {
+    "name": "LLM-as-Judge",
+    "short": "Using an LLM, given a grading prompt, to score another LLM's outputs — scaling up evaluation of open-ended tasks where code can't grade and humans are too slow.",
+    "def": "LLM-as-judge means using an LLM, equipped with a grading prompt, to score another LLM's outputs. It exists to fill a gap: open-ended outputs (summaries, support replies, essays) can't be graded by string-matching code, and human review doesn't scale to thousands of cases per experiment — a judge model offers human-like judgment at code-like speed. The catch is that the judge is itself an LLM, with its own <a href='pages/09-judge-biases.html'>biases</a> and failure modes, so a judge must be <a href='pages/06-validating-the-grader.html'>validated against human judgment</a> before its scores can be trusted. The approach was popularized alongside the MT-Bench evaluation.",
+    "also": "LLM judge, AI judge, autograder",
+    "see": ["grader", "judge-alignment", "position-bias", "pairwise-comparison", "single-answer-grading", "g-eval"]
+  },
+  "pairwise-comparison": {
+    "name": "Pairwise Comparison",
+    "short": "A judging format where the grader sees two responses to the same input and picks the better one, rather than scoring each alone.",
+    "def": "Pairwise comparison is a judging format where the grader — human or <a href='pages/08-llm-as-judge.html'>LLM judge</a> — sees two responses to the same input side by side and picks the better one (or calls a tie). It exists because relative judgments are easier to make consistently than absolute ones: deciding which of two summaries is better is more reliable than assigning each a defensible score alone. It's the format behind <a href='pages/23-leaderboard-illusion.html'>arena-style rankings</a>. Its costs: results only say which is better, not whether either is good enough, and LLM judges show <a href='pages/09-judge-biases.html'>position bias</a> — favoring an answer because of where it appears — so careful setups swap the order and check both ways.",
+    "also": "A/B grading, preference comparison",
+    "see": ["single-answer-grading", "position-bias", "arena-rating", "llm-as-judge"]
+  },
+  "single-answer-grading": {
+    "name": "Single-Answer Grading",
+    "short": "A judging format where the grader scores one response on its own — against a rubric or pass/fail criteria — without comparing it to an alternative.",
+    "def": "Single-answer grading has the judge score one response on its own — against a <a href='pages/08-llm-as-judge.html'>rubric</a>, pass/fail criteria, or sometimes a reference answer — rather than comparing it to an alternative. It's the natural format for product evals, where the question is 'is this output good enough to ship?', not 'which of two is better?', and it produces absolute scores you can track over time. The trade-off cuts the other way from <a href='pages/08-llm-as-judge.html'>pairwise comparison</a>: absolute judgments are harder to make consistently, which is why they lean on tight rubrics and <a href='pages/05-from-failures-to-evals.html'>binary judgments</a>.",
+    "also": "pointwise grading, direct assessment",
+    "see": ["pairwise-comparison", "rubric", "binary-judgment", "llm-as-judge"]
+  },
+  "rubric": {
+    "name": "Rubric",
+    "short": "The explicit written criteria a grader uses to score outputs — what to check, what counts as failing — so judgments are consistent and reviewable.",
+    "def": "A rubric is the explicit written criteria a grader applies: what to check, what counts as a failure, how to decide borderline cases. It exists because 'grade this response' is underspecified — without written criteria, every grader (and every run of an <a href='pages/08-llm-as-judge.html'>LLM judge</a>) fills the gap with its own taste, and the scores stop meaning one thing. A rubric makes grading consistent, makes disagreements debuggable (you can point at the criterion in dispute), and is where lessons from <a href='pages/04-error-analysis.html'>error analysis</a> get encoded. Expect to revise it as labeling reveals criteria you didn't know you had (<a href='pages/06-validating-the-grader.html'>criteria drift</a>).",
+    "also": "grading criteria",
+    "see": ["criteria-drift", "single-answer-grading", "binary-judgment", "judge-alignment"]
+  },
+  "position-bias": {
+    "name": "Position Bias",
+    "short": "An LLM judge's tendency to favor a response based on where it appears (often the first) in a side-by-side comparison, regardless of quality.",
+    "def": "Position bias is an <a href='pages/08-llm-as-judge.html'>LLM judge's</a> tendency, in a side-by-side comparison, to favor a response because of where it appears — often the one shown first — independent of quality. It was documented in the MT-Bench work on LLM judging, and it matters because it silently corrupts <a href='pages/08-llm-as-judge.html'>pairwise</a> results: if the judge leans first-position, whichever system you happen to list first wins extra ties. The standard defense is symmetry: run every comparison twice with the order swapped, and treat verdicts that flip with the order as ties. See <a href='pages/09-judge-biases.html'>Judge Biases and Failure Modes</a>.",
+    "also": "order bias",
+    "see": ["pairwise-comparison", "verbosity-bias", "self-enhancement-bias", "llm-as-judge"]
+  },
+  "verbosity-bias": {
+    "name": "Verbosity Bias",
+    "short": "An LLM judge's tendency to rate longer, more detailed-looking responses higher, even when the extra length adds no real substance.",
+    "def": "Verbosity bias is an <a href='pages/08-llm-as-judge.html'>LLM judge's</a> tendency to score longer, more elaborate responses higher, even when the added length is padding rather than substance. It plausibly traces to training: models are tuned on human preference data, and human raters also tend to reward thoroughness-looking answers, so the judge inherits and amplifies the habit. It matters because it's exploitable — a system can climb your eval by getting wordier, not better. Defenses include rubrics that explicitly value concision, checking whether score correlates with length in your results, and spot-checking long winners by hand. See <a href='pages/09-judge-biases.html'>Judge Biases</a>.",
+    "also": "length bias",
+    "see": ["position-bias", "self-enhancement-bias", "llm-as-judge", "rubric"]
+  },
+  "self-enhancement-bias": {
+    "name": "Self-Enhancement Bias",
+    "short": "An LLM judge's tendency to rate outputs produced by itself (or models like it) higher than equally good outputs from other models.",
+    "def": "Self-enhancement bias is the tendency of an <a href='pages/08-llm-as-judge.html'>LLM judge</a> to rate outputs from itself — or from models similar to it — higher than comparable outputs from other models; the term comes from the MT-Bench evaluation work. The mechanism is intuitive: a judge scores what matches its own sense of a good answer, and its own outputs match that sense by construction. It matters whenever the judge model is also a contestant, as in model-comparison studies. The literature splits the phenomenon into <a href='pages/09-judge-biases.html'>self-preference</a> (the behavior) and <a href='pages/09-judge-biases.html'>self-recognition</a> (a proposed mechanism: identifying its own text).",
+    "see": ["self-preference", "self-recognition", "position-bias", "llm-as-judge"]
+  },
+  "self-preference": {
+    "name": "Self-Preference",
+    "short": "The measured behavior of an LLM judge scoring its own outputs above others' — the effect that self-recognition is proposed to explain.",
+    "def": "Self-preference is the measured behavior of an LLM judge favoring its own outputs over comparable outputs from other models — what you observe when you put a judge's own generations into the pool it grades. The term is used in research that pulls <a href='pages/09-judge-biases.html'>self-enhancement bias</a> apart into two pieces: the preference itself, and <a href='pages/09-judge-biases.html'>self-recognition</a> — the judge's ability to identify text as its own — studied as a possible cause. The practical upshot: avoid grading a system with the same model that powers it, or validate carefully against human labels if you must.",
+    "see": ["self-recognition", "self-enhancement-bias", "judge-alignment", "llm-as-judge"]
+  },
+  "self-recognition": {
+    "name": "Self-Recognition",
+    "short": "An LLM's ability to identify which texts it wrote itself — studied as a possible mechanism behind judges favoring their own outputs.",
+    "def": "Self-recognition is an LLM's ability to tell which of several texts it produced itself, without being told. It's studied because it offers a mechanism for <a href='pages/09-judge-biases.html'>self-preference</a>: if a judge can implicitly recognize its own style, that recognition could drive the favoritism, the way a teacher might unconsciously favor an essay that sounds like their own writing. The distinction matters for fixing the problem — a recognition-driven bias might be reduced by paraphrasing outputs before judging, while a taste-driven one wouldn't be. See <a href='pages/09-judge-biases.html'>Judge Biases and Failure Modes</a>.",
+    "see": ["self-preference", "self-enhancement-bias", "llm-as-judge"]
+  },
+  "chain-of-thought": {
+    "name": "Chain-of-Thought",
+    "short": "Prompting an LLM to write out step-by-step reasoning before its answer — used in judging to make the model evaluate before it scores.",
+    "def": "Chain-of-thought is the technique of prompting an LLM to write out step-by-step reasoning before giving its final answer, rather than answering immediately. It helps because the model generates one <a href='pages/01-what-is-an-eval.html'>token</a> at a time with no hidden scratchpad — writing the reasoning out <em>is</em> its way of working through a problem. In <a href='pages/08-llm-as-judge.html'>LLM judging</a> it's standard practice: ask the judge to analyze the response against the criteria first and only then emit a verdict, which both improves the verdicts and leaves a readable rationale you can audit when you disagree with a score.",
+    "also": "CoT",
+    "see": ["llm-as-judge", "g-eval", "prompt", "few-shot"]
+  },
+  "few-shot": {
+    "name": "Few-Shot",
+    "short": "Including worked examples of the task in the prompt so the model learns the pattern from them — for judges, examples of graded outputs.",
+    "def": "Few-shot prompting includes a handful of worked examples of the task directly in the <a href='pages/01-what-is-an-eval.html'>prompt</a> — input, correct output, input, correct output — so the model picks up the pattern from demonstrations instead of from instructions alone ('zero-shot' means no examples). It works because LLMs are pattern continuers: examples pin down format and standards more precisely than descriptions can. In judge-building it's a key tool — showing the judge expert-graded examples, complete with critiques, is much of how <a href='pages/10-aligning-judges.html'>critique shadowing</a> transfers an expert's standards into the judge prompt. Benchmark scores also depend on the shot count, so it's always reported.",
+    "also": "in-context learning, n-shot",
+    "see": ["prompt", "chain-of-thought", "critique-shadowing", "llm-as-judge"]
+  },
+  "reference-guided-grading": {
+    "name": "Reference-Guided Grading",
+    "short": "Giving an LLM judge a known-correct reference answer to consult while grading, anchoring its judgment instead of trusting it to know the answer.",
+    "def": "Reference-guided grading gives the <a href='pages/08-llm-as-judge.html'>LLM judge</a> a known-correct reference answer alongside the response it's scoring, so it judges by comparison rather than from its own knowledge. The point is anchoring: on tasks with definite answers — math, factual questions — an unanchored judge can be confidently wrong about the answer itself and grade a correct response as a failure; the reference removes that failure mode. It's the judge-flavored version of <a href='pages/03-types-of-evaluators.html'>reference-based evaluation</a>, and it only works where a reference can be written — open-ended tasks still need rubric-based judging.",
+    "see": ["reference-based", "ground-truth", "llm-as-judge", "rubric"]
+  },
+  "judge-alignment": {
+    "name": "Judge Alignment",
+    "short": "How closely an LLM judge's verdicts match a trusted human expert's on the same outputs — measured before the judge's scores are trusted at scale.",
+    "def": "Judge alignment is the degree to which an <a href='pages/08-llm-as-judge.html'>LLM judge's</a> verdicts match a trusted human's verdicts on the same outputs — and the process of measuring and improving that match. It's the answer to the obvious objection to LLM judging: if a fallible model does the grading, why believe the scores? You believe them only after checking the judge against expert labels on a held-out set, using agreement measures like <a href='appendices/e-agreement-metrics.html'>Cohen's kappa</a> or per-class rates rather than raw percent agreement, which flatters judges on lopsided data. Alignment is ongoing — judges get re-checked as criteria evolve. See <a href='pages/10-aligning-judges.html'>Aligning Judges with Human Experts</a>.",
+    "also": "judge validation",
+    "see": ["critique-shadowing", "inter-annotator-agreement", "principal-domain-expert", "criteria-drift"]
+  },
+  "g-eval": {
+    "name": "G-Eval",
+    "short": "An LLM-judging technique that has the judge reason step by step, fill out a scoring form, and weight scores by token probabilities for finer-grained results.",
+    "def": "G-Eval is a named LLM-judging technique that combines three pieces: the judge first generates <a href='pages/08-llm-as-judge.html'>chain-of-thought</a> evaluation steps from the criteria, then fills out a scoring form by following them, and the final score is computed by weighting the possible score <a href='pages/01-what-is-an-eval.html'>tokens</a> by the probability the model assigns each — so instead of a flat '4', you get a probability-weighted average like 3.7. The weighting exists because judges asked for a single number cluster on a few favorites; using the full probability distribution recovers finer distinctions. The catch: it needs token probabilities from the API, which not all providers expose.",
+    "see": ["llm-as-judge", "chain-of-thought", "token", "single-answer-grading"]
+  },
+  "model-graded-scorer": {
+    "name": "Model-Graded Scorer",
+    "short": "Harness terminology (e.g. in Inspect) for a scorer that calls an LLM to grade outputs — LLM-as-judge, packaged as a pluggable component.",
+    "def": "A model-graded scorer is eval-harness terminology — used by frameworks like <a href='pages/24-inspect.html'>Inspect</a> — for a <a href='pages/02-anatomy-of-an-eval.html'>scorer</a> component that calls an LLM to do the grading, as opposed to scorers that match strings or run code. It's <a href='pages/08-llm-as-judge.html'>LLM-as-judge</a> packaged as a pluggable part: the harness handles running samples and aggregating results, and you slot in a model-graded scorer with a grading prompt where deterministic checks can't judge the output. Same concept, infrastructure vocabulary — and the same obligation to <a href='pages/06-validating-the-grader.html'>validate the grader</a> applies.",
+    "see": ["grader", "llm-as-judge", "harness", "judge-alignment"]
+  }
+}

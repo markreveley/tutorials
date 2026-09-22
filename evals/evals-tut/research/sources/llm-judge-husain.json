@@ -1,0 +1,91 @@
+{
+  "id": "llm-judge-husain",
+  "citation": {
+    "authors": "Hamel Husain",
+    "title": "Using LLM-as-a-Judge For Evaluation: A Complete Guide (originally published as 'Creating a LLM-as-a-Judge That Drives Business Results')",
+    "venue": "hamel.dev (Hamel's Blog)",
+    "year": "2024 (published October 29, 2024; later retitled)",
+    "url": "https://hamel.dev/blog/posts/llm-judge/"
+  },
+  "fetched_urls": [
+    "https://hamel.dev/blog/posts/llm-judge/",
+    "http://web.archive.org/web/20241104062954/https://hamel.dev/blog/posts/llm-judge/"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Critique shadowing methodology — confirm the steps (principal domain expert, pass/fail + critiques, iterate until agreement)",
+      "verdict": "confirmed",
+      "finding": "The post names the technique 'Critique Shadowing' and lays out 7 steps: (1) Find the Principal Domain Expert; (2) Create a Dataset (diverse, structured by dimensions such as features/scenarios/personas, real + synthetic); (3) Direct the Domain Expert to Make Pass/Fail Judgments with Critiques; (4) Fix Errors (and loop back to step 3); (5) Build Your LLM as a Judge, Iteratively — using the expert's critiques as few-shot examples and iterating the prompt until convergence with the expert; (6) Perform Error Analysis; (7) Create More Specialized LLM Judges (if needed). The process is explicitly iterative with feedback loops and 'never truly ends'.",
+      "quote": "The solution is to use a technique that I call 'Critique Shadowing'. Here's how to do it, step by step. ... The Critique Shadowing process is iterative, with feedback loops. ... Build LLM Judge: Create prompt using expert examples; Test against expert judgments; Refine prompt until agreement is satisfactory. ... This process never truly ends. It repeats periodically or when material changes occur.",
+      "location": "Intro ('The Problem' section) and 'Recap of Critique Shadowing'"
+    },
+    {
+      "planned": "Argues for binary pass/fail over Likert scales — confirm reasoning",
+      "verdict": "confirmed",
+      "finding": "Confirmed. He calls 1-5 scales 'Arbitrary Scoring Systems' with unclear, subjective differences between scores. His reasons for binary pass/fail: (1) clarity and focus — forces consideration of what truly matters; (2) actionable — 'People don't know what to do with a 3 or 4'; (3) forces articulation of expectations — experts must explain why something passed/failed; (4) efficient use of resources. He also claims from experience that multi-dimension scaled metrics tend not to correlate with domain expert judgments, and he criticizes off-the-shelf metrics in eval frameworks for the same reason.",
+      "quote": "If your evaluations consist of a bunch of metrics that LLMs score on a 1-5 scale (or any other scale), you're doing it wrong. ... It's not actionable: People don't know what to do with a 3 or 4. ... Every time I've analyzed data on domain expert judgments, they tend not to correlate with these kind of metrics. ... I can guarantee you that if someone says you need to measure 8 things on a 1-5 scale, they don't know what they are looking for. They are just guessing.",
+      "location": "Sections 'Why are simple pass/fail metrics important?' and 'Don't stray from binary pass/fail judgments when starting out'"
+    },
+    {
+      "planned": "The 'find your principal domain expert' / benevolent dictator concept",
+      "verdict": "corrected",
+      "finding": "The 'Principal Domain Expert' concept is fully confirmed as Step 1: 'one (maybe two) key individuals whose judgment is crucial', with four reasons (sets the standard, captures unspoken expectations, consistency in judgment, sense of ownership) and examples (psychologist for mental-health AI, lawyer for legal AI, customer service director, lead teacher). HOWEVER, the phrase 'benevolent dictator' does NOT appear anywhere in this post (verified in both the current page and the Nov 2024 archived version). That term comes from Husain & Shankar's later work (the AI evals FAQ/course material), not this source. Cite this post for 'Principal Domain Expert' only, or attribute 'benevolent dictator' to the later source.",
+      "quote": "In most organizations there is usually one (maybe two) key individuals whose judgment is crucial for the success of your AI product. ... Many developers attempt to act as the domain expert themselves, or find a convenient proxy (ex: their superior). This is a recipe for disaster. People will have varying opinions about what is acceptable, and you can't make everyone happy. What's important is that your principal domain expert is satisfied.",
+      "location": "Step 1: Find The Principal Domain Expert"
+    },
+    {
+      "planned": "Recommended workflow for measuring judge-human agreement over time",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with important nuance. Workflow (Honeycomb example with expert Phillip Carter): send the expert a spreadsheet with the NLQ, generated query, the judge's critique, and the judge's pass/fail outcome; the expert fills out his own version with his critiques; use disagreements to improve the judge prompt; track agreement rates over time to ensure convergence. It took 'only three iterations to achieve > 90% agreement'. Crucial caveat the course must include: raw agreement worked there only because the dataset was roughly balanced (~50% failures); with imbalanced classes he explicitly recommends measuring precision and recall separately instead of raw agreement. Re-run the human review at regular intervals and whenever something material changes (e.g., a model update); after the first two iterations, focus sampling more on suspected errors plus some random sampling.",
+      "quote": "I also tracked agreement rates over time to ensure we were converging on a good prompt. ... we used agreement between the model and human evaluator because our dataset was roughly balanced (about 50% of instances were failures). However, using raw agreement is generally not recommended and can be misleading when classes are imbalanced. Instead, you should typically measure precision and recall separately. ... It took us only three iterations to achieve > 90% agreement between the LLM and Phillip.",
+      "location": "Step 5: 'Keep Iterating on the Prompt Until Convergence With Domain Expert' and 'How Often Should You Evaluate?'"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "Criteria drift: you cannot fully define evaluation criteria before grading outputs — the act of grading defines the criteria. Husain quotes Shankar et al.'s 'Who Validates the Validators?' paper directly.",
+      "quote": "to grade outputs, people need to externalize and define their evaluation criteria; however, the process of grading outputs helps them to define that very criteria. We dub this phenomenon criteria drift, and it implies that it is impossible to completely determine evaluation criteria prior to human judging of LLM outputs.",
+      "numbers": "n/a (quoted from Shankar et al., 'Who Validates the Validators?')"
+    },
+    {
+      "point": "Critiques must be detailed enough to serve as few-shot examples in the judge prompt — 'detailed enough that a new employee could understand it.' Being too terse is a common mistake. The Honeycomb judge prompt embeds expert critiques in <nlq>/<query>/<critique> tags with 'good'/'bad' outcomes.",
+      "quote": "Most importantly, the critique should be detailed enough so that you can use it in a few-shot prompt for a LLM judge. In other words, it should be detailed enough that a new employee could understand it. Being too terse is a common mistake.",
+      "numbers": "n/a"
+    },
+    {
+      "point": "Dataset sizing heuristic: start around 30 examples and keep going until no new failure modes appear, then continue until you stop learning anything new.",
+      "quote": "My heuristic is that I start with around 30 examples and keep going until I do not see any new failure modes. From there, I keep going until I'm not learning anything new.",
+      "numbers": "~30 examples to start"
+    },
+    {
+      "point": "The judge is a 'hack' to force data-looking: the real business value comes from careful examination of data and error analysis, not the judge artifact itself.",
+      "quote": "I would go as far as saying that creating a LLM judge is a nice 'hack' I use to trick people into carefully looking at their data! That's right. The real business value comes from looking at your data.",
+      "numbers": "n/a"
+    },
+    {
+      "point": "Error analysis workflow: after the judge reaches acceptable agreement, apply it to unseen data only (to avoid bias), compute failure rates segmented by dimensions (feature x scenario x persona), then hand-classify failed traces by root cause and compute the distribution to prioritize fixes. His illustrative tables show e.g. Order Tracking / No Matches / New User at 75.0% failure rate (20 examples), and a root-cause distribution over 20 failed interactions: Missing User Education 40%, Authentication/Access Issues 30%, Poor Context Handling 20%, Inadequate Error Messages 10%. (These tables are illustrative examples, not real measured data.)",
+      "quote": "You should calculate the error on unseen data only to make sure your aren't getting biased results. ... After you have classified a number of errors, you can calculate the distribution of errors by root cause.",
+      "numbers": "Illustrative: 75.0% failure rate for Order Tracking/No Matches/New User (n=20); root causes 40/30/20/10% over 20 failed interactions"
+    },
+    {
+      "point": "Common judge-prompt mistakes are mostly about examples: no critiques, extremely terse critiques, missing external context (user metadata, system info the human grader used), and insufficient diversity of examples.",
+      "quote": "Most of the mistakes I've seen in LLM judge prompts have to do with not providing good examples: Not providing any critiques. Writing extremely terse critiques. Not providing external context. ... Not providing diverse examples.",
+      "numbers": "n/a"
+    },
+    {
+      "point": "Scaling down human involvement: the expert doesn't grade every example, just a representative sample sufficient for reliable statistics; humans can't be eliminated entirely because the judge must stay aligned to a human standard. The post claims experience from helping 30+ companies set up eval systems.",
+      "quote": "Your domain expert doesn't have to inspect every single example, you just need a representative sample so you can have reliable statistics. ... I don't think you can eliminate humans completely, because the LLM still needs to be aligned to something, and that something is usually a human.",
+      "numbers": "Subtitle: 'A step-by-step guide with my learnings from 30+ AI implementations'"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "Do not cite this post under the title 'Creating a LLM-as-a-Judge That Drives Business Results' without noting it was retitled. As of June 2026 the live page is titled 'Using LLM-as-a-Judge For Evaluation: A Complete Guide'; the original title is preserved in the Nov 2024 Wayback snapshot.",
+    "Do not attribute the phrase 'benevolent dictator' to this post — it does not appear in it (checked current and archived versions). The post's term is 'Principal Domain Expert'. 'Benevolent dictator' is from Husain/Shankar's later AI-evals material.",
+    "Do not teach raw agreement as THE metric for judge-human alignment. The post explicitly warns raw agreement is misleading with imbalanced classes and recommends precision and recall separately; agreement was acceptable in the Honeycomb case only because classes were ~50/50.",
+    "The '>90% agreement in three iterations' figure is from one case study (Honeycomb Query Assistant); the post says 'Your mileage may vary depending on the complexity of the task.'",
+    "The error-rate and root-cause tables are illustrative toy examples, not empirical results — don't present those percentages as measured findings.",
+    "The post does not say binary pass/fail is forever — 'You can introduce more complexity later if needed'; the argument is to start binary."
+  ],
+  "notes_for_authors": "Full text fetched and verified directly. Published October 29, 2024; the page was later retitled from 'Creating a LLM-as-a-Judge That Drives Business Results' to 'Using LLM-as-a-Judge For Evaluation: A Complete Guide' at the same URL — cite accordingly or link the Wayback snapshot for the original title. All four planned claims hold except the 'benevolent dictator' terminology, which is not in this source. Strongest quotable material: the 1-5 scale takedown ('they don't know what they are looking for. They are just guessing.'), the criteria-drift quote from Shankar et al., the 30-example heuristic, the agreement-metric caveat (precision/recall under class imbalance), and the closing thesis that the judge is a 'hack' to make people look at their data. The Honeycomb prompt (with Phillip Carter's critiques as few-shot examples) is a complete, reproducible artifact good for a course exercise. The post also includes a Mermaid flow diagram of the process with explicit feedback loops, and a 'Do You Really Need This?' section on when to shortcut the process (indie dev who is the domain expert, cheap-to-review data)."
+}

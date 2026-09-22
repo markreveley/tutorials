@@ -1,0 +1,218 @@
+{
+  "id": "systemd",
+  "tag": "[systemd]",
+  "citation": {
+    "authors": "systemd project (freedesktop.org); Docker Inc. for the logging claims",
+    "title": "systemd(1), systemctl(1), journalctl(1), systemd.unit(5), systemd.service(5), systemd.kill(5), systemd-system.conf(5), journald.conf(5), systemd-journald.service(8), systemd-cgls(1)",
+    "venue": "freedesktop.org systemd man pages ('latest' = systemd 261.2 at fetch time); Ubuntu 24.04 manpages (systemd 255.4-1ubuntu8.17) for distro-version defaults",
+    "year": "2026",
+    "url": "https://www.freedesktop.org/software/systemd/man/latest/systemd.html"
+  },
+  "fetched_urls": [
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemctl.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/journalctl.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd-system.conf.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd-journald.service.html",
+    "https://www.freedesktop.org/software/systemd/man/latest/systemd-cgls.html",
+    "https://www.freedesktop.org/software/systemd/man/255/journald.conf.html",
+    "https://manpages.ubuntu.com/manpages/noble/en/man5/journald.conf.5.html",
+    "https://manpages.ubuntu.com/manpages/noble/en/man5/systemd-system.conf.5.html",
+    "https://manpages.ubuntu.com/manpages/noble/en/man5/systemd.kill.5.html",
+    "https://docs.docker.com/engine/logging/configure/",
+    "https://docs.docker.com/engine/logging/",
+    "https://docs.docker.com/engine/containers/multi-service_container/",
+    "https://man7.org/linux/man-pages/man5/systemd.exec.5.html",
+    "https://man7.org/linux/man-pages/man5/systemd.service.5.html"
+  ],
+  "fetched_on": "2026-09-20",
+  "access": "full",
+  "claims": [
+    {
+      "planned": "systemd is the system and service manager running as PID 1 on most mainstream distros; units (service, socket, timer, mount, target); unit file search paths /etc/systemd/system overrides /usr/lib/systemd/system",
+      "verdict": "confirmed",
+      "finding": "systemd(1): 'a system and service manager for Linux operating systems', acting as init when run as PID 1. 'On most mainstream distros' is NOT stated by the systemd docs — treat as unsourced general knowledge or drop. There are 11 unit types: service, socket, target, device, mount, automount, timer, swap, path, slice, scope. System-mode load path, highest priority first: /etc/systemd/system.control, /run/systemd/system.control, /run/systemd/transient, /run/systemd/generator.early, /etc/systemd/system ('System units created by the administrator'), /run/systemd/system ('Runtime units'), /run/systemd/generator, /usr/local/lib/systemd/system, /usr/lib/systemd/system ('System units installed by the distribution package manager'), /run/systemd/generator.late. Earlier directories override later ones, so /etc > /run > /usr/lib.",
+      "quote": "systemd is a system and service manager for Linux operating systems. When run as first process on boot (as PID 1), it acts as init system that brings up and maintains userspace services.",
+      "location": "systemd(1), Description; unit types in > Units; paths in systemd.unit(5) > Unit File Load Path, Table 1",
+      "cite_url": "https://www.freedesktop.org/software/systemd/man/latest/systemd.html"
+    },
+    {
+      "planned": "systemctl status/start/stop/enable/disable/list-units --type=service / --failed; enable ≠ start",
+      "verdict": "confirmed",
+      "finding": "enable creates the [Install] symlinks and reloads the manager; it explicitly does NOT start the unit (use --now or a separate start). disable removes the symlinks (and does not stop). status shows runtime status plus the most recent journal lines. list-units shows units in memory — by default only active, pending-job, or failed ones (--all for everything). --failed == --state=failed. -t/--type= filters by unit type. mask links the unit to /dev/null so it cannot be started at all. is-active returns exit code 0 if active.",
+      "quote": "Note that this does not have the effect of also starting any of the units being enabled. If this is desired, combine this command with the --now switch, or invoke start with appropriate arguments later.",
+      "location": "systemctl(1), Commands > Unit File Commands > enable UNIT…",
+      "cite_url": "https://www.freedesktop.org/software/systemd/man/latest/systemctl.html"
+    },
+    {
+      "planned": "journald collects stdout/stderr of services, syslog, kernel messages; journalctl -u UNIT, -b, -f, -p err, --since, -k; storage volatile (/run/log/journal) vs persistent (/var/log/journal) per Storage= setting",
+      "verdict": "corrected",
+      "finding": "Sources and flags confirmed. journald collects: kernel messages (kmsg), syslog(3) messages, native Journal API messages, stdout/stderr of service units, audit records. journalctl: -u UNIT, -b (current boot; -1 = previous), -f follow, -p LEVEL (that level AND more important; emerg 0 … debug 7), -S/--since & -U/--until, -k kernel only (implies -b), -n N (default 10), -e, -o FORMAT (short default; json available), --no-pager, --disk-usage. CORRECTION on the Storage= default — it is version-dependent: upstream 'latest' (systemd 261) says Defaults to \"persistent\" (compile-time setting); systemd 255, which is what Ubuntu 24.04 ships (255.4-1ubuntu8.17), says Defaults to \"auto\": persistent only if /var/log/journal exists, else volatile under /run/log/journal (lost at reboot). For the course's reference platform state 'auto' and cite the Ubuntu noble / v255 page.",
+      "quote": "\"auto\" behaves like \"persistent\" if the /var/log/journal directory exists, and \"volatile\" otherwise (the existence of the directory controls the storage mode). ... Defaults to \"auto\" in the default journal namespace, and \"persistent\" in all others.",
+      "location": "journald.conf(5) for systemd 255 / Ubuntu noble, Options > Storage=; sources list in systemd-journald.service(8) Description",
+      "cite_url": "https://manpages.ubuntu.com/manpages/noble/en/man5/journald.conf.5.html"
+    },
+    {
+      "planned": "Stopping a service: KillMode=control-group default, SIGTERM then SIGKILL after TimeoutStopSec (default 90s)",
+      "verdict": "confirmed",
+      "finding": "KillMode= defaults to control-group: ALL remaining processes in the unit's cgroup are killed on stop (after ExecStop=). KillSignal= defaults to SIGTERM, and systemd always follows it with SIGCONT; after TimeoutStopSec= the remaining processes get SIGKILL (FinalKillSignal= default SIGKILL; SendSIGKILL= default yes). TimeoutStopSec= itself defaults to DefaultTimeoutStopSec= from the manager config, which defaults to 90 s — so '90s' is one indirection away and a distro/admin can change it. Same values on Ubuntu 24.04's systemd 255 pages. Other KillMode values: mixed (SIGTERM to main process, SIGKILL to the whole group), process (main only, 'not recommended'), none ('strongly recommended against').",
+      "quote": "DefaultTimeoutStartSec= and DefaultTimeoutStopSec= default to 90 s in the system manager and 90 s in the user manager.",
+      "location": "systemd-system.conf(5), Timeouts and Rate Limits; KillMode in systemd.kill(5) Options ('Defaults to control-group.'); TimeoutStopSec= in systemd.service(5)",
+      "cite_url": "https://www.freedesktop.org/software/systemd/man/latest/systemd-system.conf.html"
+    },
+    {
+      "planned": "Restart= policies; services run in their own cgroup (systemd-cgls)",
+      "verdict": "confirmed",
+      "finding": "Restart= one of no (default), on-success, on-failure, on-abnormal, on-watchdog, on-abort, always. A stop/restart requested through systemd never triggers a restart. 'Clean exit' = exit code 0, or (non-oneshot) death by SIGHUP, SIGINT, SIGTERM or SIGPIPE. RestartSec= defaults to 100ms. cgroups: processes systemd spawns are placed in individual control groups named after their unit, visible under /sys/fs/cgroup/ or via systemd-cgls, which 'recursively shows the contents of the selected Linux control group hierarchy in a tree'.",
+      "quote": "Processes systemd spawns are placed in individual Linux control groups named after the unit which they belong to in the private systemd hierarchy. ... systemd uses this to effectively keep track of processes.",
+      "location": "systemd(1), Concepts; Restart= in systemd.service(5) Options; systemd-cgls(1) Description",
+      "cite_url": "https://www.freedesktop.org/software/systemd/man/latest/systemd.html"
+    },
+    {
+      "planned": "Typical Docker containers do NOT run systemd; PID 1 is the app, logs go to container stdout/stderr → docker logs (cite Docker docs for logging: json-file default driver)",
+      "verdict": "confirmed",
+      "finding": "Docker: 'A container's main running process is the ENTRYPOINT and/or CMD'; best practice one service per container; --init is called 'superior to using a full-fledged init process such as sysvinit or systemd'. docker logs shows the command's STDOUT and STDERR by default. Default logging driver is json-file, with NO log rotation by default (disk-exhaustion risk; Docker recommends the 'local' driver). With a non-file driver and dual logging disabled, docker logs may show nothing. Executed: ubuntu:24.04 image has no systemctl/journalctl, PID 1 is the given command, /var/log holds only package-manager logs; docker logs returned both the stdout and the stderr line; LogConfig.Type = json-file.",
+      "quote": "As a default, Docker uses the json-file logging driver, which caches container logs as JSON internally.",
+      "location": "Docker docs, 'Configure logging drivers' (intro); STDOUT/STDERR sentence in 'View container logs'; main process in 'Run multiple processes in a container'",
+      "cite_url": "https://docs.docker.com/engine/logging/configure/"
+    },
+    {
+      "planned": "(Added by page-13 author) Unit-file execution settings used in the page's example: ExecStart=, User=, WorkingDirectory=, Environment=, EnvironmentFile=; systemd's own warning that Environment= is unsuitable for secrets",
+      "verdict": "confirmed",
+      "finding": "systemd.service(5): ExecStart= 'Commands that are executed when this service is started. Unless Type= is oneshot, exactly one command must be given.' systemd.exec(5): User=/Group= 'Set the UNIX user or group that the processes are executed as'; for system services 'the default is \"root\"'. WorkingDirectory= 'Sets the working directory for executed processes'; if not set, defaults to the root directory for the system instance. Environment= 'Sets environment variables for executed processes'. EnvironmentFile= 'Similar to Environment=, but reads the environment variables from a text file' of newline-separated assignments. The Environment= entry carries an explicit secrets warning (quote). Fetched from man7.org (renders systemd 262~devel) on 2026-09-21 because freedesktop.org returned 403 and manpages.ubuntu.com refused connections; these settings' semantics are long-standing, but no v255-specific page was reachable. EXECUTED: the page's example unit passes `systemd-analyze verify` on Ubuntu 24.04's systemd 255 (see research/verify/13-services-and-logs.txt).",
+      "quote": "Note that environment variables are not suitable for passing secrets (such as passwords, key material, ...) to service processes. Environment variables set for a unit are exposed to unprivileged clients via D-Bus IPC, and generally not understood as being data that requires protection. Moreover, environment variables are propagated down the process tree, including across security boundaries (such as setuid/setgid executables), and hence might leak to processes that should not have access to the secret data. Use LoadCredential=, LoadCredentialEncrypted= or SetCredentialEncrypted= (see below) to pass data to unit processes securely.",
+      "location": "systemd.exec(5), Environment=; User=, Group=; WorkingDirectory=; EnvironmentFile=. systemd.service(5), ExecStart=",
+      "cite_url": "https://man7.org/linux/man-pages/man5/systemd.exec.5.html"
+    }
+  ],
+  "extra_findings": [
+    {
+      "finding": "KillMode=control-group exact text.",
+      "quote": "If set to control-group, all remaining processes in the control group of this unit will be killed on unit stop (for services: after the stop command is executed, as configured with ExecStop=).",
+      "location": "systemd.kill(5), Options > KillMode="
+    },
+    {
+      "finding": "The stop sequence: SIGTERM (+SIGCONT, optional SIGHUP), wait TimeoutStopSec, then SIGKILL.",
+      "quote": "Processes will first be terminated via SIGTERM (unless the signal to send is changed via KillSignal= or RestartKillSignal=). ... If processes still remain after ... the delay configured via the TimeoutStopSec= has passed ... the termination request is repeated with the SIGKILL signal or the signal specified via FinalKillSignal= (unless this is disabled via the SendSIGKILL= option).",
+      "location": "systemd.kill(5), Options > KillMode="
+    },
+    {
+      "finding": "SIGCONT always follows the kill signal, so stopped (SIGSTOP'd) tasks can still be terminated.",
+      "quote": "Note that, right after sending the signal specified in this setting, systemd will always send SIGCONT, to ensure that even suspended tasks can be terminated cleanly.",
+      "location": "systemd.kill(5), Options > KillSignal= ('Defaults to SIGTERM.')"
+    },
+    {
+      "finding": "Why KillMode=process/none are discouraged — processes escape lifecycle and resource management.",
+      "quote": "it is not recommended to set KillMode= to process or even none, as this allows processes to escape the service manager's lifecycle and resource management, and to remain running even while their service is considered stopped and is assumed to not consume any resources.",
+      "location": "systemd.kill(5), Options > KillMode="
+    },
+    {
+      "finding": "TimeoutStopSec= exact text: accepts seconds or spans like '5min 20s'; 'infinity' disables.",
+      "quote": "Second, it configures the time to wait for the service itself to stop. If it does not terminate in the specified time, it will be forcibly terminated by SIGKILL (see KillMode= in systemd.kill(5)). ... Defaults to DefaultTimeoutStopSec= from the manager configuration file",
+      "location": "systemd.service(5), Options > TimeoutStopSec="
+    },
+    {
+      "finding": "Contrast for the course: Docker's stop grace period is 10 s (see 'pid1'); systemd's is 90 s; both are SIGTERM-then-SIGKILL, but systemd signals the WHOLE cgroup by default while docker stop signals only the container's main process.",
+      "quote": "Defaults to control-group.",
+      "location": "systemd.kill(5), Options > KillMode= (compare docker container stop reference)"
+    },
+    {
+      "finding": "Drop-in overrides: foo.service.d/*.conf merged after the main unit file; /etc drop-ins beat /run beat /usr/lib. This is how to change a packaged unit without editing it.",
+      "quote": "Along with a unit file foo.service, a \"drop-in\" directory foo.service.d/ may exist. All files with the suffix \".conf\" from this directory will be merged in the alphanumeric order and parsed after the main unit file itself has been parsed.",
+      "location": "systemd.unit(5), Description"
+    },
+    {
+      "finding": "Load-path override rule exact text.",
+      "quote": "Unit files found in directories listed earlier override files with the same name in directories lower in the list.",
+      "location": "systemd.unit(5), Unit File Load Path"
+    },
+    {
+      "finding": "systemctl status, exact text.",
+      "quote": "Show runtime status information about the whole system or about one or more units followed by most recent log data from the journal.",
+      "location": "systemctl(1), Commands > Unit Commands > status"
+    },
+    {
+      "finding": "systemctl list-units default filter.",
+      "quote": "By default, only units which are active, have pending jobs, or have failed are shown; this can be changed with option --all.",
+      "location": "systemctl(1), Commands > list-units"
+    },
+    {
+      "finding": "systemctl stop succeeds even if ExecStop fails, 'because the manager will still forcibly terminate the unit'. mask: 'link these unit files to /dev/null, making it impossible to start them'. --failed: 'List units in failed state. This is equivalent to --state=failed.'",
+      "quote": "Mask one or more units, as specified on the command line. This will link these unit files to /dev/null, making it impossible to start them. This is a stronger version of disable",
+      "location": "systemctl(1), Commands > mask; stop; Options > --failed"
+    },
+    {
+      "finding": "What journald collects, exact list.",
+      "quote": "Kernel log messages, via kmsg; Simple system log messages, via the libc syslog(3) call; Structured system log messages via the native Journal API ...; Standard output and standard error of service units ...; Audit records, originating from the kernel audit subsystem",
+      "location": "systemd-journald.service(8), Description"
+    },
+    {
+      "finding": "Service stdout/stderr go to the journal by default; stream is split into records at newlines.",
+      "quote": "The systemd service manager invokes all service processes with standard output and standard error connected to the journal by default. This behaviour may be altered via the StandardOutput=/StandardError= unit file settings",
+      "location": "systemd-journald.service(8), Stream logging"
+    },
+    {
+      "finding": "Who may read the journal: root and members of systemd-journal, adm, wheel; every user can read their own per-user journal.",
+      "quote": "All users are granted access to their private per-user journals. However, by default, only root and users who are members of a few special groups are granted access to the system journal and the journals of other users. Members of the groups \"systemd-journal\", \"adm\", and \"wheel\" can read all journal files.",
+      "location": "journalctl(1), Description"
+    },
+    {
+      "finding": "journalctl -p semantics and level names.",
+      "quote": "The log levels are the usual syslog log levels as documented in syslog(3), i.e. \"emerg\" (0), \"alert\" (1), \"crit\" (2), \"err\" (3), \"warning\" (4), \"notice\" (5), \"info\" (6), \"debug\" (7). If a single log level is specified, all messages with this log level or a lower (hence more important) log level are shown.",
+      "location": "journalctl(1), Filtering Options > -p, --priority="
+    },
+    {
+      "finding": "journalctl -b, -k, -f, --since exact behaviours: -b with no argument = current boot, -1 = boot before last... ; -k 'Show only kernel messages ... implies --boot=0'; -f 'Show only the most recent journal entries, and continuously print new entries'; --since accepts '2012-10-30 18:17:16', 'yesterday', 'today', 'now', and relative times. Output is paged through less by default (--no-pager to disable — essential in scripts and agent transcripts).",
+      "quote": "Show messages from a specific boot. This will add a match for \"_BOOT_ID=\". The argument may be empty, in which case logs for the current boot will be shown.",
+      "location": "journalctl(1), Filtering Options > -b, --boot"
+    },
+    {
+      "finding": "journald rate limiting: default 10000 messages per 30 s per service; excess messages are DROPPED (with a notice) — a noisy service can lose log lines.",
+      "quote": "If, in the time interval defined by RateLimitIntervalSec=, more messages than specified in RateLimitBurst= are logged by a service, all further messages within the interval are dropped until the interval is over. ... Defaults to 10000 messages in 30s.",
+      "location": "journald.conf(5), Options > RateLimitIntervalSec=, RateLimitBurst="
+    },
+    {
+      "finding": "Upstream latest Storage= default (for contrast with Ubuntu 24.04's 'auto').",
+      "quote": "Defaults to \"persistent\" in the default journal namespace (this value is determined at compilation time), and \"persistent\" in all others.",
+      "location": "journald.conf(5) 'latest' (systemd 261.2), Options > Storage=",
+      "cite_url": "https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html"
+    },
+    {
+      "finding": "Volatile vs persistent locations, exact text.",
+      "quote": "The journal service stores log data either persistently below /var/log/journal or in a volatile way below /run/log/journal/ (in the latter case, it is lost at reboot).",
+      "location": "systemd-journald.service(8), Description"
+    },
+    {
+      "finding": "Restart= exact definition of on-failure.",
+      "quote": "If set to on-failure, the service will be restarted when the process exits with a non-zero exit code, is terminated by a signal (including on core dump, but excluding the aforementioned four signals), when an operation (such as service reload) times out, and when the configured watchdog timeout is triggered.",
+      "location": "systemd.service(5), Options > Restart="
+    },
+    {
+      "finding": "Docker json-file has no rotation by default.",
+      "quote": "By default, no log-rotation is performed. As a result, log-files stored by the default json-file logging driver can cause a significant amount of disk space to be used for containers that generate much output, which can lead to disk space exhaustion.",
+      "location": "Docker docs, 'Configure logging drivers' (Tip)",
+      "cite_url": "https://docs.docker.com/engine/logging/configure/"
+    },
+    {
+      "finding": "docker logs = the main command's stdout+stderr.",
+      "quote": "By default, docker logs shows the command's STDOUT and STDERR.",
+      "location": "Docker docs, 'View container logs'",
+      "cite_url": "https://docs.docker.com/engine/logging/"
+    },
+    {
+      "finding": "EXECUTED: a stock ubuntu:24.04 container has no systemd tooling; PID 1 is the command; docker logs captures both streams; driver json-file.",
+      "quote": "$ docker run --rm ubuntu:24.04 sh -c 'command -v systemctl journalctl || echo \"systemctl/journalctl: not installed\"; ps -p 1 -o pid,comm; ls /var/log | head -20'\nsystemctl/journalctl: not installed\n  PID COMMAND\n    1 sh\nalternatives.log\napt\nbootstrap.log\nbtmp\ndpkg.log\nfaillog\nlastlog\nwtmp\n$ docker run -d --name lt-R2-log ubuntu:24.04 sh -c 'echo to-stdout; echo to-stderr >&2; sleep 1'; sleep 2; docker logs lt-R2-log; docker inspect lt-R2-log --format '{{.HostConfig.LogConfig.Type}}'\nto-stderr\nto-stdout\njson-file",
+      "location": "executed ubuntu:24.04 (Docker 28.1.1)"
+    },
+    {
+      "finding": "EXECUTED: Ubuntu 24.04's systemd package version.",
+      "quote": "$ docker run --rm ubuntu:24.04 sh -c 'apt-get update -qq; apt-cache policy systemd | head -3'\nsystemd:\n  Installed: (none)\n  Candidate: 255.4-1ubuntu8.17",
+      "location": "executed ubuntu:24.04"
+    }
+  ],
+  "teaching_notes": "systemd cannot be run in the course's Docker lab, so pages must describe or quote rather than show invented output (AUTHORING rule). Version trap: freedesktop.org 'latest' is systemd 261, Ubuntu 24.04 ships 255 — cite manpages.ubuntu.com/noble or freedesktop.org/software/systemd/man/255/ for defaults. The one default that actually differs is journald Storage= (255: auto; latest: persistent). TimeoutStopSec '90s' and KillMode 'control-group' are identical in both. Two precisions: (1) '90 s' is DefaultTimeoutStopSec=, which TimeoutStopSec= inherits; (2) systemd kills the whole cgroup on stop, which is the robust version of what docker stop does to a single PID — a nice bridge to the cgroups page (cgroup.kill in 'oom'). 'Most mainstream distros use systemd' is not in these docs; leave it unsourced-general or find a distro source. journalctl pages by default — always show --no-pager in scripted examples. Note docker logs ordering across stdout/stderr is not guaranteed (our run printed stderr first)."
+}

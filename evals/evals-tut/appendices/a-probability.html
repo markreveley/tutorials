@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Probability Basics · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Appendix A · Math &amp; Stats</p>
+    <h1>Probability Basics</h1>
+    <p class="lede">Everything in eval statistics — error bars, significance tests, pass@k — rests on a handful of probability ideas. This appendix builds them from zero, using one running example: a model that answers each eval question correctly with probability 0.7.</p>
+
+    <h2 id="what-probability-means">What probability means</h2>
+
+    <p>Suppose you have an <span class="term" data-g="eval">eval</span> — a fixed set of questions you put to a model, each graded pass or fail. Take one question from it. You run the model on that question over and over (with temperature above zero, the model's output varies from run to run). Out of the first 10 attempts it passes 8. Out of 100, 73. Out of 10,000, 7,012. The fraction of passes keeps wobbling, but less and less, settling toward some value — say 0.7.</p>
+
+    <p>That settling point is what we'll mean by <strong>probability</strong>: the long-run fraction of times an outcome occurs if you could repeat the experiment indefinitely under the same conditions. "This model answers this question correctly with probability 0.7" means: repeat it forever, and 70% of attempts pass. There are deeper philosophical readings of probability, but for this course the long-run-frequency reading is all you need.</p>
+
+    <p>Two immediate consequences. First, probabilities live between 0 (never happens) and 1 (always happens). Second — and this is the part people forget — a probability tells you almost nothing about any <em>single</em> attempt. With p = 0.7, the next attempt might pass or fail, and nothing about the number 0.7 tells you which. Probability is a statement about the aggregate, not the instance.</p>
+
+    <div class="keyidea"><span class="label">Key idea</span> Probability = long-run frequency. It describes what happens over many repetitions, never what happens next. Every statistical tool in this course is a way of reasoning backward from a small number of repetitions to that long-run frequency.</div>
+
+    <h2 id="random-variables">Random variables</h2>
+
+    <p>A <span class="term" data-g="random-variable">random variable</span> is just a number whose value depends on chance. Despite the intimidating name, that's the whole definition. "The number showing on a die I'm about to roll" is a random variable. "The number of questions a model will pass on tomorrow's eval run" is a random variable. Before the experiment happens, the value is unknown; after, it's an ordinary number.</p>
+
+    <p>Here is the single most important reframe in this course: <strong>the score of an eval run is a random variable.</strong> When you run a 100-question eval and get 73%, that 73% is one realized value of a quantity that could have come out differently — different sampled outputs, different luck. Run it again and you might get 69% or 76% with nothing about the model having changed. Module 5 (<a href="../pages/16-error-bars.html">Error Bars on Eval Scores</a>) is entirely about taking this seriously.</p>
+
+    <p>We'll write random variables with capital letters. For our running example, let <em>X</em> be the result of the model attempting one question: <em>X</em> = 1 if it passes, <em>X</em> = 0 if it fails.</p>
+
+    <h2 id="bernoulli-trials">Bernoulli trials and independence</h2>
+
+    <p>A random variable that can only be 0 or 1 — fail or pass — is called a <span class="term" data-g="bernoulli-trial">Bernoulli trial</span>. It's the simplest random variable there is, and it's everywhere in evals: every binary-graded question, every unit test that passes or fails, every judge verdict of "acceptable / not acceptable" is a Bernoulli trial. A Bernoulli trial is fully described by one number, the probability of a 1. We write <em>X</em> ~ Bernoulli(<em>p</em>), and in our running example <em>p</em> = 0.7.</p>
+
+    <p>Now take a whole eval: <em>n</em> questions, each one a Bernoulli trial. To say anything about the total score we need one more concept. Two trials are <span class="term" data-g="independence">independent</span> if the outcome of one tells you nothing about the outcome of the other — knowing the first question passed doesn't change the 0.7 probability for the second. Coin flips are independent; whether it rains today and whether it rains tomorrow are not (weather persists).</p>
+
+    <p>Independence is an <em>assumption</em>, and in evals it's sometimes false in ways that matter. If your eval contains five questions about the same document, a model that misreads that document will likely fail all five together — those failures are correlated, not independent. Statistics built on an independence assumption will then overstate how much you know (this is why <a href="../pages/16-error-bars.html">clustered standard errors</a> exist). For this appendix we'll assume independence holds; just remember it's something you assert, not something you get for free.</p>
+
+    <h2 id="expectation">Expectation: the long-run average</h2>
+
+    <p>The <span class="term" data-g="expectation">expectation</span> (or expected value) of a random variable, written E[<em>X</em>], is its long-run average: the value you'd get by averaging infinitely many repetitions. For a variable taking finitely many values, you compute it as a weighted average — each possible value times its probability, summed up.</p>
+
+    <p>For our Bernoulli trial with <em>p</em> = 0.7:</p>
+
+    <div class="math">E[X] = 1 × 0.7 + 0 × 0.3 = 0.7 = p</div>
+
+    <p>In words: a pass/fail variable's long-run average is just its pass probability. This tidy fact is why pass <em>rates</em> and pass <em>probabilities</em> are interchangeable: the fraction of 1s you observe over many trials converges to <em>p</em>.</p>
+
+    <p>Note that E[<em>X</em>] = 0.7 even though <em>X</em> itself can never equal 0.7 — it's always exactly 0 or exactly 1. "Expected value" does not mean "the value you expect on any given trial"; it means the average over many trials. The name is genuinely misleading and you just have to get used to it.</p>
+
+    <p><strong>Linearity of expectation.</strong> Expectations add, always: E[<em>X</em> + <em>Y</em>] = E[<em>X</em>] + E[<em>Y</em>]. In plain words, the long-run average of a sum is the sum of the long-run averages. Remarkably, this holds whether or not <em>X</em> and <em>Y</em> are independent — averages don't care about correlation. So if a model attempts 10 questions, each with pass probability 0.7, the expected number of passes is 0.7 + 0.7 + … + 0.7 = 7, no independence required. Linearity is the workhorse behind almost every formula in Appendices <a href="b-sampling.html">B</a> and <a href="d-combinatorics-pass-at-k.html">D</a>.</p>
+
+    <h2 id="variance">Variance and standard deviation: spread</h2>
+
+    <p>The expectation tells you where outcomes center; it says nothing about how far they scatter. Two evals could both average 70% while one swings between 60% and 80% and the other barely moves. The standard measure of scatter is <span class="term" data-g="variance">variance</span>: the average <em>squared</em> distance between the variable and its expectation.</p>
+
+    <div class="math">Var(X) = E[(X − E[X])<sup>2</sup>]</div>
+
+    <p>In words: take how far each outcome lands from the long-run average, square it (so misses in either direction count positively), and average those squared misses. For a Bernoulli(<em>p</em>) variable this works out to a famous closed form. With <em>p</em> = 0.7, the expectation is 0.7; a pass (value 1) misses it by 0.3, a fail (value 0) misses it by 0.7. Weighting each squared miss by its probability:</p>
+
+    <div class="math">Var(X) = 0.7 × (1 − 0.7)<sup>2</sup> + 0.3 × (0 − 0.7)<sup>2</sup> = 0.7 × 0.09 + 0.3 × 0.49 = 0.063 + 0.147 = 0.21</div>
+
+    <p>And in general:</p>
+
+    <div class="math">Var(X) = p(1 − p)</div>
+
+    <p>In words: a pass/fail variable's variance is the pass probability times the fail probability. Check it on our example: 0.7 × 0.3 = 0.21. ✓</p>
+
+    <p>The formula p(1 − p) is worth staring at. It equals 0 when <em>p</em> = 0 or <em>p</em> = 1 — if the model always fails or always passes, there's no scatter at all, every trial is identical. It's largest at <em>p</em> = 0.5, where it equals 0.25. That's the intuition: <em>p</em> = 0.5 is maximum uncertainty — a coin flip, passes and fails equally likely, outcomes as unpredictable as a binary outcome can be. The further <em>p</em> gets from 0.5 in either direction, the more predictable each trial becomes, and the variance shrinks. One practical consequence: eval scores near 50% are the noisiest, run to run, of any score.</p>
+
+    <p>Variance has awkward units — it's in <em>squared</em> passes. Taking the square root fixes that. The <span class="term" data-g="standard-deviation">standard deviation</span> is σ = √Var(<em>X</em>), and it lives on the same scale as the variable itself, which makes it the number you can actually picture: roughly, the typical distance of an outcome from the average. For our single question, σ = √0.21 ≈ 0.458.</p>
+
+    <h2 id="binomial-distribution">The binomial distribution</h2>
+
+    <p>Now run the whole eval. Let <em>S</em> be the total number of passes across <em>n</em> independent questions, each Bernoulli(<em>p</em>). The probability of each possible total — P(<em>S</em> = 0), P(<em>S</em> = 1), …, P(<em>S</em> = <em>n</em>) — follows the <span class="term" data-g="binomial-distribution">binomial distribution</span>. The formula: there are C(<em>n</em>, <em>k</em>) different ways to choose <em>which</em> <em>k</em> questions pass (C(<em>n</em>, <em>k</em>) counts combinations; see <a href="d-combinatorics-pass-at-k.html">Appendix D</a>), and each particular pattern of <em>k</em> passes and <em>n</em> − <em>k</em> fails has probability <em>p</em><sup>k</sup>(1 − <em>p</em>)<sup>n−k</sup> by independence. So:</p>
+
+    <div class="math">P(S = k) = C(n, k) × p<sup>k</sup> × (1 − p)<sup>n−k</sup></div>
+
+    <p>In words: the chance of exactly <em>k</em> passes is the number of ways to place them, times the probability of any one placement. Its mean and variance follow directly from the single-trial results: linearity of expectation gives the mean, and independence lets the single-trial variances add up the same way.</p>
+
+    <div class="math">E[S] = np &nbsp;&nbsp;&nbsp;&nbsp; Var(S) = np(1 − p)</div>
+
+    <p>In words: the expected number of passes is the per-question pass probability times the number of questions, and the spread around that grows with both <em>n</em> and the per-question uncertainty p(1 − p).</p>
+
+    <div class="card">
+      <p><strong>Worked example: a 10-question eval, p = 0.7.</strong> Our model takes a 10-question eval; each question independently passes with probability 0.7. Let <em>S</em> be the number it gets right.</p>
+      <p><em>Mean:</em> E[<em>S</em>] = 10 × 0.7 = <strong>7</strong>. <em>Variance:</em> Var(<em>S</em>) = 10 × 0.7 × 0.3 = <strong>2.1</strong>. <em>Standard deviation:</em> σ = √2.1 ≈ <strong>1.45</strong>. So a typical run lands around 7 passes, give or take about a question and a half.</p>
+      <p><em>Probability of exactly 7 passes:</em> there are C(10, 7) = 120 ways to choose which 7 questions pass. Each such pattern has probability 0.7<sup>7</sup> × 0.3<sup>3</sup> = 0.0823543 × 0.027 ≈ 0.0022236. So</p>
+      <div class="math">P(S = 7) = 120 × 0.0022236 ≈ 0.267</div>
+      <p>The single most likely outcome — the true score, 70% — happens barely a quarter of the time. The same arithmetic for the neighbors gives P(<em>S</em> = 8) = 45 × 0.7<sup>8</sup> × 0.3<sup>2</sup> = 45 × 0.05764801 × 0.09 ≈ 0.233 and P(<em>S</em> = 6) = 210 × 0.7<sup>6</sup> × 0.3<sup>4</sup> = 210 × 0.117649 × 0.0081 ≈ 0.200. Roughly a 30% chance the run reports something outside 60–80% entirely.</p>
+    </div>
+
+    <figure>
+    <div class="diagram">Binomial distribution: n = 10 questions, p = 0.7
+(one # ≈ 1% probability)
+
+ passes │
+    0–2 │  &lt; 0.2% combined
+      3 │#  0.9%
+      4 │####  3.7%
+      5 │##########  10.3%
+      6 │####################  20.0%
+      7 │###########################  26.7%   ← mean np = 7
+      8 │#######################  23.3%
+      9 │############  12.1%
+     10 │###  2.8%</div>
+    <figcaption>All possible scores on the 10-question eval and how often each occurs. The distribution centers on 7 but spreads widely — scores of 5 (50%) to 9 (90%) all occur with meaningful probability from the same model.</figcaption>
+    </figure>
+
+    <h2 id="why-this-matters">Why this matters for evals</h2>
+
+    <p>Look at that diagram again and let it sink in: a model whose true per-question ability is exactly 70% will report 50% on one run in ten, and 90% or better about one run in seven. Nothing changed between runs except luck. With more questions the spread narrows — relative to the maximum score, the standard deviation shrinks like 1/√n — but it never reaches zero, and small evals (a few dozen <span class="term" data-g="sample">samples</span> is common in practice) are far noisier than people's intuitions suggest.</p>
+
+    <div class="pitfall"><span class="label">Pitfall</span> Treating a single eval run's score as <em>the</em> score. "Model A got 73%, model B got 70%, so A is better" is exactly the mistake this appendix should inoculate you against: on our 10-question eval, two runs of the <em>same</em> model report different scores 81% of the time, and differ by 20 percentage points or more nearly half the time (46%). A single score is one draw from a distribution. Before you compare scores, you need to know how wide that distribution is — that's what error bars are for.</div>
+
+    <p>Where to go from here. <a href="b-sampling.html">Appendix B</a> turns this around: given one observed score, how do you estimate the underlying <em>p</em> and quantify your uncertainty about it (standard errors, confidence intervals)? Then <a href="../pages/16-error-bars.html">Module 5</a> applies the machinery to real eval reporting — including what to do when the independence assumption breaks.</p>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

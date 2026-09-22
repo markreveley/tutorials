@@ -1,0 +1,159 @@
+{
+ "id": "capabilities-7",
+ "tag": "[capabilities(7)]",
+ "citation": {
+  "authors": "Linux man-pages project (Michael Kerrisk et al.)",
+  "title": "capabilities(7) — overview of Linux capabilities",
+  "venue": "Linux man-pages 6.19, man7.org rendering",
+  "year": "2026",
+  "url": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man7/capabilities.7.html",
+  "https://man7.org/linux/man-pages/man5/proc_pid_status.5.html",
+  "https://man7.org/linux/man-pages/man1/capsh.1.html",
+  "https://docs.docker.com/engine/containers/run/",
+  "https://docs.docker.com/engine/security/",
+  "https://docs.docker.com/reference/cli/docker/container/run/"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "Linux divides the privileges traditionally associated with superuser into distinct units (capabilities) that can be independently enabled/disabled, per-thread",
+   "verdict": "confirmed",
+   "finding": "Verbatim. 'Starting with Linux 2.2'. The preceding paragraph gives the traditional model: privileged processes (effective UID 0) 'bypass all kernel permission checks'.",
+   "quote": "Starting with Linux 2.2, Linux divides the privileges traditionally associated with superuser into distinct units, known as capabilities, which can be independently enabled and disabled. Capabilities are a per-thread attribute.",
+   "location": "capabilities(7), DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
+  },
+  {
+   "planned": "CAP_SYS_ADMIN is overloaded ('the new root'), includes mount(2), etc. — exact man page wording",
+   "verdict": "confirmed",
+   "finding": "Both phrases are in the man page. The CAP_SYS_ADMIN entry opens 'Note: this capability is overloaded; see Notes to kernel developers below.' Its first bullet: 'Perform a range of system administration operations including: quotactl(2), mount(2), umount(2), pivot_root(2), swapon(2), swapoff(2), sethostname(2), and setdomainname(2)'. Other bullets relevant to containers: 'employ CLONE_* flags that create new namespaces with clone(2) and unshare(2) (but, since Linux 3.8, creating user namespaces does not require any capability)'; 'call setns(2) (requires CAP_SYS_ADMIN in the target namespace)'; perform the same BPF operations as CAP_BPF; 'override RLIMIT_NPROC resource limit'. The 'new root' phrase is in 'Notes to kernel developers' and is hedged: 'It can plausibly be called \"the new root\"'. The bullet begins: 'Don't choose CAP_SYS_ADMIN if you can possibly avoid it!' and ends 'Don't make the problem worse.'",
+   "quote": "A vast proportion of existing capability checks are associated with this capability [...]. It can plausibly be called \"the new root\", since on the one hand, it confers a wide range of powers, and on the other hand, its broad scope means that this is the capability that is required by many privileged programs.",
+   "location": "capabilities(7), 'Notes to kernel developers'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
+  },
+  {
+   "planned": "What these allow: CAP_NET_RAW (raw sockets → ping, packet sniffing), CAP_NET_ADMIN, CAP_NET_BIND_SERVICE (ports <1024), CAP_DAC_OVERRIDE, CAP_DAC_READ_SEARCH, CAP_CHOWN, CAP_KILL, CAP_SETUID, CAP_SYS_PTRACE, CAP_SYS_MODULE, CAP_SYS_CHROOT, CAP_MKNOD",
+   "verdict": "confirmed",
+   "finding": "Exact man-page definitions (man-pages 6.19): CAP_NET_RAW — 'Use RAW and PACKET sockets; bind to any address for transparent proxying.' (NB: the man page does NOT mention ping or sniffing; those are consequences — Docker's security page glosses dropping it as 'Deny access to raw sockets (to prevent packet spoofing)'. Treat 'ping' as illustration, not citation.) CAP_NET_ADMIN — 'Perform various network-related operations: interface configuration; administration of IP firewall, masquerading, and accounting; modify routing tables; bind to any address for transparent proxying; set type-of-service (TOS); clear driver statistics; set promiscuous mode; enabling multicasting; ...'. CAP_NET_BIND_SERVICE — 'Bind a socket to Internet domain privileged ports (port numbers less than 1024).' CAP_DAC_OVERRIDE — 'Bypass file read, write, and execute permission checks. (DAC is an abbreviation of \"discretionary access control\".)' CAP_DAC_READ_SEARCH — 'Bypass file read permission checks and directory read and execute permission checks; invoke open_by_handle_at(2); use the linkat(2) AT_EMPTY_PATH flag ...'. CAP_CHOWN — 'Make arbitrary changes to file UIDs and GIDs (see chown(2)).' CAP_KILL — 'Bypass permission checks for sending signals (see kill(2)). This includes use of the ioctl(2) KDSIGACCEPT operation.' CAP_SETUID — 'Make arbitrary manipulations of process UIDs (setuid(2), setreuid(2), setresuid(2), setfsuid(2)); forge UID when passing socket credentials via UNIX domain sockets; write a user ID mapping in a user namespace'. CAP_SYS_PTRACE — 'Trace arbitrary processes using ptrace(2); ... transfer data to or from the memory of arbitrary processes using process_vm_readv(2) and process_vm_writev(2); inspect processes using kcmp(2)' (the current page also lists inspecting other processes' sensitive /proc entries such as /proc/pid/maps, /proc/pid/mem). CAP_SYS_MODULE — 'Load and unload kernel modules (see init_module(2) and delete_module(2))'. CAP_SYS_CHROOT — 'Use chroot(2); change mount namespaces using setns(2).' CAP_MKNOD (since Linux 2.4) — 'Create special files using mknod(2).'",
+   "quote": "CAP_NET_RAW • Use RAW and PACKET sockets; • bind to any address for transparent proxying. [...] CAP_NET_BIND_SERVICE Bind a socket to Internet domain privileged ports (port numbers less than 1024). [...] CAP_DAC_OVERRIDE Bypass file read, write, and execute permission checks.",
+   "location": "capabilities(7), 'Capabilities list'",
+   "cite_url": "https://man7.org/linux/man-pages/man7/capabilities.7.html"
+  },
+  {
+   "planned": "Capability sets: permitted, effective, inheritable, bounding, ambient; /proc/PID/status CapEff etc; capsh --decode / getpcaps",
+   "verdict": "confirmed",
+   "finding": "The five thread sets are in capabilities(7) 'Thread capability sets': Permitted ('a limiting superset for the effective capabilities that the thread may assume'; once dropped it 'can never reacquire that capability' short of exec'ing a set-user-ID-root or file-capability program), Inheritable, Effective ('the set of capabilities used by the kernel to perform permission checks for the thread'), Bounding (per-thread since 2.6.25; limits what execve can grant), Ambient (since Linux 4.3). SOURCE LOCATION NOTE: the /proc/PID/status field names are NOT described in capabilities(7); they are in proc_pid_status(5): 'CapInh, CapPrm, CapEff — Masks (expressed in hexadecimal) of capabilities enabled in inheritable, permitted, and effective sets', 'CapBnd — Capability bounding set', 'CapAmb — Ambient capability set'. `capsh --decode=N` is in capsh(1); getpcaps(8) appears only in capabilities(7) SEE ALSO. On Ubuntu/Debian both come from package libcap2-bin (executed); on Alpine `apk add libcap` provides capsh (executed).",
+   "quote": "Effective: This is the set of capabilities used by the kernel to perform permission checks for the thread.",
+   "location": "capabilities(7), 'Thread capability sets'; field names: proc_pid_status(5); --decode: capsh(1)",
+   "cite_url": "https://man7.org/linux/man-pages/man5/proc_pid_status.5.html"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "The traditional model that capabilities replace: UID 0 bypasses all permission checks.",
+   "quote": "Privileged processes bypass all kernel permission checks, while unprivileged processes are subject to full permission checking based on the process's credentials (usually: effective UID, effective GID, and supplementary group list).",
+   "location": "capabilities(7), DESCRIPTION"
+  },
+  {
+   "finding": "The stated goal of capabilities (useful one-liner).",
+   "quote": "The goal of capabilities is divide the power of superuser into pieces, such that if a program that has one or more capabilities is compromised, its power to do damage to the system would be less than the same program running with root privilege.",
+   "location": "capabilities(7), 'Notes to kernel developers'"
+  },
+  {
+   "finding": "Dropping from the permitted set is one-way.",
+   "quote": "If a thread drops a capability from its permitted set, it can never reacquire that capability (unless it execve(2)s either a set-user-ID-root program, or a program whose associated file capabilities grant that capability).",
+   "location": "capabilities(7), 'Thread capability sets' → Permitted"
+  },
+  {
+   "finding": "Bounding set: caps what execve can ever grant; inherited across fork, preserved across execve. This is the set Docker trims — a capability absent from CapBnd cannot be regained even by a setuid-root binary.",
+   "quote": "The capability bounding set is a security mechanism that can be used to limit the capabilities that can be gained during an execve(2). [...] The bounding set is inherited at fork(2) from the thread's parent, and is preserved across an execve(2).",
+   "location": "capabilities(7), 'Capability bounding set'"
+  },
+  {
+   "finding": "Other definitions a Docker page will need (all in Docker's default set): CAP_FOWNER, CAP_FSETID, CAP_SETGID, CAP_SETPCAP, CAP_SETFCAP, CAP_AUDIT_WRITE.",
+   "quote": "CAP_FOWNER • Bypass permission checks on operations that normally require the filesystem UID of the process to match the UID of the file (e.g., chmod(2), utime(2)) [...] CAP_SETFCAP (since Linux 2.6.24) Set arbitrary capabilities on a file. [...] CAP_AUDIT_WRITE (since Linux 2.6.11) Write records to kernel auditing log.",
+   "location": "capabilities(7), 'Capabilities list'"
+  },
+  {
+   "finding": "Capabilities NOT in Docker's default set that matter for evals: CAP_SYS_TIME (set the clock), CAP_SYS_BOOT (reboot, kexec_load), CAP_SYS_RAWIO (/dev/mem, I/O ports).",
+   "quote": "CAP_SYS_TIME Set system clock (settimeofday(2), stime(2), adjtimex(2)); set real-time (hardware) clock. [...] CAP_SYS_BOOT Use reboot(2) and kexec_load(2).",
+   "location": "capabilities(7), 'Capabilities list'"
+  },
+  {
+   "finding": "Technical limit: capability sets are 64-bit. /proc/sys/kernel/cap_last_cap gives the highest capability number the running kernel knows (executed on this host: 40, i.e. 41 capabilities, the last being cap_checkpoint_restore).",
+   "quote": "There is also a technical limit: the size of capability sets is currently limited to 64 bits. [...] Since Linux 3.2, the file /proc/sys/kernel/cap_last_cap exposes the numerical value of the highest capability supported by the running kernel",
+   "location": "capabilities(7), 'Notes to kernel developers' and 'Thread capability sets'"
+  },
+  {
+   "finding": "Docker's DEFAULT capability set, as documented today — exactly 14: AUDIT_WRITE, CHOWN, DAC_OVERRIDE, FOWNER, FSETID, KILL, MKNOD, NET_BIND_SERVICE, NET_RAW, SETFCAP, SETGID, SETPCAP, SETUID, SYS_CHROOT. (Matches the executed CapEff mask 00000000a80425fb.) Not granted by default include SYS_ADMIN, NET_ADMIN, SYS_PTRACE, SYS_MODULE, SYS_TIME, SYS_BOOT, DAC_READ_SEARCH, BPF, PERFMON.",
+   "quote": "By default, Docker has a default list of capabilities that are kept. The following table lists the Linux capability options which are allowed by default and can be dropped.",
+   "location": "Docker Docs, Running containers, 'Runtime privilege and Linux capabilities'",
+   "cite_url": "https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities"
+  },
+  {
+   "finding": "Docker describes its approach as an allowlist and recommends dropping everything not needed.",
+   "quote": "By default Docker drops all capabilities except those needed, an allowlist instead of a denylist approach. [...] The best practice for users would be to remove all capabilities except those explicitly required for their processes.",
+   "location": "Docker Docs, Docker Engine security, 'Linux kernel capabilities'",
+   "cite_url": "https://docs.docker.com/engine/security/#linux-kernel-capabilities"
+  },
+  {
+   "finding": "Docker: root in a container is weaker than real root.",
+   "quote": "containers can run with a reduced capability set; meaning that \"root\" within a container has much less privileges than the real \"root\". For instance, it is possible to: - Deny all \"mount\" operations - Deny access to raw sockets (to prevent packet spoofing) - Deny access to some filesystem operations, like creating new device nodes [...] - Deny module loading",
+   "location": "Docker Docs, Docker Engine security, 'Linux kernel capabilities'",
+   "cite_url": "https://docs.docker.com/engine/security/#linux-kernel-capabilities"
+  },
+  {
+   "finding": "--cap-add/--cap-drop accept ALL and an optional CAP_ prefix; for network changes Docker recommends --cap-add=NET_ADMIN rather than --privileged.",
+   "quote": "Both flags support the value `ALL` [...] The `--cap-add` and `--cap-drop` flags accept capabilities to be specified with a `CAP_` prefix. [...] For interacting with the network stack, instead of using `--privileged` they should use `--cap-add=NET_ADMIN` to modify the network interfaces.",
+   "location": "Docker Docs, Running containers, 'Runtime privilege and Linux capabilities'",
+   "cite_url": "https://docs.docker.com/engine/containers/run/#runtime-privilege-and-linux-capabilities"
+  },
+  {
+   "finding": "What --privileged does — the documented 7-item list.",
+   "quote": "The `--privileged` flag gives the following capabilities to a container: - Enables all Linux kernel capabilities - Disables the default seccomp profile - Disables the default AppArmor profile - Disables the SELinux process label - Grants access to all host devices - Makes `/sys` read-write - Makes cgroups mounts read-write",
+   "location": "Docker Docs, docker container run reference, 'Escalate container privileges (--privileged)'",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#privileged"
+  },
+  {
+   "finding": "Docker's warning about --privileged.",
+   "quote": "A container with `--privileged` is not a securely sandboxed process. Containers in this mode can get a root shell on the host and take control over the system.",
+   "location": "Docker Docs, docker container run reference, 'Escalate container privileges (--privileged)'",
+   "cite_url": "https://docs.docker.com/reference/cli/docker/container/run/#privileged"
+  },
+  {
+   "finding": "EXECUTED — default container: Permitted = Effective = Bounding = a80425fb; Inheritable and Ambient empty.",
+   "quote": "$ docker run --rm ubuntu:24.04 grep -E '^Cap' /proc/self/status\nCapInh:\t0000000000000000\nCapPrm:\t00000000a80425fb\nCapEff:\t00000000a80425fb\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — decoding the default mask gives exactly Docker's 14 documented capabilities (capsh from libcap2-bin; apt-get install output omitted).",
+   "quote": "$ capsh --decode=00000000a80425fb\n0x00000000a80425fb=cap_chown,cap_dac_override,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_net_bind_service,cap_net_raw,cap_sys_chroot,cap_mknod,cap_audit_write,cap_setfcap\n$ getpcaps 1\n1: cap_chown,cap_dac_override,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_net_bind_service,cap_net_raw,cap_sys_chroot,cap_mknod,cap_audit_write,cap_setfcap=ep\n$ cat /proc/sys/kernel/cap_last_cap\n40",
+   "location": "executed ubuntu:24.04 after `apt-get update && apt-get install -y libcap2-bin`; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — --cap-drop ALL: root (UID 0) with every set empty, including the bounding set.",
+   "quote": "$ docker run --rm --cap-drop ALL ubuntu:24.04 grep -E '^Cap' /proc/self/status\nCapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\nCapBnd:\t0000000000000000\nCapAmb:\t0000000000000000",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — --privileged: all 41 capabilities (mask 000001ffffffffff), which capsh decodes as cap_chown … cap_sys_admin … cap_perfmon,cap_bpf,cap_checkpoint_restore.",
+   "quote": "$ docker run --rm --privileged ubuntu:24.04 grep -E '^Cap' /proc/self/status\nCapInh:\t0000000000000000\nCapPrm:\t000001ffffffffff\nCapEff:\t000001ffffffffff\nCapBnd:\t000001ffffffffff\nCapAmb:\t0000000000000000",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — a non-root user in a default container has NO effective/permitted capabilities, but the bounding set is still the default 14 (so a setuid-root binary could regain them unless no-new-privileges is set).",
+   "quote": "$ docker run --rm --user 1000 ubuntu:24.04 grep -E '^Cap' /proc/self/status\nCapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\nCapBnd:\t00000000a80425fb\nCapAmb:\t0000000000000000",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  },
+  {
+   "finding": "EXECUTED — mount fails in a default container (no CAP_SYS_ADMIN) and succeeds with --cap-add SYS_ADMIN. On this host the failure is due to capabilities alone: the daemon's seccomp profile is 'unconfined' (see seccomp-nnp note) and the result is identical with seccomp=builtin.",
+   "quote": "$ docker run --rm ubuntu:24.04 sh -c 'mount -t tmpfs none /mnt; echo exit=$?'\nmount: /mnt: permission denied.\n       dmesg(1) may have more information after failed mount system call.\nexit=32\n$ docker run --rm --cap-add SYS_ADMIN ubuntu:24.04 sh -c 'mount -t tmpfs none /mnt; echo exit=$?; findmnt /mnt'\nexit=0\nTARGET SOURCE FSTYPE OPTIONS\n/mnt   none   tmpfs  rw,relatime",
+   "location": "executed ubuntu:24.04; Docker Desktop (macOS, arm64), Engine 28.1.1, kernel 6.10.14-linuxkit, cgroup v2, containerd snapshotter 'overlayfs'"
+  }
+ ],
+ "teaching_notes": "The '14 default capabilities' number is current and triple-checked: Docker's table has 14 rows, the executed CapEff mask a80425fb decodes to the same 14 names. 'The new root' is a real man-page phrase but hedged ('can plausibly be called'). The man page never mentions ping under CAP_NET_RAW — keep that as the author's illustration. /proc status field names belong to proc_pid_status(5), not capabilities(7) — cite accordingly. Nice teaching contrast (executed): --user 1000 gives empty CapEff but an intact CapBnd, whereas --cap-drop ALL empties CapBnd too. The capabilities(7) CAP_SYS_PTRACE entry in man-pages 6.19 is longer than older copies (adds /proc inspection, process_vm_*, kcmp bullets)."
+}

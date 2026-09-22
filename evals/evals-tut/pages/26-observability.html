@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tracing and Online Evaluation · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 7 · Tooling</p>
+    <h1>Tracing and online evaluation</h1>
+    <p class="lede">
+      Everything in this course runs on one raw material: traces. The final page covers the
+      infrastructure layer that produces and scores them — using Langfuse and Braintrust as the two
+      best-documented exemplars — and the unifying idea both teach: offline experiments and online
+      monitoring are one system, not two.
+    </p>
+
+    <h2 id="data-model">The tracing data model</h2>
+    <p>
+      Module 2's instruction was "log everything and look at it." Observability platforms give that
+      instruction a schema. Langfuse's data model is representative and worth learning by
+      name:<a class="cite" href="https://langfuse.com/docs/observability/data-model" title="Langfuse data model documentation (accessed 2026-06-10)">[Langfuse/Braintrust]</a>
+    </p>
+    <div class="diagram">Session   (optional) groups traces from one user interaction
+ └─ Trace      one complete request/response cycle
+     └─ Observations   the steps inside — nested to any depth:
+         ├─ Span        a generic operation (retrieval, parsing…)
+         ├─ Generation  an LLM call — a specialized span carrying
+         │              model, parameters, token usage, cost
+         └─ Event       a point-in-time action</div>
+    <p>
+      Two details matter beyond vocabulary. <strong>Generations are not just spans</strong>: the
+      LLM-call subtype carries model name, parameters, token usage, and cost details, which is what
+      makes per-call cost and latency attribution automatic<a class="cite" href="https://langfuse.com/docs/observability/data-model" title="Langfuse data model">[Langfuse/Braintrust]</a> —
+      the bookkeeping Module 4's cost-controlled evaluation needs, for free. And <strong>observations
+      nest arbitrarily</strong>, so an agent's tool-call tree or a RAG pipeline's
+      retrieve-then-generate structure is represented faithfully, with parent-child
+      timing<a class="cite" href="https://langfuse.com/docs/observability/data-model" title="Langfuse data model">[Langfuse/Braintrust]</a> —
+      the <span class="term" data-g="trajectory">trajectory</span> from
+      <a href="11-evaluating-agents.html">page 11</a>, as a data structure.
+    </p>
+
+    <h2 id="scores">Scores: evaluation results as attached data</h2>
+    <p>
+      The second primitive: a <strong>score</strong>, attachable to traces, sessions, <em>and</em>
+      individual observations — from any grader type: "model-based evaluations (LLM-as-a-Judge), human
+      annotations or fully custom evaluation workflows via
+      API/SDKs."<a class="cite" href="https://langfuse.com/docs/scores/overview" title="Langfuse scores documentation">[Langfuse/Braintrust]</a>
+      That's the grader taxonomy of <a href="03-types-of-evaluators.html">page 3</a> as a storage
+      schema: code checks, judge verdicts, and expert labels land in one place, attached to the
+      evidence they judged. The granularity detail has practical teeth: Langfuse's recommended
+      production pattern has shifted to <em>observation-level</em> evaluators — scoring individual
+      steps rather than whole traces — because they "complete evaluation in seconds, not
+      minutes."<a class="cite" href="https://langfuse.com/docs/scores/model-based-evals" title="Langfuse model-based evals documentation">[Langfuse/Braintrust]</a>
+      Step-level scoring also localizes failures the way error analysis wants: "retrieval returned
+      junk" rather than "trace bad."
+    </p>
+
+    <h2 id="experiments">Experiments: comparisons you can trust later</h2>
+    <p>
+      Braintrust's contribution to the vocabulary is the <strong><span class="term" data-g="experiment">experiment</span></strong>:
+      "an immutable snapshot of an evaluation run — permanently stored, comparable over time, and
+      shareable across your team," built from versioned <strong>datasets</strong> ("experiments can pin
+      to specific versions") and <strong>scorers</strong> returning 0–1 values, with a pre-built scorer
+      library (autoevals) and a deliberately separate, <em>ephemeral</em> playground for quick
+      iteration.<a class="cite" href="https://www.braintrust.dev/docs/guides/evals/write" title="Braintrust evals documentation (accessed 2026-06-10)">[Langfuse/Braintrust]</a>
+      The design encodes two course lessons. Immutable run + pinned dataset version = the
+      reproducibility bundle of <a href="19-reproducibility.html">page 19</a>: a comparison between
+      experiments run weeks apart provably used identical test cases. And the playground/experiment
+      split institutionalizes the difference between exploring and measuring — the same line
+      <a href="17-comparing-models.html">page 17</a> drew statistically.
+    </p>
+    <div class="warn">
+      <span class="label">A practical judge note</span>
+      <p>Autoevals — Braintrust's scorer library — defaults to OpenAI's API for its LLM-as-judge
+      scorers, redirectable via environment configuration.<a class="cite" href="https://www.braintrust.dev/docs/reference/autoevals" title="Braintrust autoevals reference">[Langfuse/Braintrust]</a>
+      Beyond the deployment surprise, that's a judge-identity decision being made by a default —
+      and Module 3's self-preference findings say judge identity is not a neutral choice when the
+      judged model is from the same family. Know which model your metric library is quietly calling.</p>
+    </div>
+
+    <h2 id="loop">The unified loop: offline and online are one system</h2>
+    <p>
+      The deepest concept this layer teaches is stated by both vendors in their own words. Langfuse:
+      evaluation "happens both online, on live production traces, and offline, before you ship a
+      change."<a class="cite" href="https://langfuse.com/docs/evaluation/overview" title="Langfuse evaluation overview">[Langfuse/Braintrust]</a>
+      Braintrust, structurally: "Logs use the same data structure as experiments, which means:
+      instrumentation code works for both logging and evaluation … scores and feedback apply to both
+      logs and experiments … production data seamlessly becomes evaluation
+      datasets."<a class="cite" href="https://www.braintrust.dev/docs/guides/logging" title="Braintrust logging guide">[Langfuse/Braintrust]</a>
+      Online scoring runs asynchronously, off the request path, with no latency
+      impact<a class="cite" href="https://www.braintrust.dev/docs/guides/logging" title="Braintrust logging guide">[Langfuse/Braintrust]</a> —
+      exactly the production-monitoring pattern <a href="07-evals-in-the-lifecycle.html">page 7</a>
+      prescribed.
+    </p>
+    <p>
+      Put together, this is <a href="07-evals-in-the-lifecycle.html">Module 2's flywheel</a> with the
+      plumbing made explicit: production traces flow in; sampled traces get scored (by validated
+      judges) and reviewed (by humans, during error analysis); interesting failures graduate into
+      versioned datasets; datasets feed offline experiments that gate the next change; the change
+      ships, instrumented identically, and the loop repeats. One schema — traces, scores, datasets,
+      experiments — carries the whole course's process.
+    </p>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Mistaking the platform for the practice. A tracing platform makes data <em>available</em>; it
+      doesn't make anyone look at it, validate a judge, or run error analysis — and an unvalidated
+      LLM-as-judge evaluator wired to production traces is the same unvalidated judge from
+      <a href="10-aligning-judges.html">page 10</a>, now generating authoritative-looking dashboards at
+      scale. Remember the verified practitioner warning that predates all these tools: "Don't buy fancy
+      LLM tools. Use what you have first" — the discipline transfers; the tooling only amplifies
+      whichever discipline (or absence) it finds.<a class="cite" href="https://hamel.dev/blog/posts/evals/" title="Husain 2024, Your AI Product Needs Evals">[Husain, Evals]</a></p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea — and the close of the course</span>
+      <p>The course began with a four-part machine: task, data, grader, metric. It ends with that
+      machine industrialized — traces as the data, validated judges and assertions as the graders,
+      experiments as the comparisons, error bars on the metrics, validity audits on the whole — running
+      continuously on live traffic. None of the infrastructure replaces the two disciplines everything
+      depended on: <strong>look at your data, and validate your validators.</strong> Tools change
+      yearly; those don't.</p>
+    </div>
+
+    <p>
+      Where to next: the <a href="../bibliography.html">annotated bibliography</a> collects every
+      primary source with what it's good for; the <a href="../glossary.html">glossary</a> holds every
+      term; and the <a href="../appendices/a-probability.html">appendices</a> are there whenever the
+      statistics deserve a second pass.
+    </p>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Langfuse documentation — data model, scores, model-based evals, evaluation overview, langfuse.com/docs (accessed 2026-06-10). <a href="https://langfuse.com/docs">langfuse.com/docs</a></li>
+        <li>Braintrust documentation — evals, datasets, scorers, autoevals, playground, logging, braintrust.dev/docs (accessed 2026-06-10). <a href="https://www.braintrust.dev/docs/start">braintrust.dev/docs</a></li>
+        <li>Hamel Husain, "Your AI Product Needs Evals," hamel.dev, March 2024. <a href="https://hamel.dev/blog/posts/evals/">hamel.dev/blog/posts/evals</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

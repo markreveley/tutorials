@@ -1,0 +1,87 @@
+{
+  "id": "who-validates",
+  "citation": {
+    "authors": "Shreya Shankar, J.D. Zamfirescu-Pereira, Björn Hartmann, Aditya G. Parameswaran, Ian Arawjo",
+    "title": "Who Validates the Validators? Aligning LLM-Assisted Evaluation of LLM Outputs with Human Preferences",
+    "venue": "UIST '24: Proceedings of the 37th Annual ACM Symposium on User Interface Software and Technology (Pittsburgh, PA, October 13-16, 2024); preprint arXiv:2404.12272 [cs.HC]",
+    "year": "2024",
+    "url": "https://doi.org/10.1145/3654777.3676450"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2404.12272",
+    "https://arxiv.org/pdf/2404.12272"
+  ],
+  "access": "full",
+  "claims": [
+    {
+      "planned": "Introduces EvalGen, a mixed-initiative interface for generating and validating eval criteria/assertions",
+      "verdict": "confirmed",
+      "finding": "EvalGen is a mixed-initiative interface (built atop ChainForge) that uses LLMs to suggest evaluation criteria and generate candidate assertion implementations (Python functions or LLM grader prompts), while soliciting human grades on a subset of outputs to select the implementations best aligned with those grades. A final 'report card' shows per-criterion and aggregate alignment.",
+      "quote": "We present a mixed-initiative approach to “validate the validators”—aligning LLM-generated evaluation functions (be it prompts or code) with human requirements. Our interface, EvalGen, provides automated assistance to users in generating evaluation criteria and implementing assertions. While generating candidate implementations (Python functions, LLM grader prompts), EvalGen asks humans to grade a subset of LLM outputs; this feedback is used to select implementations that better align with user grades.",
+      "location": "Abstract"
+    },
+    {
+      "planned": "Criteria drift: the act of grading outputs causes users to refine/change their criteria — confirm the exact finding and how it was observed",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with specifics: criteria drift was observed in a qualitative think-aloud study with nine (9) industry practitioners using EvalGen on an entity-extraction (NER) task over 100 tweets. The paper identifies TWO types of drift: (1) participants wanted to ADD new criteria when they observed new 'types' of bad LLM outputs (P2, P5, P6, P8, P9), and (2) participants REINTERPRETED existing criteria as they graded more outputs (P2, P5, P6, P8, P9) — e.g., relaxing a 'proper noun' criterion from 'all entities are proper nouns' to 'most entities are proper nouns' after seeing real outputs. Even participants who graded first kept refining criteria upon further grading, sometimes going back to change previous grades.",
+      "quote": "7.3.1 Criteria drift. Grading outputs spurred changes or refinements in participants’ criteria, which we refer to as criteria drift. We observed two types of drift. First, participants wanted to add new criteria when they observed new “types” of bad LLM outputs (P2, P5, P6, P8, P9). ... Second, as participants graded more outputs, we found that they reinterpret existing criteria to better fit the LLM’s behavior (P2, P5, P6, P8, P9).",
+      "location": "Section 7.3.1 (Findings); study design in Section 7 (nine industry practitioners, think-aloud)"
+    },
+    {
+      "planned": "Humans need to grade some outputs to define good criteria (catch-22 / 'it depends on the outputs')",
+      "verdict": "confirmed",
+      "finding": "Confirmed as the paper's explicitly named 'catch-22': people need externalized criteria to grade outputs, but grading outputs is what helps them externalize criteria. The paper draws the strong conclusion that it is impossible to completely determine evaluation criteria before judging actual LLM outputs — some criteria are dependent on the observed outputs rather than definable a priori. Participant P7's quote 'I think it's hard to know until you see it' captures the 'it depends on the outputs' framing.",
+      "quote": "We observed a “catch-22” situation: to grade outputs, people need to externalize and define their evaluation criteria; however, the process of grading outputs helps them to define that very criteria. We dub this phenomenon criteria drift, and it implies that it is impossible to completely determine evaluation criteria prior to human judging of LLM outputs. [...] “I think it’s hard to know until you see it,” P7 said.",
+      "location": "Section 1 (Introduction) and Section 7.3 / 7.3.1"
+    },
+    {
+      "planned": "Alignment measured between generated assertions and human grades",
+      "verdict": "confirmed",
+      "finding": "Confirmed, with a formal definition: alignment of an assertion set F is the harmonic mean of coverage and (1 - false failure rate), computed against the user's binary good/bad grades. Coverage = fraction of user-graded-BAD outputs that at least one assertion fails (the set's true negative rate); False Failure Rate (FFR) = fraction of user-graded-GOOD outputs that at least one assertion fails. Alignment(F) = 2 x Coverage(F) x (1-FFR(F)) / (Coverage(F) + (1-FFR(F))) — analogous to an F1 score over failures. Alignment is recalculated for every candidate assertion each time the user grades an output, and EvalGen picks the most-aligned assertion per criterion subject to an FFR threshold.",
+      "quote": "At a high level, alignment is a combination of the assertion’s coverage, or ability to fail outputs that the user thinks are bad, and the false failure rate, or ability to not fail outputs that the user thinks are good. [...] We define the alignment of F as the harmonic mean of coverage and the inverse of FFR: Alignment(F) = 2 × [Coverage(F) × (1 − FFR(F))] / [Coverage(F) + (1 − FFR(F))]. Note that alignment is very similar to F1 score; however, we are concerned with the precision and recall of failures.",
+      "location": "Section 4.1 and Appendix A.3"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "LLM judges inherit the problems of the LLMs they evaluate, so they themselves require human validation — the core motivation for the whole paper.",
+      "quote": "Yet LLM-generated evaluators simply inherit all the problems of the LLMs they evaluate, requiring further human validation.",
+      "numbers": "n/a (Abstract)"
+    },
+    {
+      "point": "Criteria drift undermines any workflow that assumes evaluation criteria can be fixed before looking at model outputs — eval design must support rapid, simultaneous iteration over criteria and implementations.",
+      "quote": "What is more, some criteria appears dependent on the specific LLM outputs observed (rather than independent criteria that can be defined a priori), raising serious questions for approaches that assume the independence of evaluation from observation of model outputs. [...] our findings suggest that users need evaluation assistants to support rapid iteration over criteria and implementations simultaneously.",
+      "numbers": "Drift observed in 5 of 9 participants for each of the two drift types (P2, P5, P6, P8, P9)"
+    },
+    {
+      "point": "Human-in-the-loop criteria selection beats full automation: EvalGen matched or beat the fully-automated SPADE baseline with fewer assertions, using only a small sample of grades.",
+      "quote": "Our results in Table 1 show that EvalGen, by incorporating human judgment during criteria selection, achieved equal or better alignment than SPADE with fewer assertions for both pipelines. Specifically, in the product pipeline, EvalGen produced an assertion set less than half the size of SPADE’s and increased coverage from 49% to 73%.",
+      "numbers": "Coverage 49% -> 73% (product pipeline); EvalGen used 16 graded outputs per pipeline vs. all 80-100; SPADE needed its FFR threshold relaxed from 10% to 40% to find a viable assertion set for the product pipeline"
+    },
+    {
+      "point": "'Alignment' is itself subjective: the same code assertion can be aligned with one user's grades and misaligned with another's, because natural-language criteria hide tacit, person-specific interpretations.",
+      "quote": "Both P5 and P9 got the same code-based assertion for the criterion, which simply checked for the presence of the hashtag character in the output—this assertion did not align with P5’s grades, but did with P9’s. [...] we observed that misalignment sometimes occurred due to tacit criteria that participants held which was not explicitly explained in natural language.",
+      "numbers": "Section 7.3.3; perceptions of alignment were 'polarized' across the 9 participants (Table 2)"
+    },
+    {
+      "point": "Users want different strictness per criterion, not one global threshold — some criteria 'must absolutely pass' while others can tolerate failures.",
+      "quote": "There are criteria where you can be okay with failing, and then there are other criteria where you are like, ‘this must absolutely pass’... [T]here’s a [spectrum] of failure as opposed to: it just passes or fails.",
+      "numbers": "Participant P3; EvalGen used one global false failure rate constraint, which P3 found insufficient"
+    },
+    {
+      "point": "Humans and code/LLM evaluators have complementary strengths: criteria like word count are hard for humans to grade reliably but trivial for a Python function, so people want to put themselves in the loop selectively.",
+      "quote": "A criterion like word count is hard for humans to assess but easy for a good Python function to evaluate. P8 desired to grade for only one criteria, reasoning that it might improve efficiency (“I generally want to be in the loop for these tests...but I want to put myself in the loop in a way that is efficient.”).",
+      "numbers": "P2, P5, P6, P7, P8 said they didn't fully trust their own grades on some criteria; Section 7.3.2"
+    }
+  ],
+  "misconceptions_to_avoid": [
+    "The qualitative study had NINE participants, not 8 (nine industry practitioners recruited via a Twitter post: software engineers, ML scientists, startup executives, independent consultants). A summarization pass during fact-checking initially reported 8; the PDF text says 'We recruited nine industry practitioners' and 'All participants (n = 9)'.",
+    "Criteria drift is about HUMAN criteria changing during grading, not about model/data drift. The paper explicitly distinguishes it from 'other drifts' like model drift, prompt edits, or upstream chain changes.",
+    "Alignment is NOT plain accuracy or standard F1 over pass labels: it is the harmonic mean of coverage and (1 - FFR), i.e., precision/recall of FAILURES at the assertion-set level.",
+    "Coverage is the fraction of user-judged-BAD outputs caught (paper calls it the set's true negative rate under their convention where f=0 means fail), not the fraction of outputs the assertions make predictions on.",
+    "EvalGen is mixed-initiative, not fully automated — the comparison with SPADE exists precisely to show the value of human input over full automation.",
+    "Do not cite the venue as arXiv only: the canonical publication is UIST '24, DOI 10.1145/3654777.3676450 (arXiv:2404.12272 is the preprint, submitted 18 Apr 2024).",
+    "The study task was NER over 100 tweets via a prompt template in ChainForge; 3 of 9 participants changed the prompt, and one changed the task to sentiment analysis — the findings are from a single-session think-aloud, not longitudinal field deployment."
+  ],
+  "notes_for_authors": "This paper is the canonical citation for 'criteria drift' and the grading catch-22; both terms are the paper's own coinage, so quote them exactly. Strongest one-line quote for the catch-22: 'users need criteria to grade outputs, but grading outputs helps users define criteria' (Abstract). The strongest claim is in the Introduction: 'it is impossible to completely determine evaluation criteria prior to human judging of LLM outputs' — useful for teaching why eval criteria must be developed iteratively while looking at real outputs, not specified up front. Use the two-type breakdown of drift (new criteria from new failure modes; reinterpretation of existing criteria, with the proper-noun example) for concreteness. The Alignment = harmonic-mean-of-coverage-and-(1-FFR) formula is a good bridge to teaching precision/recall framing of LLM-judge validation. The SPADE comparison (coverage 49%->73% with under half the assertions, from only 16 grades) is the paper's main quantitative result; the qualitative findings carry the conceptual weight. Also teachable: the P5/P9 hashtag example showing the same assertion can be aligned for one user and not another — good for discussing rater subjectivity and why 'alignment with user preferences' is per-user. Caveat for the course: n=9, single-session, qualitative; do not overstate statistical claims."
+}

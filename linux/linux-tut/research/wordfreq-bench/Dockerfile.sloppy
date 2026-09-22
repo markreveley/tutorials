@@ -1,0 +1,14 @@
+# wordfreq-bench, SLOPPY build — every line marked (!) is an integrity bug the course dissects (page 26).
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends python3 git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+# (!) the whole upstream repo, history included: the fix commit is on another branch
+COPY build/repo-with-history /app
+# (!) hidden tests and expected answers shipped inside the image, world-readable
+COPY grader /opt/grader
+# (!) the oracle solution copied in, then "deleted" in a later layer — still in the image
+COPY solution /tmp/solution
+RUN rm -rf /tmp/solution
+WORKDIR /app
+# (!) no USER instruction: the agent runs as root
+CMD ["sleep", "infinity"]

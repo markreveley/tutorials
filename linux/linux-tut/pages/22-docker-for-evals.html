@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Docker for Eval Environments · Linux for Evals Engineers</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 6 · Containers &amp; Isolation</p>
+    <h1>Docker for eval environments</h1>
+    <p class="lede">
+      Pages 20 and 21 took the container apart into kernel features. This page puts it back together
+      with the tool everyone actually types: Docker, organised around the life of one task
+      environment — build it, run it, drive it, inspect it, throw it away. The running example is the
+      real <code>wordfreq-bench</code> Dockerfile.
+    </p>
+
+    <h2 id="architecture">Who does what when you type <code>docker run</code></h2>
+    <p>
+      <span class="term" data-g="docker">Docker</span> is not one program. The <code>docker</code>
+      command you type is a client; it sends requests to a long-running
+      <span class="term" data-g="docker-daemon">daemon</span>, <code>dockerd</code>, which owns the
+      images and containers. The daemon in turn delegates: "Docker Engine uses containerd for managing
+      the container lifecycle… By default, containerd uses runc as its container
+      runtime."<a class="cite" href="https://docs.docker.com/engine/daemon/alternative-runtimes/" title="Docker Docs, Alternative container runtimes">[OCI Runtime Spec]</a>
+      runc is the small program that finally makes the
+      namespace, cgroup and capability system calls from pages
+      <a href="20-namespaces.html">20</a>–<a href="21-cgroups-capabilities-seccomp.html">21</a>, then
+      gets out of the way.
+    </p>
+    <div class="diagram">  you                the Docker host (on a Mac: a Linux VM)
+┌──────────┐  API    ┌─────────┐  ┌────────────┐  ┌──────┐
+│ docker   │────────▶│ dockerd │─▶│ containerd │─▶│ runc │
+│ (client) │  over a │ (daemon)│  │ lifecycle, │  └──┬───┘
+└──────────┘  unix   │ images, │  │ images     │     │ namespaces,
+              socket │ networks│  └────────────┘     │ cgroups, caps,
+                     └────┬────┘                     ▼ rootfs; exec()
+                          │              ┌──────────────────────┐
+ registry ◀─ pull / push ─┘              │ container = ordinary │
+ (Docker Hub, …)                         │ Linux process(es)    │
+                                         └──────────────────────┘</div>
+    <p>
+      Two consequences follow from the picture. First, the client and the host can be different
+      machines — on your Mac they always are: Docker Desktop runs the daemon inside a Linux
+      virtual machine, and paths you bind-mount are
+      resolved on "the Docker daemon host, not the
+      client."<a class="cite" href="https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints" title="Docker Docs, Bind mounts: considerations and constraints">[Docker: storage]</a>
+      Second, whoever can talk to the daemon's socket can start any container with any privileges,
+      which is why the socket is the most dangerous file on the machine
+      (<a href="23-hardening-containers.html">page 23</a>).
+    </p>
+
+    <h2 id="images-and-layers">Images and containers: class and instance</h2>
+    <p>
+      An <span class="term" data-g="image">image</span> is a read-only filesystem plus a little
+      metadata (default command, user, environment). A
+      <span class="term" data-g="container">container</span> is a running instance of an image: the
+      same files, plus a thin writable layer on top, plus a process. "All changes made to the running
+      container… are written to this thin writable container
+      layer."<a class="cite" href="https://docs.docker.com/engine/storage/drivers/#container-and-layers" title="Docker Docs, Storage drivers: container and layers">[Kernel: overlayfs]</a>
+      One image, a thousand containers, each with a private scratch layer — that is the whole reason
+      containers suit evals, and the mechanism is the
+      <span class="term" data-g="overlayfs">overlayfs</span> mount from
+      <a href="14-mounts-and-filesystems.html">page 14</a>.
+    </p>
+    <p>
+      The image itself is a stack of <span class="term" data-g="layer">layers</span>: "Each layer is
+      only a set of differences from the layer before
+      it."<a class="cite" href="https://docs.docker.com/engine/storage/drivers/#images-and-layers" title="Docker Docs, Storage drivers: images and layers">[Kernel: overlayfs]</a>
+      <code>docker history</code> lists them, newest first:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker images wordfreq-bench
+<span class="o">REPOSITORY       TAG        IMAGE ID       CREATED       SIZE
+wordfreq-bench   hardened   82e0a1d29453   4 hours ago   198MB
+wordfreq-bench   sloppy     030d48a44685   5 hours ago   317MB</span>
+<span class="p">$</span> docker history wordfreq-bench:hardened
+<span class="o">IMAGE          CREATED       CREATED BY                                      SIZE
+82e0a1d29453   4 hours ago   CMD ["sleep" "infinity"]                        0B
+&lt;missing&gt;      4 hours ago   USER agent                                      0B
+&lt;missing&gt;      4 hours ago   WORKDIR /app                                    4.1kB
+&lt;missing&gt;      4 hours ago   COPY --chown=agent:agent app /app # buildkit    32.8kB
+&lt;missing&gt;      4 hours ago   RUN /bin/sh -c useradd --create-home --uid 1…   77.8kB
+&lt;missing&gt;      4 hours ago   RUN /bin/sh -c apt-get update &amp;&amp; apt-get ins…   45.2MB
+&lt;missing&gt;      9 days ago    /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B
+&lt;missing&gt;      9 days ago    /bin/sh -c #(nop) ADD file:ff1ce8d2ee022926e…   110MB
+…</span></code></pre>
+    <p>
+      Every Dockerfile instruction is a row. The ones that touch files (<code>RUN</code>,
+      <code>COPY</code>, <code>ADD</code>) carry bytes; metadata instructions show <code>0B</code>.
+      The bottom rows are Ubuntu's own build.
+    </p>
+    <div class="callout">
+      <span class="label">Background — "overlay2" or "overlayfs"?</span>
+      <p>Older tutorials say Docker's storage driver is <code>overlay2</code>. Docker's docs now say
+      the containerd image store is the default for Docker Engine 29.0 and later on fresh installs,
+      using the <code>overlayfs</code> snapshotter; hosts upgraded from earlier versions keep
+      <code>overlay2</code>.<a class="cite" href="https://docs.docker.com/engine/storage/containerd/" title="Docker Docs, containerd image store">[Kernel: overlayfs]</a>
+      Docker Desktop here reports <code>overlayfs</code> too. The kernel mechanism is identical
+      either way; run <code>docker info --format '{{.Driver}}'</code> to see which you have.</p>
+    </div>
+
+    <h3 id="tags-and-digests">Tags move; digests don't</h3>
+    <p>
+      <code>ubuntu:24.04</code> is a <span class="term" data-g="tag">tag</span>: a human-friendly
+      label that the publisher re-points whenever they rebuild. Docker's docs say it flatly: "Image
+      tags are mutable." An <span class="term" data-g="image-digest">image digest</span> is the
+      SHA-256 of the image's content; pinning to one means "you're guaranteed to always use the same
+      image version, even if a publisher replaces the tag with a new
+      image."<a class="cite" href="https://docs.docker.com/build/building/best-practices/#pin-base-image-versions" title="Docker Docs, Building best practices: pin base image versions">[Docker: Dockerfile]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker image inspect --format '{{index .RepoDigests 0}}' ubuntu:24.04
+<span class="o">ubuntu@sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3</span></code></pre>
+    <p>
+      You can use that whole string anywhere an image name goes — <code>docker run</code>, a
+      Dockerfile's <code>FROM</code>, a compose file. (Why this matters for drift:
+      <a href="15-packages-reproducibility.html">page 15</a>.)
+    </p>
+
+    <h2 id="dockerfile">Build: the wordfreq-bench Dockerfile, line by line</h2>
+    <p>
+      A <span class="term" data-g="dockerfile">Dockerfile</span> is the recipe for an image. This is
+      the hardened task image for the course's running example, verbatim from
+      <code>research/wordfreq-bench/Dockerfile</code>:
+    </p>
+<pre><code># wordfreq-bench, hardened build. The grader and the oracle solution never enter this image:
+# grading happens outside, after the agent exits (see grade.sh).
+FROM ubuntu:24.04
+RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends python3 \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+RUN useradd --create-home --uid 1001 --shell /bin/bash agent
+# exported tree only: no .git, so no history to mine
+COPY --chown=agent:agent app /app
+WORKDIR /app
+USER agent
+CMD ["sleep", "infinity"]</code></pre>
+    <table>
+      <thead><tr><th>Line</th><th>What it does</th><th>Why it is written this way</th></tr></thead>
+      <tbody>
+        <tr><td><code>FROM ubuntu:24.04</code></td><td>Start from a <span class="term" data-g="base-image">base image</span>.</td>
+            <td>A tag, for readability in a teaching file. A published benchmark should use <code>ubuntu:24.04@sha256:…</code> — tag <em>and</em> digest.</td></tr>
+        <tr><td><code>RUN apt-get update &amp;&amp; … install …</code></td><td>Run a command at build time; its file changes become a layer.</td>
+            <td>One <code>RUN</code>, not two. Docker's rule: "Always combine <code>RUN apt-get update</code> with <code>apt-get install</code> in the same <code>RUN</code> statement", because a cached <code>update</code> layer goes stale and later installs fail.<a class="cite" href="https://docs.docker.com/build/building/best-practices/#apt-get" title="Docker Docs, Building best practices: apt-get">[Docker: Dockerfile]</a> The <code>rm -rf</code> is in the same <code>RUN</code> for a reason you'll see <a href="#layers-remember">below</a>.</td></tr>
+        <tr><td><code>RUN useradd … --uid 1001 … agent</code></td><td>Create the non-root user.</td>
+            <td>Explicit uid so ownership is predictable across hosts (<a href="07-users-groups-root.html">page 7</a>); 1001 because Ubuntu's image already has <code>ubuntu</code> at 1000.</td></tr>
+        <tr><td><code>COPY --chown=agent:agent app /app</code></td><td>Copy the task repo from the build context into the image.</td>
+            <td>Only <code>app/</code>. The grader and solution directories sit beside it on the host and are never copied. No <code>.git</code> (<a href="26-environment-integrity.html">page 26</a>).</td></tr>
+        <tr><td><code>WORKDIR /app</code></td><td>Default working directory for later instructions and for the container.</td><td>So the agent's first <code>ls</code> shows the task.</td></tr>
+        <tr><td><code>USER agent</code></td><td>Default user for the container's processes.</td>
+            <td>Without it, "the default user within a container is root (uid = 0)."<a class="cite" href="https://docs.docker.com/engine/containers/run/#user" title="Docker Docs, Running containers: user">[Docker: run]</a></td></tr>
+        <tr><td><code>CMD ["sleep", "infinity"]</code></td><td>The default command: do nothing, forever.</td>
+            <td>The harness will <code>exec</code> the agent's commands into this idle container. JSON-array ("exec") form runs the program directly; the string ("shell") form wraps it in <code>/bin/sh -c</code>, and for an ENTRYPOINT the docs warn that the wrapped program "will not be the container's PID 1, and will not receive Unix signals."<a class="cite" href="https://docs.docker.com/reference/dockerfile/#entrypoint" title="Docker Docs, Dockerfile reference: ENTRYPOINT">[Docker: Dockerfile]</a> That is the ten-second <code>docker stop</code> hang from <a href="10-signals-exit-codes.html">page 10</a>.</td></tr>
+      </tbody>
+    </table>
+    <p>Build it from the directory that holds the Dockerfile (the final <code>.</code> is the <em>build context</em> — the files <code>COPY</code> can see):</p>
+<pre class="term"><code><span class="p">$</span> docker build -t wordfreq-bench:hardened .
+<span class="o">…
+#7 [2/5] RUN apt-get update &amp;&amp; apt-get install -y --no-install-recommends python3     &amp;&amp; rm -rf /var/lib/apt/lists/*
+#7 CACHED
+#8 [3/5] RUN useradd --create-home --uid 1001 --shell /bin/bash agent
+#8 CACHED
+#9 [4/5] COPY --chown=agent:agent app /app
+#9 CACHED
+…
+#11 naming to docker.io/library/wordfreq-bench:hardened done</span></code></pre>
+    <p>
+      <code>CACHED</code> is the build cache: a step is reused if its inputs are unchanged. For
+      <code>RUN</code>, "just the command string itself is used to find a match" — Docker does not
+      know that the Ubuntu archive changed since yesterday — and once one step misses, every step
+      after it
+      rebuilds.<a class="cite" href="https://docs.docker.com/build/cache/invalidation/#general-rules" title="Docker Docs, Build cache invalidation: general rules">[Docker: Dockerfile]</a>
+      So the same Dockerfile built today on my machine (cached <code>apt</code> layer from last month)
+      and on yours (fresh) yields different package versions.
+    </p>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>Treat a task image as a measured artifact, not a recipe. When I rebuilt this Dockerfile with
+      every step <code>CACHED</code>, the resulting image ID still differed from the first build
+      (<code>82e0a1d2…</code> vs <code>0375d1f7…</code>), because the ID covers build metadata as
+      well as layers. "We used the same Dockerfile" is therefore not evidence of the same
+      environment. Build once, push to a registry, and
+      write the image digest into every results file next to the model name and the score.</p>
+    </div>
+
+    <h2 id="run">Run: the flags that define a sandbox</h2>
+    <p>
+      <code>docker run [flags] IMAGE [command]</code> creates a container and starts it. The image
+      supplies defaults; flags override them:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm wordfreq-bench:hardened id
+<span class="o">uid=1001(agent) gid=1001(agent) groups=1001(agent)</span>
+<span class="p">$</span> docker run --rm -u root -w /tmp -e SEED=42 wordfreq-bench:hardened bash -c 'id -un; pwd; echo $SEED'
+<span class="o">root
+/tmp
+42</span></code></pre>
+    <p>
+      Note what the second command shows: <code>USER agent</code> in the image is a <em>default</em>.
+      Anyone who controls the <code>docker run</code> line — the harness — can be root. The agent,
+      who only controls what runs <em>inside</em>, cannot. The working set of flags (semantics from
+      the CLI
+      reference<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/run/#options" title="Docker Docs, docker container run: options">[Docker: run]</a>):
+    </p>
+    <table>
+      <thead><tr><th>Flag</th><th>Meaning</th><th>Linux mechanism (page)</th></tr></thead>
+      <tbody>
+        <tr><td><code>--rm</code></td><td>Remove the container, and its anonymous volumes, when it exits</td><td>—</td></tr>
+        <tr><td><code>-it</code></td><td><code>-i</code> keep stdin open, <code>-t</code> allocate a pseudo-TTY: an interactive shell</td><td>TTY (<a href="27-reading-terminal-transcripts.html">27</a>)</td></tr>
+        <tr><td><code>-d</code>, <code>--name N</code></td><td>Run in the background; give it a name you can refer to</td><td>—</td></tr>
+        <tr><td><code>-e K=V</code>, <code>-u</code>, <code>-w</code></td><td>Environment variable, user, working directory</td><td>env (<a href="11-environment-and-secrets.html">11</a>), uid (<a href="07-users-groups-root.html">7</a>)</td></tr>
+        <tr><td><code>--mount type=bind,src=…,dst=…,readonly</code></td><td>Graft a host directory into the container. Without <code>readonly</code>: "Bind mounts have write access to files on the host by default."<a class="cite" href="https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints" title="Docker Docs, Bind mounts">[Docker: storage]</a></td><td>bind mount (<a href="14-mounts-and-filesystems.html">14</a>)</td></tr>
+        <tr><td><code>--read-only</code>, <code>--tmpfs /tmp</code></td><td>Root filesystem read-only; a RAM-backed scratch directory</td><td><code>ro</code> mount, tmpfs (14)</td></tr>
+        <tr><td><code>--network none</code></td><td>No interfaces but loopback</td><td>network namespace (<a href="19-firewalls-and-egress.html">19</a>)</td></tr>
+        <tr><td><code>--memory</code>, <code>--cpus</code>, <code>--pids-limit</code></td><td>Resource ceilings. Default is no limit.</td><td>cgroup files (<a href="21-cgroups-capabilities-seccomp.html">21</a>)</td></tr>
+        <tr><td><code>--init</code></td><td>"Run an init inside the container that forwards signals and reaps processes"</td><td>PID 1 (<a href="10-signals-exit-codes.html">10</a>)</td></tr>
+      </tbody>
+    </table>
+    <p>Each one is checkable from inside, which is the habit to build:</p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --read-only --tmpfs /tmp wordfreq-bench:hardened bash -c 'touch /app/x; touch /tmp/ok &amp;&amp; echo tmp-ok'
+<span class="o">touch: cannot touch '/app/x': <span class="hl">Read-only file system</span>
+tmp-ok</span>
+<span class="p">$</span> docker run --rm --memory 256m --cpus 1.5 --pids-limit 100 wordfreq-bench:hardened \
+    bash -c 'cat /sys/fs/cgroup/memory.max /sys/fs/cgroup/cpu.max /sys/fs/cgroup/pids.max'
+<span class="o">268435456
+150000 100000
+100</span>
+<span class="p">$</span> docker run --rm --mount type=bind,src=$PWD/grader,dst=/opt/grader,readonly -u root \
+    wordfreq-bench:hardened bash -c 'ls /opt/grader; echo x &gt;&gt; /opt/grader/expected.json'
+<span class="o">expected.json
+run-tests.sh
+test_hidden.py
+bash: line 1: /opt/grader/expected.json: <span class="hl">Read-only file system</span></span></code></pre>
+    <p>
+      The last run is root, inside the container, failing to modify a read-only mount — but happily
+      <em>listing</em> it. Read-only stops tampering, not reading; an answer key needs absence
+      (<a href="14-mounts-and-filesystems.html">page 14</a>,
+      <a href="26-environment-integrity.html">page 26</a>).
+    </p>
+
+    <h3 id="docker-exit-codes">When <code>docker run</code> itself fails: 125, 126, 127</h3>
+    <p>
+      The exit status of <code>docker run</code> is normally the contained command's. Three values
+      are Docker's own: 125 "the error is with Docker daemon itself", 126 "the specified contained
+      command can't be invoked", 127 "the contained command can't be
+      found."<a class="cite" href="https://docs.docker.com/engine/containers/run/#exit-status" title="Docker Docs, Running containers: exit status">[Docker: run]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --nosuchflag wordfreq-bench:hardened true; echo "exit=$?"
+<span class="o">unknown flag: --nosuchflag
+…
+exit=125</span>
+<span class="p">$</span> docker run --rm wordfreq-bench:hardened /app/wordfreq.py; echo "exit=$?"
+<span class="o">docker: Error response from daemon: … exec: "/app/wordfreq.py": permission denied: unknown
+exit=126</span>
+<span class="p">$</span> docker run --rm wordfreq-bench:hardened nosuchcmd; echo "exit=$?"
+<span class="o">docker: Error response from daemon: … exec: "nosuchcmd": executable file not found in $PATH: unknown
+exit=127</span></code></pre>
+    <p>
+      126 and 127 mean the same as they do in bash
+      (<a href="../appendices/b-exit-codes-signals.html">Appendix B</a>), so the number alone does not
+      say which layer produced it. The text does: <code>Error response from daemon</code> means the
+      container never started. That is an observation about the <em>run</em>, not about the model:
+      record it as an infrastructure failure, keep it in <em>scheduled</em>, leave it out of
+      <em>completed</em> — and never quietly out of the report.
+    </p>
+
+    <h2 id="drive-and-inspect">Drive and inspect: one rollout, start to post-mortem</h2>
+    <p>
+      Here is the loop a harness performs, by hand. Start
+      an idle sandbox, then <code>exec</code> commands into it — <code>docker exec</code> "runs a new
+      command in a running
+      container",<a class="cite" href="https://docs.docker.com/reference/cli/docker/container/exec/" title="Docker Docs, docker container exec">[Docker: run]</a>
+      as the container's user unless you say otherwise:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run -d --name lt-22-rollout --init wordfreq-bench:hardened
+<span class="o">d3ee5d716b8f6f03f411e01145107222bcca37f9b17e12cea72e6d0443756e65</span>
+<span class="p">$</span> docker exec lt-22-rollout ps -ef
+<span class="o">UID        PID  PPID  C STIME TTY          TIME CMD
+agent        1     0  0 10:53 ?        00:00:00 /sbin/docker-init -- sleep infinity
+agent        7     1  0 10:53 ?        00:00:00 sleep infinity
+agent        8     0  0 10:53 ?        00:00:00 ps -ef</span>
+<span class="p">$</span> docker exec lt-22-rollout python3 wordfreq.py data/sample.txt
+<span class="o">3 The
+3 the
+2 on</span></code></pre>
+    <p>
+      That is the bug: "The" and "the" counted separately. Now the "agent" works. I copied in a small
+      script that applies the fix (<code>docker cp</code> moves files across the boundary in either
+      direction), ran it, and left some debris, as agents do:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker cp fix.py lt-22-rollout:/tmp/fix.py
+<span class="p">$</span> docker exec lt-22-rollout python3 /tmp/fix.py
+<span class="p">$</span> docker exec lt-22-rollout python3 wordfreq.py data/sample.txt
+<span class="o">7 the
+2 cat
+2 end</span>
+<span class="p">$</span> docker exec lt-22-rollout bash -c 'echo notes &gt; /app/NOTES.txt; rm /app/README.md; echo hi &gt; /home/agent/.bash_history'</code></pre>
+    <p>
+      Now the post-mortem. <code>docker diff</code> compares the container's writable layer with its
+      image: <code>A</code> added, <code>C</code> changed, <code>D</code> deleted.
+    </p>
+<pre class="term"><code><span class="p">$</span> docker diff lt-22-rollout
+<span class="o">C /app
+A /app/NOTES.txt
+A /app/__pycache__
+A /app/__pycache__/wordfreq.cpython-312.pyc
+C /app/tests
+A /app/tests/__pycache__
+A /app/tests/__pycache__/test_basic.cpython-312.pyc
+<span class="hl">C /app/wordfreq.py</span>
+D /app/README.md
+C /home
+C /home/agent
+A /home/agent/.bash_history
+C /tmp
+A /tmp/fix.py
+C /usr
+C /usr/sbin
+A /usr/sbin/docker-init</span></code></pre>
+    <p>
+      That is "what did the agent change?" answered exhaustively, from outside, without trusting
+      anything inside the box. (The last three lines are not the agent: <code>--init</code> places
+      the <code>docker-init</code> binary there. Know your runtime's own footprint so you can subtract
+      it.) It sees only the writable layer — files written to volumes, bind mounts or tmpfs do not
+      appear. Three more reads complete the picture:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker logs lt-22-rollout
+<span class="p">$</span> docker inspect --format '{{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} user={{.Config.User}} image={{.Image}}' lt-22-rollout
+<span class="o">running exit=0 oom=false user=agent image=sha256:82e0a1d29453139ac5067345ff29b98d2e34d7b07603d9a692546a4973a0dec3</span>
+<span class="p">$</span> docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.PIDs}}' lt-22-rollout
+<span class="o">NAME            CPU %     MEM USAGE / LIMIT     PIDS
+lt-22-rollout   0.01%     1.309MiB / 7.654GiB   2</span></code></pre>
+    <div class="pitfall">
+      <span class="label">Pitfall — <code>docker logs</code> is empty and that is correct</span>
+      <p><code>docker logs</code> "shows the command's <code>STDOUT</code> and
+      <code>STDERR</code>"<a class="cite" href="https://docs.docker.com/engine/logging/" title="Docker Docs, View container logs">[Docker: logs]</a>
+      — the container's <em>main</em> command, here <code>sleep infinity</code>, which prints
+      nothing. Everything the agent did arrived via <code>exec</code>, and exec output goes back to
+      whoever called exec, not to the container log. In an exec-driven harness the transcript is the
+      only record of the agent's output; if the harness didn't save both streams
+      (<a href="04-streams-pipes-redirection.html">page 4</a>), they are gone. <code>docker logs</code>
+      is useful when the container's command <em>is</em> the work:</p>
+<pre class="term"><code><span class="p">$</span> docker run --name lt-22-once wordfreq-bench:hardened python3 wordfreq.py nosuchfile
+<span class="o">Traceback (most recent call last):
+…
+FileNotFoundError: [Errno 2] No such file or directory: 'nosuchfile'</span>
+<span class="p">$</span> docker ps -a --filter name=lt-22 --format 'table {{.Names}}\t{{.Status}}\t{{.Command}}'
+<span class="o">NAMES           STATUS                              COMMAND
+lt-22-once      Exited (1) Less than a second ago   "python3 wordfreq.py…"
+lt-22-rollout   Up 25 seconds                       "sleep infinity"</span>
+<span class="p">$</span> docker logs lt-22-once 2&gt;/dev/null | wc -l      <span class="c"># stdout only</span>
+<span class="o">0</span>
+<span class="p">$</span> docker logs lt-22-once 2&gt;&amp;1 &gt;/dev/null | tail -1  <span class="c"># stderr only</span>
+<span class="o">FileNotFoundError: [Errno 2] No such file or directory: 'nosuchfile'</span></code></pre>
+      <p>Note <code>docker ps -a</code>: without <code>-a</code> you see only running containers, and
+      the exited one — the one you need to debug — is invisible.</p>
+    </div>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>The minimal post-mortem of any rollout is four reads from outside the box: exit code and
+      <code>OOMKilled</code> (<code>docker inspect</code>), main-process output
+      (<code>docker logs</code>), filesystem footprint (<code>docker diff</code>), and the image ID it
+      ran from. Collect them <em>before</em> removing the container — a harness that runs everything
+      with <code>--rm</code> destroys the evidence that would tell a model failure from an
+      infrastructure failure.</p>
+    </div>
+
+    <h2 id="reset">Reset: throw the container away</h2>
+    <p>
+      There is no "undo" command, and none is needed. Containers should be "as ephemeral as
+      possible… stopped and destroyed, then rebuilt and replaced with an absolute minimum set up and
+      configuration."<a class="cite" href="https://docs.docker.com/build/building/best-practices/#create-ephemeral-containers" title="Docker Docs, Building best practices: create ephemeral containers">[Docker: Dockerfile]</a>
+      Removing a container deletes its writable layer; a new container from the same image starts
+      from the image's exact bytes:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker rm -f lt-22-rollout lt-22-once
+<span class="p">$</span> docker run -d --name lt-22-rollout --init wordfreq-bench:hardened
+<span class="p">$</span> docker exec lt-22-rollout python3 wordfreq.py data/sample.txt
+<span class="o">3 The
+3 the
+2 on</span></code></pre>
+    <p>
+      The bug is back. That is a <span class="term" data-g="reset">reset</span>, and it cost under a
+      second. The exception is anything stored <em>outside</em> the writable layer. A named
+      <span class="term" data-g="volume">volume</span> survives both <code>docker rm</code> and
+      <code>--rm</code> (only anonymous volumes die with a <code>--rm</code>
+      container<a class="cite" href="https://docs.docker.com/engine/storage/volumes/#named-and-anonymous-volumes" title="Docker Docs, Volumes: named and anonymous volumes">[Docker: storage]</a>):
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm --mount type=volume,src=lt-22-cache,dst=/cache -u root wordfreq-bench:hardened \
+    bash -c 'echo rollout-1-was-here &gt; /cache/note'
+<span class="p">$</span> docker run --rm --mount type=volume,src=lt-22-cache,dst=/cache wordfreq-bench:hardened cat /cache/note
+<span class="o">rollout-1-was-here</span></code></pre>
+    <div class="evals">
+      <span class="label">In eval work</span>
+      <p>A fresh container per <span class="term" data-g="rollout">rollout</span> is what makes
+      samples independent. A shared pip cache volume, a reused container, a bind-mounted work
+      directory: each lets rollout 1 influence rollout 2, and then one early accident (a corrupted
+      cache, a half-applied fix) produces a <em>streak</em> of failures or passes. Error bars assume
+      independent samples
+      (<a href="../../../evals/evals-tut/pages/16-error-bars.html">Understanding LLM Evals, page 16</a>);
+      correlated rollouts make them too narrow. Audit for it with
+      <code>docker inspect --format '{{json .Mounts}}'</code> on a live sandbox.</p>
+    </div>
+
+    <h2 id="layers-remember">Two things an image never forgets</h2>
+    <p>
+      <strong>Deleted files.</strong> Layers are append-only differences. Docker's docs, about a
+      directory removed by a later instruction: it "will still be available in the previous
+      layer."<a class="cite" href="https://docs.docker.com/engine/storage/drivers/#images-and-layers" title="Docker Docs, Storage drivers: images and layers">[Kernel: overlayfs]</a>
+      The deliberately sloppy build of the running example does exactly this
+      (<code>Dockerfile.sloppy</code>: <code>COPY solution /tmp/solution</code> then
+      <code>RUN rm -rf /tmp/solution</code>). In a container the directory is gone. In the image it is
+      not:
+    </p>
+<pre class="term"><code><span class="p">$</span> docker run --rm wordfreq-bench:sloppy ls /tmp/solution
+<span class="o">ls: cannot access '/tmp/solution': No such file or directory</span>
+<span class="p">$</span> docker save wordfreq-bench:sloppy -o img.tar &amp;&amp; tar -xf img.tar
+<span class="p">$</span> for l in blobs/sha256/*; do tar -tf "$l" 2&gt;/dev/null | grep solution &amp;&amp; echo "   ^ in ${l:0:28}…"; done
+<span class="o">tmp/.wh.solution
+   ^ in blobs/sha256/84eb90d2670f6cf…
+tmp/solution/
+<span class="hl">tmp/solution/wordfreq.patch.py</span>
+   ^ in blobs/sha256/88440700ca8c404…</span></code></pre>
+    <p>
+      One layer holds the file; the next holds only a <code>.wh.</code> "whiteout" marker saying
+      "hide it". Anyone who can pull the image can read the
+      oracle solution — this is
+      <span class="term" data-g="solution-leakage">solution leakage</span> through the image, and it
+      is why the hardened Dockerfile never copies the solution at all, and why
+      <code>rm -rf /var/lib/apt/lists/*</code> sits in the <em>same</em> <code>RUN</code> as the
+      install: deletion only saves space within one layer.
+    </p>
+    <p>
+      <strong>Build arguments and ENV.</strong> "Build arguments and environment variables are
+      inappropriate for passing secrets to your build, because they persist in the final
+      image."<a class="cite" href="https://docs.docker.com/build/building/secrets/" title="Docker Docs, Build secrets">[Docker: Dockerfile]</a>
+      Proof, with a four-line Dockerfile (<code>ARG HF_TOKEN</code>,
+      <code>ENV JUDGE_API_KEY=sk-judge-999</code>, a <code>RUN</code> that uses the token):
+    </p>
+<pre class="term"><code><span class="p">$</span> docker build -q --build-arg HF_TOKEN=hf_secret_777 -t lt-22-arg:1 .
+<span class="p">$</span> docker history --no-trunc --format '{{.CreatedBy}}' lt-22-arg:1 | head -3
+<span class="o">RUN |1 <span class="hl">HF_TOKEN=hf_secret_777</span> /bin/sh -c echo "downloading with $HF_TOKEN" &gt; /dev/null # buildkit
+ENV <span class="hl">JUDGE_API_KEY=sk-judge-999</span>
+ARG HF_TOKEN=hf_secret_777</span>
+<span class="p">$</span> docker run --rm lt-22-arg:1 env | grep -E 'TOKEN|KEY'
+<span class="o">JUDGE_API_KEY=sk-judge-999</span></code></pre>
+    <p>
+      The <code>ARG</code> is not in the container's environment, but it is in the history forever;
+      the <code>ENV</code> is handed to the agent directly. The documented fix is
+      <code>RUN --mount=type=secret</code>; the better fix for an eval is that the
+      secret never goes near the task image
+      (<a href="11-environment-and-secrets.html">page 11</a>).
+    </p>
+
+    <h2 id="compose">Compose: tasks with more than one box</h2>
+    <p>
+      Some tasks need a database or an API beside the agent's box.
+      <span class="term" data-g="docker-compose">Docker Compose</span> describes several containers
+      and their networks in one YAML file; harnesses such as Inspect take a compose file as the
+      sandbox definition (<a href="25-how-harnesses-use-linux.html">page 25</a>). A two-service
+      variant of the running example:
+    </p>
+<pre><code># wordfreq-bench, two-service variant: the agent's box plus a cache it must talk to.
+name: lt-22-task
+services:
+  default:                        # the service the harness execs into
+    image: wordfreq-bench:hardened
+    init: true
+    user: agent
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    networks: [tasknet]
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: redis:7-alpine
+    networks: [tasknet]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+networks:
+  tasknet:
+    internal: true                # services reach each other; nothing reaches out</code></pre>
+    <p>
+      Every <code>docker run</code> flag has a compose key (<code>init</code>, <code>user</code>,
+      <code>mem_limit</code>, <code>pids_limit</code>; the full hardening set is on
+      <a href="23-hardening-containers.html">page 23</a>). Two keys deserve comment.
+      <code>depends_on</code> in its short form gives start <em>order</em> only; the long form with
+      <code>condition: service_healthy</code> waits for the healthcheck <a class="cite" href="https://docs.docker.com/reference/compose-file/services/#depends_on" title="Docker Docs, Compose file reference: depends_on">[Compose]</a>
+      — otherwise the agent's first
+      command races the database's startup and you get a
+      flaky task. And <code>internal: true</code>
+      "lets you create an externally isolated
+      network."<a class="cite" href="https://docs.docker.com/reference/compose-file/networks/#internal" title="Docker Docs, Compose file reference: networks, internal">[Compose]</a>
+    </p>
+<pre class="term"><code><span class="p">$</span> docker compose up -d
+<span class="o"> …
+ Container lt-22-task-db-1  Healthy
+ Container lt-22-task-default-1  Started</span>
+<span class="p">$</span> docker compose exec default getent hosts db
+<span class="o">172.18.0.2      db</span>
+<span class="p">$</span> docker compose exec default python3 -c "import socket; s=socket.create_connection(('db',6379),3); s.sendall(b'PING\r\n'); print(s.recv(16))"
+<span class="o">b'+PONG\r\n'</span>
+<span class="p">$</span> docker compose exec -T default python3 -c 'import socket; socket.create_connection(("1.1.1.1", 443), 3)'
+<span class="o">…
+OSError: [Errno 101] <span class="hl">Network is unreachable</span></span>
+<span class="p">$</span> docker compose down -v</code></pre>
+    <p>
+      The service name <code>db</code> resolves because Compose registers service names with Docker's
+      internal DNS server<a class="cite" href="https://docs.docker.com/compose/how-tos/networking/#default-network-and-service-discovery" title="Docker Docs, Networking in Compose">[Compose]</a>
+      (<a href="18-dns-http-tls.html">page 18</a>); the outside world is
+      unreachable because an internal network has no route out
+      (<a href="19-firewalls-and-egress.html">page 19</a>; for the concepts behind container
+      networking see
+      <a href="../../../networking/networking-tut/pages/14-containers.html">Networking for LLM Evals, lesson 14</a>).
+      <code>down -v</code> removes containers,
+      network <em>and</em> volumes — the compose-level reset. Forget <code>-v</code> and the database's
+      volume carries state into the next rollout.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat — Docker Desktop is a VM</span>
+      <p>On your Mac the "host" in every Docker sentence is a hidden Linux VM: "for Docker Desktop,
+      the daemon runs inside a Linux VM, not directly on the native
+      host."<a class="cite" href="https://docs.docker.com/engine/storage/bind-mounts/#considerations-and-constraints" title="Docker Docs, Bind mounts: considerations and constraints">[Docker: storage]</a>
+      So the <code>7.654GiB</code> limit in the <code>docker stats</code> output above is that VM's
+      memory, not the Mac's; bind mounts cross a macOS-to-VM boundary; and on Apple Silicon
+      <code>uname -m</code> in these containers prints <code>aarch64</code>, not the
+      <code>x86_64</code> of most benchmark hosts. Develop on the Mac; take measurements on the
+      Linux hosts you will report (<a href="../appendices/e-macos-vs-linux.html">Appendix E</a>).</p>
+    </div>
+
+    <div class="check">
+      <span class="label">Check your understanding</span>
+      <p>A teammate's harness launches every sandbox with <code>docker run --rm</code> and reports
+      412 of 500 rollouts correct. Of the 88 failures, 31 have an empty transcript and exit code 137
+      or 125. They propose reporting 412/469, "since those 31 never really ran". What would you ask
+      in review?</p>
+      <details class="solution"><summary>Reveal the reasoning</summary>
+      <p><strong>Observed:</strong> two exit codes and empty transcripts. <strong>Supposed:</strong>
+      that all 31 are infrastructure faults. The codes do not mean the same thing. 125 with
+      <code>Error response from daemon</code> means the container never started — a fact about the
+      run. 137 means SIGKILL, which could be an OOM kill, a harness timeout, or
+      <code>docker stop</code>; an agent that allocates 10 GB is arguably a model failure under a
+      stated budget. The discriminating evidence is <code>State.OOMKilled</code>, the harness's
+      timeout log, and timing — and <code>--rm</code> has already deleted the first of these, so ask
+      for the harness to stop using <code>--rm</code> (collect <code>inspect</code>/<code>diff</code>,
+      then remove) and re-run the 31. For the report: never drop them silently. Give
+      <em>correct / scheduled</em> (412/500), <em>completed / scheduled</em>, and
+      <em>correct / completed</em> as three separate numbers, with the rule for what counts as
+      "completed" fixed before looking at results — a denominator chosen afterwards can be steered
+      to any score.</p>
+      </details>
+    </div>
+
+    <div class="lab">
+      <span class="label">Lab</span>
+      <p><strong>Container lab</strong> — these run on your Mac's terminal (the <code>docker</code>
+      client), not inside <code>lt-lab</code>. You need the course repo's
+      <code>research/wordfreq-bench/</code> directory; <code>cd</code> into it.</p>
+      <ol>
+        <li><strong>Reproduce.</strong> Build the hardened image, start a detached container named
+          <code>wf</code> with <code>--init</code>, create a file in <code>/app</code> and one in
+          <code>/tmp</code> via <code>docker exec</code>, and list the footprint with
+          <code>docker diff</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker build -t wordfreq-bench:hardened .
+<span class="p">$</span> docker run -d --name wf --init wordfreq-bench:hardened
+<span class="p">$</span> docker exec wf bash -c 'echo notes &gt; /app/NOTES.txt; echo x &gt; /tmp/x'
+<span class="p">$</span> docker diff wf
+<span class="o">C /app
+A /app/NOTES.txt
+C /usr
+C /usr/sbin
+A /usr/sbin/docker-init
+C /tmp
+A /tmp/x</span></code></pre>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Before running it: what will
+          <code>docker logs wf</code> print, given everything you just did in <code>wf</code>? Then:
+          remove <code>wf</code>, start it again, and predict whether <code>/app/NOTES.txt</code>
+          exists.
+          <details class="solution"><summary>Solution</summary>
+          <p>Nothing: the log holds the main command's streams (<code>sleep infinity</code>), not
+          exec'd commands'. After <code>docker rm -f wf</code> and a new <code>docker run</code>, the
+          file is gone (<code>ls: cannot access '/app/NOTES.txt': No such file or directory</code>) —
+          the writable layer died with the container.</p>
+          </details></li>
+        <li><strong>Predict, then verify.</strong> Run the two <code>--mount type=volume,src=lt-22-cache…</code>
+          commands from the <a href="#reset">reset section</a>. Both containers used
+          <code>--rm</code>. Does the note survive? Clean up with
+          <code>docker volume rm lt-22-cache</code>.
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker run --rm --mount type=volume,src=lt-22-cache,dst=/cache wordfreq-bench:hardened cat /cache/note
+<span class="o">rollout-1-was-here</span>
+<span class="p">$</span> docker volume ls --filter name=lt-22
+<span class="o">DRIVER    VOLUME NAME
+local     lt-22-cache</span></code></pre>
+          <p>It survives: <code>--rm</code> removes anonymous volumes only. Named volumes are
+          cross-rollout state until someone runs <code>docker volume rm</code>.</p>
+          </details></li>
+        <li><strong>Eval task: whose failure?</strong> A rollout "failed with no output". Recreate
+          it, then decide from outside the box whether to score it as a model failure:
+          <code>docker run --name pm --memory 64m --memory-swap 64m wordfreq-bench:hardened python3 -c 'x = bytearray(200*1024*1024)'</code>
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker ps -a --filter name=pm --format '{{.Names}}\t{{.Status}}'
+<span class="o">pm	Exited (137) Less than a second ago</span>
+<span class="p">$</span> docker logs pm
+<span class="p">$</span> docker inspect --format 'exit={{.State.ExitCode}} oom={{.State.OOMKilled}} mem={{.HostConfig.Memory}}' pm
+<span class="o">exit=137 oom=true mem=67108864</span>
+<span class="p">$</span> docker rm pm</code></pre>
+          <p>137 = killed by SIGKILL (<a href="10-signals-exit-codes.html">page 10</a>); empty logs
+          because a SIGKILLed process prints nothing; <code>oom=true</code> with a 64 MiB limit says
+          the kernel's OOM killer did it (<a href="12-resources-and-limits.html">page 12</a>).
+          Whether that is "the model's fault" depends on whether 64 MiB is the benchmark's stated
+          budget — but it must be <em>counted</em> as an OOM, not as a wrong answer.</p>
+          </details></li>
+        <li><strong>Eval task: audit an image you were handed.</strong> Without starting a
+          container, find out whether <code>wordfreq-bench:sloppy</code> ever contained a solution
+          directory. (Hint: <code>docker history</code>.)
+          <details class="solution"><summary>Solution</summary>
+<pre class="term"><code><span class="p">$</span> docker history --format '{{.CreatedBy}}\t{{.Size}}' wordfreq-bench:sloppy | head -6
+<span class="o">CMD ["sleep" "infinity"]	0B
+WORKDIR /app	4.1kB
+<span class="hl">RUN /bin/sh -c rm -rf /tmp/solution # buildk…	8.19kB
+COPY solution /tmp/solution # buildkit	16.4kB</span>
+COPY grader /opt/grader # buildkit	24.6kB
+COPY build/repo-with-history /app # buildkit	283kB</span></code></pre>
+          <p>A <code>COPY</code> followed by an <code>rm</code> of the same path is the signature. The
+          history also shows the grader being copied into the image — the second finding.</p>
+          </details></li>
+      </ol>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>[Docker: run] Docker Inc., <em>docker container run</em> (CLI reference), <em>Running containers</em>, <em>docker container exec</em>. Docker Docs. <a href="https://docs.docker.com/reference/cli/docker/container/run/">docs.docker.com/reference/cli/docker/container/run/</a> · <a href="https://docs.docker.com/engine/containers/run/">docs.docker.com/engine/containers/run/</a></li>
+        <li>[Docker: Dockerfile] Docker Inc., <em>Dockerfile reference</em>; <em>Building best practices</em>; <em>Build secrets</em>; <em>Build cache invalidation</em>. Docker Docs. <a href="https://docs.docker.com/reference/dockerfile/">docs.docker.com/reference/dockerfile/</a> · <a href="https://docs.docker.com/build/building/best-practices/">docs.docker.com/build/building/best-practices/</a></li>
+        <li>[Docker: storage] Docker Inc., <em>Storage; Volumes; Bind mounts; tmpfs mounts</em>. Docker Docs. <a href="https://docs.docker.com/engine/storage/">docs.docker.com/engine/storage/</a></li>
+        <li>[Kernel: overlayfs] Linux kernel documentation, <em>Overlay Filesystem</em>, with Docker Docs <em>Storage drivers</em> and <em>containerd image store</em>. <a href="https://docs.kernel.org/filesystems/overlayfs.html">docs.kernel.org/filesystems/overlayfs.html</a> · <a href="https://docs.docker.com/engine/storage/drivers/">docs.docker.com/engine/storage/drivers/</a> · <a href="https://docs.docker.com/engine/storage/containerd/">docs.docker.com/engine/storage/containerd/</a></li>
+        <li>[Compose] Docker Inc., <em>Compose file reference: services; networks</em>. Docker Docs. <a href="https://docs.docker.com/reference/compose-file/services/">docs.docker.com/reference/compose-file/services/</a></li>
+        <li>[Docker: logs] Docker Inc., <em>View container logs</em>. Docker Docs. <a href="https://docs.docker.com/engine/logging/">docs.docker.com/engine/logging/</a></li>
+        <li>[OCI Runtime Spec] Open Container Initiative, <em>Runtime Specification</em>, with Docker Docs <em>Alternative container runtimes</em> (Engine → containerd → runc). <a href="https://github.com/opencontainers/runtime-spec/blob/main/spec.md">github.com/opencontainers/runtime-spec</a> · <a href="https://docs.docker.com/engine/daemon/alternative-runtimes/">docs.docker.com/engine/daemon/alternative-runtimes/</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

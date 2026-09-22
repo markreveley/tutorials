@@ -1,0 +1,125 @@
+{
+ "id": "tcp-udp",
+ "tag": "[tcp(7)]",
+ "citation": {
+  "authors": "Linux man-pages project; IETF (Eddy, W., Ed.; Postel, J.; Cotton, M. et al.)",
+  "title": "tcp(7), udp(7), connect(2) (Linux man-pages 6.19); RFC 9293 Transmission Control Protocol; RFC 768 User Datagram Protocol; RFC 6335 port number registry procedures; Linux kernel IP sysctl documentation",
+  "venue": "man7.org / rfc-editor.org / docs.kernel.org",
+  "year": "2026 (man-pages); 2022 (RFC 9293); 1980 (RFC 768); 2011 (RFC 6335)",
+  "url": "https://man7.org/linux/man-pages/man7/tcp.7.html"
+ },
+ "fetched_urls": [
+  "https://man7.org/linux/man-pages/man7/tcp.7.html",
+  "https://man7.org/linux/man-pages/man7/udp.7.html",
+  "https://man7.org/linux/man-pages/man2/connect.2.html",
+  "https://man7.org/linux/man-pages/man5/proc_sys_net_ipv4.5.html",
+  "https://www.rfc-editor.org/rfc/rfc6335.txt",
+  "https://www.rfc-editor.org/rfc/rfc9293.txt",
+  "https://www.rfc-editor.org/rfc/rfc768.txt",
+  "https://docs.kernel.org/networking/ip-sysctl.html",
+  "https://man7.org/linux/man-pages/man8/iptables-extensions.8.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "TCP: reliable, ordered, connection-oriented byte stream; UDP: connectionless, unreliable datagrams",
+   "verdict": "confirmed",
+   "finding": "tcp(7): \"reliable, stream-oriented, full-duplex connection between two sockets\"; \"guarantees that the data arrives in order and retransmits lost packets\"; \"does not preserve record boundaries\". RFC 9293 s2.2: \"TCP provides a reliable, in-order, byte-stream service to applications.\" udp(7): \"connectionless, unreliable datagram packet service. Packets may be reordered or duplicated before they arrive.\"",
+   "quote": "It provides a reliable, stream-oriented, full-duplex connection between two sockets on top of ip(7), for both v4 and v6 versions. TCP guarantees that the data arrives in order and retransmits lost packets. It generates and checks a per-packet checksum to catch transmission errors. TCP does not preserve record boundaries.",
+   "location": "tcp(7) DESCRIPTION",
+   "cite_url": "https://man7.org/linux/man-pages/man7/tcp.7.html"
+  },
+  {
+   "planned": "Port ranges: System 0-1023, User 1024-49151, Dynamic/Private 49152-65535 (RFC 6335); Linux ephemeral default range from ip_local_port_range 32768-60999",
+   "verdict": "confirmed",
+   "finding": "RFC 6335 s6 exactly as planned (System = \"Well Known\", User = \"Registered\", Dynamic = \"Private or Ephemeral\", never assigned). Linux default ip_local_port_range is 32768 60999 per kernel docs - i.e. Linux's ephemeral range does NOT match the IANA dynamic range (it starts inside the User Ports range and stops short of 65535). Executed in ubuntu:24.04 container: `cat /proc/sys/net/ipv4/ip_local_port_range` -> \"32768\t60999\".",
+   "quote": "the System Ports, also known as the Well Known Ports, from 0-1023 (assigned by IANA) ... the User Ports, also known as the Registered Ports, from 1024-49151 (assigned by IANA) ... the Dynamic Ports, also known as the Private or Ephemeral Ports, from 49152-65535 (never assigned)",
+   "location": "RFC 6335 section 6, Port Number Ranges",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc6335#section-6"
+  },
+  {
+   "planned": "Connection refused = RST from a reachable host with no listener; timeout = packets dropped (firewall DROP or no route)",
+   "verdict": "corrected",
+   "finding": "Supported, with two refinements. (1) Refused: RFC 9293 s3.5.2 - a SYN to a port with no connection (CLOSED) is answered with a reset; connect(2) ECONNREFUSED = \"found no one listening on the remote address\". But a firewall REJECT rule also produces an immediate refusal (default ICMP port-unreachable, or TCP RST with tcp-reset) so \"refused\" does not prove the host itself answered. (2) Timeout: connect(2) ETIMEDOUT = \"Timeout while attempting connection\"; the kernel retransmits SYNs tcp_syn_retries times (default 6) - about 127 s per tcp(7), 131 s per current kernel docs - so without a client-side timeout a dropped SYN hangs for ~2 minutes. \"No route\" is NOT a timeout: it fails immediately with ENETUNREACH (executed under --network none: curl exit 7 after 0 ms; ping \"connect: Network is unreachable\"). Executed: closed port on 127.0.0.1 -> curl (7) after 0 ms; nft drop rule -> curl (28) after 3007 ms with --connect-timeout 3; nft reject -> curl (7) after 0 ms.",
+   "quote": "If the connection does not exist (CLOSED), then a reset is sent in response to any incoming segment except another reset. A SYN segment that does not match an existing connection is rejected by this means.",
+   "location": "RFC 9293 section 3.5.2, Reset Generation",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc9293#section-3.5.2"
+  }
+ ],
+ "extra_findings": [
+  {
+   "finding": "Kernel doc: ip_local_port_range default.",
+   "quote": "Defines the local port range that is used by TCP and UDP to choose the local port. The first number is the first, the second the last local port number. ... Must be greater than or equal to ip_unprivileged_port_start. The default values are 32768 and 60999 respectively.",
+   "location": "Kernel docs: IP Sysctl, ip_local_port_range",
+   "cite_url": "https://docs.kernel.org/networking/ip-sysctl.html"
+  },
+  {
+   "finding": "When an ephemeral port is allocated (bind to port 0, listen/connect/sendto on an unbound socket).",
+   "quote": "This file contains two integers that define the default local port range allocated to sockets that are not explicitly bound to a port number—that is, the range used for ephemeral ports.",
+   "location": "proc_sys_net_ipv4(5), /proc/sys/net/ipv4/ip_local_port_range",
+   "cite_url": "https://man7.org/linux/man-pages/man5/proc_sys_net_ipv4.5.html"
+  },
+  {
+   "finding": "connect(2) error meanings.",
+   "quote": "ECONNREFUSED: A connect() on a stream socket found no one listening on the remote address. ... ENETUNREACH: Network is unreachable. ... ETIMEDOUT: Timeout while attempting connection. The server may be too busy to accept new connections.",
+   "location": "connect(2) ERRORS",
+   "cite_url": "https://man7.org/linux/man-pages/man2/connect.2.html"
+  },
+  {
+   "finding": "SYN retry default per tcp(7).",
+   "quote": "The maximum number of times initial SYNs for an active TCP connection attempt will be retransmitted. ... The default value is 6, which corresponds to retrying for up to approximately 127 seconds.",
+   "location": "tcp(7) /proc interfaces, tcp_syn_retries"
+  },
+  {
+   "finding": "SYN retry default per kernel docs (differs slightly from tcp(7): 131 s).",
+   "quote": "Default value is 6, which corresponds to 67seconds (with tcp_syn_linear_timeouts = 4) till the last retransmission with the current initial RTO of 1second. With this the final timeout for an active TCP connection attempt will happen after 131seconds.",
+   "location": "Kernel docs: IP Sysctl, tcp_syn_retries",
+   "cite_url": "https://docs.kernel.org/networking/ip-sysctl.html"
+  },
+  {
+   "finding": "General RST rule.",
+   "quote": "As a general rule, reset (RST) is sent whenever a segment arrives that apparently is not intended for the current connection. A reset must not be sent if it is not clear that this is the case.",
+   "location": "RFC 9293 section 3.5.2"
+  },
+  {
+   "finding": "RFC 9293 is the current TCP spec (obsoletes RFC 793); tcp(7) still cites RFC 793. Three-way handshake is defined in s3.5.",
+   "quote": "The \"three-way handshake\" is the procedure used to establish a connection.",
+   "location": "RFC 9293 section 3.5"
+  },
+  {
+   "finding": "UDP per its RFC: minimal mechanism, no delivery or duplicate protection.",
+   "quote": "This protocol provides a procedure for application programs to send messages to other programs with a minimum of protocol mechanism. The protocol is transaction oriented, and delivery and duplicate protection are not guaranteed.",
+   "location": "RFC 768 Introduction",
+   "cite_url": "https://www.rfc-editor.org/rfc/rfc768"
+  },
+  {
+   "finding": "UDP \"connection refused\" exists too: an ICMP port-unreachable for an earlier datagram surfaces as ECONNREFUSED on a later call.",
+   "quote": "ECONNREFUSED: No receiver was associated with the destination address. This might be caused by a previous packet sent over the socket.",
+   "location": "udp(7) ERRORS",
+   "cite_url": "https://man7.org/linux/man-pages/man7/udp.7.html"
+  },
+  {
+   "finding": "Unbound UDP sockets get an ephemeral port from ip_local_port_range and bind INADDR_ANY.",
+   "quote": "Otherwise, the socket layer will automatically assign a free local port out of the range defined by /proc/sys/net/ipv4/ip_local_port_range and bind the socket to INADDR_ANY.",
+   "location": "udp(7) DESCRIPTION"
+  },
+  {
+   "finding": "REJECT semantics in iptables (default error is ICMP port unreachable; tcp-reset option).",
+   "quote": "This is used to send back an error packet in response to the matched packet: otherwise it is equivalent to DROP ... (icmp-port-unreachable is the default). The option tcp-reset can be used on rules which only match the TCP protocol: this causes a TCP RST packet to be sent back.",
+   "location": "iptables-extensions(8), REJECT (IPv4-specific)",
+   "cite_url": "https://man7.org/linux/man-pages/man8/iptables-extensions.8.html"
+  },
+  {
+   "finding": "Executed symptom table (refused vs dropped vs rejected vs no network).",
+   "quote": "closed port:   curl: (7) Failed to connect to 127.0.0.1 port 81 after 0 ms: Couldn't connect to server\nblackhole:     curl: (28) Failed to connect to 192.0.2.1 port 80 after 3012 ms: Timeout was reached   [--connect-timeout 3]\nnft drop:      curl: (28) Failed to connect to 1.1.1.1 port 80 after 3007 ms: Timeout was reached\nnft reject:    curl: (7) Failed to connect to 1.1.1.1 port 80 after 0 ms: Couldn't connect to server\n--network none: curl: (7) Failed to connect to 93.184.215.14 port 80 after 0 ms: Couldn't connect to server",
+   "location": "executed lt-r4-tools:local = ubuntu:24.04 (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; curl 8.5.0)"
+  },
+  {
+   "finding": "Executed: a TCP three-way handshake as tcpdump shows it ([S], [S.], [.] then the HTTP GET).",
+   "quote": "IP 172.17.0.3.42196 > 1.1.1.1.80: Flags [S], seq 2698517202, win 65495, ...\nIP 1.1.1.1.80 > 172.17.0.3.42196: Flags [S.], seq 2102899308, ack 2698517203, ...\nIP 172.17.0.3.42196 > 1.1.1.1.80: Flags [.], ack 1, win 512, ...\nIP 172.17.0.3.42196 > 1.1.1.1.80: Flags [P.], seq 1:71, ack 1, ... length 70: HTTP: GET / HTTP/1.1",
+   "location": "executed lt-r4-tools:local, tcpdump -i eth0 -n -c 6 \"tcp port 80 and host 1.1.1.1\" (Docker Desktop 28.1.1, linuxkit kernel 6.10.14, arm64; curl 8.5.0)"
+  }
+ ],
+ "teaching_notes": "Folklore corrected: (a) Linux ephemeral ports are 32768-60999, not the IANA 49152-65535 (the source port 42196 in the executed tcpdump shows it). (b) \"refused means the host is up and nothing listens\" is only one cause - a firewall REJECT gives the identical client symptom; \"timeout means DROP or no route\" is half wrong - no route fails instantly (ENETUNREACH), only silent drops time out, and the kernel default wait is ~127-131 s, which is why harnesses must set --connect-timeout. tcp(7) says ~127 s and kernel docs say 131 s: quote \"about two minutes\"."
+}

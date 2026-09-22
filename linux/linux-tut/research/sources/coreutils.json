@@ -1,0 +1,227 @@
+{
+ "id": "coreutils",
+ "tag": "[Coreutils]",
+ "citation": {
+  "authors": "Free Software Foundation (David MacKenzie et al.)",
+  "title": "GNU Coreutils manual (for GNU Coreutils 9.12)",
+  "venue": "gnu.org",
+  "year": "n.d. (manual for release 9.12, fetched 2026)",
+  "url": "https://www.gnu.org/software/coreutils/manual/coreutils.html"
+ },
+ "fetched_urls": [
+  "https://www.gnu.org/software/coreutils/manual/coreutils.html",
+  "https://man7.org/linux/man-pages/man1/timeout.1.html"
+ ],
+ "fetched_on": "2026-09-20",
+ "access": "full",
+ "claims": [
+  {
+   "planned": "timeout: sends TERM by default; exit status 124 on timeout; 125 if timeout itself fails; 126/127 for not-executable/not-found; 137 when KILL is sent (-k / -s KILL) ; --kill-after behaviour; --preserve-status",
+   "verdict": "confirmed",
+   "finding": "All confirmed, by docs and by running. Default signal is TERM. 124 = command timed out and --preserve-status not given; 125 = timeout itself failed; 126 = found but cannot be invoked; 127 = not found; 137 = command OR timeout itself received KILL (128+9) — the two cases cannot be distinguished; otherwise the command's own status. -k DURATION sends KILL that long AFTER the first signal (not from start). 124 is returned even if the child ignored TERM and later finished normally. --preserve-status returns the child's status instead of 124 (143 if it died of TERM). Version caveat: the 9.12 manual lists short options -p (--preserve-status) and -f (--foreground); coreutils 9.4 on Ubuntu 24.04 has only the long forms. BusyBox timeout (Alpine) does NOT return 124 — see extra_findings.",
+   "quote": "124 if command times out, and --preserve-status is not specified 125 if timeout itself fails 126 if command is found but cannot be invoked 127 if command cannot be found 137 if command or timeout is sent the KILL(9) signal (128+9) the exit status of command otherwise",
+   "location": "23.6 timeout: Run a command with a time limit, 'Exit status'",
+   "cite_url": "https://www.gnu.org/software/coreutils/manual/coreutils.html#timeout-invocation"
+  },
+  {
+   "planned": "uniq only collapses ADJACENT duplicate lines, hence sort | uniq",
+   "verdict": "confirmed",
+   "finding": "Confirmed. The manual itself suggests `sort -u` for non-adjacent duplicates. Executed: printf 'a\\nb\\na\\na\\nb\\n' | uniq -> a b a b; | sort | uniq -c -> 3 a / 2 b.",
+   "quote": "The input need not be sorted, but repeated input lines are detected only if they are adjacent. If you want to discard non-adjacent duplicate lines, perhaps you want to use sort -u.",
+   "location": "7.3 uniq: Uniquify files",
+   "cite_url": "https://www.gnu.org/software/coreutils/manual/coreutils.html#uniq-invocation"
+  },
+  {
+   "planned": "sort is locale-dependent; LC_ALL=C gives byte ordering (reproducibility point)",
+   "verdict": "confirmed",
+   "finding": "sort compares using the LC_COLLATE locale; the manual's footnote says to set LC_ALL=C for the traditional order and warns that setting only LC_COLLATE is ineffective if LC_ALL is set. The same applies to ls ordering and uniq comparisons. Executed: LC_ALL=C sort -> '10 9 A B _x a b'; LC_ALL=en_US.UTF-8 sort -> '10 9 a A b B _x'. Note the stock ubuntu:24.04 image only has C, C.utf8 and POSIX locales (LANG unset), so the difference appears only after a locale is generated — or between a container and the reader's Mac/host.",
+   "quote": "If you use a non-POSIX locale (e.g., by setting LC_ALL to 'en_US'), then sort may produce output that is sorted differently than you're accustomed to. In that case, set the LC_ALL environment variable to 'C'.",
+   "location": "7.1 sort: Sort text files, footnote 1",
+   "cite_url": "https://www.gnu.org/software/coreutils/manual/coreutils.html#sort-invocation"
+  },
+  {
+   "planned": "rm: -r, -f semantics; --preserve-root is default (rm -rf / refused)",
+   "verdict": "confirmed",
+   "finding": "-r/-R/--recursive removes directories and their contents; by default rm does not remove directories. -f ignores nonexistent files and missing operands and never prompts. --preserve-root is the default: rm fails on any attempt to remove / recursively; --no-preserve-root overrides. Caveat: the protection is only for a path that resolves to / itself — `rm -rf /*` is not covered (the shell expands it to /bin /etc ...). chmod/chown/chgrp default to --NO-preserve-root. Executed: `rm -rf /` -> 'rm: it is dangerous to operate recursively on '/'' / 'rm: use --no-preserve-root to override this failsafe', status 1.",
+   "quote": "Fail upon any attempt to remove the root directory, /, when used with the --recursive option. This is the default behavior.",
+   "location": "11.5 rm: Remove files or directories; 2.9 Treating / specially",
+   "cite_url": "https://www.gnu.org/software/coreutils/manual/coreutils.html#rm-invocation"
+  },
+  {
+   "planned": "ls -l output fields; chmod symbolic and numeric modes; chown syntax; mktemp; tee; head/tail -f; wc; cut; tr; env; nohup; stat; df/du; readlink/realpath",
+   "verdict": "confirmed",
+   "finding": "All documented as expected; specifics are itemised in extra_findings (ls -l field order and type/mode characters; symbolic mode grammar [ugoa...][-+=]perms; octal table; chown [owner][:[group]]; mktemp default template tmp.XXXXXXXXXX and 0600/0700 modes; tee -a; head/tail default 10 lines; tail -f follows by descriptor by default; wc prints newline, word, byte counts; env -i; nohup; df units of 1024 bytes; du vs --apparent-size; readlink vs realpath).",
+   "quote": "In addition to the name of each file, print the file type, file mode bits, number of hard links, owner name, group name, size, and timestamp (see Formatting file timestamps), normally the modification timestamp (the mtime, see File timestamps).",
+   "location": "10.1.2 What information is listed, -l",
+   "cite_url": "https://www.gnu.org/software/coreutils/manual/coreutils.html#What-information-is-listed"
+  }
+ ],
+ "extra_findings": [
+  {
+   "fact": "Manual fetched documents GNU Coreutils 9.12; Ubuntu 24.04 ships 9.4 and Debian 12 ships 9.1. Option sets differ slightly (e.g. timeout -p/-f short options are newer than 9.4).",
+   "quote": "$ timeout --version -> timeout (GNU coreutils) 9.4 ; timeout --help lists '--preserve-status' and '--foreground' with no short form, plus '-k, --kill-after=DURATION', '-s, --signal=SIGNAL', '-v, --verbose'",
+   "location": "title page 'GNU Coreutils 9.12'; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "timeout observed exit statuses.",
+   "quote": "timeout 1 sleep 5 -> 124 | timeout 5 true -> 0 | timeout 5 bash -c 'exit 42' -> 42 | timeout 1 nosuchcmd -> \"timeout: failed to run command 'nosuchcmd_zz': No such file or directory\" 127 | non-executable file -> 'Permission denied' 126 | timeout --badopt -> 125 | timeout -s KILL 1 sleep 5 -> 137 | child traps/ignores TERM, no -k: child runs to completion, status still 124 | timeout -k 1 1 (child ignores TERM) -> 137 | timeout --preserve-status 1 sleep 5 -> 143 | --preserve-status with child handler 'exit 7' -> 7 | timeout -v -> \"timeout: sending signal TERM to command 'sleep'\"",
+   "location": "executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "BusyBox timeout (Alpine) is NOT GNU timeout: on expiry it returned 143 (the child's 128+15), not 124. A harness that detects timeouts by `== 124` will silently miss them on Alpine images.",
+   "quote": "$ timeout 1 sleep 3; echo $? -> Terminated / 143\n$ timeout -s KILL 1 sleep 3; echo $? -> Killed / 137\n$ ls -l /usr/bin/timeout -> /usr/bin/timeout -> /bin/busybox (BusyBox v1.36.1)",
+   "location": "executed alpine:3.20"
+  },
+  {
+   "fact": "KILL ambiguity: 137 may mean timeout itself was killed and the command is still running.",
+   "quote": "In the case of the 'KILL(9)' signal, timeout returns with exit status 137, regardless of whether that signal is sent to command or to timeout itself, i.e., these cases cannot be distinguished. In the latter case, the command process may still be alive after timeout has forcefully been terminated.",
+   "location": "23.6 timeout"
+  },
+  {
+   "fact": "--kill-after timing and purpose.",
+   "quote": "The specified duration starts from the point in time when timeout sends the initial signal to command, i.e., not from the beginning when the command is started. ... This option may be useful if the selected signal did not kill the command, either because the signal was blocked or ignored",
+   "location": "23.6 timeout, -k"
+  },
+  {
+   "fact": "timeout runs the command in a background process group unless --foreground; with --foreground, children of the command are not timed out. Duration suffixes s (default), m, h, d; a duration of 0 disables the timeout.",
+   "quote": "In this mode of operation, any children of command will not be timed out.",
+   "location": "23.6 timeout, --foreground"
+  },
+  {
+   "fact": "env and nohup share the 125/126/127 convention.",
+   "quote": "125 if env itself fails 126 if command is found but cannot be invoked 127 if command cannot be found the exit status of command otherwise",
+   "location": "23.2 env: Run a command in a modified environment, 'Exit status'"
+  },
+  {
+   "fact": "env -i / --ignore-environment starts from an empty environment. Executed: `env -i FOO=bar env` prints only FOO=bar; `env -i bash -c 'echo $PATH'` still shows a PATH because bash supplies a built-in default.",
+   "quote": "Start with an empty environment, ignoring the inherited environment.",
+   "location": "23.2 env, -i; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "ls -l file type characters: - regular, b block special, c character special, d directory, l symbolic link, p FIFO, s socket (plus rarer C, D, M, n, P, ?).",
+   "quote": "The file type is one of the following characters: '-' regular file 'b' block special file 'c' character special file ... 'd' directory ... 'l' symbolic link ... 'p' FIFO (named pipe) ... 's' socket",
+   "location": "10.1.2 What information is listed, -l"
+  },
+  {
+   "fact": "ls mode-string special letters: s = setuid/setgid with x; S = without x; t = sticky with other-x; T = sticky without other-x. A trailing '+' means an ACL, '.' an SELinux context only. Executed: chmod 1776 dir -> drwxrwxrwT; 1777 -> drwxrwxrwt.",
+   "quote": "'t' If the restricted deletion flag or sticky bit, and the other-executable bit, are both set. The restricted deletion flag is another name for the sticky bit.",
+   "location": "10.1.2 What information is listed, -l; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "ls -l prints numeric IDs when a name cannot be found; -n always prints numeric IDs. Executed: file chowned to 4242:4242 shows '4242 4242'.",
+   "quote": "If the owner or group name cannot be determined, print the owner or group ID instead, right-justified as a cue that it is a number rather than a textual name.",
+   "location": "10.1.2 What information is listed, -l"
+  },
+  {
+   "fact": "The 'total' line of ls -l is allocated blocks (default 1024-byte units), not a file count.",
+   "quote": "For each directory that is listed, preface the files with a line 'total blocks', where blocks is the file system allocation for all files in that directory. The block size currently defaults to 1024 bytes",
+   "location": "10.1.2 What information is listed, -l"
+  },
+  {
+   "fact": "Meaning of r/w/x, including for directories.",
+   "quote": "permission to read the file. For directories, this means permission to list the contents of the directory. permission to write to (change) the file. For directories, this means permission to create and remove files in the directory. permission to execute the file (run it as a program). For directories, this means permission to access files in the directory.",
+   "location": "27.1 Structure of File Mode Bits"
+  },
+  {
+   "fact": "Octal values: 4000 setuid, 2000 setgid, 1000 sticky; owner 400/200/100; group 40/20/10; other 4/2/1. Example from the manual: 4751 = u=srwx,g=rx,o=x; 664 = ug=rw,o=r.",
+   "quote": "For example, numeric mode '4751' corresponds to symbolic mode 'u=srwx,g=rx,o=x', and numeric mode '664' corresponds to symbolic mode 'ug=rw,o=r'. Numeric mode '0' corresponds to symbolic mode 'a='.",
+   "location": "27.3 Numeric Modes"
+  },
+  {
+   "fact": "Symbolic mode grammar.",
+   "quote": "The format of symbolic modes is: [ugoa...][-+=]perms...[,...] where perms is either zero or more letters from the set 'rwxXst', or a single letter from the set 'ugo'.",
+   "location": "27.2 Symbolic Modes"
+  },
+  {
+   "fact": "`chmod +w` with no who-letters respects the umask (so `chmod +w` under umask 022 adds only u+w), whereas `chmod a+w` does not.",
+   "quote": "If the users part of a symbolic mode is omitted, it defaults to 'a' (affect all users), except that any permissions that are set in the system variable umask are not affected.",
+   "location": "27.2.6 The Umask and Protection"
+  },
+  {
+   "fact": "Sticky bit wording and /tmp.",
+   "quote": "Prevent unprivileged users from removing or renaming a file in a directory unless they own the file or the directory; this is commonly found on world-writable directories like /tmp.",
+   "location": "27.1 Structure of File Mode Bits"
+  },
+  {
+   "fact": "Mode bits are not the whole story: attributes (chattr +i) and read-only mounts also deny operations.",
+   "quote": "Even if a file's mode bits allow an operation on that file, that operation may still fail, because: the file-system-specific attributes or flags do not permit it; or the file system is mounted as read-only.",
+   "location": "27.1 Structure of File Mode Bits"
+  },
+  {
+   "fact": "chown argument forms: owner | owner:group | owner: (group becomes owner's login group) | :group (same as chgrp). Numeric IDs accepted.",
+   "quote": "If the owner is followed by a colon and a group (a group name or numeric group ID), with no spaces between them, the group ownership of the files is changed as well (to group).",
+   "location": "13.1 chown: Change file owner and group"
+  },
+  {
+   "fact": "mktemp: default template tmp.XXXXXXXXXX under $TMPDIR or /tmp; at least three X's required; file is created 0600 (dir 0700 with -d). Executed: mktemp -> /tmp/tmp.iM4mtjAd93, mode 600; mktemp -d -> mode 700; with umask 000 the file is still 600.",
+   "quote": "When creating a file, the resulting file has read and write permissions for the current user, but no permissions for the group or others; these permissions are reduced if the current umask is more restrictive.",
+   "location": "18.4 mktemp: Create temporary file or directory; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "Why mktemp rather than /tmp/name.$$: predictable names allow a symlink race.",
+   "quote": "that naming scheme is easily predictable, and suffers from a race condition where the attacker can create an appropriately named symbolic link, such that when the script then opens a handle to what it thought was an unused file, it is instead modifying an existing file.",
+   "location": "18.4 mktemp"
+  },
+  {
+   "fact": "tee copies stdin to stdout and to each file; overwrites unless -a.",
+   "quote": "The tee command copies standard input to standard output and also to any files given as arguments. This is useful when you want not only to send some data down a pipe, but also to save a copy.",
+   "location": "17.1 tee: Redirect output to multiple files or processes"
+  },
+  {
+   "fact": "head and tail print 10 lines by default; tail -f follows by file descriptor by default (keeps following a renamed/unlinked file; use --follow=name or -F for log rotation).",
+   "quote": "If you'd like to continue to track the end of a growing file even after it has been unlinked, use --follow=descriptor. This is the default",
+   "location": "5.2 tail: Output the last part of files, -f"
+  },
+  {
+   "fact": "wc default output is newline, word, byte counts, in that order; with a single count and no file name there are no leading spaces (GNU extension). Executed: `wc c.txt` -> ' 2  2 12 c.txt'; `wc -l < c.txt` -> '2'.",
+   "quote": "By default, wc prints three counts: the newline, words, and byte counts.",
+   "location": "6.1 wc: Print newline, word, and byte or character counts; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "wc -l counts newline characters, so a final line without a trailing newline is not counted.",
+   "quote": "wc counts the number of bytes, characters, words, and newlines in each given file",
+   "location": "6.1 wc"
+  },
+  {
+   "fact": "nohup: ignores SIGHUP; if stdout is a terminal, output is appended to nohup.out (or $HOME/nohup.out), created mode 0600. Executed in a container without a TTY: no nohup.out is created.",
+   "quote": "If standard output is a terminal, the command's standard output is appended to the file nohup.out; if that cannot be written to, it is appended to the file $HOME/nohup.out; and if that cannot be written to, the command is not run.",
+   "location": "23.4 nohup: Run a command immune to hangups; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "df reports in 1024-byte units by default and, with no arguments, all mounted file systems; with a file argument, the file system containing it.",
+   "quote": "With no arguments, df reports the space used and available on all currently mounted file systems (of all types). Otherwise, df reports on the file system containing each argument file.",
+   "location": "14.1 df: Report file system space usage"
+  },
+  {
+   "fact": "du reports allocated space, not apparent size. Executed: a 100 MiB sparse file shows `ls -l` 104857600, `du -k` 0, `du -k --apparent-size` 102400.",
+   "quote": "Print apparent sizes, rather than file system usage. The apparent size of a file is the number of bytes reported by wc -c on regular files, or more generally, ls -l --block-size=1 or stat --format=%s.",
+   "location": "14.2 du, --apparent-size; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "readlink prints a symlink's stored value (and fails with non-zero status on a non-symlink); readlink -f / realpath print the canonical absolute name with no symlinks, . or ... Executed: readlink lnk -> /etc/../etc/passwd; readlink -f lnk -> /etc/passwd; realpath lnk -> /etc/passwd; readlink on a regular file -> status 1.",
+   "quote": "The realpath command outputs a file's canonicalized name, which is an absolute file name that contains neither unnecessary '/' nor components that are '.', '..', or a symbolic link.",
+   "location": "18.5 realpath; 12.6 readlink; executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "stat -c format sequences verified: %a octal mode, %A symbolic mode, %U:%G owner:group, %s size, %h hard links, %i inode.",
+   "quote": "$ stat -c '%a %A %U:%G %s bytes %h links inode=%i' f -> 644 -rw-r--r-- root:root 3 bytes 2 links inode=33608434",
+   "location": "executed ubuntu:24.04 (GNU coreutils 9.4)"
+  },
+  {
+   "fact": "rm refuses '.' and '..' and returns 1 for a missing file unless -f.",
+   "quote": "Any attempt to remove a file whose last file name component is . or .. is rejected without any prompting, as mandated by POSIX.",
+   "location": "11.5 rm; executed: `rm nonexist` -> status 1, `rm -f nonexist` -> 0, `rm dd` (a directory) -> \"rm: cannot remove 'dd': Is a directory\" status 1"
+  },
+  {
+   "fact": "rm does not securely erase.",
+   "quote": "Warning: If you use rm to remove a file, it is usually possible to recover the contents of that file.",
+   "location": "11.5 rm"
+  },
+  {
+   "fact": "uniq comparisons also follow LC_COLLATE.",
+   "quote": "Comparisons honor the rules specified by the LC_COLLATE locale category.",
+   "location": "7.3 uniq"
+  }
+ ],
+ "teaching_notes": "The timeout exit-status table is the single most reusable fact for harness authors: 124 timed out, 125 timeout failed, 126/127 as the shell, 137 KILL (ambiguous between command and timeout), else the command's status. Two surprises: (1) BusyBox timeout on Alpine returned 143, not 124 — GNU's table does not transfer to Alpine task images; (2) the online manual tracks the newest release (9.12) while Ubuntu 24.04 has 9.4 — short options -p/-f for timeout do not exist there, so pages should use --preserve-status/--foreground. Also: stock ubuntu:24.04 has no en_US locale, so the 'sort is locale-dependent' demo needs `locale-gen` (or compare with the reader's Mac); the principle (pin LC_ALL=C in graders) is confirmed by the manual's own footnote. Deep-link anchors (#timeout-invocation, #uniq-invocation, #sort-invocation, #rm-invocation, #What-information-is-listed) were checked against the fetched HTML."
+}

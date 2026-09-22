@@ -1,0 +1,278 @@
+### page 12 verification — 2026-09-21 — image lt-12-base:1 = ubuntu:24.04 + procps python3 (committed from lt-11-lab)
+$ docker run -d --name lt-12-lim --memory 256m --memory-swap 256m --cpus 1.5 --pids-limit 100 lt-12-base:1 sleep infinity
++ nproc
+10
++ python3 -c 'import os; print(os.cpu_count())'
+10
++ free -h
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       985Mi       4.1Gi       980Ki       2.8Gi       6.7Gi
+Swap:          1.0Gi          0B       1.0Gi
++ uptime
+ 21:02:39 up  8:42,  0 user,  load average: 1.01, 0.37, 0.24
++ cat /proc/loadavg
+1.01 0.37 0.24 1/417 17
++ head -3 /proc/meminfo
+MemTotal:        8025424 kB
+MemFree:         4315428 kB
+MemAvailable:    7015672 kB
++ cd /sys/fs/cgroup
++ cat memory.max memory.swap.max memory.current memory.peak
+268435456
+0
+2883584
+5304320
++ cat memory.events
+low 0
+high 0
+max 0
+oom 0
+oom_kill 0
+oom_group_kill 0
++ cat cpu.max
+150000 100000
++ cat pids.max pids.current
+100
+3
++ grep cgroup /proc/mounts
+cgroup /sys/fs/cgroup cgroup2 ro,nosuid,nodev,noexec,relatime 0 0
++ df -h / /tmp
+Filesystem      Size  Used Avail Use% Mounted on
+overlay        1007G  7.4G  949G   1% /
+overlay        1007G  7.4G  949G   1% /
++ df -i /
+Filesystem       Inodes  IUsed    IFree IUse% Mounted on
+overlay        67108864 111709 66997155    1% /
++ du -sh /usr /var
+163M	/usr
+61M	/var
++ top -b -n 1
++ head -8
+top - 21:02:39 up  8:42,  0 user,  load average: 1.01, 0.37, 0.24
+Tasks:   4 total,   1 running,   3 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  0.0 us,  0.9 sy,  0.0 ni, 99.1 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st 
+MiB Mem :   7837.3 total,   4209.0 free,    988.2 used,   2839.4 buff/cache     
+MiB Swap:   1024.0 total,   1024.0 free,      0.0 used.   6849.2 avail Mem 
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+    1 root      20   0    2268   1076   1076 S   0.0   0.0   0:00.00 sleep
+### ulimit as learner
+real-time non-blocking time  (microseconds, -R) unlimited
+core file size              (blocks, -c) 0
+data seg size               (kbytes, -d) unlimited
+scheduling priority                 (-e) 0
+file size                   (blocks, -f) unlimited
+pending signals                     (-i) 31324
+max locked memory           (kbytes, -l) unlimited
+max memory size             (kbytes, -m) unlimited
+open files                          (-n) 1048576
+pipe size                (512 bytes, -p) 8
+POSIX message queues         (bytes, -q) 819200
+real-time priority                  (-r) 0
+stack size                  (kbytes, -s) 8192
+cpu time                   (seconds, -t) unlimited
+max user processes                  (-u) unlimited
+virtual memory              (kbytes, -v) unlimited
+file locks                          (-x) unlimited
+---
+1048576
+1048576
+Limit                     Soft Limit           Hard Limit           Units     
+Max cpu time              unlimited            unlimited            seconds   
+Max processes             unlimited            unlimited            processes 
+Max open files            1048576              1048576              files     
+
+### MEMORY exhaustion inside lt-12-lim (256m, no swap): child killed, shell survives
+exit=137
+/tmp/s4.sh: line 1:    42 Killed                  python3 -c 'b = bytearray(400 * 1024 * 1024); print("allocated")'
+oom 1
+oom_kill 1
+oom_group_kill 0
+268435456
+$ docker inspect lt-12-lim (still running)
+Status=running ExitCode=0 OOMKilled=true
+
+### whole-container cases
+# (a) victim is a child; PID 1 carries on and exits 0
+pytest-ish step exit=137
+agent carries on
+bash: line 1:     6 Killed                  python3 -c "bytearray(400*1024*1024)"
+container exit=0
+ExitCode=0 OOMKilled=true
+# (b) victim is PID 1
+container exit=137
+ExitCode=137 OOMKilled=true
+# (c) 137 without OOM: docker stop on a PID 1 that ignores TERM
+lt-12-stop
+docker stop lt-12-stop  0.02s user 0.01s system 0% cpu 10.203 total
+ExitCode=137 OOMKilled=false
+
+### CPU cap: nothing dies, everything is slow
+$ docker run --rm  lt-12-base:1 bash /cpu.sh
+4 workers wall: 0.6 s
+max 100000
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+$ docker run --rm --cpus 0.5 lt-12-base:1 bash /cpu.sh
+unknown flag: --cpus 0.5
+
+Usage:  docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+
+Run 'docker run --help' for more information
+# the same job under a 10 s timeout
+4 workers wall: 6.5 s
+50000 100000
+nr_periods 66
+nr_throttled 66
+throttled_usec 22099913
+exit=0
+# (rerun of the capped case; the line above failed from a zsh quoting slip on the authoring side)
+$ docker run --rm --cpus 0.5 lt-12-base:1 bash /cpu.sh
+4 workers wall: 7.0 s
+50000 100000
+nr_periods 70
+nr_throttled 70
+throttled_usec 23621513
+# under a 5 s timeout
+exit=124
+4 workers wall: 0.7 s
+max 100000
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+exit=0
+
+### DISK: ENOSPC on an 8 MiB tmpfs; df vs du; deleted-open file; inodes
+$ docker run --rm --memory 256m --tmpfs /scratch:size=8m lt-12-base:1 bash
++ df -h /scratch
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           8.0M     0  8.0M   0% /scratch
++ head -c 20M /dev/zero
+head: error writing 'standard output': No space left on device
++ echo exit=1
++ ls -l /scratch/big
+exit=1
+-rw-r--r-- 1 root root 8388608 Sep 21 21:03 /scratch/big
++ df -h /scratch
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           8.0M  8.0M     0 100% /scratch
++ python3 -c 'open("/scratch/out.json","w").write("{}")'
+exit=0
++ echo exit=0
++ rm /scratch/big
++ head -c 5M /dev/zero
++ sleep 0.5
++ tail -f /scratch/log
++ rm /scratch/log
++ du -sh /scratch
+0	/scratch
++ df -h /scratch
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs           8.0M  5.0M  3.0M  63% /scratch
++ grep deleted
++ ls -l /proc/14/fd
+lr-x------ 1 root root 64 Sep 21 21:03 3 -> /scratch/log (deleted)
++ kill 14
++ sleep 0.5
++ df -h /scratch
++ tail -1
+tmpfs           8.0M     0  8.0M   0% /scratch
+
+$ docker run --rm --tmpfs /scratch:size=8m,nr_inodes=20 lt-12-base:1 bash   # inode exhaustion
+touch: cannot touch 'f20': No space left on device
+tmpfs           8.0M     0  8.0M   0% /scratch
+Filesystem     Inodes IUsed IFree IUse% Mounted on
+tmpfs              20    20     0  100% /scratch
+
+### PIDS
+      1 bash: fork: Interrupted system call
+      3 bash: fork: retry: Resource temporarily unavailable
+20
+max 3
+
+### FDS
+OSError: [Errno 24] Too many open files: '/etc/hostname'
+exit=1
+20
+### rlimit inherited + one-way ratchet (learner)
+64
+rc=1
+bash: line 1: ulimit: open files: cannot modify limit: Operation not permitted
+
+### full disk: what happens to a small result file
+echo exit=1
+bash: line 3: echo: write error: No space left on device
+-rw-r--r-- 1 root root 0 Sep 21 21:04 /scratch/result.json
+OSError: [Errno 28] No space left on device
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 2, in <module>
+OSError: [Errno 28] No space left on device
+python exit=1
+total 8192
+-rw-r--r-- 1 root root 8388608 Sep 21 21:04 big
+-rw-r--r-- 1 root root       0 Sep 21 21:04 r2.json
+-rw-r--r-- 1 root root       0 Sep 21 21:04 result.json
+
+### lab
+# ex1
+10
+MemTotal:        8025424 kB
+134217728
+50000 100000
+50
+# ex2
+Killed
+still here: 137
+container exit=0
+ExitCode=0 OOMKilled=true
+# ex4
+a=137
+c=137
+/lt-a exit=137 oom=true mem=67108864 2026-09-21T21:04:23.094847338Z 2026-09-21T21:04:23.21214363Z
+/lt-b exit=137 oom=false mem=0 2026-09-21T21:04:23.356081505Z 2026-09-21T21:04:35.545929636Z
+/lt-c exit=137 oom=false mem=0 2026-09-21T21:04:35.759604511Z 2026-09-21T21:04:37.840581554Z
+
+### FINAL cpu.sh (as shown on page; shellcheck clean)
+#!/bin/bash
+work() { python3 -c 'sum(i*i for i in range(12_000_000))'; }
+start=$(date +%s.%N)
+work & work & work & work &
+wait
+end=$(date +%s.%N)
+python3 -c "print('4 workers wall:', round($end - $start, 1), 's')"
+cat /sys/fs/cgroup/cpu.max
+grep -E 'nr_periods|nr_throttled|throttled_usec' /sys/fs/cgroup/cpu.stat
+$ docker run --rm -v cpu.sh:/cpu.sh:ro lt-12-base:1 bash /cpu.sh
+4 workers wall: 0.7 s
+max 100000
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+$ same with --cpus 0.5
+4 workers wall: 6.7 s
+50000 100000
+nr_periods 69
+nr_throttled 68
+throttled_usec 22924227
+$ --cpus 0.5, timeout 5
+exit=124
+$ uncapped, timeout 5
+4 workers wall: 0.6 s
+max 100000
+nr_periods 0
+nr_throttled 0
+throttled_usec 0
+exit=0
+
+### refused allocation (RLIMIT_AS) vs OOM kill
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+MemoryError
+exit=1
+
+### python thread under pids limit
+RuntimeError can't start new thread
