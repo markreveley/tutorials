@@ -8,9 +8,10 @@ from pathlib import Path
 import random
 from statistics import mean, stdev
 import sys
-from stats import (bootstrap, count_pair, exact_discordance, paired_sample_size,
-                   pass_at_k, probability, quantile, standard_error, wilson,
-                   zero_failure_bound)
+from stats import (benjamini_hochberg, bonferroni, bootstrap, count_pair,
+                   exact_discordance, paired_sample_size, pass_at_k, pearson,
+                   pearson_normal_pvalue, permutation_pvalue, probability, quantile, spearman,
+                   standard_error, wilson, zero_failure_bound)
 
 DATA = Path(__file__).resolve().parent / 'data'
 
@@ -41,6 +42,134 @@ def load_tasks(path):
     if len(rows) < 2:
         raise ValueError('need at least two tasks')
     return rows
+
+
+def load_candidates(path):
+    rows = []
+    seen = set()
+    with Path(path).open() as stream:
+        for number, line in enumerate(stream, 1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict) or not isinstance(row.get('candidate_id'), str) or not row['candidate_id']:
+                raise ValueError(f'line {number}: need a JSON object with a nonempty candidate_id')
+            if row['candidate_id'] in seen:
+                raise ValueError(f'line {number}: duplicate candidate_id')
+            seen.add(row['candidate_id'])
+            for key in ('activation', 'label'):
+                values = row.get(key)
+                if not isinstance(values, list) or len(values) < 3 or any(
+                        isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in values):
+                    raise ValueError(f'line {number}: {key} must be a list of at least three finite numbers')
+            if len(row['activation']) != len(row['label']):
+                raise ValueError(f'line {number}: activation and label must have the same length')
+            rows.append(row)
+    if not rows:
+        raise ValueError('need at least one candidate')
+    return rows
+
+
+def parse_numbers(text):
+    try:
+        values = [float(v) for v in text.replace(',', ' ').split()]
+    except ValueError:
+        raise ValueError('give numbers separated by spaces or commas')
+    return values
+
+
+def command_correlate(args):
+    if args.candidate:
+        rows = {r['candidate_id']: r for r in load_candidates(args.data)}
+        if args.candidate not in rows:
+            raise ValueError(f'unknown candidate {args.candidate}; the fixture has {len(rows)} candidates')
+        x, y = rows[args.candidate]['activation'], rows[args.candidate]['label']
+        print(f'Candidate {args.candidate} from {args.data}: n={len(x)} paired observations (activation, label)')
+    elif args.x and args.y:
+        x, y = parse_numbers(args.x), parse_numbers(args.y)
+        print(f'Supplied lists: n={len(x)} paired observations')
+    else:
+        raise ValueError('give --candidate ID or both --x and --y')
+    exact = len(x) <= 8
+    for name, statistic in (('Pearson r', pearson), ('Spearman rho', spearman)):
+        observed, p, draws = permutation_pvalue(x, y, statistic, args.permutations, args.seed, exact)
+        how = f'exact over all {draws:,} orderings of the labels' if exact else f'{draws:,} random relabelings, seed {args.seed}'
+        print(f'{name}: {observed:+.4f}; two-sided permutation p = {p:.4f} ({how})')
+    normal = pearson_normal_pvalue(pearson(x, y), len(x))
+    shown = f'{normal:.4f}' if normal >= 1e-4 else f'{normal:.2g}'
+    print(f'For comparison, the normal-theory p for Pearson r is {shown}; it assumes bivariate normal data.')
+    print('Pearson measures linear co-variation; Spearman applies Pearson to ranks and sees any monotone relation.')
+    print('The p-value is the fraction of label relabelings whose |statistic| is at least the observed one.')
+    print('It assumes exchangeable labels under the null, not normality. It says nothing about effect size or')
+    print('whether this candidate was chosen because it looked good on these same observations.')
+
+
+def screen_report(label, rejected, planted, truth_known):
+    count = sum(rejected)
+    line = f'{label:<34}{count:>6}'
+    if truth_known and planted:
+        false = sum(r and not t for r, t in zip(rejected, planted))
+        line += f'   of which not planted: {false}' + (f' ({false/count:.0%} of rejections)' if count else '')
+    print(line)
+
+
+def command_screen(args):
+    if args.alpha <= 0 or args.alpha >= 1:
+        raise ValueError('alpha must be between 0 and 1')
+    rng = random.Random(args.seed)
+    if args.data:
+        rows = load_candidates(args.data)
+        xs = [r['activation'] for r in rows]
+        ys = [r['label'] for r in rows]
+        planted = [bool(r.get('planted')) for r in rows]
+        ids = [r['candidate_id'] for r in rows]
+        truth_known = all('planted' in r for r in rows)
+        n = len(xs[0])
+        print(f'Screening {len(rows)} candidates from {args.data}; n={n} observations each; alpha={args.alpha:g}; seed {args.seed}')
+        print(f'Each candidate: Pearson r and a two-sided permutation p-value from {args.permutations:,} relabelings.')
+        results = [permutation_pvalue(x, y, pearson, args.permutations, rng.randrange(10**9), False) for x, y in zip(xs, ys)]
+        rs = [r for r, _, _ in results]
+        ps = [p for _, p, _ in results]
+    else:
+        if args.candidates < 2 or args.n < 6:
+            raise ValueError('need candidates >= 2 and n >= 6')
+        n = args.n
+        if args.real < 0 or args.real > args.candidates:
+            raise ValueError('real must be between 0 and candidates')
+        planted = [i < args.real for i in range(args.candidates)]
+        ids = [f'sim-{i:04}' for i in range(args.candidates)]
+        truth_known = True
+        label = [rng.gauss(0, 1) for _ in range(n)]
+        xs, ys = [], []
+        for is_real in planted:
+            xs.append([rng.gauss(0, 1) + (args.effect*l if is_real else 0) for l in label])
+            ys.append(label)
+        rs = [pearson(x, y) for x, y in zip(xs, ys)]
+        # The simulated data are normal by construction, so the null distribution
+        # of r is known exactly and is integrated numerically for each candidate.
+        ps = [pearson_normal_pvalue(r, n) for r in rs]
+        print(f'Simulated screen: {args.candidates} candidates, n={n} observations each, alpha={args.alpha:g}, seed {args.seed}')
+        print(f'{args.real} candidates carry a real association (effect {args.effect:g}); the rest are independent noise.')
+        print(f'Each p-value is the exact two-sided tail of r under independent normal data at n={n}, the simulation\'s own null.')
+        print('Real activations are not normal by construction; screen --data uses per-candidate permutation p-values instead.')
+    expected = len(rs)*args.alpha
+    print(f'Expected count passing p<{args.alpha:g} if every candidate were null: {expected:g}')
+    print(f'{"Rule":<34}{"pass":>6}')
+    screen_report(f'Raw p < {args.alpha:g}', [p < args.alpha for p in ps], planted, truth_known)
+    screen_report(f'Bonferroni, alpha/{len(ps)}', bonferroni(ps, args.alpha), planted, truth_known)
+    screen_report(f'Benjamini-Hochberg, q={args.alpha:g}', benjamini_hochberg(ps, args.alpha), planted, truth_known)
+    best = max(range(len(rs)), key=lambda i: abs(rs[i]))
+    print(f'Largest |r| on the full data: {ids[best]} r={rs[best]:+.3f}, p={ps[best]:.2g}' + (', planted' if planted[best] else ', not planted') if truth_known else '')
+    half = n//2
+    screened = [pearson(x[:half], y[:half]) for x, y in zip(xs, ys)]
+    winner = max(range(len(rs)), key=lambda i: abs(screened[i]))
+    held = pearson(xs[winner][half:], ys[winner][half:])
+    print(f'Winner on the first {half} observations: {ids[winner]} r={screened[winner]:+.3f}; same candidate on the held-out {n-half}: r={held:+.3f}'
+          + ((' (planted)' if planted[winner] else ' (not planted)') if truth_known else ''))
+    print('The screening-half r is biased away from zero because it was selected as the maximum; the held-out r is not.')
+    print('Bonferroni bounds the chance of any false rejection; BH bounds the expected fraction of false rejections among')
+    print('rejections, under independence or positive dependence. Neither rule confirms a specific candidate; confirmation')
+    print('needs data not used for selection and a control that would also pass if the claim were empty.')
 
 
 def command_rate(args):
@@ -235,7 +364,7 @@ def command_quiz(_args):
         correct = int(choice)-1 == answer
         score += correct
         print(('Correct. ' if correct else 'Reconsider. ') + why)
-    print(f'\n{score}/{len(QUESTIONS)}. For the full readiness task, open lesson 23.')
+    print(f'\n{score}/{len(QUESTIONS)}. For the full readiness task, open lesson 23; for screening many candidates, lessons 24-25.')
 
 
 def parser():
@@ -250,8 +379,10 @@ def parser():
     p = sub.add_parser('bayes', help='Beta-Binomial update and prior sensitivity'); p.add_argument('passes',type=int); p.add_argument('trials',type=int); p.add_argument('--alpha',type=float,default=1); p.add_argument('--beta',type=float,default=1); p.add_argument('--threshold',type=float,default=.8); p.add_argument('--draws',type=int,default=20000); p.set_defaults(run=command_bayes)
     p = sub.add_parser('rare', help='upper failure-rate bound after zero failures'); p.add_argument('trials',type=int); p.set_defaults(run=command_rare)
     p = sub.add_parser('reliability', help='at-least-one and all-k success estimates'); p.add_argument('passes',type=int); p.add_argument('trials',type=int); p.add_argument('k',type=int); p.set_defaults(run=command_reliability)
+    p = sub.add_parser('correlate', help='Pearson and Spearman correlation with a permutation p-value'); p.add_argument('--candidate',help='candidate_id in the candidates fixture'); p.add_argument('--data',type=Path,default=DATA/'candidates.jsonl'); p.add_argument('--x',help='activation values, comma or space separated'); p.add_argument('--y',help='label values, same length as --x'); p.add_argument('--permutations',type=int,default=2000); p.set_defaults(run=command_correlate)
+    p = sub.add_parser('screen', help='screen many candidates: false positives, Bonferroni, BH, and selection bias'); p.add_argument('--data',type=Path,help='candidates JSONL; omit to simulate'); p.add_argument('--candidates',type=int,default=3000); p.add_argument('--n',type=int,default=50); p.add_argument('--real',type=int,default=0,help='simulated candidates with a real association'); p.add_argument('--effect',type=float,default=.5); p.add_argument('--alpha',type=float,default=.05); p.add_argument('--permutations',type=int,default=500); p.set_defaults(run=command_screen)
     p = sub.add_parser('quiz', help='interactive judgment checks with explanations'); p.set_defaults(run=command_quiz)
-    for name in ('sample','compare','multiple','peek','bayes'):
+    for name in ('sample','compare','multiple','peek','bayes','correlate','screen'):
         sub.choices[name].add_argument('--seed',type=int,default=7)
     return root
 

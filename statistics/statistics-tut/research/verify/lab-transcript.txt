@@ -1,22 +1,22 @@
 Statistics for Evals: actual local command transcript
-Authoring date: 2026-09-21
-Python: 3.14.3 (main, Feb  3 2026, 15:32:20) [Clang 17.0.0 (clang-1700.6.3.2)]
+Authoring date: 2026-09-21; module 6 (correlate, screen) added and the whole transcript regenerated 2026-10-20
+Python: 3.13.16 (main, Oct  1 2026, 15:40:24) [GCC 13.3.0]
 Quiz stdin supplied by verifier: 1, 2, 3, 2, 2, 3 (one answer per line).
 All data are synthetic; no model calls or network requests.
 
 $ python3 --version
-Python 3.14.3
+Python 3.13.16
 
 [exit 0]
 
 $ python3 labs/stats_lab.py --help
 usage: stats_lab.py [-h]
-                    {rate,sample,compare,power,multiple,peek,bayes,rare,reliability,quiz} ...
+                    {rate,sample,compare,power,multiple,peek,bayes,rare,reliability,correlate,screen,quiz} ...
 
 Offline statistics experiments for evals. Run --help or quiz to start.
 
 positional arguments:
-  {rate,sample,compare,power,multiple,peek,bayes,rare,reliability,quiz}
+  {rate,sample,compare,power,multiple,peek,bayes,rare,reliability,correlate,screen,quiz}
     rate                Wilson interval for a pass count
     sample              simulate repeated samples and confidence-interval
                         coverage
@@ -27,6 +27,10 @@ positional arguments:
     bayes               Beta-Binomial update and prior sensitivity
     rare                upper failure-rate bound after zero failures
     reliability         at-least-one and all-k success estimates
+    correlate           Pearson and Spearman correlation with a permutation
+                        p-value
+    screen              screen many candidates: false positives, Bonferroni,
+                        BH, and selection bias
     quiz                interactive judgment checks with explanations
 
 options:
@@ -73,7 +77,7 @@ Your answer: Correct. Ordinary fixed-sample p-values do not justify this stoppin
   3. Zero observed; one-sided 95% upper bound about 3% under the model
 Your answer: Correct. An unobserved failure can still occur. The bound depends on the sampling and independence assumptions.
 
-6/6. For the full readiness task, open lesson 23.
+6/6. For the full readiness task, open lesson 23; for screening many candidates, lessons 24-25.
 
 [exit 0]
 
@@ -400,6 +404,97 @@ A bootstrap interval is approximate; increasing resamples does not add evaluatio
 
 [exit 0]
 
+$ python3 labs/stats_lab.py correlate --x "1 2 3 4 5 6 7 8" --y "3 1 2 5 4 6 7 20"
+Supplied lists: n=8 paired observations
+Pearson r: +0.7776; two-sided permutation p = 0.0030 (exact over all 40,320 orderings of the labels)
+Spearman rho: +0.9048; two-sided permutation p = 0.0046 (exact over all 40,320 orderings of the labels)
+For comparison, the normal-theory p for Pearson r is 0.0231; it assumes bivariate normal data.
+Pearson measures linear co-variation; Spearman applies Pearson to ranks and sees any monotone relation.
+The p-value is the fraction of label relabelings whose |statistic| is at least the observed one.
+It assumes exchangeable labels under the null, not normality. It says nothing about effect size or
+whether this candidate was chosen because it looked good on these same observations.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py screen
+Simulated screen: 3000 candidates, n=50 observations each, alpha=0.05, seed 7
+0 candidates carry a real association (effect 0.5); the rest are independent noise.
+Each p-value is the exact two-sided tail of r under independent normal data at n=50, the simulation's own null.
+Real activations are not normal by construction; screen --data uses per-candidate permutation p-values instead.
+Expected count passing p<0.05 if every candidate were null: 150
+Rule                                pass
+Raw p < 0.05                         151   of which not planted: 151 (100% of rejections)
+Bonferroni, alpha/3000                 0   of which not planted: 0
+Benjamini-Hochberg, q=0.05             0   of which not planted: 0
+Largest |r| on the full data: sim-0221 r=+0.471, p=0.00056, not planted
+Winner on the first 25 observations: sim-1217 r=-0.630; same candidate on the held-out 25: r=-0.098 (not planted)
+The screening-half r is biased away from zero because it was selected as the maximum; the held-out r is not.
+Bonferroni bounds the chance of any false rejection; BH bounds the expected fraction of false rejections among
+rejections, under independence or positive dependence. Neither rule confirms a specific candidate; confirmation
+needs data not used for selection and a control that would also pass if the claim were empty.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py screen --real 30 --effect 1
+Simulated screen: 3000 candidates, n=50 observations each, alpha=0.05, seed 7
+30 candidates carry a real association (effect 1); the rest are independent noise.
+Each p-value is the exact two-sided tail of r under independent normal data at n=50, the simulation's own null.
+Real activations are not normal by construction; screen --data uses per-candidate permutation p-values instead.
+Expected count passing p<0.05 if every candidate were null: 150
+Rule                                pass
+Raw p < 0.05                         178   of which not planted: 148 (83% of rejections)
+Bonferroni, alpha/3000                25   of which not planted: 0 (0% of rejections)
+Benjamini-Hochberg, q=0.05            29   of which not planted: 0 (0% of rejections)
+Largest |r| on the full data: sim-0001 r=+0.797, p=4.6e-12, planted
+Winner on the first 25 observations: sim-0011 r=+0.777; same candidate on the held-out 25: r=+0.739 (planted)
+The screening-half r is biased away from zero because it was selected as the maximum; the held-out r is not.
+Bonferroni bounds the chance of any false rejection; BH bounds the expected fraction of false rejections among
+rejections, under independence or positive dependence. Neither rule confirms a specific candidate; confirmation
+needs data not used for selection and a control that would also pass if the claim were empty.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py screen --data labs/data/candidates.jsonl
+Screening 60 candidates from labs/data/candidates.jsonl; n=40 observations each; alpha=0.05; seed 7
+Each candidate: Pearson r and a two-sided permutation p-value from 500 relabelings.
+Expected count passing p<0.05 if every candidate were null: 3
+Rule                                pass
+Raw p < 0.05                          10   of which not planted: 4 (40% of rejections)
+Bonferroni, alpha/60                   0   of which not planted: 0
+Benjamini-Hochberg, q=0.05             5   of which not planted: 0 (0% of rejections)
+Largest |r| on the full data: unit-003 r=+0.726, p=0.002, planted
+Winner on the first 20 observations: unit-003 r=+0.794; same candidate on the held-out 20: r=+0.650 (planted)
+The screening-half r is biased away from zero because it was selected as the maximum; the held-out r is not.
+Bonferroni bounds the chance of any false rejection; BH bounds the expected fraction of false rejections among
+rejections, under independence or positive dependence. Neither rule confirms a specific candidate; confirmation
+needs data not used for selection and a control that would also pass if the claim were empty.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py correlate --candidate unit-003
+Candidate unit-003 from /home/user/tutorials/statistics/statistics-tut/labs/data/candidates.jsonl: n=40 paired observations (activation, label)
+Pearson r: +0.7265; two-sided permutation p = 0.0005 (2,000 random relabelings, seed 7)
+Spearman rho: +0.7058; two-sided permutation p = 0.0005 (2,000 random relabelings, seed 7)
+For comparison, the normal-theory p for Pearson r is 1.1e-07; it assumes bivariate normal data.
+Pearson measures linear co-variation; Spearman applies Pearson to ranks and sees any monotone relation.
+The p-value is the fraction of label relabelings whose |statistic| is at least the observed one.
+It assumes exchangeable labels under the null, not normality. It says nothing about effect size or
+whether this candidate was chosen because it looked good on these same observations.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py correlate --candidate unit-000
+Candidate unit-000 from /home/user/tutorials/statistics/statistics-tut/labs/data/candidates.jsonl: n=40 paired observations (activation, label)
+Pearson r: +0.0486; two-sided permutation p = 0.7761 (2,000 random relabelings, seed 7)
+Spearman rho: +0.0614; two-sided permutation p = 0.6892 (2,000 random relabelings, seed 7)
+For comparison, the normal-theory p for Pearson r is 0.7658; it assumes bivariate normal data.
+Pearson measures linear co-variation; Spearman applies Pearson to ranks and sees any monotone relation.
+The p-value is the fraction of label relabelings whose |statistic| is at least the observed one.
+It assumes exchangeable labels under the null, not normality. It says nothing about effect size or
+whether this candidate was chosen because it looked good on these same observations.
+
+[exit 0]
+
 $ python3 labs/stats_lab.py rate 0 10
 Observed pass rate: 0/10 = 0.0%
 95% Wilson interval: [0.0%, 27.8%]
@@ -453,5 +548,24 @@ Approximate 95% equal-tail credible interval: [0.484, 0.940]
 Approximate P(p>0.8 | data, model, prior): 0.386
 Monte Carlo draws: 20000; seed: 7. Assumes iid Bernoulli outcomes with one common p.
 Try another prior. Model misspecification and biased task selection are not covered by this posterior.
+
+[exit 0]
+
+$ python3 labs/stats_lab.py screen --candidates 200 --n 20 --seed 3
+Simulated screen: 200 candidates, n=20 observations each, alpha=0.05, seed 3
+0 candidates carry a real association (effect 0.5); the rest are independent noise.
+Each p-value is the exact two-sided tail of r under independent normal data at n=20, the simulation's own null.
+Real activations are not normal by construction; screen --data uses per-candidate permutation p-values instead.
+Expected count passing p<0.05 if every candidate were null: 10
+Rule                                pass
+Raw p < 0.05                          11   of which not planted: 11 (100% of rejections)
+Bonferroni, alpha/200                  0   of which not planted: 0
+Benjamini-Hochberg, q=0.05             0   of which not planted: 0
+Largest |r| on the full data: sim-0075 r=+0.693, p=0.00071, not planted
+Winner on the first 10 observations: sim-0112 r=+0.867; same candidate on the held-out 10: r=+0.114 (not planted)
+The screening-half r is biased away from zero because it was selected as the maximum; the held-out r is not.
+Bonferroni bounds the chance of any false rejection; BH bounds the expected fraction of false rejections among
+rejections, under independence or positive dependence. Neither rule confirms a specific candidate; confirmation
+needs data not used for selection and a control that would also pass if the claim were empty.
 
 [exit 0]

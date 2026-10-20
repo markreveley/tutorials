@@ -8,6 +8,7 @@ MODULES = [
  ('Respect the data structure', 'Handle repeated runs, related tasks, slices, weights, and missing outcomes.'),
  ('Measure the measuring instrument', 'Evaluate graders, probability forecasts, and Bayesian updates.'),
  ('Make defensible decisions', 'Avoid selection traps, measure reliability, and write a result you can defend.'),
+ ('Screen many candidates', 'Correlate, test by shuffling, count what chance alone would pass, and confirm on data the screen never saw.'),
 ]
 
 

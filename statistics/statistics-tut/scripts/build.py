@@ -13,11 +13,12 @@ from inference import LESSONS as INFERENCE
 from structure import LESSONS as STRUCTURE
 from measurement import LESSONS as MEASUREMENT
 from decisions import LESSONS as DECISIONS
+from screening import LESSONS as SCREENING
 from reference_pages import REFERENCES
 
 ROOT = Path(__file__).resolve().parents[1]
 TITLE = 'Statistics for Evals'
-LESSONS = FOUNDATIONS + INFERENCE + STRUCTURE + MEASUREMENT + DECISIONS
+LESSONS = FOUNDATIONS + INFERENCE + STRUCTURE + MEASUREMENT + DECISIONS + SCREENING
 
 
 class GlossLinks(HTMLParser):
@@ -107,7 +108,7 @@ def build():
         cards+=f'<a class="modcard" href="{ls[0]["path"]}"><h3 id="module-{i}"><span class="n">{i}</span>{escape(title)}</h3><p>{desc}</p><div class="pages">{len(ls)} lessons · {ls[0]["n"]}–{ls[-1]["n"]}</div></a>'
     body='''<div class="keyidea"><span class="label">The professional target</span><p>Given an eval report, explain what it measures, whether the uncertainty calculation fits the data, and what decision the evidence supports.</p></div>
 <p><a class="start-link" href="pages/00-orientation.html">Start with what statistics lets you say →</a></p>
-<h2 id="outcomes">What you will be able to do</h2><ul><li>Define a score’s population, denominator, and run policy.</li><li>Read confidence intervals and compare systems on paired tasks.</li><li>Handle repeated runs, related repositories, missing outcomes, and task mixtures.</li><li>Evaluate a grader and inspect probability forecasts.</li><li>Plan sample sizes and avoid misleading comparisons or stopping rules.</li><li>Write an analysis and decision memo another engineer can reproduce.</li></ul>
+<h2 id="outcomes">What you will be able to do</h2><ul><li>Define a score’s population, denominator, and run policy.</li><li>Read confidence intervals and compare systems on paired tasks.</li><li>Handle repeated runs, related repositories, missing outcomes, and task mixtures.</li><li>Evaluate a grader and inspect probability forecasts.</li><li>Plan sample sizes and avoid misleading comparisons or stopping rules.</li><li>Write an analysis and decision memo another engineer can reproduce.</li><li>Screen thousands of candidate neurons or features, count what chance would pass, and confirm a winner on held-out data.</li></ul>
 <h2 id="modules">The course</h2><div class="modgrid">'''+cards+'''</div>
 <h2 id="how">How to work through it</h2><p>This beginner course assumes percentages and averages, then builds the rest. Each lesson includes an eval scenario, worked reasoning, a pitfall, and a check with a revealable explanation. Selected lessons add terminal experiments where simulation makes the idea easier to see.</p>
 <p>The running case compares two fictional agent versions. Start with independent tasks, then add repeated attempts, related repositories, and a sensitive category. All data are synthetic. Finish by defending a decision with a report template and a readiness rubric.</p>
@@ -124,7 +125,7 @@ python3 labs/stats_lab.py compare</code></pre>
         gloss+=f'<div class="gloss-entry"><h2 id="{slug}">{escape(g["name"])}</h2><p>{escape(g["defn"])}</p></div>'
     gloss+='</div>'
     shell('glossary.html','Glossary','Reference','Definitions in the language of eval work. Linked terms in lessons also show keyboard-accessible tooltips.',gloss,nav)
-    bib='<p>These sources were opened and checked during authoring on 2026-09-21. The notes identify the scope verified; they do not claim that an entire source or every linked method was independently reproduced. The local experiments validate the supplied implementations and synthetic examples.</p>'
+    bib='<p>These sources were opened and checked during authoring on 2026-09-21, and for module 6 on 2026-10-20. The notes identify the scope verified; they do not claim that an entire source or every linked method was independently reproduced. The local experiments validate the supplied implementations and synthetic examples.</p>'
     for key,s in SOURCES.items():
         bib+=f'<h2 id="{key}">{escape(s["tag"])}</h2><p><a href="{s["url"]}">{escape(s["title"])}</a></p><p>{escape(s["claims"])}</p>'
     bib+='<p>See <a href="research/source-checks.md">source-checking notes</a> and <a href="research/sources.json">the machine-readable source record</a>. No model-provider performance, prices, or current benchmark rankings are asserted.</p>'
@@ -132,7 +133,7 @@ python3 labs/stats_lab.py compare</code></pre>
     (ROOT/'assets/nav-data.js').write_text('window.NAV = '+json.dumps(nav,ensure_ascii=False,indent=2)+';\n')
     glossary={slug:dict(name=g['name'],short=g['short'],**{'def':g['defn']}) for slug,g in GLOSSARY.items()}
     (ROOT/'assets/glossary-data.js').write_text('window.GLOSSARY = '+json.dumps(glossary,ensure_ascii=False,indent=2)+';\n')
-    (ROOT/'research/sources.json').write_text(json.dumps({key:dict(s,checked='2026-09-21',status='confirmed-with-stated-scope') for key,s in SOURCES.items()},ensure_ascii=False,indent=2)+'\n')
+    (ROOT/'research/sources.json').write_text(json.dumps({key:dict(s,checked=s.get('checked','2026-09-21'),status='confirmed-with-stated-scope') for key,s in SOURCES.items()},ensure_ascii=False,indent=2)+'\n')
     (ROOT/'research/glossary.json').write_text(json.dumps(glossary,ensure_ascii=False,indent=2)+'\n')
     print(f'Built {len(LESSONS)} lessons, {len(REFERENCES)} appendices, home, glossary, and bibliography.')
 

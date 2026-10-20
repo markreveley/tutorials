@@ -26,11 +26,13 @@ def verify():
             if line not in commands: commands.append(line)
     # Also exercise the command-reference table's commands and important edge cases.
     for args in ['rate 0 10','power --sd 0.5 --delta 0.03','sample --trials 100 --p 0.7',
-                 'multiple --tests 20','peek','bayes 8 10 --alpha 1 --beta 1']:
+                 'multiple --tests 20','peek','bayes 8 10 --alpha 1 --beta 1',
+                 'correlate --candidate unit-003','screen --data labs/data/candidates.jsonl',
+                 'screen --real 30 --effect 1','screen --candidates 200 --n 20 --seed 3']:
         line='python3 labs/stats_lab.py '+args
         if line not in commands: commands.append(line)
     output=['Statistics for Evals: actual local command transcript',
-            'Authoring date: 2026-09-21',f'Python: {sys.version}',
+            'Authoring date: 2026-09-21; module 6 (correlate, screen) added and the whole transcript regenerated 2026-10-20',f'Python: {sys.version}',
             'Quiz stdin supplied by verifier: 1, 2, 3, 2, 2, 3 (one answer per line).',
             'All data are synthetic; no model calls or network requests.', '']
     for line in commands:
