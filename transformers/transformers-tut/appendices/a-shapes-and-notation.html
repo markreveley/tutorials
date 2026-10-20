@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shapes and notation · Transformer Anatomy</title><meta name="description" content="Every symbol used in the lessons, every parameter tensor of GPT-2 small with its shape, and every activation shape, in one place.">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<a class="skip-link" href="#main">Skip to content</a><div class="layout"><aside class="sidebar" data-nav aria-label="Course navigation"><p class="site-title"><a href="../index.html">Transformer Anatomy</a></p><p class="site-sub">from token ids to logits, one tensor at a time</p><div class="nav-module"><span class="mod-label">Start here</span><a href="../index.html"> Course home</a></div><div class="nav-module"><span class="mod-label">0 · The object of study</span><a href="../pages/00-orientation.html">00 The model is a function from token ids to logits</a><a href="../pages/01-tokenization.html">01 Tokenization: byte-pair encoding and the GPT-2 vocabulary</a><a href="../pages/02-embeddings-and-positions.html">02 Embeddings and positions: the first residual vector</a><a href="../pages/03-the-residual-stream.html">03 The residual stream: a sum of writes</a><a href="../pages/04-layer-norm.html">04 Layer norm: what it does, where GPT-2 puts it, and folding it away</a></div><div class="nav-module"><span class="mod-label">1 · Attention</span><a href="../pages/05-attention-one-head.html">05 Attention I: one head on three tokens</a><a href="../pages/06-attention-circuits.html">06 Attention II: heads as a QK circuit and an OV circuit</a></div><div class="nav-module"><span class="mod-label">2 · MLPs and the output</span><a href="../pages/07-the-mlp-block.html">07 The MLP block: two matrices, a GELU, and where a neuron lives</a><a href="../pages/08-gated-mlps.html">08 Gated MLPs: SwiGLU in Llama and Qwen3</a><a href="../pages/09-unembedding-and-logits.html">09 Unembedding and logits: from the stream to a distribution</a></div><div class="nav-module"><span class="mod-label">3 · The whole model</span><a href="../pages/10-forward-pass-from-raw-weights.html">10 The full forward pass from raw weights</a><a href="../pages/11-shapes-and-parameter-counts.html">11 Shapes and parameter counts: deriving 124M from the config</a><a href="../pages/12-generation-and-the-kv-cache.html">12 Generation and the KV cache</a></div><div class="nav-module"><span class="mod-label">4 · Tooling and variants</span><a href="../pages/13-naming-maps.html">13 Naming maps: the same activation in Hugging Face, TransformerLens 4, and nnsight</a><a href="../pages/14-architectural-variants.html">14 Architectural variants: GPT-2 versus Llama-style models</a><a href="../pages/15-readiness-review.html">15 Readiness review</a></div><div class="nav-module"><span class="mod-label">Reference and practice</span><a href="../appendices/a-shapes-and-notation.html" class="current" aria-current="page">A Shapes and notation</a><a href="../appendices/b-command-reference.html">B Command reference</a><a href="../glossary.html"> Glossary</a><a href="../bibliography.html"> Annotated bibliography</a></div></aside>
+<div class="content"><main class="page" id="main"><p class="kicker">Appendix A</p><h1>Shapes and notation</h1><p class="lede">Every symbol used in the lessons, every parameter tensor of GPT-2 small with its shape, and every activation shape, in one place.</p>
+<h2 id="symbols">Symbols</h2>
+<table><tr><th>Symbol</th><th>GPT-2 small</th><th>Meaning</th></tr>
+<tr><td>b, s</td><td>—</td><td>batch size and sequence length of one input</td></tr>
+<tr><td>d_model (n_embd)</td><td>768</td><td>width of the residual stream</td></tr>
+<tr><td>n_layer</td><td>12</td><td>number of blocks</td></tr>
+<tr><td>n_head</td><td>12</td><td>heads per block</td></tr>
+<tr><td>d_head</td><td>64</td><td>d_model / n_head</td></tr>
+<tr><td>d_mlp (n_inner)</td><td>3072</td><td>MLP hidden width, 4 × d_model</td></tr>
+<tr><td>d_vocab</td><td>50257</td><td>vocabulary size</td></tr>
+<tr><td>n_ctx (n_positions)</td><td>1024</td><td>context window</td></tr>
+<tr><td>ε</td><td>1e-5</td><td>layer-norm epsilon</td></tr>
+<tr><td>x, W_Q, W_K, W_V, W_O</td><td>—</td><td>a residual row vector and one head's four matrices; row-vector convention, q = x W_Q</td></tr>
+<tr><td>W_in, W_out</td><td>(768, 3072), (3072, 768)</td><td>MLP up- and down-projection (c_fc, c_proj)</td></tr>
+<tr><td>W_U</td><td>(768, 50257)</td><td>unembedding = wteᵀ</td></tr></table>
+<h2 id="parameters">Parameter tensors</h2>
+<p>From the installed checkpoint:</p><pre class="term"><code>python labs/anatomy.py shapes</code></pre><pre class="output"><code>tensor                               shape                  params
+transformer.wte.weight               (50257, 768)       38,597,376
+transformer.wpe.weight               (1024, 768)           786,432
+transformer.h.0.ln_1.weight          (768,)                    768
+transformer.h.0.ln_1.bias            (768,)                    768
+transformer.h.0.attn.c_attn.weight   (768, 2304)         1,769,472
+transformer.h.0.attn.c_attn.bias     (2304,)                 2,304
+transformer.h.0.attn.c_proj.weight   (768, 768)            589,824
+transformer.h.0.attn.c_proj.bias     (768,)                    768
+transformer.h.0.ln_2.weight          (768,)                    768
+transformer.h.0.ln_2.bias            (768,)                    768
+transformer.h.0.mlp.c_fc.weight      (768, 3072)         2,359,296
+transformer.h.0.mlp.c_fc.bias        (3072,)                 3,072
+transformer.h.0.mlp.c_proj.weight    (3072, 768)         2,359,296
+transformer.h.0.mlp.c_proj.bias      (768,)                    768
+transformer.ln_f.weight              (768,)                    768
+transformer.ln_f.bias                (768,)                    768
+lm_head.weight                       (50257, 768)       38,597,376   (tied to wte; not counted)
+transformer.h.1 ... transformer.h.11 repeat the twelve h.0 tensors with the same shapes.
+state_dict entries: 149</code></pre>
+<h2 id="activations">Activation shapes</h2>
+<table><tr><th>Activation</th><th>Shape</th><th>Hugging Face</th><th>TransformerLens 4</th><th>nnsight</th></tr>
+<tr><td>token ids</td><td>(b, s)</td><td>input_ids</td><td>input to run_with_cache</td><td>input to trace</td></tr>
+<tr><td>token / position embedding</td><td>(b, s, 768) / (b, s, 768)</td><td>wte(ids) / wpe(pos)</td><td>hook_embed / hook_pos_embed</td><td>transformer.wte.output / wpe.output</td></tr>
+<tr><td>residual into block i</td><td>(b, s, 768)</td><td>hidden_states[i]</td><td>blocks.i.hook_resid_pre</td><td>transformer.h[i].input</td></tr>
+<tr><td>q, k, v, z per head</td><td>(b, s, 12, 64)</td><td>internal (b, 12, s, 64)</td><td>blocks.i.attn.hook_q / _k / _v / _z</td><td>—</td></tr>
+<tr><td>scores, pattern</td><td>(b, 12, s, s)</td><td>attentions[i] (eager only)</td><td>blocks.i.attn.hook_attn_scores / hook_pattern</td><td>hook on attn</td></tr>
+<tr><td>attention write</td><td>(b, s, 768)</td><td>hook on h[i].attn</td><td>blocks.i.hook_attn_out</td><td>transformer.h[i].attn.output[0]</td></tr>
+<tr><td>residual after attention</td><td>(b, s, 768)</td><td>—</td><td>blocks.i.hook_resid_mid</td><td>transformer.h[i].mlp.input (pre-norm input is ln_2's)</td></tr>
+<tr><td>MLP pre / post activation</td><td>(b, s, 3072)</td><td>hook on h[i].mlp.act</td><td>blocks.i.mlp.hook_pre / hook_post</td><td>transformer.h[i].mlp.act.input / .output</td></tr>
+<tr><td>MLP write</td><td>(b, s, 768)</td><td>hook on h[i].mlp</td><td>blocks.i.hook_mlp_out</td><td>transformer.h[i].mlp.output</td></tr>
+<tr><td>residual after block i</td><td>(b, s, 768)</td><td>hidden_states[i+1] for i &lt; 11</td><td>blocks.i.hook_resid_post</td><td>transformer.h[i].output</td></tr>
+<tr><td>after ln_f</td><td>(b, s, 768)</td><td>hidden_states[12]</td><td>ln_final.hook_out</td><td>transformer.ln_f.output</td></tr>
+<tr><td>logits</td><td>(b, s, 50257)</td><td>logits</td><td>return value</td><td>lm_head.output</td></tr></table>
+<p>The rows with three library names were verified numerically in <a href="../pages/13-naming-maps.html">lesson 13</a>; the q/k/v/z and resid_mid rows are from the installed package's cache (shapes printed in the lesson-13 output) and were not cross-checked against the other libraries.</p>
+<nav class="pagenav" aria-label="Previous and next page"><a class="prev" href="../pages/15-readiness-review.html"><span class="dir">← Previous</span>Readiness review</a><a class="next" href="../appendices/b-command-reference.html"><span class="dir">Next →</span>Command reference</a></nav></main></div></div>
+<script src="../assets/nav-data.js"></script><script src="../assets/glossary-data.js"></script><script src="../assets/wiki.js"></script></body></html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command reference · Transformer Anatomy</title><meta name="description" content="Every sub-command of labs/anatomy.py, the lesson it belongs to, and the test commands. All run from the course directory.">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<a class="skip-link" href="#main">Skip to content</a><div class="layout"><aside class="sidebar" data-nav aria-label="Course navigation"><p class="site-title"><a href="../index.html">Transformer Anatomy</a></p><p class="site-sub">from token ids to logits, one tensor at a time</p><div class="nav-module"><span class="mod-label">Start here</span><a href="../index.html"> Course home</a></div><div class="nav-module"><span class="mod-label">0 · The object of study</span><a href="../pages/00-orientation.html">00 The model is a function from token ids to logits</a><a href="../pages/01-tokenization.html">01 Tokenization: byte-pair encoding and the GPT-2 vocabulary</a><a href="../pages/02-embeddings-and-positions.html">02 Embeddings and positions: the first residual vector</a><a href="../pages/03-the-residual-stream.html">03 The residual stream: a sum of writes</a><a href="../pages/04-layer-norm.html">04 Layer norm: what it does, where GPT-2 puts it, and folding it away</a></div><div class="nav-module"><span class="mod-label">1 · Attention</span><a href="../pages/05-attention-one-head.html">05 Attention I: one head on three tokens</a><a href="../pages/06-attention-circuits.html">06 Attention II: heads as a QK circuit and an OV circuit</a></div><div class="nav-module"><span class="mod-label">2 · MLPs and the output</span><a href="../pages/07-the-mlp-block.html">07 The MLP block: two matrices, a GELU, and where a neuron lives</a><a href="../pages/08-gated-mlps.html">08 Gated MLPs: SwiGLU in Llama and Qwen3</a><a href="../pages/09-unembedding-and-logits.html">09 Unembedding and logits: from the stream to a distribution</a></div><div class="nav-module"><span class="mod-label">3 · The whole model</span><a href="../pages/10-forward-pass-from-raw-weights.html">10 The full forward pass from raw weights</a><a href="../pages/11-shapes-and-parameter-counts.html">11 Shapes and parameter counts: deriving 124M from the config</a><a href="../pages/12-generation-and-the-kv-cache.html">12 Generation and the KV cache</a></div><div class="nav-module"><span class="mod-label">4 · Tooling and variants</span><a href="../pages/13-naming-maps.html">13 Naming maps: the same activation in Hugging Face, TransformerLens 4, and nnsight</a><a href="../pages/14-architectural-variants.html">14 Architectural variants: GPT-2 versus Llama-style models</a><a href="../pages/15-readiness-review.html">15 Readiness review</a></div><div class="nav-module"><span class="mod-label">Reference and practice</span><a href="../appendices/a-shapes-and-notation.html">A Shapes and notation</a><a href="../appendices/b-command-reference.html" class="current" aria-current="page">B Command reference</a><a href="../glossary.html"> Glossary</a><a href="../bibliography.html"> Annotated bibliography</a></div></aside>
+<div class="content"><main class="page" id="main"><p class="kicker">Appendix B</p><h1>Command reference</h1><p class="lede">Every sub-command of labs/anatomy.py, the lesson it belongs to, and the test commands. All run from the course directory.</p>
+<h2 id="setup">Environment</h2>
+<p>A Python environment with <code>torch</code>, <code>transformers</code> (5.x), <code>transformer_lens</code> (4.x), and <code>nnsight</code>, with <code>gpt2</code> in the Hugging Face cache. The authoring versions are recorded at the top of <a href="../research/verify/lab-transcript.txt">the transcript</a>. Set <code>HF_HUB_OFFLINE=1</code> to avoid network lookups; the tool sets it by default.</p>
+<h2 id="commands">Inspection commands</h2>
+<table><tr><th>Command</th><th>Lesson</th><th>Shows</th></tr>
+<tr><td><code>tokens TEXT... [--compare A B]</code></td><td>01</td><td>token ids, decoded pieces, raw pieces with Ġ</td></tr>
+<tr><td><code>bpe-demo [--merges N]</code></td><td>01</td><td>toy byte-pair training on the five-word corpus</td></tr>
+<tr><td><code>embed [TEXT] [--positions N]</code></td><td>02</td><td>wte and wpe rows and their sum; check against hidden_states[0]</td></tr>
+<tr><td><code>stream [TEXT] [--position P]</code></td><td>03</td><td>residual norms and every write per block; the sum identity</td></tr>
+<tr><td><code>layernorm-demo</code></td><td>04, 14</td><td>LayerNorm, RMSNorm, and folding on [1, 3, 5, 7]</td></tr>
+<tr><td><code>attention-demo</code></td><td>05</td><td>one head on the three-token pencil example, checked against torch</td></tr>
+<tr><td><code>heads [TEXT] --layer L --head H</code></td><td>06</td><td>a real attention pattern and the ranks of its QK and OV circuits</td></tr>
+<tr><td><code>mlp-demo [TEXT] --layer L</code></td><td>07</td><td>top neurons per position, fraction active, GELU values</td></tr>
+<tr><td><code>swiglu-demo</code></td><td>08</td><td>SwiGLU on a two-vector</td></tr>
+<tr><td><code>logit-lens [TEXT]</code></td><td>09</td><td>top-3 tokens after every block at the last position</td></tr>
+<tr><td><code>softmax-demo</code></td><td>09, 12</td><td>softmax and temperature on [2, 1, 0]</td></tr>
+<tr><td><code>config</code></td><td>00, 11</td><td>config values and the parameter-count derivation</td></tr>
+<tr><td><code>shapes</code></td><td>11, A</td><td>every state-dict tensor with shape and size</td></tr>
+<tr><td><code>generate [TEXT] [--tokens N] [--temperature T] [--seed S]</code></td><td>12</td><td>greedy and sampled continuations; cached versus uncached greedy</td></tr>
+<tr><td><code>names [TEXT] [--layer L] [--processing none|default]</code></td><td>13</td><td>the three-library naming table with max differences</td></tr>
+<tr><td><code>compare [TEXT] [--reference] [--tools]</code></td><td>10, 15</td><td>your forward pass (or the author's) against transformers, TransformerLens, nnsight</td></tr></table>
+<h2 id="tests">Lab tests</h2><pre class="term"><code>python -m unittest discover -s labs -p &#x27;test_tokens.py&#x27; -v
+python -m unittest discover -s labs -p &#x27;test_attention.py&#x27; -v
+python -m unittest discover -s labs -p &#x27;test_gpt2_from_scratch.py&#x27; -v
+python -m unittest discover -s labs -p &#x27;test_*.py&#x27; -v</code></pre>
+<p>Tests that need torch or transformers skip with a message when those are absent. Before the stubs are implemented the tests fail with <code>NotImplementedError</code>; the transcript records that starting state and a passing run against the author's reference solutions under <code>labs/reference/</code>, which are used only to generate verified output and are not the learner's starting point.</p>
+<h2 id="help">Help</h2><pre class="term"><code>python labs/anatomy.py --help</code></pre><pre class="output"><code>usage: anatomy.py [-h]
+                  {tokens,bpe-demo,embed,stream,layernorm-demo,attention-demo,heads,mlp-demo,swiglu-demo,logit-lens,softmax-demo,config,shapes,generate,names,compare} ...
+
+Transformer Anatomy: small inspection commands for GPT-2 small.
+
+Every lesson&#x27;s terminal output comes from this file. Run from the course directory:
+
+    python labs/anatomy.py tokens &quot;The cat sat on the mat&quot;
+    python labs/anatomy.py --help
+
+Commands that need a model load `gpt2` from the local Hugging Face cache. Set
+HF_HUB_OFFLINE=1 to avoid network lookups. `names` also needs transformer_lens
+and nnsight; everything else needs only torch and transformers.
+
+positional arguments:
+  {tokens,bpe-demo,embed,stream,layernorm-demo,attention-demo,heads,mlp-demo,swiglu-demo,logit-lens,softmax-demo,config,shapes,generate,names,compare}
+    tokens              show GPT-2 token ids and pieces
+    bpe-demo            train a toy byte-pair encoder step by step
+    embed               token and position embeddings for a prompt
+    stream              residual stream norms layer by layer
+    layernorm-demo      LayerNorm, RMSNorm, and folding on a 4-vector
+    attention-demo      one head on a 3-token pencil example
+    heads               one real GPT-2 attention pattern and its QK/OV
+                        circuits
+    mlp-demo            MLP activations and GELU values
+    swiglu-demo         SwiGLU on a 2-vector
+    logit-lens          unembed every block&#x27;s residual stream
+    softmax-demo        softmax and temperature on three logits
+    config              derive the parameter count from the config
+    shapes              every tensor in the state dict with its shape
+    generate            greedy and sampled generation, with and without a KV
+                        cache
+    names               verify activation names across HF, TransformerLens 4,
+                        and nnsight
+    compare             compare labs/gpt2_from_scratch.py with the reference
+                        model
+
+options:
+  -h, --help            show this help message and exit</code></pre>
+<nav class="pagenav" aria-label="Previous and next page"><a class="prev" href="../appendices/a-shapes-and-notation.html"><span class="dir">← Previous</span>Shapes and notation</a><a class="next" href="../glossary.html"><span class="dir">Next →</span>Glossary</a></nav></main></div></div>
+<script src="../assets/nav-data.js"></script><script src="../assets/glossary-data.js"></script><script src="../assets/wiki.js"></script></body></html>
