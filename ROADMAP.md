@@ -136,6 +136,16 @@ empty, then run.
 
 ## Status log
 
+- 2026-10-20: all four new courses authored, checked, and committed:
+  Python for Model Internals (17 lessons), Linear Algebra for
+  Interpretability (16), Transformer Anatomy (16), Interpretability Methods
+  and Rigor (16). Every course's site check passes with all sibling links
+  present. Each course's `NEXT.md` lists optional follow-ups only; the common
+  one is that rendered-browser verification was not possible in the authoring
+  environment. Suggested learning order: Python, then linear algebra
+  interleaved, then transformers, then interpretability, dipping into the
+  statistics and evals bridging material when a lesson points there.
+
 - 2026-10-20: statistics module 6 (lessons 24–25) and evals module 8 (pages 27–29) added.
 - 2026-10-20: plan written. DAG retired as delivery format. Eval-pipeline
   labs moved. Toolchain verified on CPU. Course authoring begins.
