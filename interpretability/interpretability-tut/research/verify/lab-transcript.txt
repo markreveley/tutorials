@@ -1,0 +1,1182 @@
+Interpretability Methods and Rigor: actual local command transcript
+Authoring date: 2026-10-20
+Python: 3.13.16 (main, Oct  1 2026, 15:40:24) [GCC 13.3.0]
+Interpreter: /home/user/.venv-ml/bin/python
+Platform: Linux-6.18.44-fc-v139-x86_64-with-glibc2.39
+Packages: torch 2.14.1+cpu, torchvision 0.29.1+cpu, transformers 5.20.2, transformer_lens 4.2.0, nnsight 0.8.1, numpy 2.5.4
+Models: gpt2 (124M) from the local Hugging Face cache via TransformerLens TransformerBridge with compatibility mode; torchvision GoogLeNet IMAGENET1K_V1 from the local torch hub cache.
+All runs are CPU-only and offline (HF_HUB_OFFLINE=1). Seeds are fixed in the scripts.
+
+$ python labs/reference/curve_tuning.py
+PRE-REGISTRATION (fixed before the held-out stimuli were rendered):
+  claim: inception3b of torchvision GoogLeNet contains a family of orientation-selective curve detectors: channels that respond to a curve of one orientation, are nearly silent at the opposite orientation, keep their preference under cosmetic changes, and prefer a curve to a straight line of the same tangent.
+  selection: top K channels by peak x selectivity on the screening stimuli (K fixed before running)
+  H1 (held-out radius/thickness): preferred orientation on held-out arcs within 20 degrees of the screening preference, for at least 80% of candidates
+  H2 (opposite orientation): held-out response at preferred+180 degrees < 0.25 x peak, for at least 80% of candidates
+  H3 (contrast inversion): on light-on-dark arcs the preferred orientation stays within 20 degrees and the peak is at least 0.3 x the dark-arc peak, for at least 60% of candidates
+  H4 (curve, not line): held-out arc peak > 1.5 x the peak response to a straight line of the same tangent orientation and thickness, for at least 80% of candidates
+  H5 (family spans orientations): the candidates' preferred orientations leave no gap larger than 90 degrees around the circle
+  controls: 100 random non-candidate channels run through the same held-out tests; their pass rates are reported beside the candidates'. The blank-field response is subtracted everywhere.
+  what_failure_means: a hypothesis that fails is reported as failed; the candidates are then orientation-selective arc responders, not demonstrated curve detectors.
+
+STAGE 1 (screening on 36x2 dark arcs): median channel peak 0.33, selectivity median 0.33
+  top 12 channels by peak x selectivity: [177, 222, 158, 128, 133, 246, 284, 253, 194, 311, 140, 242]
+
+STAGE 2 (held-out stimuli):
+  ch  scr held   peak   opp  inv    ipk   line  H1 H2 H3 H4
+ 177  180  180   6.62  0.00  180   5.99   0.13   y  y  y  y
+ 222   90  100   5.79  0.00  100   5.82   0.35   y  y  y  y
+ 158  150  150   5.45  0.00  150   5.48   1.11   y  y  y  y
+ 128    0   10   5.48 -0.05   10   5.04   0.17   y  y  y  y
+ 133   40   40   4.96  0.00   40   5.05   0.57   y  y  y  y
+ 246  120  120   4.72  0.00  120   4.44   0.83   y  y  y  y
+ 284  270  270   4.12 -0.02  260   4.23  -0.03   y  y  y  y
+ 253  210  200   4.73  0.00  210   4.06   0.39   y  y  y  y
+ 194  310  300   3.98  0.00  310   3.21   0.30   y  y  y  y
+ 311  310  310   3.61  0.00  310   3.93   0.19   y  y  y  y
+ 140   80   80   3.91  0.00   80   3.39   0.50   y  y  y  y
+ 242  270  270   4.45  0.00  270   4.32   0.37   y  y  y  y
+
+H1: candidates 100% (need >= 80%) -> pass; random-channel control 72%
+H2: candidates 100% (need >= 80%) -> pass; random-channel control 47%
+H3: candidates 100% (need >= 60%) -> pass; random-channel control 42%
+H4: candidates 100% (need >= 80%) -> pass; random-channel control 46%
+H1-H4 jointly: candidates 100%; random-channel control 22%
+H5: held-out preferred orientations [10, 40, 80, 100, 120, 150, 180, 200, 270, 270, 300, 310]; largest gap 70 degrees -> pass
+
+[exit 0; 14 s]
+
+$ python labs/reference/neuron_score.py --rule digit
+corpus: 3270 tokens -> 13 screening chunks, 12 held-out chunks of 128
+pre-registered: held-out r >= 0.5 and above the 95th percentile of 200 random same-layer neurons and of 500 label shuffles
+
+         rule layer neuron  train r held-out r  rand95  shuf95 |rand|max  base rate  verdict
+        digit     0    908    0.979      0.978   0.116   0.040     0.334      0.029  demonstrated
+
+[exit 0; 39 s]
+
+$ python -m unittest discover -s labs -p 'test_*.py'   # learner stubs: expected to fail until implemented
+
+EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE
+======================================================================
+ERROR: test_angular_difference_wraps (test_curve_detector.EvaluationChecks.test_angular_difference_wraps)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_curve_detector_passes_and_line_detector_fails (test_curve_detector.EvaluationChecks.test_curve_detector_passes_and_line_detector_fails)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_largest_gap (test_curve_detector.EvaluationChecks.test_largest_gap)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_select_candidates_prefers_strong_selective_channels (test_curve_detector.EvaluationChecks.test_select_candidates_prefers_strong_selective_channels)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_summarise_tuning (test_curve_detector.EvaluationChecks.test_summarise_tuning)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_inception3b_output_shape (test_curve_detector.ModelSmokeTest.test_inception3b_output_shape)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_arc_rotates_with_orientation (test_curve_detector.StimulusChecks.test_arc_rotates_with_orientation)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_arc_shape_range_and_ink (test_curve_detector.StimulusChecks.test_arc_shape_range_and_ink)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_line_is_symmetric_under_180 (test_curve_detector.StimulusChecks.test_line_is_symmetric_under_180)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_orientation_selectivity (test_curve_detector.StimulusChecks.test_orientation_selectivity)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_pearson_known_values_and_degenerate_input (test_explanation_score.ScoringChecks.test_pearson_known_values_and_degenerate_input)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_random_unit_control_excludes_the_unit_itself (test_explanation_score.ScoringChecks.test_random_unit_control_excludes_the_unit_itself)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_rule_predictions_regex_and_callable (test_explanation_score.ScoringChecks.test_rule_predictions_regex_and_callable)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_split_alternates_and_never_overlaps (test_explanation_score.ScoringChecks.test_split_alternates_and_never_overlaps)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_true_explanation_scores_high_and_passes (test_explanation_score.ScoringChecks.test_true_explanation_scores_high_and_passes)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_reports_control_percentiles (test_explanation_score.ScoringChecks.test_verdict_reports_control_percentiles)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_wrong_explanation_of_a_real_unit_is_not_demonstrated (test_explanation_score.ScoringChecks.test_wrong_explanation_of_a_real_unit_is_not_demonstrated)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_prefix_matching_score_on_synthetic_patterns (test_induction.InductionChecks.test_prefix_matching_score_on_synthetic_patterns)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_sequences_have_the_right_shape_and_structure (test_induction.InductionChecks.test_sequences_have_the_right_shape_and_structure)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict (test_induction.InductionChecks.test_verdict)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_hook_overwrites_only_the_named_position (test_patching.PatchingChecks.test_hook_overwrites_only_the_named_position)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_recovered_fraction (test_patching.PatchingChecks.test_recovered_fraction)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_with_claim_and_control_positions (test_patching.PatchingChecks.test_verdict_with_claim_and_control_positions)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_majority_rate (test_probe.ProbeChecks.test_majority_rate)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_no_signal_means_no_pass (test_probe.ProbeChecks.test_no_signal_means_no_pass)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_probe_recovers_a_linear_label_on_held_out_data (test_probe.ProbeChecks.test_probe_recovers_a_linear_label_on_held_out_data)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_random_direction_rarely_beats_the_probe (test_probe.ProbeChecks.test_random_direction_rarely_beats_the_probe)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_shuffled_labels_fall_to_about_the_majority_rate (test_probe.ProbeChecks.test_shuffled_labels_fall_to_about_the_majority_rate)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_logic (test_probe.ProbeChecks.test_verdict_logic)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_complete_protocol_validates (test_protocol.ProtocolChecks.test_complete_protocol_validates)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_fewer_than_two_controls_is_a_problem (test_protocol.ProtocolChecks.test_fewer_than_two_controls_is_a_problem)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_judge_needs_threshold_and_beats_controls (test_protocol.ProtocolChecks.test_judge_needs_threshold_and_beats_controls)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_looking_first_is_a_problem (test_protocol.ProtocolChecks.test_looking_first_is_a_problem)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_missing_and_placeholder_fields_are_named (test_protocol.ProtocolChecks.test_missing_and_placeholder_fields_are_named)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_refuses_incomplete_protocol_without_running (test_protocol.ProtocolChecks.test_run_refuses_incomplete_protocol_without_running)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_requires_the_preregistered_controls_to_be_reported (test_protocol.ProtocolChecks.test_run_requires_the_preregistered_controls_to_be_reported)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_returns_verdict_and_protocol (test_protocol.ProtocolChecks.test_run_returns_verdict_and_protocol)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+----------------------------------------------------------------------
+Ran 37 tests in 1.370s
+
+FAILED (errors=37)
+[exit 1; 3 s]
+
+$ INTERP_LAB_IMPL=reference python -m unittest discover -s labs -p 'test_*.py'
+
+.....................................
+----------------------------------------------------------------------
+Ran 37 tests in 0.506s
+
+OK
+[exit 0; 4 s]
+
+$ python -m unittest discover -s labs -p 'test_protocol.py' -v   # learner stubs: expected to fail until implemented
+
+test_complete_protocol_validates (test_protocol.ProtocolChecks.test_complete_protocol_validates) ... ERROR
+test_fewer_than_two_controls_is_a_problem (test_protocol.ProtocolChecks.test_fewer_than_two_controls_is_a_problem) ... ERROR
+test_judge_needs_threshold_and_beats_controls (test_protocol.ProtocolChecks.test_judge_needs_threshold_and_beats_controls) ... ERROR
+test_looking_first_is_a_problem (test_protocol.ProtocolChecks.test_looking_first_is_a_problem) ... ERROR
+test_missing_and_placeholder_fields_are_named (test_protocol.ProtocolChecks.test_missing_and_placeholder_fields_are_named) ... ERROR
+test_run_refuses_incomplete_protocol_without_running (test_protocol.ProtocolChecks.test_run_refuses_incomplete_protocol_without_running) ... ERROR
+test_run_requires_the_preregistered_controls_to_be_reported (test_protocol.ProtocolChecks.test_run_requires_the_preregistered_controls_to_be_reported) ... ERROR
+test_run_returns_verdict_and_protocol (test_protocol.ProtocolChecks.test_run_returns_verdict_and_protocol) ... ERROR
+
+======================================================================
+ERROR: test_complete_protocol_validates (test_protocol.ProtocolChecks.test_complete_protocol_validates)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_fewer_than_two_controls_is_a_problem (test_protocol.ProtocolChecks.test_fewer_than_two_controls_is_a_problem)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_judge_needs_threshold_and_beats_controls (test_protocol.ProtocolChecks.test_judge_needs_threshold_and_beats_controls)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_looking_first_is_a_problem (test_protocol.ProtocolChecks.test_looking_first_is_a_problem)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_missing_and_placeholder_fields_are_named (test_protocol.ProtocolChecks.test_missing_and_placeholder_fields_are_named)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_refuses_incomplete_protocol_without_running (test_protocol.ProtocolChecks.test_run_refuses_incomplete_protocol_without_running)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_requires_the_preregistered_controls_to_be_reported (test_protocol.ProtocolChecks.test_run_requires_the_preregistered_controls_to_be_reported)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_returns_verdict_and_protocol (test_protocol.ProtocolChecks.test_run_returns_verdict_and_protocol)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.013s
+
+FAILED (errors=8)
+[exit 1; 0 s]
+
+$ INTERP_LAB_IMPL=reference python -m unittest discover -s labs -p 'test_protocol.py' -v
+
+test_complete_protocol_validates (test_protocol.ProtocolChecks.test_complete_protocol_validates) ... ok
+test_fewer_than_two_controls_is_a_problem (test_protocol.ProtocolChecks.test_fewer_than_two_controls_is_a_problem) ... ok
+test_judge_needs_threshold_and_beats_controls (test_protocol.ProtocolChecks.test_judge_needs_threshold_and_beats_controls) ... ok
+test_looking_first_is_a_problem (test_protocol.ProtocolChecks.test_looking_first_is_a_problem) ... ok
+test_missing_and_placeholder_fields_are_named (test_protocol.ProtocolChecks.test_missing_and_placeholder_fields_are_named) ... ok
+test_run_refuses_incomplete_protocol_without_running (test_protocol.ProtocolChecks.test_run_refuses_incomplete_protocol_without_running) ... ok
+test_run_requires_the_preregistered_controls_to_be_reported (test_protocol.ProtocolChecks.test_run_requires_the_preregistered_controls_to_be_reported) ... ok
+test_run_returns_verdict_and_protocol (test_protocol.ProtocolChecks.test_run_returns_verdict_and_protocol) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.019s
+
+OK
+[exit 0; 0 s]
+
+$ python labs/reference/maxact.py --layer 2 --neuron 2928
+layer 2 neuron 2928: 3200 tokens; activation mean 0.033, sd 0.417, max 2.103; fraction > 0: 0.169; fraction > 0.5*max: 0.0706
+
+Top 10 activations (what a max-activating-examples view shows):
+    2.103   boiled the kettle.[\n\n]\nHOW
+    2.037   delay the sailing.[\n\n]\nA
+    1.905   about a clock.[ Both] customers are
+    1.865   think probably true.[ But] section 3
+    1.854   predict.\n\n[Second], the
+    1.847   into the ground.[ So]akaways
+    1.822   two routes agree.[\n]\nWhen
+    1.798   is for delay.[\n\n]\nSH
+    1.786  's always clicked."[\n]\n"
+    1.780   years.\n\n\n[NOT]ES T
+
+Random tokens from activation quantile bands (what the top-k view hides):
+  band 0.99-1.00 (activation 1.660 to 2.103, 32 tokens):
+      1.822   two routes agree.[\n]\nWhen
+      1.758   her a measurement.[\n]\nShe
+      1.716   story were false.[ If] the ch
+      1.672   responding to that.[ You] need the
+  band 0.90-0.99 (activation 0.551 to 1.660, 288 tokens):
+      1.518   and a remark.[ The] remarks are
+      1.499   bought it."\n[\n]"It
+      1.257   in September.\n[\n]The harvest
+      0.606   listening on Tuesday.[ Those] are different
+  band 0.50-0.90 (activation -0.118 to 0.551, 1280 tokens):
+      0.069  ee: R.[ Oy]elaran
+     -0.114   October 1911, strikes[ the] name through
+     -0.114   will turn from silver[ to] gold to
+     -0.115   we were building in[ April].\n
+  band 0.00-0.50 (activation -0.170 to -0.118, 1600 tokens):
+     -0.133   the control that would[ fail] if your
+     -0.157   years. It read[ high] by about
+     -0.164   on the phone and[ didn]'t notice
+     -0.168  THE HARBOUR[ LED]GER\n
+
+[exit 0; 11 s]
+
+$ python labs/reference/maxact.py --layer 0 --neuron 908
+layer 0 neuron 908: 3200 tokens; activation mean 0.012, sd 0.597, max 4.573; fraction > 0: 0.035; fraction > 0.5*max: 0.0319
+
+Top 10 activations (what a max-activating-examples view shows):
+    4.573   41 at 19.[6] kilograms,
+    4.563   is 4,8[12] builds.
+    4.492   wire, 2.[5] mm,
+    4.452   difference of 0.[7] minutes could
+    4.337   declared mass: 6[33] kg.
+    4.319   to brown.\n[5]. Let
+    4.316   which is 4,[8]12 builds
+    4.268  91 and 1.[08]. Say
+    4.204   minutes to 9.[4] minutes between
+    4.158   affect performance.\n[6]. After
+
+Random tokens from activation quantile bands (what the top-k view hides):
+  band 0.99-1.00 (activation 3.346 to 4.573, 32 tokens):
+      4.031   four minutes.\n[3]. Add
+      3.681   film.\n\n[1]. Raise
+      3.514  .1 minutes to[ 9].4
+      3.387  Crate 2 of[ 6]: ceramic
+  band 0.90-0.99 (activation -0.033 to 3.346, 288 tokens):
+      3.203   under 200 lines,[ 5].3
+     -0.008   Its pages are fox[ed] and the
+     -0.018   disagree, you have[ learned] something,
+     -0.032   clicking is new,[ you]'d need
+  band 0.50-0.90 (activation -0.094 to -0.033, 1280 tokens):
+     -0.049  \n1. Raise[ the] heat to
+     -0.057  .\n\nWhat[ I] would do
+     -0.085   vegetated kg.[\n]Crate
+     -0.091   book for that year[ lists] a J
+  band 0.00-0.50 (activation -0.170 to -0.094, 1600 tokens):
+     -0.122   across its whole range[.] Every measurement
+     -0.155   HARBOUR LED[GER]\n\n
+     -0.158  :42 that evening[.] By the
+     -0.162   succeed ifexactly[ proportional]." Your
+
+[exit 0; 11 s]
+
+$ python labs/reference/maxact.py --layer 9 --neuron 788
+layer 9 neuron 788: 3200 tokens; activation mean 0.359, sd 1.225, max 5.798; fraction > 0: 0.146; fraction > 0.5*max: 0.0950
+
+Top 10 activations (what a max-activating-examples view shows):
+    5.798   marks, which was[,] Daf
+    5.691  ," said Oren[.]\n\n
+    5.635   not think it is[,] and I
+    5.487   1,140 pounds[,] somewhat under
+    5.275   of them were wrong[,] but I
+    5.075  08. Say that[.] "Pro
+    5.062  What I would do[.] Keep the
+    5.026  , interviewed in 1974[,] said her
+    4.974  , which is honest[,] but the
+    4.959  \nWhat I measured[.] I pulled
+
+Random tokens from activation quantile bands (what the top-k view hides):
+  band 0.99-1.00 (activation 4.550 to 5.798, 32 tokens):
+      5.798   marks, which was[,] Daf
+      5.275   of them were wrong[,] but I
+      4.764   18.2 kilograms[,] had stood
+      4.582   responsible. much larger[.] The median
+  band 0.90-0.99 (activation 2.730 to 4.550, 288 tokens):
+      4.343   It clicked, twice[,] then was
+      4.127   been rehomed[.] Two plots
+      4.080   She turned a page[.] "If
+      3.473   to be audited[.] Each entry
+  band 0.50-0.90 (activation -0.079 to 2.730, 1280 tokens):
+      0.004  Total declared mass:[ 6]33 kg
+     -0.014   a lint-[free] cloth,
+     -0.026   overall slowdown is a[ composition] effect.
+     -0.027  , 22 shill[ings]," and
+  band 0.00-0.50 (activation -0.170 to -0.079, 1600 tokens):
+     -0.122   until you do,[ a] reader can
+     -0.132  On the morning of[ 14] March 1911
+     -0.148  Oren kettle."[\n]\nHe
+     -0.151   with it was shifted[ by] the same
+
+[exit 0; 11 s]
+
+$ python -m unittest discover -s labs -p 'test_explanation_score.py' -v   # learner stubs: expected to fail until implemented
+
+test_pearson_known_values_and_degenerate_input (test_explanation_score.ScoringChecks.test_pearson_known_values_and_degenerate_input) ... ERROR
+test_random_unit_control_excludes_the_unit_itself (test_explanation_score.ScoringChecks.test_random_unit_control_excludes_the_unit_itself) ... ERROR
+test_rule_predictions_regex_and_callable (test_explanation_score.ScoringChecks.test_rule_predictions_regex_and_callable) ... ERROR
+test_split_alternates_and_never_overlaps (test_explanation_score.ScoringChecks.test_split_alternates_and_never_overlaps) ... ERROR
+test_true_explanation_scores_high_and_passes (test_explanation_score.ScoringChecks.test_true_explanation_scores_high_and_passes) ... ERROR
+test_verdict_reports_control_percentiles (test_explanation_score.ScoringChecks.test_verdict_reports_control_percentiles) ... ERROR
+test_wrong_explanation_of_a_real_unit_is_not_demonstrated (test_explanation_score.ScoringChecks.test_wrong_explanation_of_a_real_unit_is_not_demonstrated) ... ERROR
+
+======================================================================
+ERROR: test_pearson_known_values_and_degenerate_input (test_explanation_score.ScoringChecks.test_pearson_known_values_and_degenerate_input)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_random_unit_control_excludes_the_unit_itself (test_explanation_score.ScoringChecks.test_random_unit_control_excludes_the_unit_itself)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_rule_predictions_regex_and_callable (test_explanation_score.ScoringChecks.test_rule_predictions_regex_and_callable)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_split_alternates_and_never_overlaps (test_explanation_score.ScoringChecks.test_split_alternates_and_never_overlaps)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_true_explanation_scores_high_and_passes (test_explanation_score.ScoringChecks.test_true_explanation_scores_high_and_passes)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_reports_control_percentiles (test_explanation_score.ScoringChecks.test_verdict_reports_control_percentiles)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_wrong_explanation_of_a_real_unit_is_not_demonstrated (test_explanation_score.ScoringChecks.test_wrong_explanation_of_a_real_unit_is_not_demonstrated)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.036s
+
+FAILED (errors=7)
+[exit 1; 0 s]
+
+$ INTERP_LAB_IMPL=reference python -m unittest discover -s labs -p 'test_explanation_score.py' -v
+
+test_pearson_known_values_and_degenerate_input (test_explanation_score.ScoringChecks.test_pearson_known_values_and_degenerate_input) ... ok
+test_random_unit_control_excludes_the_unit_itself (test_explanation_score.ScoringChecks.test_random_unit_control_excludes_the_unit_itself) ... ok
+test_rule_predictions_regex_and_callable (test_explanation_score.ScoringChecks.test_rule_predictions_regex_and_callable) ... ok
+test_split_alternates_and_never_overlaps (test_explanation_score.ScoringChecks.test_split_alternates_and_never_overlaps) ... ok
+test_true_explanation_scores_high_and_passes (test_explanation_score.ScoringChecks.test_true_explanation_scores_high_and_passes) ... ok
+test_verdict_reports_control_percentiles (test_explanation_score.ScoringChecks.test_verdict_reports_control_percentiles) ... ok
+test_wrong_explanation_of_a_real_unit_is_not_demonstrated (test_explanation_score.ScoringChecks.test_wrong_explanation_of_a_real_unit_is_not_demonstrated) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.083s
+
+OK
+[exit 0; 0 s]
+
+$ python labs/reference/neuron_score.py --all
+corpus: 3270 tokens -> 13 screening chunks, 12 held-out chunks of 128
+pre-registered: held-out r >= 0.5 and above the 95th percentile of 200 random same-layer neurons and of 500 label shuffles
+
+         rule layer neuron  train r held-out r  rand95  shuf95 |rand|max  base rate  verdict
+        digit     0    908    0.979      0.978   0.116   0.040     0.334      0.029  demonstrated
+      capital     0   1102    0.757      0.727   0.115   0.044     0.271      0.076  demonstrated
+      newline     0    504    0.988      0.995   0.131   0.044     0.335      0.044  demonstrated
+        punct     9    788    0.919      0.918   0.187   0.044     0.558      0.117  demonstrated
+ after_period     2   2928    0.860      0.845   0.125   0.042     0.560      0.103  demonstrated
+        quote     0    121    0.777      0.828   0.069   0.044     0.512      0.016  demonstrated
+          the     0    132    0.996      0.997   0.131   0.041     0.335      0.059  demonstrated
+   space_word     1   1034    0.651      0.528   0.231   0.042     0.372      0.700  demonstrated
+
+[exit 0; 43 s]
+
+$ python labs/reference/feature_vis.py --unit 177 --out assets/img/fv-3b-177.png
+unit inception3b:177: centre objective step 0 = 0.01, step 75 = 8.45, final = 9.87
+wrote assets/img/fv-3b-177.png (128x128)
+
+[exit 0; 11 s]
+
+$ python labs/reference/curve_tuning.py --random 300
+PRE-REGISTRATION (fixed before the held-out stimuli were rendered):
+  claim: inception3b of torchvision GoogLeNet contains a family of orientation-selective curve detectors: channels that respond to a curve of one orientation, are nearly silent at the opposite orientation, keep their preference under cosmetic changes, and prefer a curve to a straight line of the same tangent.
+  selection: top K channels by peak x selectivity on the screening stimuli (K fixed before running)
+  H1 (held-out radius/thickness): preferred orientation on held-out arcs within 20 degrees of the screening preference, for at least 80% of candidates
+  H2 (opposite orientation): held-out response at preferred+180 degrees < 0.25 x peak, for at least 80% of candidates
+  H3 (contrast inversion): on light-on-dark arcs the preferred orientation stays within 20 degrees and the peak is at least 0.3 x the dark-arc peak, for at least 60% of candidates
+  H4 (curve, not line): held-out arc peak > 1.5 x the peak response to a straight line of the same tangent orientation and thickness, for at least 80% of candidates
+  H5 (family spans orientations): the candidates' preferred orientations leave no gap larger than 90 degrees around the circle
+  controls: 100 random non-candidate channels run through the same held-out tests; their pass rates are reported beside the candidates'. The blank-field response is subtracted everywhere.
+  what_failure_means: a hypothesis that fails is reported as failed; the candidates are then orientation-selective arc responders, not demonstrated curve detectors.
+
+STAGE 1 (screening on 36x2 dark arcs): median channel peak 0.33, selectivity median 0.33
+  top 12 channels by peak x selectivity: [177, 222, 158, 128, 133, 246, 284, 253, 194, 311, 140, 242]
+
+STAGE 2 (held-out stimuli):
+  ch  scr held   peak   opp  inv    ipk   line  H1 H2 H3 H4
+ 177  180  180   6.62  0.00  180   5.99   0.13   y  y  y  y
+ 222   90  100   5.79  0.00  100   5.82   0.35   y  y  y  y
+ 158  150  150   5.45  0.00  150   5.48   1.11   y  y  y  y
+ 128    0   10   5.48 -0.05   10   5.04   0.17   y  y  y  y
+ 133   40   40   4.96  0.00   40   5.05   0.57   y  y  y  y
+ 246  120  120   4.72  0.00  120   4.44   0.83   y  y  y  y
+ 284  270  270   4.12 -0.02  260   4.23  -0.03   y  y  y  y
+ 253  210  200   4.73  0.00  210   4.06   0.39   y  y  y  y
+ 194  310  300   3.98  0.00  310   3.21   0.30   y  y  y  y
+ 311  310  310   3.61  0.00  310   3.93   0.19   y  y  y  y
+ 140   80   80   3.91  0.00   80   3.39   0.50   y  y  y  y
+ 242  270  270   4.45  0.00  270   4.32   0.37   y  y  y  y
+
+H1: candidates 100% (need >= 80%) -> pass; random-channel control 68%
+H2: candidates 100% (need >= 80%) -> pass; random-channel control 47%
+H3: candidates 100% (need >= 60%) -> pass; random-channel control 40%
+H4: candidates 100% (need >= 80%) -> pass; random-channel control 42%
+H1-H4 jointly: candidates 100%; random-channel control 19%
+H5: held-out preferred orientations [10, 40, 80, 100, 120, 150, 180, 200, 270, 270, 300, 310]; largest gap 70 degrees -> pass
+
+[exit 0; 9 s]
+
+$ python labs/reference/probe_run.py --layer 6
+layer 6, label "after_period": train 1664 tokens (0.090 positive), held-out 1536 tokens (0.103 positive); majority-class accuracy 0.897
+probe: train accuracy 0.999, held-out accuracy 0.985
+shuffled-label control (20 fits): held-out accuracy mean 0.834, max 0.861
+random-direction control (20 directions): held-out accuracy mean 0.882, max 0.894
+pre-registered test (held-out >= majority + 0.10 and above both controls): FAIL
+exploratory, NOT pre-registered: held-out recall on positives 0.930, on negatives 0.991, balanced accuracy 0.961; the largest gain over majority that any probe could reach here is 0.103
+
+[exit 0; 14 s]
+
+$ python labs/reference/probe_run.py --layer 0
+layer 0, label "after_period": train 1664 tokens (0.090 positive), held-out 1536 tokens (0.103 positive); majority-class accuracy 0.897
+probe: train accuracy 0.999, held-out accuracy 0.980
+shuffled-label control (20 fits): held-out accuracy mean 0.856, max 0.874
+random-direction control (20 directions): held-out accuracy mean 0.881, max 0.892
+pre-registered test (held-out >= majority + 0.10 and above both controls): FAIL
+exploratory, NOT pre-registered: held-out recall on positives 0.899, on negatives 0.989, balanced accuracy 0.944; the largest gain over majority that any probe could reach here is 0.103
+
+[exit 0; 15 s]
+
+$ python labs/reference/probe_run.py --layer 11
+layer 11, label "after_period": train 1664 tokens (0.090 positive), held-out 1536 tokens (0.103 positive); majority-class accuracy 0.897
+probe: train accuracy 0.999, held-out accuracy 0.954
+shuffled-label control (20 fits): held-out accuracy mean 0.818, max 0.850
+random-direction control (20 directions): held-out accuracy mean 0.891, max 0.902
+pre-registered test (held-out >= majority + 0.10 and above both controls): FAIL
+exploratory, NOT pre-registered: held-out recall on positives 0.747, on negatives 0.978, balanced accuracy 0.863; the largest gain over majority that any probe could reach here is 0.103
+
+[exit 0; 15 s]
+
+$ python -m unittest discover -s labs -p 'test_probe.py' -v   # learner stubs: expected to fail until implemented
+
+test_majority_rate (test_probe.ProbeChecks.test_majority_rate) ... ERROR
+test_no_signal_means_no_pass (test_probe.ProbeChecks.test_no_signal_means_no_pass) ... ERROR
+test_probe_recovers_a_linear_label_on_held_out_data (test_probe.ProbeChecks.test_probe_recovers_a_linear_label_on_held_out_data) ... ERROR
+test_random_direction_rarely_beats_the_probe (test_probe.ProbeChecks.test_random_direction_rarely_beats_the_probe) ... ERROR
+test_shuffled_labels_fall_to_about_the_majority_rate (test_probe.ProbeChecks.test_shuffled_labels_fall_to_about_the_majority_rate) ... ERROR
+test_verdict_logic (test_probe.ProbeChecks.test_verdict_logic) ... ERROR
+
+======================================================================
+ERROR: test_majority_rate (test_probe.ProbeChecks.test_majority_rate)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_no_signal_means_no_pass (test_probe.ProbeChecks.test_no_signal_means_no_pass)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_probe_recovers_a_linear_label_on_held_out_data (test_probe.ProbeChecks.test_probe_recovers_a_linear_label_on_held_out_data)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_random_direction_rarely_beats_the_probe (test_probe.ProbeChecks.test_random_direction_rarely_beats_the_probe)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_shuffled_labels_fall_to_about_the_majority_rate (test_probe.ProbeChecks.test_shuffled_labels_fall_to_about_the_majority_rate)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_logic (test_probe.ProbeChecks.test_verdict_logic)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.017s
+
+FAILED (errors=6)
+[exit 1; 0 s]
+
+$ INTERP_LAB_IMPL=reference python -m unittest discover -s labs -p 'test_probe.py' -v
+
+test_majority_rate (test_probe.ProbeChecks.test_majority_rate) ... ok
+test_no_signal_means_no_pass (test_probe.ProbeChecks.test_no_signal_means_no_pass) ... ok
+test_probe_recovers_a_linear_label_on_held_out_data (test_probe.ProbeChecks.test_probe_recovers_a_linear_label_on_held_out_data) ... ok
+test_random_direction_rarely_beats_the_probe (test_probe.ProbeChecks.test_random_direction_rarely_beats_the_probe) ... ok
+test_shuffled_labels_fall_to_about_the_majority_rate (test_probe.ProbeChecks.test_shuffled_labels_fall_to_about_the_majority_rate) ... ok
+test_verdict_logic (test_probe.ProbeChecks.test_verdict_logic) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.132s
+
+OK
+[exit 0; 0 s]
+
+$ python labs/reference/logit_lens_run.py
+prompt 'The capital of France is'; final top token ' now', target ' Paris' rank 93
+
+   after      top token  p(top) p(target) KL to final
+ block 0         ' not'   0.384     0.000       3.244
+ block 1         ' now'   0.337     0.000       4.099
+ block 2         ' now'   0.471     0.000       4.170
+ block 3         ' now'   0.558     0.000       4.159
+ block 4         ' now'   0.653     0.000       3.950
+ block 5         ' now'   0.672     0.000       4.805
+ block 6         ' now'   0.550     0.000       3.373
+ block 7         ' now'   0.741     0.000       3.811
+ block 8         ' now'   0.574     0.000       2.637
+ block 9         ' now'   0.333     0.005       1.491
+block 10         ' now'   0.204     0.002       0.318
+block 11         ' now'   0.048     0.002       0.000
+
+Direct logit attribution to ' Paris' (each part passed through the final layer norm):
+  block  0: attention   -0.04   mlp   -0.05
+  block  1: attention   +0.07   mlp   -0.04
+  block  2: attention   +0.09   mlp   -0.05
+  block  3: attention   +0.05   mlp   +0.15
+  block  4: attention   +0.14   mlp   +0.24
+  block  5: attention   +0.15   mlp   -0.17
+  block  6: attention   +0.48   mlp   +0.39
+  block  7: attention   +0.21   mlp   +0.11
+  block  8: attention   +0.29   mlp   +0.81
+  block  9: attention   +1.90   mlp   +0.72
+  block 10: attention   +0.48   mlp   +0.56
+  block 11: attention   +0.90   mlp   +2.07
+  embeddings   -0.01; layer-norm and unembed biases   +1.59
+  sum of parts  +11.02; logit from the forward pass  +11.02
+
+[exit 0; 8 s]
+
+$ python labs/reference/logit_lens_run.py --prompt "The capital of Italy is" --target " Rome"
+prompt 'The capital of Italy is'; final top token ' now', target ' Rome' rank 8
+
+   after      top token  p(top) p(target) KL to final
+ block 0         ' not'   0.363     0.000       3.176
+ block 1         ' now'   0.327     0.000       4.111
+ block 2         ' now'   0.433     0.000       4.062
+ block 3         ' now'   0.545     0.000       3.984
+ block 4         ' now'   0.648     0.000       3.699
+ block 5         ' now'   0.668     0.000       4.630
+ block 6         ' now'   0.525     0.000       3.250
+ block 7         ' now'   0.713     0.000       3.763
+ block 8         ' now'   0.596     0.000       2.691
+ block 9         ' now'   0.274     0.024       1.813
+block 10         ' now'   0.139     0.023       0.359
+block 11         ' now'   0.046     0.015       0.000
+
+Direct logit attribution to ' Rome' (each part passed through the final layer norm):
+  block  0: attention   -0.10   mlp   +0.06
+  block  1: attention   +0.15   mlp   -0.07
+  block  2: attention   +0.20   mlp   -0.02
+  block  3: attention   +0.13   mlp   +0.10
+  block  4: attention   +0.23   mlp   +0.04
+  block  5: attention   +0.29   mlp   -0.02
+  block  6: attention   +0.49   mlp   +0.13
+  block  7: attention   +0.25   mlp   -0.02
+  block  8: attention   +0.44   mlp   +0.57
+  block  9: attention   +2.18   mlp   +1.26
+  block 10: attention   +0.65   mlp   +1.72
+  block 11: attention   +0.52   mlp   +3.00
+  embeddings   -0.03; layer-norm and unembed biases   +0.86
+  sum of parts  +12.98; logit from the forward pass  +12.98
+
+[exit 0; 8 s]
+
+$ python labs/reference/patch_run.py
+tokens: ['<|endoftext|>', 'The', ' capital', ' of', ' France', ' is']
+metric logit(Paris)-logit(Rome): clean +1.405, corrupted -4.417
+layer     pos0     pos1     pos2     pos3     pos4     pos5   (recovered fraction)
+    0     0.00     0.00     0.00     0.00     1.00    -0.01
+    1     0.00     0.00     0.00     0.00     1.00    -0.00
+    2     0.00     0.00     0.00     0.00     1.00    -0.00
+    3     0.00     0.00     0.00     0.00     0.99     0.00
+    4     0.00     0.00     0.00     0.00     1.01     0.03
+    5     0.00     0.00     0.00     0.00     1.00     0.03
+    6     0.00     0.00     0.00     0.00     0.98     0.08
+    7     0.00     0.00     0.00     0.00     0.98     0.08
+    8     0.00     0.00     0.00     0.00     0.87     0.15
+    9     0.00     0.00     0.00     0.00     0.29     0.70
+   10     0.00     0.00     0.00     0.00     0.12     0.85
+   11     0.00     0.00     0.00     0.00     0.00     1.00
+
+country position (index 4): best recovery 1.01 -> pass (> 0.50 pre-registered)
+position 0 control: largest recovery 0.00 -> pass (< 0.10 pre-registered)
+
+[exit 0; 11 s]
+
+$ python -m unittest discover -s labs -p 'test_patching.py' -v   # learner stubs: expected to fail until implemented
+
+test_hook_overwrites_only_the_named_position (test_patching.PatchingChecks.test_hook_overwrites_only_the_named_position) ... ERROR
+test_recovered_fraction (test_patching.PatchingChecks.test_recovered_fraction) ... ERROR
+test_verdict_with_claim_and_control_positions (test_patching.PatchingChecks.test_verdict_with_claim_and_control_positions) ... ERROR
+
+======================================================================
+ERROR: test_hook_overwrites_only_the_named_position (test_patching.PatchingChecks.test_hook_overwrites_only_the_named_position)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_recovered_fraction (test_patching.PatchingChecks.test_recovered_fraction)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_with_claim_and_control_positions (test_patching.PatchingChecks.test_verdict_with_claim_and_control_positions)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+FAILED (errors=3)
+[exit 1; 2 s]
+
+$ INTERP_LAB_IMPL=reference python -m unittest discover -s labs -p 'test_patching.py' -v
+
+test_hook_overwrites_only_the_named_position (test_patching.PatchingChecks.test_hook_overwrites_only_the_named_position) ... ok
+test_recovered_fraction (test_patching.PatchingChecks.test_recovered_fraction) ... ok
+test_verdict_with_claim_and_control_positions (test_patching.PatchingChecks.test_verdict_with_claim_and_control_positions) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+OK
+[exit 0; 2 s]
+
+$ python labs/reference/induction_run.py
+5 random sequences of 50 tokens, repeated once. Loss per token: first copy 12.38, second copy 0.43
+
+prefix-matching score, repeated sequence (rows: layers, columns: heads):
+  L0  0.01 0.00 0.01 0.00 0.00 0.00 0.01 0.00 0.01 0.01 0.01 0.01
+  L1  0.00 0.00 0.00 0.00 0.00 0.01 0.01 0.01 0.01 0.01 0.01 0.00
+  L2  0.00 0.02 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+  L3  0.00 0.00 0.00 0.00 0.01 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+  L4  0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.01 0.00 0.00 0.00
+  L5  0.46 0.91 0.00 0.00 0.00 0.95 0.00 0.00 0.01 0.02 0.02 0.00
+  L6  0.00 0.00 0.01 0.00 0.02 0.00 0.02 0.00 0.00 0.92 0.03 0.00
+  L7  0.00 0.22 0.84 0.00 0.00 0.00 0.04 0.10 0.00 0.00 0.91 0.05
+  L8  0.00 0.39 0.01 0.03 0.00 0.00 0.17 0.00 0.01 0.02 0.06 0.01
+  L9  0.26 0.17 0.11 0.00 0.08 0.01 0.51 0.02 0.05 0.46 0.00 0.04
+  L10 0.39 0.54 0.04 0.15 0.05 0.00 0.33 0.53 0.04 0.00 0.19 0.26
+  L11 0.02 0.05 0.03 0.00 0.03 0.10 0.05 0.06 0.01 0.33 0.44 0.01
+
+heads with score >= 0.5: [(5, 1), (5, 5), (6, 9), (7, 2), (7, 10), (9, 6), (10, 1), (10, 7)]
+same heads on the non-repeated control sequence:
+  L5H1: repeated 0.91, control 0.00
+  L5H5: repeated 0.95, control 0.00
+  L6H9: repeated 0.92, control 0.00
+  L7H2: repeated 0.84, control 0.00
+  L7H10: repeated 0.91, control 0.00
+  L9H6: repeated 0.51, control 0.00
+  L10H1: repeated 0.54, control 0.01
+  L10H7: repeated 0.53, control 0.00
+pre-registered test: pass
+
+[exit 0; 10 s]
+
+$ python -m unittest discover -s labs -p 'test_induction.py' -v   # learner stubs: expected to fail until implemented
+
+test_prefix_matching_score_on_synthetic_patterns (test_induction.InductionChecks.test_prefix_matching_score_on_synthetic_patterns) ... ERROR
+test_sequences_have_the_right_shape_and_structure (test_induction.InductionChecks.test_sequences_have_the_right_shape_and_structure) ... ERROR
+test_verdict (test_induction.InductionChecks.test_verdict) ... ERROR
+
+======================================================================
+ERROR: test_prefix_matching_score_on_synthetic_patterns (test_induction.InductionChecks.test_prefix_matching_score_on_synthetic_patterns)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_sequences_have_the_right_shape_and_structure (test_induction.InductionChecks.test_sequences_have_the_right_shape_and_structure)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict (test_induction.InductionChecks.test_verdict)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+FAILED (errors=3)
+[exit 1; 2 s]
+
+$ INTERP_LAB_IMPL=reference python -m unittest discover -s labs -p 'test_induction.py' -v
+
+test_prefix_matching_score_on_synthetic_patterns (test_induction.InductionChecks.test_prefix_matching_score_on_synthetic_patterns) ... ok
+test_sequences_have_the_right_shape_and_structure (test_induction.InductionChecks.test_sequences_have_the_right_shape_and_structure) ... ok
+test_verdict (test_induction.InductionChecks.test_verdict) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+OK
+[exit 0; 2 s]
+
+$ python -m unittest discover -s labs -p 'test_*.py' -v   # learner stubs: expected to fail until implemented
+
+test_angular_difference_wraps (test_curve_detector.EvaluationChecks.test_angular_difference_wraps) ... ERROR
+test_curve_detector_passes_and_line_detector_fails (test_curve_detector.EvaluationChecks.test_curve_detector_passes_and_line_detector_fails) ... ERROR
+test_largest_gap (test_curve_detector.EvaluationChecks.test_largest_gap) ... ERROR
+test_select_candidates_prefers_strong_selective_channels (test_curve_detector.EvaluationChecks.test_select_candidates_prefers_strong_selective_channels) ... ERROR
+test_summarise_tuning (test_curve_detector.EvaluationChecks.test_summarise_tuning) ... ERROR
+test_inception3b_output_shape (test_curve_detector.ModelSmokeTest.test_inception3b_output_shape) ... ERROR
+test_arc_rotates_with_orientation (test_curve_detector.StimulusChecks.test_arc_rotates_with_orientation) ... ERROR
+test_arc_shape_range_and_ink (test_curve_detector.StimulusChecks.test_arc_shape_range_and_ink) ... ERROR
+test_line_is_symmetric_under_180 (test_curve_detector.StimulusChecks.test_line_is_symmetric_under_180) ... ERROR
+test_orientation_selectivity (test_curve_detector.StimulusChecks.test_orientation_selectivity) ... ERROR
+test_pearson_known_values_and_degenerate_input (test_explanation_score.ScoringChecks.test_pearson_known_values_and_degenerate_input) ... ERROR
+test_random_unit_control_excludes_the_unit_itself (test_explanation_score.ScoringChecks.test_random_unit_control_excludes_the_unit_itself) ... ERROR
+test_rule_predictions_regex_and_callable (test_explanation_score.ScoringChecks.test_rule_predictions_regex_and_callable) ... ERROR
+test_split_alternates_and_never_overlaps (test_explanation_score.ScoringChecks.test_split_alternates_and_never_overlaps) ... ERROR
+test_true_explanation_scores_high_and_passes (test_explanation_score.ScoringChecks.test_true_explanation_scores_high_and_passes) ... ERROR
+test_verdict_reports_control_percentiles (test_explanation_score.ScoringChecks.test_verdict_reports_control_percentiles) ... ERROR
+test_wrong_explanation_of_a_real_unit_is_not_demonstrated (test_explanation_score.ScoringChecks.test_wrong_explanation_of_a_real_unit_is_not_demonstrated) ... ERROR
+test_prefix_matching_score_on_synthetic_patterns (test_induction.InductionChecks.test_prefix_matching_score_on_synthetic_patterns) ... ERROR
+test_sequences_have_the_right_shape_and_structure (test_induction.InductionChecks.test_sequences_have_the_right_shape_and_structure) ... ERROR
+test_verdict (test_induction.InductionChecks.test_verdict) ... ERROR
+test_hook_overwrites_only_the_named_position (test_patching.PatchingChecks.test_hook_overwrites_only_the_named_position) ... ERROR
+test_recovered_fraction (test_patching.PatchingChecks.test_recovered_fraction) ... ERROR
+test_verdict_with_claim_and_control_positions (test_patching.PatchingChecks.test_verdict_with_claim_and_control_positions) ... ERROR
+test_majority_rate (test_probe.ProbeChecks.test_majority_rate) ... ERROR
+test_no_signal_means_no_pass (test_probe.ProbeChecks.test_no_signal_means_no_pass) ... ERROR
+test_probe_recovers_a_linear_label_on_held_out_data (test_probe.ProbeChecks.test_probe_recovers_a_linear_label_on_held_out_data) ... ERROR
+test_random_direction_rarely_beats_the_probe (test_probe.ProbeChecks.test_random_direction_rarely_beats_the_probe) ... ERROR
+test_shuffled_labels_fall_to_about_the_majority_rate (test_probe.ProbeChecks.test_shuffled_labels_fall_to_about_the_majority_rate) ... ERROR
+test_verdict_logic (test_probe.ProbeChecks.test_verdict_logic) ... ERROR
+test_complete_protocol_validates (test_protocol.ProtocolChecks.test_complete_protocol_validates) ... ERROR
+test_fewer_than_two_controls_is_a_problem (test_protocol.ProtocolChecks.test_fewer_than_two_controls_is_a_problem) ... ERROR
+test_judge_needs_threshold_and_beats_controls (test_protocol.ProtocolChecks.test_judge_needs_threshold_and_beats_controls) ... ERROR
+test_looking_first_is_a_problem (test_protocol.ProtocolChecks.test_looking_first_is_a_problem) ... ERROR
+test_missing_and_placeholder_fields_are_named (test_protocol.ProtocolChecks.test_missing_and_placeholder_fields_are_named) ... ERROR
+test_run_refuses_incomplete_protocol_without_running (test_protocol.ProtocolChecks.test_run_refuses_incomplete_protocol_without_running) ... ERROR
+test_run_requires_the_preregistered_controls_to_be_reported (test_protocol.ProtocolChecks.test_run_requires_the_preregistered_controls_to_be_reported) ... ERROR
+test_run_returns_verdict_and_protocol (test_protocol.ProtocolChecks.test_run_returns_verdict_and_protocol) ... ERROR
+
+======================================================================
+ERROR: test_angular_difference_wraps (test_curve_detector.EvaluationChecks.test_angular_difference_wraps)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_curve_detector_passes_and_line_detector_fails (test_curve_detector.EvaluationChecks.test_curve_detector_passes_and_line_detector_fails)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_largest_gap (test_curve_detector.EvaluationChecks.test_largest_gap)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_select_candidates_prefers_strong_selective_channels (test_curve_detector.EvaluationChecks.test_select_candidates_prefers_strong_selective_channels)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_summarise_tuning (test_curve_detector.EvaluationChecks.test_summarise_tuning)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_inception3b_output_shape (test_curve_detector.ModelSmokeTest.test_inception3b_output_shape)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_arc_rotates_with_orientation (test_curve_detector.StimulusChecks.test_arc_rotates_with_orientation)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_arc_shape_range_and_ink (test_curve_detector.StimulusChecks.test_arc_shape_range_and_ink)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_line_is_symmetric_under_180 (test_curve_detector.StimulusChecks.test_line_is_symmetric_under_180)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_orientation_selectivity (test_curve_detector.StimulusChecks.test_orientation_selectivity)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_pearson_known_values_and_degenerate_input (test_explanation_score.ScoringChecks.test_pearson_known_values_and_degenerate_input)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_random_unit_control_excludes_the_unit_itself (test_explanation_score.ScoringChecks.test_random_unit_control_excludes_the_unit_itself)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_rule_predictions_regex_and_callable (test_explanation_score.ScoringChecks.test_rule_predictions_regex_and_callable)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_split_alternates_and_never_overlaps (test_explanation_score.ScoringChecks.test_split_alternates_and_never_overlaps)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_true_explanation_scores_high_and_passes (test_explanation_score.ScoringChecks.test_true_explanation_scores_high_and_passes)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_reports_control_percentiles (test_explanation_score.ScoringChecks.test_verdict_reports_control_percentiles)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_wrong_explanation_of_a_real_unit_is_not_demonstrated (test_explanation_score.ScoringChecks.test_wrong_explanation_of_a_real_unit_is_not_demonstrated)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_prefix_matching_score_on_synthetic_patterns (test_induction.InductionChecks.test_prefix_matching_score_on_synthetic_patterns)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_sequences_have_the_right_shape_and_structure (test_induction.InductionChecks.test_sequences_have_the_right_shape_and_structure)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict (test_induction.InductionChecks.test_verdict)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_hook_overwrites_only_the_named_position (test_patching.PatchingChecks.test_hook_overwrites_only_the_named_position)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_recovered_fraction (test_patching.PatchingChecks.test_recovered_fraction)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_with_claim_and_control_positions (test_patching.PatchingChecks.test_verdict_with_claim_and_control_positions)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_majority_rate (test_probe.ProbeChecks.test_majority_rate)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_no_signal_means_no_pass (test_probe.ProbeChecks.test_no_signal_means_no_pass)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_probe_recovers_a_linear_label_on_held_out_data (test_probe.ProbeChecks.test_probe_recovers_a_linear_label_on_held_out_data)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_random_direction_rarely_beats_the_probe (test_probe.ProbeChecks.test_random_direction_rarely_beats_the_probe)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_shuffled_labels_fall_to_about_the_majority_rate (test_probe.ProbeChecks.test_shuffled_labels_fall_to_about_the_majority_rate)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_verdict_logic (test_probe.ProbeChecks.test_verdict_logic)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_complete_protocol_validates (test_protocol.ProtocolChecks.test_complete_protocol_validates)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_fewer_than_two_controls_is_a_problem (test_protocol.ProtocolChecks.test_fewer_than_two_controls_is_a_problem)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_judge_needs_threshold_and_beats_controls (test_protocol.ProtocolChecks.test_judge_needs_threshold_and_beats_controls)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_looking_first_is_a_problem (test_protocol.ProtocolChecks.test_looking_first_is_a_problem)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_missing_and_placeholder_fields_are_named (test_protocol.ProtocolChecks.test_missing_and_placeholder_fields_are_named)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_refuses_incomplete_protocol_without_running (test_protocol.ProtocolChecks.test_run_refuses_incomplete_protocol_without_running)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_requires_the_preregistered_controls_to_be_reported (test_protocol.ProtocolChecks.test_run_requires_the_preregistered_controls_to_be_reported)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+======================================================================
+ERROR: test_run_returns_verdict_and_protocol (test_protocol.ProtocolChecks.test_run_returns_verdict_and_protocol)
+----------------------------------------------------------------------
+NotImplementedError: implement after reading the tests
+
+----------------------------------------------------------------------
+Ran 37 tests in 1.272s
+
+FAILED (errors=37)
+[exit 1; 3 s]
+
+$ INTERP_LAB_IMPL=reference python -m unittest discover -s labs -p 'test_*.py' -v
+
+test_angular_difference_wraps (test_curve_detector.EvaluationChecks.test_angular_difference_wraps) ... ok
+test_curve_detector_passes_and_line_detector_fails (test_curve_detector.EvaluationChecks.test_curve_detector_passes_and_line_detector_fails) ... ok
+test_largest_gap (test_curve_detector.EvaluationChecks.test_largest_gap) ... ok
+test_select_candidates_prefers_strong_selective_channels (test_curve_detector.EvaluationChecks.test_select_candidates_prefers_strong_selective_channels) ... ok
+test_summarise_tuning (test_curve_detector.EvaluationChecks.test_summarise_tuning) ... ok
+test_inception3b_output_shape (test_curve_detector.ModelSmokeTest.test_inception3b_output_shape) ... ok
+test_arc_rotates_with_orientation (test_curve_detector.StimulusChecks.test_arc_rotates_with_orientation) ... ok
+test_arc_shape_range_and_ink (test_curve_detector.StimulusChecks.test_arc_shape_range_and_ink) ... ok
+test_line_is_symmetric_under_180 (test_curve_detector.StimulusChecks.test_line_is_symmetric_under_180) ... ok
+test_orientation_selectivity (test_curve_detector.StimulusChecks.test_orientation_selectivity) ... ok
+test_pearson_known_values_and_degenerate_input (test_explanation_score.ScoringChecks.test_pearson_known_values_and_degenerate_input) ... ok
+test_random_unit_control_excludes_the_unit_itself (test_explanation_score.ScoringChecks.test_random_unit_control_excludes_the_unit_itself) ... ok
+test_rule_predictions_regex_and_callable (test_explanation_score.ScoringChecks.test_rule_predictions_regex_and_callable) ... ok
+test_split_alternates_and_never_overlaps (test_explanation_score.ScoringChecks.test_split_alternates_and_never_overlaps) ... ok
+test_true_explanation_scores_high_and_passes (test_explanation_score.ScoringChecks.test_true_explanation_scores_high_and_passes) ... ok
+test_verdict_reports_control_percentiles (test_explanation_score.ScoringChecks.test_verdict_reports_control_percentiles) ... ok
+test_wrong_explanation_of_a_real_unit_is_not_demonstrated (test_explanation_score.ScoringChecks.test_wrong_explanation_of_a_real_unit_is_not_demonstrated) ... ok
+test_prefix_matching_score_on_synthetic_patterns (test_induction.InductionChecks.test_prefix_matching_score_on_synthetic_patterns) ... ok
+test_sequences_have_the_right_shape_and_structure (test_induction.InductionChecks.test_sequences_have_the_right_shape_and_structure) ... ok
+test_verdict (test_induction.InductionChecks.test_verdict) ... ok
+test_hook_overwrites_only_the_named_position (test_patching.PatchingChecks.test_hook_overwrites_only_the_named_position) ... ok
+test_recovered_fraction (test_patching.PatchingChecks.test_recovered_fraction) ... ok
+test_verdict_with_claim_and_control_positions (test_patching.PatchingChecks.test_verdict_with_claim_and_control_positions) ... ok
+test_majority_rate (test_probe.ProbeChecks.test_majority_rate) ... ok
+test_no_signal_means_no_pass (test_probe.ProbeChecks.test_no_signal_means_no_pass) ... ok
+test_probe_recovers_a_linear_label_on_held_out_data (test_probe.ProbeChecks.test_probe_recovers_a_linear_label_on_held_out_data) ... ok
+test_random_direction_rarely_beats_the_probe (test_probe.ProbeChecks.test_random_direction_rarely_beats_the_probe) ... ok
+test_shuffled_labels_fall_to_about_the_majority_rate (test_probe.ProbeChecks.test_shuffled_labels_fall_to_about_the_majority_rate) ... ok
+test_verdict_logic (test_probe.ProbeChecks.test_verdict_logic) ... ok
+test_complete_protocol_validates (test_protocol.ProtocolChecks.test_complete_protocol_validates) ... ok
+test_fewer_than_two_controls_is_a_problem (test_protocol.ProtocolChecks.test_fewer_than_two_controls_is_a_problem) ... ok
+test_judge_needs_threshold_and_beats_controls (test_protocol.ProtocolChecks.test_judge_needs_threshold_and_beats_controls) ... ok
+test_looking_first_is_a_problem (test_protocol.ProtocolChecks.test_looking_first_is_a_problem) ... ok
+test_missing_and_placeholder_fields_are_named (test_protocol.ProtocolChecks.test_missing_and_placeholder_fields_are_named) ... ok
+test_run_refuses_incomplete_protocol_without_running (test_protocol.ProtocolChecks.test_run_refuses_incomplete_protocol_without_running) ... ok
+test_run_requires_the_preregistered_controls_to_be_reported (test_protocol.ProtocolChecks.test_run_requires_the_preregistered_controls_to_be_reported) ... ok
+test_run_returns_verdict_and_protocol (test_protocol.ProtocolChecks.test_run_returns_verdict_and_protocol) ... ok
+
+----------------------------------------------------------------------
+Ran 37 tests in 0.368s
+
+OK
+[exit 0; 3 s]
+
+$ python labs/reference/curve_tuning.py --units 379,406,385,343,342,388,324,340,330,349
+PRE-REGISTRATION (fixed before the held-out stimuli were rendered):
+  claim: inception3b of torchvision GoogLeNet contains a family of orientation-selective curve detectors: channels that respond to a curve of one orientation, are nearly silent at the opposite orientation, keep their preference under cosmetic changes, and prefer a curve to a straight line of the same tangent.
+  selection: top K channels by peak x selectivity on the screening stimuli (K fixed before running)
+  H1 (held-out radius/thickness): preferred orientation on held-out arcs within 20 degrees of the screening preference, for at least 80% of candidates
+  H2 (opposite orientation): held-out response at preferred+180 degrees < 0.25 x peak, for at least 80% of candidates
+  H3 (contrast inversion): on light-on-dark arcs the preferred orientation stays within 20 degrees and the peak is at least 0.3 x the dark-arc peak, for at least 60% of candidates
+  H4 (curve, not line): held-out arc peak > 1.5 x the peak response to a straight line of the same tangent orientation and thickness, for at least 80% of candidates
+  H5 (family spans orientations): the candidates' preferred orientations leave no gap larger than 90 degrees around the circle
+  controls: 100 random non-candidate channels run through the same held-out tests; their pass rates are reported beside the candidates'. The blank-field response is subtracted everywhere.
+  what_failure_means: a hypothesis that fails is reported as failed; the candidates are then orientation-selective arc responders, not demonstrated curve detectors.
+
+STAGE 1 skipped: testing the named units [379, 406, 385, 343, 342, 388, 324, 340, 330, 349]
+
+STAGE 2 (held-out stimuli):
+  ch  scr held   peak   opp  inv    ipk   line  H1 H2 H3 H4
+ 379  180  120   0.05  0.00  240   0.23   0.00   -  y  -  y
+ 406  250  250  -0.27   nan  250  -0.24  -0.25   y  -  -  -
+ 385  170  170   0.53  0.51   20   0.71   0.85   y  -  -  -
+ 343  210  190   0.01 -22.50   90   0.18  -0.07   y  y  -  y
+ 342  180    0  -0.62   nan  140  -0.57  -0.62   -  -  -  -
+ 388  310  310   0.80  0.00  310   0.70   0.12   y  y  y  y
+ 324   80  100   0.57  0.37  100   0.55   0.44   y  -  y  -
+ 340   20  280   0.46  0.00  170   0.44   0.25   -  y  -  y
+ 330   70   90   0.24  0.00   80   0.30   0.62   y  y  y  -
+ 349  240  240   1.54  0.00  230   1.42   0.52   y  y  y  y
+
+H1: candidates 70% (need >= 80%) -> FAIL; random-channel control 73%
+H2: candidates 60% (need >= 80%) -> FAIL; random-channel control 49%
+H3: candidates 40% (need >= 60%) -> FAIL; random-channel control 39%
+H4: candidates 50% (need >= 80%) -> FAIL; random-channel control 48%
+H1-H4 jointly: candidates 20%; random-channel control 23%
+H5: held-out preferred orientations [0, 90, 100, 120, 170, 190, 240, 250, 280, 310]; largest gap 90 degrees -> pass
+
+[exit 0; 10 s]
