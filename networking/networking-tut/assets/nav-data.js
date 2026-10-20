@@ -28,7 +28,7 @@ window.NAV = [
         "n": "01",
         "path": "pages/01-request-journey.html",
         "title": "Follow an eval request",
-        "kw": "layers packets host client server protocol request journey OSI"
+        "kw": "layers packets host client server protocol request journey OSI eval worker harness agent model gateway inference backend"
       },
       {
         "n": "02",

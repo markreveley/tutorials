@@ -7,7 +7,7 @@ The design extends the supplied `evals/domains/evals/evals-tut` reference: cream
 ## Included
 
 - 24 lessons across 8 modules, with original scenarios, diagrams, and revealable reasoning checks.
-- 87 glossary entries with first-mention links and keyboard-focus tooltips.
+- 93 glossary entries with first-mention links and keyboard-focus tooltips.
 - Three local calculators: IPv4 ranges, transfer serialization, and average in-flight work.
 - Command reference, focused textbook reading map, annotated primary-source bibliography.
 - A loopback-only Python lab for HTTP errors, deadlines, retries, and partial streams.

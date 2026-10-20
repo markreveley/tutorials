@@ -82,9 +82,24 @@ add(0,'orientation',0,'What networking competence looks like',
 add(1,'request-journey',1,'Follow an eval request',
  'A method call in your program can set a chain of machines in motion. Start by making that hidden chain visible.',
  h('actors','Programs, machines, and messages')+
- p('A <strong>host</strong> is a computer participating in a network. A <strong>process</strong> is a running program on that host. Your eval worker is a process; its cloud virtual machine is a host. A <strong>client</strong> initiates a request and a <strong>server</strong> accepts it. These are roles: the model gateway is a server to your worker and a client to an inference backend.')+
+ p('A <strong>host</strong> is a computer participating in a network, such as your laptop or a cloud virtual machine. A <strong>process</strong> is a running instance of a program on that host. For this example, imagine a Python program on a cloud virtual machine that reads a test prompt, sends it to a model API, and saves the answer. That running program is our <strong>eval worker</strong>; the virtual machine is its host.')+
+ table(['Term','Meaning in this course'],[
+ ['Eval harness','The software that organizes an evaluation: loading test cases, configuring runs, assigning work, collecting results, and arranging scoring. It can be a single program or a system with many workers.'],
+ ['Eval worker','The part of the eval harness that executes assigned test cases. In this example it is one Python process that sends prompts and records responses, timing, and failures.'],
+ ['Agent','A model-driven system that can choose actions, use tools, and use their results to continue a task. In an agent evaluation, this is the system being tested; the worker starts or drives a test task and records what happens. A simple prompt-and-answer eval needs no agent loop.'],
+ ['Model gateway','An intermediary service that accepts model API requests and forwards them to a suitable model-serving service. It may check API keys, enforce rate limits, or select a backend. Here it is an API gateway for model calls; it does not itself run the model.'],
+ ['Inference backend','The service behind the gateway that runs the trained model to generate output. “Inference service” and “model server” refer to this same role in our example.']])+
+ p('The word <em>harness</em> needs context. An <strong>agent harness</strong> is the code around a model that manages the action loop, tool execution, and task state. An <strong>eval harness</strong> runs and measures tests of a model or agent. A worker may run an agent harness in its own process or control one running elsewhere. These responsibilities do not require one process or machine each.')+
+ h('client-server','Client and server describe each exchange')+
+ p('For the HTTP API calls in this example, a <strong>client</strong> sends a request for work and receives the response. A <strong>server</strong> accepts the request and sends a response. <strong>Both sides send and receive data.</strong> A server returning an answer, including streaming it in pieces, is still acting as the server. The roles describe who requests the work and who serves that request, not a one-way flow of data. The same program can serve requests on one connection while making requests on another.'+cite('http'))+
+ diagram('Requests:   eval worker → model gateway → inference backend\nResponses:  eval worker ← model gateway ← inference backend','One possible deployment, with two separate request/response exchanges. The gateway is optional; a worker can also call a model server directly.')+
+ table(['Exchange','Client','Server'],[
+ ['Worker asks the gateway to generate an answer','Eval worker','Model gateway'],
+ ['Gateway asks the backend to perform generation','Model gateway','Inference backend']])+
+ p('The worker and backend therefore communicate <em>through the gateway</em> in this example. The worker receives the gateway’s response, which carries output obtained from the backend. If the worker calls the backend directly instead, the worker is the client and the backend is the server. If a backend makes a separate request to a worker’s callback endpoint, the backend is a client and the worker is a server for that separate exchange. Simply returning the model’s answer does not reverse their roles.')+
+ check('The backend streams generated text to the gateway, which streams it to the worker. Has the worker become a server?', 'No. Those messages are responses to requests already made. The worker remains the client of the gateway, and the gateway remains the client of the backend. To identify the roles, ask who requests work on each connection, not who is currently sending bytes.')+
+ h('packets','Messages travel in packets')+
  p('A network moves data between hosts over links. It breaks large transfers into manageable pieces called <strong>packets</strong>. Devices forward those pieces toward their destinations. Sending a million-byte prompt does not create one giant indivisible Internet message. Your software sees a higher-level abstraction built over many transfers.'+cite('foundation'))+
- diagram('dataset → eval worker → API gateway → inference service\n              │               │               │\n              └────── logs / traces / results ─┘','Logical dependencies. Each arrow may hide several network hops.')+
  h('stages','The request has stages')+
  table(['Stage','What it contributes','A distinct failure'],[
  ['Resolve a name','DNS helps find an address for the API hostname.','The worker cannot resolve the name.'],
@@ -100,7 +115,7 @@ add(1,'request-journey',1,'Follow an eval request',
  p('The seven-layer OSI vocabulary appears in infrastructure discussions. “Layer 3” usually concerns IP routing; “Layer 4” concerns transport addresses and ports; “Layer 7” concerns application messages such as HTTP. Treat these as clues to what a device inspects. Memorizing a seven-word list does not tell you why a request failed.')+
  box('For an eval review','For every arrow in a design, ask: who initiates it, what name and port are used, what identity is checked, what deadline applies, and where the outcome is recorded? These questions turn an attractive diagram into an operational description.')+
  check('Your worker receives HTTP 401. Which early stages probably succeeded, and what is still uncertain?', 'It reached an HTTP-speaking component. If HTTPS certificate verification was enabled and succeeded, it also established TLS to that component. The model backend may never have seen the request: a gateway could have rejected authentication. Investigate credentials, endpoint, and response provenance before blaming routing.'),
- ['foundation','apps'],'layers packets host client server protocol request journey OSI')
+ ['foundation','apps','http'],'layers packets host client server protocol request journey OSI eval worker harness agent model gateway inference backend')
 
 add(2,'addresses-and-ports',1,'Addresses, ports, and localhost',
  'An address tells the system where to send traffic; a port helps it deliver traffic to the right service. The meaning of “here” is just as important.',
