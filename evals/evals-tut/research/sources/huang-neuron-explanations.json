@@ -1,0 +1,79 @@
+{
+  "id": "huang-neuron-explanations",
+  "citation": {
+    "authors": "Jing Huang, Atticus Geiger, Karel D'Oosterlinck, Zhengxuan Wu, Christopher Potts",
+    "title": "Rigorously Assessing Natural Language Explanations of Neurons",
+    "venue": "arXiv preprint arXiv:2309.10312 [cs.CL]",
+    "year": "2023 (v1 submitted 19 Sep 2023)",
+    "url": "https://arxiv.org/abs/2309.10312"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2309.10312",
+    "https://arxiv.org/pdf/2309.10312"
+  ],
+  "access": "full",
+  "verification_method": "Fetched 2026-10-20. The abstract page was read with WebFetch (title, authors, v1 date confirmed). The PDF was downloaded with curl and converted with pdftotext -layout; the two-column layout was de-interleaved by reading the extracted text against the PDF's structure. All quotes below are verbatim from the extracted v1 text.",
+  "claims": [
+    {
+      "planned": "The paper defines two evaluation modes for a natural-language explanation of a neuron: observational (does the neuron fire on all and only inputs the explanation picks out) and interventional (is the neuron a causal mediator of the concept)",
+      "verdict": "confirmed",
+      "finding": "Exactly as planned. The observational claim is formalized as: activation a(q) > 0 iff q is in the set of strings the explanation denotes. Type I errors are predicted-fire-but-did-not; Type II errors are fired-but-not-predicted. The intervention mode uses interchange interventions and interchange intervention accuracy (IIA), a variant of causal mediation analysis.",
+      "quote": "In the observational mode, we evaluate claims that a neuron a activates on all and only input strings that refer to a concept picked out by the proposed explanation E. In the intervention mode, we construe E as a claim that the neuron a is a causal mediator of the concept denoted by E.",
+      "location": "Abstract; Section 3.1; Section 4.1"
+    },
+    {
+      "planned": "They tested GPT-4-generated explanations of GPT-2 XL neurons from Bills et al. 2023, focusing on the highest-scoring explanations",
+      "verdict": "confirmed",
+      "finding": "They randomly sampled 300 (18%) of the 1.7k neurons whose Bills et al. score is at least 0.8. The abstract describes these as 'the top 0.6% of neurons which are considered well-explained by GPT-4's own assessment' (1.7k of about 300K). Test sentences were generated with GPT-3.5-turbo and manually verified; over 95% were valid.",
+      "quote": "We randomly sampled 300 (18%) of the 1.7k neurons whose explanations have a score of at least 0.8. ... We manually verified the correctness of the generated datasets. We found over 95% of the sentences to be valid.",
+      "location": "Section 3.2 (Explanations to Evaluate; Dataset); Section 1"
+    },
+    {
+      "planned": "Observational result: precision 0.64, recall 0.50, F1 0.56 for single neurons; random pairings score F1 of zero; F1 is essentially uncorrelated with the GPT-4 score",
+      "verdict": "confirmed",
+      "finding": "Table 1 (N=1, no probe): random 0.00, GPT-4 0.56. With learned probes over N=1 neuron, 0.60; rising to 0.73 at N=16 while the random baseline rises to 0.69, so the margin over random shrinks. The F1 score has a correlation of -0.1 with the GPT-4 simulation score.",
+      "quote": "For single neuron without probing, the GPT-4 explanations have a mean F1 score of 0.56 (with a precision of 0.64 and a recall of 0.50), whereas the random baseline has a F1 score of zero. With learned probes, the F1 score of GPT-4 explanations is 0.60. The F1-score has a correlation coefficient of -0.1 with the GPT-4 score.",
+      "location": "Section 3.3, Table 1"
+    },
+    {
+      "planned": "They explain why a high simulation score does not imply a faithful explanation: the Bills scoring set is 5 top + 5 random excerpts, so a rare false positive is almost never sampled",
+      "verdict": "confirmed",
+      "finding": "Worked argument in the paper: an unfaithful explanation 'year 2000 and 2001' of a neuron that only fires on '2000' has precision 0.50, yet the probability of a Type I error appearing in the 5 random excerpts is about 1 - (1 - n%)^5, roughly 5n%, where n% is the corpus frequency of '2001'; for a long-tailed corpus that is tiny, so the score is insensitive to Type I errors.",
+      "quote": "The GPT-4 score is computed on a set of 10 examples from the GPT-2 XL training corpus, 5 containing tokens with top activations and 5 randomly sampled. We now show that an unfaithful explanation with a precision of 0.50 can still have a perfect GPT-4 score with high probability. ... the probability of having at least one example containing \"2001\" (a Type I error) is 1 - (1 - n%)^5 ~ 5n%. For any large corpus, n% could be extremely small due to a long tail distribution, which means the GPT-4 score is insensitive to Type I errors.",
+      "location": "Section 3.4"
+    },
+    {
+      "planned": "Interventional result: GPT-4 explanations select neurons with about the same causal effect as random selection; a token-activation correlation baseline does much better",
+      "verdict": "confirmed",
+      "finding": "Across tasks (unit conversion, numerical comparison, verb tense, capital retrieval), ranking by IIA gives: token-activation correlation baseline >> GPT-4 explanation ~ random baseline. The one partial exception is numerical expressions, which beat random but stayed far below the correlation baseline. No task was found where a single neuron's intervention changes behavior.",
+      "quote": "in terms of the IIA ranking, we have: token-activation correlation baseline >> GPT-4 explanation ~ random baseline. ... In other words, if we were using GPT-4 generated explanation to inform us which weights to modify in a model editing task, we would have similar performance as randomly selecting neurons to edit. ... We have not found a task where intervening on a single neuron can change model behavior in a causal manner.",
+      "location": "Section 4.3, Table 4; Section 4.4"
+    },
+    {
+      "planned": "They argue natural language is a poor explanation medium because of vagueness; many explanations use 'related to'",
+      "verdict": "confirmed",
+      "finding": "More than 30% of explanations in the Bills et al. dataset contain the phrase 'related to'; the paper gives examples ('mentions of pizza and related food items') whose denotation cannot be pinned down. Form-based explanations (spelling patterns) had precision 0.78 vs 0.62 for the rest.",
+      "quote": "More than 30% of neuron explanations in the Bills et al. 2023 dataset contain the phrase \"related to\". ... For Type I errors, i.e. precision error cases, we observe that form-based explanations have a higher precision at 0.78, while the rest only have a precision of 0.62.",
+      "location": "Section 5.1; Appendix B"
+    },
+    {
+      "planned": "Headline conclusion in the authors' words",
+      "verdict": "confirmed",
+      "finding": "The abstract's summary sentence.",
+      "quote": "We apply our framework to the GPT-4-generated explanations of GPT-2 XL neurons of Bills et al. (2023) and show that even the most confident explanations have high error rates and little to no causal efficacy.",
+      "location": "Abstract"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "An explanation is a claim with two halves (all, and only), and a test set has to be built to catch both failure types. Sampling random text catches neither reliably when the concept is rare.",
+      "quote": "our observational testing regime is more reliable, provided the chosen experimental datasets have the potential to diagnose both Type I and Type II errors.",
+      "numbers": "precision 0.64, recall 0.50, F1 0.56 on 300 top-scoring explanations; random pairing F1 0.00."
+    },
+    {
+      "point": "The two scores answer different questions and barely correlate; passing one is not evidence of passing the other.",
+      "quote": "The F1-score has a correlation coefficient of -0.1 with the GPT-4 score.",
+      "numbers": "-0.1"
+    }
+  ]
+}

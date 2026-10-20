@@ -1,0 +1,54 @@
+{
+  "id": "gao-reply",
+  "citation": {
+    "authors": "Leo Gao (@nabla_theta)",
+    "title": "Reply to Nick Cammarata's announcement of 'Neural Networks Are Already Clean' (post on X)",
+    "venue": "X (formerly Twitter)",
+    "year": "2026 (posted 15 Oct 2026, 22:35 UTC)",
+    "url": "https://x.com/nabla_theta/status/2110862078844272677"
+  },
+  "fetched_urls": [
+    "https://x.com/nabla_theta/status/2110862078844272677",
+    "https://api.fxtwitter.com/nabla_theta/status/2110862078844272677",
+    "https://api.vxtwitter.com/nabla_theta/status/2110862078844272677"
+  ],
+  "access": "full (via mirrors)",
+  "verification_method": "Fetched 2026-10-20. A direct WebFetch of x.com returned HTTP 402. The post was retrieved through two independent public mirror APIs (fxtwitter and vxtwitter) with curl; both returned byte-identical post text, the same author record (display name 'Leo Gao', handle nabla_theta, bio mentioning 'scaling SAEs to GPT-4'), the same timestamp (Thu Oct 15 22:35:12 +0000 2026) and the same parent (a post by @nickcammarata, id 2110757819427574056). The full text is quoted below; it is the entire post.",
+  "claims": [
+    {
+      "planned": "Gao's critique: an explanation that cannot be used to simulate the neuron has not really explained it; the field is evaluating explanations by vibes; simulation is harder than finding plausible explanations",
+      "verdict": "confirmed",
+      "finding": "This is the complete text of the post.",
+      "quote": "this is cool work, but i think people are overupdating on how optimistic to be about interp.\n\nin particular, we need to more rigorously evaluate explanations, rather than just going off vibes. imo if you can't simulate a neuron you haven't really explained it. my guess is simulating the neurons is way harder than finding plausible explanations. I have a post on this in the works.\n\n(i know the blog talks argues simulations are bad, but i think all of the downsides described are avoided by looking at KL instead of neuron correlation.)",
+      "location": "Full post"
+    },
+    {
+      "planned": "The roadmap's phrasing, 'an explanation that cannot predict a neuron's activations on held-out data has not been demonstrated', is a quote from Gao",
+      "verdict": "corrected",
+      "finding": "That sentence does not appear in the post. It is a paraphrase. The closest verified wording is 'imo if you can't simulate a neuron you haven't really explained it.' The course quotes the verified wording and attributes the paraphrase to the roadmap, not to Gao.",
+      "quote": "imo if you can't simulate a neuron you haven't really explained it.",
+      "location": "Full post"
+    },
+    {
+      "planned": "Gao's proposed fix for the essay's objections to simulation scoring is to score by KL divergence rather than activation correlation",
+      "verdict": "confirmed",
+      "finding": "Stated in the parenthetical. The post does not spell out the KL procedure; the natural reading, consistent with the ablation-style scoring in Bills et al. 2023 (Jensen-Shannon divergence after replacing the neuron with its simulation) and the downstream-KL metric in Gao et al. 2024, is: substitute the simulated activations into the model and measure the divergence of the output distribution from the original.",
+      "quote": "(i know the blog talks argues simulations are bad, but i think all of the downsides described are avoided by looking at KL instead of neuron correlation.)",
+      "location": "Full post"
+    },
+    {
+      "planned": "Gao published a longer critique (reported in secondary coverage under the title 'Neural networks are not already clean')",
+      "verdict": "unverifiable",
+      "finding": "The post says a longer post is 'in the works'. Searches on 2026-10-20 for a LessWrong or blog post by Gao with that title found only a secondary mention in a Substack commentary; the LessWrong linkpost for the essay (posts/x4kvabkF2Jk8GLZp8) has comments from other researchers but no post or comment by Gao was found in its fetched text. Treat the longer piece as not located; do not cite it.",
+      "quote": "I have a post on this in the works.",
+      "location": "Full post; search notes"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The disagreement is narrower than the headlines: both sides want held-out prediction. They differ on what the simulator must predict (token-level activation correlation vs effect on the model's output distribution) and on whether a test should be run before or after 'normal science' has produced a story.",
+      "quote": "all of the downsides described are avoided by looking at KL instead of neuron correlation",
+      "numbers": "n/a"
+    }
+  ]
+}

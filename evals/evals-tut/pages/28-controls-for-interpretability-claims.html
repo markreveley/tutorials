@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controls for Interpretability Claims · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 8 · Evaluating explanations</p>
+    <h1>Controls for interpretability claims</h1>
+    <p class="lede">
+      Page 20 asked of every benchmark score, "what would a broken system score?" This page asks the
+      same of every claim about a neuron: what would an empty explanation score, and what would a
+      true explanation score against the wrong neuron? Three cheap controls answer it, a 20-token
+      example carries each one through by hand, and the second half covers the two ways a claim can
+      pass all three and still be wrong.
+    </p>
+
+    <h2 id="empty-claim">What would an empty claim score?</h2>
+    <p>
+      A simulation score of 0.75 (<a href="27-scoring-an-explanation.html">page 27</a>) is a number
+      without a scale. Near 1 is good and near 0 is bad, but how near is near? The answer, as on
+      <a href="20-validity.html">page 20</a>, comes from running the measurement on things that should
+      fail: if a control carrying no information about the neuron scores 0.4, then 0.75 is modest; if
+      controls cluster at 0.0, it is strong. Three controls are cheap enough that no write-up should
+      omit them.
+    </p>
+    <div class="card">
+      <p><strong>1. The control neuron: score the same explanation against a neuron it is not about.</strong>
+      Pick a random <span class="term" data-g="control-neuron">control neuron</span> from the same
+      layer, keep the identical simulation, and correlate it with <em>that</em> neuron's real
+      activations. Huang et al. did this as their observational baseline: the real pairing scored an F1
+      of 0.56, random pairings scored zero.<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, §3.3, Table 1">[Huang]</a>
+      The gap is the evidence. If the score barely moves when you swap the neuron, it is measuring the
+      text, not the neuron.</p>
+      <p><strong>2. The shuffled-label control: break the pairing, keep everything else.</strong>
+      Randomly permute which real activation sits under which token and recompute. Many shuffles give
+      the distribution of scores an explanation earns when there is no relationship at all; the
+      fraction that match or beat the real score is a <span class="term" data-g="p-value">p-value</span>
+      for the <span class="term" data-g="null-hypothesis">null hypothesis</span> "this explanation
+      predicts nothing." This is a <span class="term" data-g="permutation-test">permutation test</span>,
+      the cousin of the bootstrap from <a href="../appendices/f-resampling.html">Appendix F</a>: no
+      distributional assumptions, a dozen lines of code.</p>
+      <p><strong>3. The baseline explanation: what does a deliberately dumb hypothesis score?</strong>
+      Write the explanation you would give knowing only surface statistics ("fires on common English
+      words," "fires on numbers," "fires on the commonest token in the top examples") and score it on the
+      same held-out set. Bills et al. did this with a per-token lookup table of mean activations, no
+      language model involved, and it "substantially outperform[ed]" their explanations on
+      average.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Results: Unigram baselines">[Bills]</a>
+      Your explanation must clear that bar by a margin to have said anything the token statistics did
+      not.</p>
+    </div>
+    <p>
+      Gao et al. 2024 make the sharper version of the third point with a different metric. Earlier
+      work reported "fraction of loss recovered" relative to zeroing out a whole layer, but "because
+      ablating the residual stream to zero causes very high downstream loss, this means that even very
+      poorly explaining the behavior can result in high scores"; their 16-million-feature model scores
+      98.2% on it.<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §4.1 and footnote 11">[Gao SAE]</a>
+      A baseline a bad explanation would also beat is not a control; it is decoration.
+    </p>
+
+    <h2 id="worked-example">Worked example: 20 tokens, three explanations, two controls</h2>
+    <p>
+      Here is a held-out sentence of 20 tokens that the explainer never saw, with simulated activations
+      for three candidate explanations of one neuron, the neuron's real activations, and the real
+      activations of a control neuron from the same layer. All values are on the 0–10 scale from page
+      27. Every number below is small enough to recompute with a pencil.
+    </p>
+    <table>
+      <tr><th>#</th><th>Token</th><th>E1: "citation markers"</th><th>E2: "the token U.S."</th><th>E0: "numbers"</th><th>Real neuron</th><th>Control neuron</th></tr>
+      <tr><td>1</td><td>The</td><td>0</td><td>0</td><td>0</td><td>0</td><td>3</td></tr>
+      <tr><td>2</td><td>court</td><td>0</td><td>0</td><td>0</td><td>1</td><td>0</td></tr>
+      <tr><td>3</td><td>cited</td><td>0</td><td>0</td><td>0</td><td>1</td><td>1</td></tr>
+      <tr><td>4</td><td>Smith</td><td>0</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+      <tr><td>5</td><td>v.</td><td>10</td><td>0</td><td>0</td><td>8</td><td>2</td></tr>
+      <tr><td>6</td><td>Jones</td><td>0</td><td>0</td><td>0</td><td>2</td><td>0</td></tr>
+      <tr><td>7</td><td>,</td><td>0</td><td>0</td><td>0</td><td>0</td><td>4</td></tr>
+      <tr><td>8</td><td>410</td><td>10</td><td>0</td><td>10</td><td>7</td><td>1</td></tr>
+      <tr><td>9</td><td>U.S.</td><td>10</td><td>10</td><td>0</td><td>9</td><td>0</td></tr>
+      <tr><td>10</td><td>113</td><td>10</td><td>0</td><td>10</td><td>2</td><td>3</td></tr>
+      <tr><td>11</td><td>,</td><td>0</td><td>0</td><td>0</td><td>0</td><td>5</td></tr>
+      <tr><td>12</td><td>then</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+      <tr><td>13</td><td>reviewed</td><td>0</td><td>0</td><td>0</td><td>1</td><td>2</td></tr>
+      <tr><td>14</td><td>the</td><td>0</td><td>0</td><td>0</td><td>0</td><td>1</td></tr>
+      <tr><td>15</td><td>14</td><td>0</td><td>0</td><td>10</td><td>0</td><td>0</td></tr>
+      <tr><td>16</td><td>-page</td><td>0</td><td>0</td><td>0</td><td>0</td><td>6</td></tr>
+      <tr><td>17</td><td>statute</td><td>0</td><td>0</td><td>0</td><td>7</td><td>0</td></tr>
+      <tr><td>18</td><td>over</td><td>0</td><td>0</td><td>0</td><td>0</td><td>4</td></tr>
+      <tr><td>19</td><td>three</td><td>0</td><td>0</td><td>0</td><td>0</td><td>2</td></tr>
+      <tr><td>20</td><td>days</td><td>0</td><td>0</td><td>0</td><td>0</td><td>6</td></tr>
+      <tr><td></td><td><strong>Sum</strong></td><td>40</td><td>10</td><td>30</td><td>40</td><td>40</td></tr>
+    </table>
+    <p>
+      Notice what the real neuron does that no explanation predicted: it fires at 7 on "statute" and
+      only at 2 on the page number "113." That is what a held-out sentence is for.
+    </p>
+    <div class="card">
+      <p><strong>Step 1: the real score for E1.</strong> E1's mean is 40/20 = 2, so its deviations are
+      +8 on the four tokens where it predicted 10 and −2 on the other sixteen. Squared and summed:
+      4 × 64 + 16 × 4 = <strong>320</strong>. The real neuron's mean is also 2; its deviations on the
+      four E1 tokens are +6, +5, +7, 0, and the sum of squared deviations over all twenty tokens is
+      36 + 25 + 49 + 0 (those four) + 25 ("statute") + 0 + 0 (Smith, Jones) + 1 + 1 + 1 (court,
+      cited, reviewed) + 10 × 4 (the ten zeros) = <strong>178</strong>.</p>
+      <p>The cross term is the sum of deviation × deviation. On the four E1 tokens it is
+      8 × (6 + 5 + 7 + 0) = 144. On the other sixteen, E1's deviation is −2 every time, and because
+      deviations from a mean always sum to zero, the real neuron's deviations on those sixteen must sum
+      to −18 (the negative of the +18 on the first four), giving (−2) × (−18) = 36. Total:
+      <strong>180</strong>.</p>
+      <div class="math">ρ(E1) = 180 / √(320 × 178) = 180 / √56,960 = 180 / 238.7 ≈ <span class="plain">0.75</span></div>
+      <p>A correlation of 0.75: on Bills et al.'s scale this is above 0.7, in the top 1.7% of GPT-2 XL
+      neurons.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Results: overall scores">[Bills]</a>
+      Now the controls.</p>
+      <p><strong>Step 2: the control neuron.</strong> The control's mean is 2; its deviations on the four
+      E1 tokens are 0, −1, −2, +1 (sum −2), its sum of squared deviations is 82. Cross term:
+      8 × (−2) + (−2) × (+2) = −16 − 4 = −20.</p>
+      <div class="math">ρ(E1, <span class="plain">control</span>) = −20 / √(320 × 82) = −20 / 162.0 ≈ <span class="plain">−0.12</span></div>
+      <p>Same explanation, same simulation, wrong neuron: −0.12. The gap between 0.75 and −0.12 is the
+      result; the 0.75 alone was not.</p>
+      <p><strong>Step 3: shuffled labels.</strong> Permute the real neuron's twenty values at random.
+      One shuffle puts 2, 1, 0, 0 under the four E1 tokens: cross term 8 × (0 − 1 − 2 − 2) +
+      (−2) × (+5) = −50, so ρ ≈ −0.21. Another happens to put 2, 0, 8, 9 there: cross term
+      8 × (0 − 2 + 6 + 7) + (−2) × (−11) = 110, so ρ ≈ 0.46. One shuffle tells you little; ten thousand
+      give the null distribution. In the script below, 18 of 10,000 shuffles reach 0.75: a permutation
+      p-value of about 0.002, on a deliberately tiny 20-token set.</p>
+      <p><strong>Step 4: the baseline explanations.</strong> E2, "fires on the token U.S.," predicts 10
+      on one token: mean 0.5, deviations +9.5 and −0.5, sum of squares 90.25 + 19 × 0.25 = 95, cross
+      term 9.5 × 7 + (−0.5) × (−7) = 70, ρ = 70/√(95 × 178) ≈ <strong>0.54</strong>. A single-token
+      explanation, the kind a lookup table produces, earns seven tenths of E1's score for a tenth of its
+      content: the Bills unigram finding in miniature. E0, "fires on numbers," predicts 10 on 410, 113
+      and 14: mean 1.5, sum of squares 3 × 72.25 + 17 × 2.25 = 255, cross term
+      8.5 × (5 + 0 − 2) + (−1.5) × (−3) = 30, ρ = 30/√(255 × 178) ≈ <strong>0.14</strong>, barely
+      above the control neuron. E1 beats both baselines by a wide margin; that, with the control-neuron
+      gap and the permutation p-value, is what "0.75" means.</p>
+    </div>
+    <p>
+      The whole computation is a stdlib Python script. It prints the six scores above (E1 +0.754 and
+      −0.123; E2 +0.538 and −0.227; E0 +0.141 and −0.138) and the shuffled-label fraction, 0.0018 with
+      this seed.
+    </p>
+<pre><code>import math, random
+
+real    = [0,1,1,2,8,2,0,7,9,2, 0,0,1,0,0,0,7,0,0,0]
+control = [3,0,1,0,2,0,4,1,0,3, 5,0,2,1,0,6,0,4,2,6]
+sim = {
+  "E1 citation markers": [0,0,0,0,10,0,0,10,10,10, 0,0,0,0,0,0,0,0,0,0],
+  "E2 the token U.S.":   [0,0,0,0,0,0,0,0,10,0,    0,0,0,0,0,0,0,0,0,0],
+  "E0 numbers":          [0,0,0,0,0,0,0,10,0,10,   0,0,0,0,10,0,0,0,0,0],
+}
+
+def corr(x, y):
+    n = len(x); mx = sum(x) / n; my = sum(y) / n
+    sxy = sum((a - mx) * (b - my) for a, b in zip(x, y))
+    sxx = sum((a - mx) ** 2 for a in x); syy = sum((b - my) ** 2 for b in y)
+    return sxy / math.sqrt(sxx * syy)
+
+for name, s in sim.items():
+    print(f"{name:22s} real {corr(s, real):+.3f}   control {corr(s, control):+.3f}")
+
+rng = random.Random(0); s = sim["E1 citation markers"]; observed = corr(s, real)
+null = [corr(s, rng.sample(real, len(real))) for _ in range(10000)]
+print("fraction of shuffled-label scores at or above", round(observed, 3), ":",
+      sum(v &gt;= observed for v in null) / len(null))</code></pre>
+
+    <h2 id="selection-bias">The examples chose themselves</h2>
+    <p>
+      The three controls test whether a score means anything. The next two sections are about claims
+      that pass all three and still mislead, because of how the hypothesis was formed. Both come down
+      to max-activating examples.
+    </p>
+    <p>
+      An explanation written from top examples is written from an extreme sample. Bills et al.
+      generated explanations from the top five of 50,000 excerpts, a quantile of 0.9996, because doing
+      so "yielded the best explanation scores, even when scoring only against random
+      sequences."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Text excerpts">[Bills]</a>
+      Sensible engineering, and a validity hazard: the explanation describes the neuron at its most
+      certain and says nothing about the long middle of its range. Anthropic's "Towards Monosemanticity"
+      names the hazard: "Many polysemantic neurons appear monosemantic if you only look at top dataset
+      examples, but are revealed to be polysemantic if you look at lower parts of the activation
+      spectrum."<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, Manual Human Analysis">[Monosemanticity]</a>
+      Their fix: divide each feature's activation range into eleven intervals, sample from every one,
+      and have a blinded annotator score each interval against the hypothesis suggested by the whole;
+      412 intervals across 162 features and neurons were scored that
+      way.<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, Manual Human Analysis">[Monosemanticity]</a>
+    </p>
+    <p>
+      The same bias infects the scoring set. Gao et al. call the result an "illusion" of
+      interpretability: explanations "are overly broad, and thus have good recall but poor precision,"
+      and it worsens as features become sparser.<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §4.3">[Gao SAE]</a>
+      A feature that fires only at the end of "don't stop" has top examples full of "stop"; the
+      explanation "stop" covers every one of them and is wrong about nearly every other occurrence in
+      the corpus, which the top examples cannot expose because they were selected to be where the
+      explanation holds.
+    </p>
+    <div class="callout">
+      <span class="label">A control that caught the metric</span>
+      <p>The Anthropic paper also ran a control that generalizes Step 2 below: it trained the same
+      feature-extraction method on a transformer with <em>random</em> weights. The human rubric and the
+      held-out logit-weight test favored the real model as they should (medians 0.74 for real features,
+      0.53 for neurons, 0.5 for the random network, chance being 0.5). But on the automated
+      activation-prediction score, "the randomized features have a higher median score," because the
+      random network's features were often pure single-token detectors, trivial to
+      simulate.<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, Appendix: Randomized Transformer">[Monosemanticity]</a>
+      A control that should score badly and does not is a finding about the metric: the BBQ story from
+      <a href="20-validity.html">page 20</a>, one layer deeper.</p>
+    </div>
+
+    <h2 id="polysemanticity">Polysemanticity hides under the top examples</h2>
+    <p>
+      <span class="term" data-g="polysemanticity">Polysemanticity</span> is the name for a unit that
+      responds to several unrelated things. Bills et al. found "the typical neuron appeared quite
+      polysemantic," and list it among the bottlenecks on explanation
+      quality.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Overview; Discussion: Limitations">[Bills]</a>
+      Huang et al.'s Type II errors, where a neuron fired on something the explanation did not cover,
+      are the same phenomenon measured as a recall failure; their appendix shows a neuron explained as
+      "small or minor changes, issues or improvements" with "high activation on opposite
+      words."<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, Appendix B">[Huang]</a>
+      The evaluator's point is not whether polysemanticity is common but that a top-examples
+      explanation is structurally unable to detect it, because a neuron's second job rarely produces
+      its very largest activations. The response is the same as everywhere in this course: sample where
+      the hypothesis is weakest. Score across the activation range, generate sentences that should
+      <em>not</em> fire the neuron and check that they do not, and search the corpus for high real
+      activations the simulation missed.
+    </p>
+    <p>
+      One proposed remedy is to change the unit. A
+      <span class="term" data-g="sparse-autoencoder">sparse autoencoder</span> learns a large set of
+      directions, called <span class="term" data-g="sae-feature">features</span>, such that each
+      activation vector is approximately a sparse sum of them, in the hope that features are
+      monosemantic where neurons are not. The Anthropic rubric result is the headline evidence: "The
+      median neuron scored 0 on our rubric, indicating that our annotator could not even form a
+      hypothesis of what the neuron could represent! Whereas the median feature interval scored a
+      12."<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, Manual Human Analysis">[Monosemanticity]</a>
+      For this module the lesson is narrower: a feature is a hypothesis too, scored by the same held-out
+      prediction and subject to the same controls. Gao et al. list explanation precision and recall
+      among their feature-quality metrics and concede that "a large fraction of the random activations
+      of features we find, especially in GPT-4, are not yet adequately
+      monosemantic."<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §4 and §6">[Gao SAE]</a>
+    </p>
+
+    <h2 id="correlation-vs-causation">A description is not a mechanism</h2>
+    <p>
+      Every test so far has been observational: does the explanation predict when the unit fires? A
+      causal claim, "the model uses this neuron to represent legal citations," needs an
+      <span class="term" data-g="intervention">intervention</span>: change the neuron and watch the
+      behavior. This is the ablation probe from page 20 (delete the policy document; does the score
+      move?) pointed inward. Huang et al.'s intervention mode swaps a neuron's activation between two
+      inputs on a task the model solves perfectly and asks whether the output follows the swap; neurons
+      selected by GPT-4 explanation did about as well as neurons selected at random, and no single
+      neuron moved behavior on any task.<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, §4.3–4.4">[Huang]</a>
+      Bills et al.'s own ablation score found that correlations of 0.9 corresponded to ablation scores
+      of only 0.3 to 0.6 on average.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Ablation scoring">[Bills]</a>
+    </p>
+    <p>
+      The causal claim wants its own control: the same intervention on a control neuron. If knocking
+      out a random neuron moves the behavior as much as knocking out yours, you have measured the
+      fragility of the task, not the role of the neuron. Huang et al. include that random-selection
+      baseline, and a stronger correlation-selected one, for every
+      task.<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, §4.2 Baselines">[Huang]</a>
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Reporting the explanation's score without the control's. "Our explanation scores 0.75" has no
+      scale; "0.75, versus −0.12 for a random neuron in the same layer, 0.54 for the best single-token
+      baseline, and above 99.8% of shuffled-label scores" is a measurement, and the extra numbers cost
+      minutes. The causal form: "ablating the neuron changed the output" without "ablating a random
+      neuron changed it this much." The omission is usually where the claim is weakest.</p>
+    </div>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>Before you look at the neuron, write down the four numbers a convincing write-up will contain:
+      the held-out score, the control-neuron score, the baseline-explanation score, and the
+      shuffled-label p-value; add the intervention and its control if the claim is causal. Decide what
+      gaps would convince you. Only then run the explainer. The order matters for the reason criteria
+      drift mattered on <a href="06-validating-the-grader.html">page 6</a>: a hypothesis formed from the
+      top examples will fit the top examples, and the only defense is a test fixed before the examples
+      could shape it.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Steven Bills, Nick Cammarata, Dan Mossing, Henk Tillman, Leo Gao, Gabriel Goh, Ilya Sutskever, Jan Leike, Jeff Wu, William Saunders, "Language models can explain neurons in language models," OpenAI, May 2023. <a href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html">openaipublic.blob.core.windows.net/neuron-explainer/paper</a></li>
+        <li>Jing Huang, Atticus Geiger, Karel D'Oosterlinck, Zhengxuan Wu, Christopher Potts, "Rigorously Assessing Natural Language Explanations of Neurons," arXiv:2309.10312 (v1, September 2023). <a href="https://arxiv.org/abs/2309.10312">arxiv.org/abs/2309.10312</a></li>
+        <li>Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, Jeffrey Wu, "Scaling and evaluating sparse autoencoders," arXiv:2406.04093 (v1, June 2024). <a href="https://arxiv.org/abs/2406.04093">arxiv.org/abs/2406.04093</a></li>
+        <li>Trenton Bricken, Adly Templeton, Joshua Batson, Brian Chen, Adam Jermyn et al. (Anthropic), "Towards Monosemanticity: Decomposing Language Models With Dictionary Learning," Transformer Circuits Thread, October 2023. <a href="https://transformer-circuits.pub/2023/monosemantic-features/index.html">transformer-circuits.pub/2023/monosemantic-features</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

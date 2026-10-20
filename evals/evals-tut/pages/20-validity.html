@@ -77,7 +77,9 @@ a number                   "33.2%"</div>
       <p><strong>1. The control check: what would a broken system score?</strong> Anthropic's models
       scored a perfect bias score of 0 on the BBQ benchmark — because they weren't answering the
       questions at all, and the metric couldn't tell.<a class="cite" href="https://www.anthropic.com/news/evaluating-ai-systems" title="Anthropic 2023, Challenges in Evaluating AI Systems">[Anthropic]</a>
-      If a trivial, broken, or constant system scores well, the chain is broken above the metric.</p>
+      If a trivial, broken, or constant system scores well, the chain is broken above the metric.
+      (<a href="28-controls-for-interpretability-claims.html">Page 28</a> runs this same probe on
+      claims about a neuron.)</p>
       <p><strong>2. The ablation: remove an input the construct requires.</strong> tau-bench's authors
       deleted the policy document their benchmark supposedly tests adherence to; the retail score barely
       moved (−4.4), revealing that successes "mostly stem from using tools in an intuitive and common

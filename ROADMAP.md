@@ -18,7 +18,11 @@ technical barriers by how much they slow that down:
    Qwen3-0.6B, and InceptionV1 run on a laptop or free Colab.
 5. **Experimental rigor, the hard one.** An explanation that cannot predict a
    neuron's activations on held-out data has not been demonstrated. Write the
-   prediction test before you look at the neuron.
+   prediction test before you look at the neuron. (The essay is Cammarata,
+   "Neural Networks Are Already Clean", already-clean.goodfire.com, 2026; the
+   critique is Leo Gao's reply on X, verbatim "if you can't simulate a neuron
+   you haven't really explained it". The sentence above is the advisor's
+   paraphrase. Both are verified in `evals/evals-tut/research/sources/`.)
 
 ## Where the repository stood
 
@@ -132,5 +136,6 @@ empty, then run.
 
 ## Status log
 
+- 2026-10-20: statistics module 6 (lessons 24–25) and evals module 8 (pages 27–29) added.
 - 2026-10-20: plan written. DAG retired as delivery format. Eval-pipeline
   labs moved. Toolchain verified on CPU. Course authoring begins.

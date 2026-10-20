@@ -8,7 +8,7 @@ Open `index.html` in a browser. No build step, no server, no external dependenci
 
 ```
 index.html              course home
-pages/                  27 course pages across 8 modules (0–7)
+pages/                  30 course pages across 9 modules (0–8)
 appendices/             A–F: math & stats mini-lessons for entry-level readers
 glossary.html           every term, with site-wide hover tooltips
 bibliography.html       annotated, verified citation universe

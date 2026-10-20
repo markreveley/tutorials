@@ -1,0 +1,119 @@
+{
+  "id": "bills-neuron-explainer",
+  "citation": {
+    "authors": "Steven Bills, Nick Cammarata, Dan Mossing, Henk Tillman, Leo Gao, Gabriel Goh, Ilya Sutskever, Jan Leike, Jeff Wu, William Saunders",
+    "title": "Language models can explain neurons in language models",
+    "venue": "OpenAI (web publication)",
+    "year": "2023 (published May 9, 2023)",
+    "url": "https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html"
+  },
+  "fetched_urls": [
+    "https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html",
+    "https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.bundle.js"
+  ],
+  "access": "full",
+  "verification_method": "Fetched 2026-10-20. The paper page is a React application: the HTML shell carries only the title, affiliation, date and table of contents (a WebFetch of the page returned nothing else). The prose lives as string literals inside index.bundle.js, which was downloaded with curl and had its long string literals extracted with a stdlib Python script. All quotes below are verbatim from that extracted text. Section locations are given by the table of contents in the HTML shell (Methods > Overall algorithm > Step 1/2/3, Ablation scoring, Human scoring; Results > Unigram baselines, Assistant model trends, Subject model trends; Discussion > Limitations). The author list is taken from the paper's own citation as reproduced in Huang et al. 2023 (arXiv:2309.10312, reference list), since the shell's author block was not machine-readable.",
+  "claims": [
+    {
+      "planned": "The method is a three-step loop: an explainer model writes an explanation from (token, activation) examples; a simulator model predicts activations from the explanation alone; the prediction is scored against the real activations",
+      "verdict": "confirmed",
+      "finding": "Exactly as planned. The explanation prompt shows few-shot examples of other neurons with tab-separated (token, activation) pairs plus researcher-written explanations, then the target neuron's pairs. The simulator is asked the counterfactual question: supposing the explanation were complete, how would the neuron fire on each token? Scoring compares the simulated list of activations against the real list over the same text excerpts.",
+      "quote": "In this step, we create a prompt that is sent to the explainer model to generate one or more explanations of a neuron's behavior. The prompt consists of few-shot examples of other real neurons, with tab-separated (token, activation) pairs from text excerpts and researcher-written explanations. ... With this method, we aim to answer the question: supposing a proposed explanation accurately and comprehensively explains a neuron's behavior, how would that neuron activate for each token in a particular sequence? To do this, we use the simulator model to simulate neuron activations for each subject model token, conditional on the proposed explanation. ... To score an explanation, we want to compare this simulated neuron against the real neuron for which the explanation was generated. That is, we want to compare two lists of values: the simulated activation values for the explanation over multiple text excerpts, and the actual activation values of the real neuron on the same text excerpts.",
+      "location": "Methods > Overall algorithm > Step 1: Explanation; Step 2: Simulation; Step 3: Scoring"
+    },
+    {
+      "planned": "The score is the correlation coefficient between simulated and true activations; 1 for a perfect simulation, about 0 for an explanation unrelated to the neuron",
+      "verdict": "confirmed",
+      "finding": "The paper first discusses an explained-variance form (noting it is not an unbiased estimator because the denominator is also estimated from a sample), then settles on correlation scoring as the main method because it requires only a linear calibration of the simulated scale to the real one.",
+      "quote": "This motivates our main method of scoring, correlation scoring, which simply reports $\\rho$. Note then that if the simulated neuron behaves identically to the real neuron, the score is 1. If the simulated neuron behaves randomly, e.g. if the explanation has nothing to do with the neuron behavior, the score will tend to be around 0.",
+      "location": "Methods > Overall algorithm > Step 3: Scoring"
+    },
+    {
+      "planned": "Activations are shown to the models on a 0-10 integer scale; explanations are generated from a handful of top-activating excerpts chosen from tens of thousands of 64-token sequences",
+      "verdict": "confirmed",
+      "finding": "Activations are normalized so the neuron's maximum ever observed maps to 10 and negatives map to 0, then discretized to integers. Text excerpts are random 64-token contiguous subsequences of the subject model's pre-training data (WebText for GPT-2). Explanations use 5 top-activating sequences; the top set is the 20 highest-activation sequences out of 50,000 (quantile 0.9996). Using only top-activating sequences gave the best scores even when scoring on random or lower-quantile sequences.",
+      "quote": "Activations are normalized to a 0-10 scale and discretized to integer values, with negative activation values mapping to 0 and the maximum activation value ever observed for the neuron mapping to 10. ... We choose random 64-token contiguous subsequences of the documents as our text excerpts. ... Thus, for the remainder of this paper, explanations are always generated from 5 top-activating sequences unless otherwise noted. We set a top quantile threshold of 0.9996, taking the 20 sequences containing the highest activations out of 50,000 total sequences.",
+      "location": "Methods > Step 1: Explanation; Methods > Text excerpts and activations"
+    },
+    {
+      "planned": "Two scoring sets: random-only, and top-and-random (5 top-activating plus 5 random excerpts); the random excerpts are meant to penalize overly broad explanations",
+      "verdict": "confirmed",
+      "finding": "Both scoring regimes are defined. Random-only is 'conceptually easy to interpret' (the explanation's ability to capture the neuron over the pre-training distribution) but has much higher variance; top-and-random is the default. The authors state that most individual random-only scores are uninformative.",
+      "quote": "The random-only score can be thought of as an explanation's ability to capture the neuron's representation of features in the pre-training distribution. While random-only scoring is conceptually easy to interpret, we also report scores on a mix of 5 top-activating and 5 random text excerpts ... The top-and-random score can be thought of as an explanation's ability to capture the neuron's most strongly represented feature (from the top text excerpts), with a penalty for overly broad explanations (from the random text excerpts). ... Random text excerpts cause significantly higher variance scores. Empirically, we found that neurons which do well on random-only scoring are dense-activating neurons. Most neurons are quite sparse, and while means across large numbers of neurons are likely to be informative, individual neuron scores are generally uninformative.",
+      "location": "Methods > Scoring (top-and-random vs random-only)"
+    },
+    {
+      "planned": "Headline numbers for GPT-2 XL: 307,200 neurons; average score around 0.15 (top-and-random) and 0.04 (random-only); about 1.7% of neurons above 0.7; over 1,000 neurons at 0.8 or above; a tiny fraction above 0.9",
+      "verdict": "confirmed",
+      "finding": "All numbers confirmed. Average top-and-random score 0.151; average random-only 0.037; scores decrease in later layers. Out of 307,200 neurons, 5,203 (1.7%) have top-and-random scores above 0.7 ('explaining roughly half the variance'); 732 (0.2%) under random-only scoring. 189 (0.06%) exceed 0.9 top-and-random; 86 (0.03%) exceed 0.9 random-only. Separately, the overview reports over 1,000 neurons scoring at least 0.8. (307,200 = 48 layers x 6,400 MLP neurons in GPT-2 XL; the extracted text says 'for GPT-2' and elsewhere that most effort went into GPT-2 XL; Huang et al. 2023 describe the same dataset as GPT-2 XL explanations.)",
+      "quote": "Overall, for GPT-2, we find an average score of 0.151 using top-and-random scoring, and 0.037 for random-only scoring. Scores generally decrease when going to later layers. ... out of a total of 307,200 neurons, 5,203 (1.7%) have top-and-random scores above 0.7 (explaining roughly half the variance), using our default methodology. With random-only scoring, this drops to 732 neurons (0.2%). Only 189 neurons (0.06%) have top-and-random scores above 0.9, and 86 (0.03%) have random-only scores above 0.9. ... We found over 1,000 neurons with explanations that scored at least 0.8, meaning that according to GPT-4 they account for most of the neuron's top-activating behavior.",
+      "location": "Results (overall scores); Overview"
+    },
+    {
+      "planned": "GPT-4 is the explainer and simulator; GPT-2 XL is the main subject model",
+      "verdict": "confirmed",
+      "finding": "GPT-4 is the simulator for most experiments and the strongest explainer tried; explanations improve smoothly with explainer capability. The subject-model work concentrated on GPT-2 XL, with additional subject models from 98K to 6.7B parameters. Note the simulator-capability dependence: 'With a poor simulator, even a very good explanation will get low scores.'",
+      "quote": "While we used GPT-4 as the simulator model for most of our experiments ... Here, we experiment with different explainer models, while holding the simulator model fixed at GPT-4. We find explanations improve smoothly with explainer model capability ... we spent the majority of our efforts looking at GPT-2 XL neurons rather than more modern models. ... With a poor simulator, even a very good explanation will get low scores.",
+      "location": "Methods > Step 2; Results > Assistant model trends; Results > Subject model trends"
+    },
+    {
+      "planned": "Human-written explanations did not score much better than GPT-4's, and were also low in absolute terms",
+      "verdict": "confirmed",
+      "finding": "Non-expert labelers wrote explanations from the same 5 top-activating excerpts. Humans beat GPT-4 by a modest margin and were low in absolute terms, which the authors read as evidence that explainer capability is not the only bottleneck. GPT-4 as simulator approaches but stays below human-human agreement.",
+      "quote": "We also obtained a human baseline from labelers asked to write explanations from scratch, using the same set of 5 top-activating text excerpts that the explainer models use. ... We see that human performance exceeds the performance of GPT-4, but not by a huge margin. Human performance is also low in absolute terms, suggesting that the main barrier to improved explanations may not simply be explainer model capabilities. ... Scores using GPT-4 as a simulator model are approaching, but still somewhat below, human-level agreement rates with other humans.",
+      "location": "Results > Assistant model trends (human baseline); Methods > Human scoring"
+    },
+    {
+      "planned": "The paper itself says explanations can score well for trivial reasons",
+      "verdict": "corrected",
+      "finding": "The paper does not use the phrase 'trivial reasons'. What it does say, in its own words: (a) the default scoring over-represents true positives and false negatives, so an explanation with good recall scores well even with mediocre precision (false positives are only sampled in proportion to their prevalence in five random excerpts); (b) when GPT-4 generated sentences matching an explanation, roughly 42% produced false positives and 86% of neurons had at least one, 'an independent signal that our explanations are often too inclusive'; (c) a correlational token-lookup-table baseline (mean activation per token over held-out text, no language model involved) 'substantially outperform[s]' the language-model explanations on average; (d) neurons that do well on random-only scoring tend to be dense-activating. Use these specific statements rather than the word 'trivial'.",
+      "quote": "Because true positives and false negatives are overrepresented, an explanation with good recall (high true positive and low false negative rate) will receive a high score, even if it has mediocre precision (i.e. a false positive rate that is high, but not high enough to be measured with five random text excerpts). ... In practice, roughly 42% of generated sequences result in false positives for their explanations. For 86% of neurons at least one of the 10 sequences resulted in a false positive. This provides an independent signal that our explanations are often too inclusive. ... The token lookup table baseline is much stronger than the token-based linear prediction baseline, substantially outperforming activation-based explanation and simulation on average.",
+      "location": "Discussion > Limitations (scoring); Methods > Revising explanations; Results > Unigram baselines"
+    },
+    {
+      "planned": "The score is correlational, not causal, and the authors say so",
+      "verdict": "confirmed",
+      "finding": "Stated in the limitations. They also define a more expensive ablation score (replace the real neuron with its simulated values and measure the Jensen-Shannon divergence of the output distribution, normalized by mean-ablation) and find that correlation scores of 0.9 still correspond to low ablation scores on average (0.3 random-only, 0.6 top-and-random).",
+      "quote": "We currently explain correlations between the network input and the neuron being interpreted on a fixed distribution. Past work has suggested that this may not reflect the causal behavior between the two. ... Nevertheless, correlation scoring appears not to capture all the deficits in simulated explanations revealed by ablation scoring. In particular, correlation scores of 0.9 still lead to relatively low ablation scores on average (0.3 for scoring on random-only text excerpts and 0.6 for top-and-random",
+      "location": "Discussion > Limitations; Methods > Ablation scoring"
+    },
+    {
+      "planned": "The explainer ignores negative evidence and tends to produce overly broad explanations; revision with counterexamples helps",
+      "verdict": "confirmed",
+      "finding": "The explainer 'often fails to take into account negative evidence'. Revising explanations using generated sentences and their true activations improved scores; the pattern was that the original is too broad and the revised one too narrow but closer. About 13% of random sentences contained false positives for original explanations.",
+      "quote": "To make things worse, we find that our explainer technique often fails to take into account negative evidence (i.e. examples of the neuron not firing which disqualify certain hypotheses). ... Qualitatively, the main pattern we observe is that the original explanation is too broad and the revised explanation is too narrow, but that the revised explanation is closer to the truth. ... roughly 13% of random sentences contain false positive activations for the original model explanations.",
+      "location": "Methods > Revising explanations"
+    },
+    {
+      "planned": "Simulator could pick up on cues a human would not; steganography risk",
+      "verdict": "confirmed",
+      "finding": "Listed as a limitation, with the proposed mitigation of training the simulator to imitate human simulation labels.",
+      "quote": "Our scoring methodology relies on the simulator model faithfully replicating how an idealized human would respond to an explanation. However, in practice, the simulator model could be picking up on aspects of an explanation that a human would not pick up on. In the worst case, the explainer model and simulator model could be implicitly performing some sort of steganography",
+      "location": "Discussion > Limitations"
+    },
+    {
+      "planned": "Synthetic 'neuron puzzles' showed the scorer discriminates better than the explainer explains",
+      "verdict": "confirmed",
+      "finding": "19 hand-built puzzles with synthetic activations. The explainer solved 5/19; given multiple-choice explanations, the true one scored highest in 16/19 and top-two in 18/19.",
+      "quote": "For 16/19 puzzles, the ground-truth explanation is ranked highest, and for 18/19 the ground-truth explanation ranks in the top two. Compared with the 5/19 puzzles that the explainer solves, this evaluation suggested to us that the explainer is currently more of a bottleneck than the scorer.",
+      "location": "Discussion > Neuron puzzles"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The simulator never sees the real activations of the neuron it is simulating; the explanation is the only channel. That is what makes the score a held-out prediction test rather than a description of the examples the explainer already saw.",
+      "quote": "supposing a proposed explanation accurately and comprehensively explains a neuron's behavior, how would that neuron activate for each token in a particular sequence?",
+      "numbers": "Scoring excerpts: 5 top-activating + 5 random (top-and-random), or random-only."
+    },
+    {
+      "point": "A scoring set's composition decides which error it can see. Five random 64-token excerpts almost never contain a rare false positive, so the default score is nearly blind to precision failures.",
+      "quote": "an explanation with good recall ... will receive a high score, even if it has mediocre precision",
+      "numbers": "42% of explanation-matching generated sentences were false positives; 86% of neurons had at least one."
+    },
+    {
+      "point": "A baseline with no language model in it (per-token mean activation lookup) beat the language-model explanations on average, which is the cleanest reason to always report a baseline explanation's score next to yours.",
+      "quote": "The token lookup table baseline is much stronger than the token-based linear prediction baseline, substantially outperforming activation-based explanation and simulation on average.",
+      "numbers": "Average top-and-random 0.151; random-only 0.037; 1.7% above 0.7; 0.06% above 0.9."
+    }
+  ]
+}

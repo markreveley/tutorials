@@ -1,0 +1,86 @@
+{
+  "id": "gao-sae",
+  "citation": {
+    "authors": "Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, Jeffrey Wu",
+    "title": "Scaling and evaluating sparse autoencoders",
+    "venue": "OpenAI / arXiv preprint arXiv:2406.04093 [cs.LG]",
+    "year": "2024 (v1 submitted 6 Jun 2024)",
+    "url": "https://arxiv.org/abs/2406.04093"
+  },
+  "fetched_urls": [
+    "https://arxiv.org/abs/2406.04093",
+    "https://arxiv.org/pdf/2406.04093"
+  ],
+  "access": "full",
+  "verification_method": "Fetched 2026-10-20. Abstract page read with WebFetch (title, nine authors, v1 date confirmed). PDF downloaded with curl and converted with pdftotext -layout. All quotes are verbatim from the extracted v1 text. Leo Gao is marked 'Primary Contributor' with correspondence address in the footnote; the author-contributions appendix credits Henk Tillman with 'N2G explanations and LM-based explainer scoring'.",
+  "claims": [
+    {
+      "planned": "The paper introduces explicit metrics for feature quality beyond reconstruction: downstream loss, probe loss, explainability (precision and recall of explanations), and ablation sparsity",
+      "verdict": "confirmed",
+      "finding": "Section 4 lists four metrics, motivated by the point that reconstruction/sparsity is not the end goal. Explainability is phrased as whether 'simple explanations that are both necessary and sufficient' exist for a latent's activation.",
+      "quote": "1. Downstream loss: How good is the language model loss if the residual stream latent is replaced with the autoencoder reconstruction of that latent? ... 2. Probe loss: Do autoencoders recover features that we believe they might have? ... 3. Explainability: Are there simple explanations that are both necessary and sufficient for the activation of the autoencoder latent? ... 4. Ablation sparsity: Does ablating individual latents have a sparse effect on downstream logits?",
+      "location": "Section 4 (Evaluation), introduction"
+    },
+    {
+      "planned": "The authors criticize the Bills et al. simulation score as recall-heavy, with a concrete example of an overly broad explanation scoring well",
+      "verdict": "confirmed",
+      "finding": "They describe an 'illusion of interpretability' from overly broad explanations and give the don't-stop example. They note precision is very expensive to evaluate with GPT-4 simulations, which is why they use the cheaper Neuron-to-Graph (N2G) n-gram explanations, building each from up to 16 activating sequences and holding out another 16 as true positives for recall.",
+      "quote": "this can create an \"illusion\" of interpretability [Bolukbasi et al., 2021], where explanations are overly broad, and thus have good recall but poor precision. For example, Bills et al. [2023] propose an automated interpretability score which disproportionately depends on recall. They find a feature activating at the end of the phrase \"don't stop\" or \"can't stop\", but an explanation activating on all instances of \"stop\" achieves a high interpretability score. As we scale autoencoders and the features get sparser and more specific, this kind of failure becomes more severe. Unfortunately, precision is extremely expensive to evaluate when the simulations are using GPT-4 as in Bills et al. [2023].",
+      "location": "Section 4.3"
+    },
+    {
+      "planned": "A baseline that is too weak makes a poor explanation look good: the zero-ablation baseline for downstream loss",
+      "verdict": "confirmed",
+      "finding": "They reject reporting 'fraction of loss recovered' relative to zero-ablation because zero-ablating the residual stream is catastrophic, so almost anything recovers most of it; for completeness, their 16M autoencoder scores 98.2% on that metric. They instead express downstream loss as the pretraining compute of a model with equal loss (10% of GPT-4's compute for the 16M-latent autoencoder).",
+      "quote": "However, because ablating the residual stream to zero causes very high downstream loss, this means that even very poorly explaining the behavior can result in high scores. ... For completeness, the zero-ablation fidelity metric of our 16M autoencoder is 98.2%. ... when our 16 million latent autoencoder is substituted into GPT-4, we get a language modeling loss corresponding to 10% of the pretraining compute of GPT-4.",
+      "location": "Section 4.1 and footnote 11"
+    },
+    {
+      "planned": "Scale of the main artifact: a 16 million latent autoencoder trained on GPT-4 activations for 40 billion tokens; code and autoencoders released",
+      "verdict": "confirmed",
+      "finding": "From the abstract.",
+      "quote": "To demonstrate the scalability of our approach, we train a 16 million latent autoencoder on GPT-4 activations for 40 billion tokens. We release code and autoencoders for open-source models, as well as a visualizer.",
+      "location": "Abstract"
+    },
+    {
+      "planned": "Explanation-reconstruction metric: simulate latents from their explanations and measure downstream loss, which values both precision and recall",
+      "verdict": "confirmed",
+      "finding": "Section 4.4 proposes using explanations to simulate latents, decoding, and measuring downstream loss, with N2G explanations; larger and sparser autoencoders did better and beat a bigram-only explanation of GPT-2 small.",
+      "quote": "This suggests combining our downstream loss and explanation metrics, by using our explanations to simulate autoencoder latents, and then checking downstream loss after decoding. This metric also has the advantage that it values both recall and precision in a way that is principled, and also values recall more for latents that activate more densely.",
+      "location": "Section 4.4"
+    },
+    {
+      "planned": "Probe-based metric details: 61 binary classification datasets; the metric is cheap but assumes which features are natural",
+      "verdict": "confirmed",
+      "finding": "As stated.",
+      "quote": "we curated a set of 61 binary classification datasets (details in Table 1). ... This metric has the advantage that it is computationally cheap. However, it also has a major limitation, which is that it leans on strong assumptions about what kinds of features are natural.",
+      "location": "Section 4.2"
+    },
+    {
+      "planned": "The authors' own limitations: many features are not yet monosemantic; N2G captures only simple patterns",
+      "verdict": "confirmed",
+      "finding": "Both listed in the limitations.",
+      "quote": "A large fraction of the random activations of features we find, especially in GPT-4, are not yet adequately monosemantic. ... While we use n2g for its computational efficiency, it is only able to capture very simple patterns. We believe there is a lot of room for improvement in terms of more expressive explanation methods that are also cheap enough to simulate to estimate explanation precision.",
+      "location": "Section 6 (Limitations and future directions)"
+    },
+    {
+      "planned": "TopK autoencoders' N2G explanations have better recall than ReLU's with slightly worse precision",
+      "verdict": "confirmed",
+      "finding": "As stated; stated as evidence of fewer spurious positive activations.",
+      "quote": "N2G explanations have significantly better recall (>1.5x) and only slightly worse precision (>0.9x) for TopK models with the same n (resulting in better F1 scores) and similar L0",
+      "location": "Section 4.3"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The group that invented simulation scoring later wrote down its main weakness themselves, and switched to a cheaper explanation format precisely so that precision could be measured.",
+      "quote": "an automated interpretability score which disproportionately depends on recall",
+      "numbers": "N2G built from up to 16 activating sequences; 16 further held out for recall."
+    },
+    {
+      "point": "The choice of baseline is a control decision: against zero-ablation almost everything scores 98%, so the number says nothing. Pick a baseline that a bad explanation would fail.",
+      "quote": "even very poorly explaining the behavior can result in high scores",
+      "numbers": "zero-ablation fidelity 98.2%; same autoencoder equals a model trained with 10% of GPT-4's pretraining compute."
+    }
+  ]
+}
