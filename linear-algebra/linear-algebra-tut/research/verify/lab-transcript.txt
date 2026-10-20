@@ -1,0 +1,502 @@
+Linear Algebra for Interpretability: actual local command transcript
+Authoring date: 2026-10-20
+Python: 3.13.16 (main, Oct  1 2026, 15:40:24) [GCC 13.3.0]
+numpy: 2.5.4
+Fixture: labs/data (GPT-2 small, blocks.6.hook_resid_post, 302 tokens; layer 7 head 0 weights). See labs/data/meta.json for torch/transformers versions.
+The last command loads GPT-2 through TransformerLens and needs torch; every other command needs numpy only.
+
+$ python3 labs/linalg_lab.py --help
+usage: linalg_lab.py [-h]
+                     {inspect,vectors,similar,project,shapes,matmul,basis,rank,remove,probe,covariance,pca,svd,gradient,correlation,review} ...
+
+Command-line demonstrations on the real GPT-2 fixture, one per lesson.
+
+Every command prints numbers computed from data/activations.npy (GPT-2 small,
+residual stream after block 6, 302 tokens) and data/weights.npz (layer 7,
+head 0). Nothing is simulated. Run from the course directory:
+
+  python3 labs/linalg_lab.py --help
+  python3 labs/linalg_lab.py inspect
+
+Commands use reference.py so they work before your exercises are implemented.
+
+positional arguments:
+  {inspect,vectors,similar,project,shapes,matmul,basis,rank,remove,probe,covariance,pca,svd,gradient,correlation,review}
+    inspect             lesson 00: shapes and a token vector
+    vectors             lesson 01: add, scale, subtract activation vectors
+    similar             lesson 02: norms, dot products, cosine similarity
+    project             lesson 03: project every token onto a direction
+    shapes              lesson 04: a weight matrix as a map between spaces
+    matmul              lesson 05: batching, composition, einsum
+    basis               lesson 06: the same vector in two bases
+    rank                lesson 07: rank and near-orthogonal directions
+    remove              lesson 08: orthogonal projection and removing a
+                        direction
+    probe               lesson 09: least-squares direction with a held-out
+                        check
+    covariance          lesson 10: covariance and its eigenvectors
+    pca                 lesson 11: PCA on the activation matrix
+    svd                 lesson 12: SVD and low-rank approximation
+    gradient            lesson 13: gradients of a dot product and a norm
+    correlation         lesson 14: is the correlation real?
+    review              readiness review pipeline
+
+options:
+  -h, --help            show this help message and exit
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_*.py' -v
+
+test_correlation_known_values (test_linalg.Correlation.test_correlation_known_values) ... skipped 'implement correlation in labs/linalg.py'
+test_gradients_match_finite_differences (test_linalg.Gradients.test_gradients_match_finite_differences) ... skipped 'implement grad_dot in labs/linalg.py'
+test_exact_line (test_linalg.LeastSquares.test_exact_line) ... skipped 'implement least_squares in labs/linalg.py'
+test_hand_computed_fit (test_linalg.LeastSquares.test_hand_computed_fit) ... skipped 'implement least_squares in labs/linalg.py'
+test_ridge_shrinks_and_fixture_probe (test_linalg.LeastSquares.test_ridge_shrinks_and_fixture_probe) ... skipped 'implement least_squares in labs/linalg.py'
+test_coordinates_in_basis_hand_computed (test_linalg.Matrices.test_coordinates_in_basis_hand_computed) ... skipped 'implement coordinates_in_basis in labs/linalg.py'
+test_rank_known_cases (test_linalg.Matrices.test_rank_known_cases) ... skipped 'implement rank in labs/linalg.py'
+test_gram_schmidt_hand_computed (test_linalg.Orthogonality.test_gram_schmidt_hand_computed) ... skipped 'implement gram_schmidt in labs/linalg.py'
+test_remove_direction (test_linalg.Orthogonality.test_remove_direction) ... skipped 'implement remove_direction in labs/linalg.py'
+test_covariance_hand_computed (test_linalg.Spectra.test_covariance_hand_computed) ... skipped 'implement covariance in labs/linalg.py'
+test_low_rank_known_and_eckart_young (test_linalg.Spectra.test_low_rank_known_and_eckart_young) ... skipped 'implement low_rank in labs/linalg.py'
+test_pca_fixture_invariants (test_linalg.Spectra.test_pca_fixture_invariants) ... skipped 'implement pca in labs/linalg.py'
+test_pca_two_dimensional (test_linalg.Spectra.test_pca_two_dimensional) ... skipped 'implement pca in labs/linalg.py'
+test_cosine_known_angles (test_linalg.Vectors.test_cosine_known_angles) ... skipped 'implement cosine in labs/linalg.py'
+test_mean_difference_direction (test_linalg.Vectors.test_mean_difference_direction) ... skipped 'implement mean_difference_direction in labs/linalg.py'
+test_norm_known_values (test_linalg.Vectors.test_norm_known_values) ... skipped 'implement norm in labs/linalg.py'
+test_project_hand_computed (test_linalg.Vectors.test_project_hand_computed) ... skipped 'implement project in labs/linalg.py'
+test_project_pythagoras_on_real_activations (test_linalg.Vectors.test_project_pythagoras_on_real_activations) ... skipped 'implement project in labs/linalg.py'
+test_bad_label_rejected (test_reference.CommandLine.test_bad_label_rejected) ... ok
+test_help_lists_every_lesson_command (test_reference.CommandLine.test_help_lists_every_lesson_command) ... ok
+test_project_output_is_consistent (test_reference.CommandLine.test_project_output_is_consistent) ... ok
+test_first_token_is_the_outlier (test_reference.Fixture.test_first_token_is_the_outlier) ... ok
+test_head_weights (test_reference.Fixture.test_head_weights) ... ok
+test_labels_agree_with_tokens (test_reference.Fixture.test_labels_agree_with_tokens) ... ok
+test_shapes_and_sizes (test_reference.Fixture.test_shapes_and_sizes) ... ok
+test_split_is_a_partition (test_reference.Fixture.test_split_is_a_partition) ... ok
+test_correlation_known_values (test_reference.ReferenceCorrelation.test_correlation_known_values) ... ok
+test_gradients_match_finite_differences (test_reference.ReferenceGradients.test_gradients_match_finite_differences) ... ok
+test_exact_line (test_reference.ReferenceLeastSquares.test_exact_line) ... ok
+test_hand_computed_fit (test_reference.ReferenceLeastSquares.test_hand_computed_fit) ... ok
+test_ridge_shrinks_and_fixture_probe (test_reference.ReferenceLeastSquares.test_ridge_shrinks_and_fixture_probe) ... ok
+test_coordinates_in_basis_hand_computed (test_reference.ReferenceMatrices.test_coordinates_in_basis_hand_computed) ... ok
+test_rank_known_cases (test_reference.ReferenceMatrices.test_rank_known_cases) ... ok
+test_gram_schmidt_hand_computed (test_reference.ReferenceOrthogonality.test_gram_schmidt_hand_computed) ... ok
+test_remove_direction (test_reference.ReferenceOrthogonality.test_remove_direction) ... ok
+test_covariance_hand_computed (test_reference.ReferenceSpectra.test_covariance_hand_computed) ... ok
+test_low_rank_known_and_eckart_young (test_reference.ReferenceSpectra.test_low_rank_known_and_eckart_young) ... ok
+test_pca_fixture_invariants (test_reference.ReferenceSpectra.test_pca_fixture_invariants) ... ok
+test_pca_two_dimensional (test_reference.ReferenceSpectra.test_pca_two_dimensional) ... ok
+test_cosine_known_angles (test_reference.ReferenceVectors.test_cosine_known_angles) ... ok
+test_mean_difference_direction (test_reference.ReferenceVectors.test_mean_difference_direction) ... ok
+test_norm_known_values (test_reference.ReferenceVectors.test_norm_known_values) ... ok
+test_project_hand_computed (test_reference.ReferenceVectors.test_project_hand_computed) ... ok
+test_project_pythagoras_on_real_activations (test_reference.ReferenceVectors.test_project_pythagoras_on_real_activations) ... ok
+
+----------------------------------------------------------------------
+Ran 44 tests in 10.302s
+
+OK (skipped=18)
+[exit 0]
+
+$ python3 labs/linalg_lab.py inspect
+activations: shape (302, 768), dtype on disk float16, loaded as float32
+tokens: 302; first eight: ['The', ' harbour', ' town', ' of', ' Weston', ' Hollow', ' kept', ' careful']
+labels: is_digit (45 ones), after_period (23 ones), starts_with_space (241 ones), capitalised (29 ones)
+token 12 = '42': first six of 768 coordinates [-2.182 -2.564  1.455  1.724 -1.904 -3.473]
+  largest |coordinate| at index 447, value 41.81
+head weights: W_Q (768, 64), W_K (768, 64), W_V (768, 64), W_O (64, 768)
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py inspect --token 0
+activations: shape (302, 768), dtype on disk float16, loaded as float32
+tokens: 302; first eight: ['The', ' harbour', ' town', ' of', ' Weston', ' Hollow', ' kept', ' careful']
+labels: is_digit (45 ones), after_period (23 ones), starts_with_space (241 ones), capitalised (29 ones)
+token 0 = 'The': first six of 768 coordinates [ 0.088 -1.491  0.975  0.061  0.429 -0.396]
+  largest |coordinate| at index 447, value 2942.00
+head weights: W_Q (768, 64), W_K (768, 64), W_V (768, 64), W_O (64, 768)
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py vectors
+u = token 12 '42', v = token 40 ' boats'
+u[:5]       = [-2.182 -2.564  1.455  1.724 -1.904]
+v[:5]       = [ 5.984  1.1   -4.691  1.996  1.895]
+(u+v)[:5]   = [ 3.803 -1.465 -3.236  3.72  -0.01 ]
+(2u)[:5]    = [-4.363 -5.129  2.91   3.447 -3.809]
+(u-v)[:5]   = [-8.166 -3.664  6.146 -0.272 -3.799]
+mean of tokens 1..301, first five coordinates: [ 0.317  0.162 -0.401  0.064  0.22 ]
+u - mean, first five: [-2.498 -2.726  1.856  1.66  -2.125]
+check: (u+v)-v == u exactly in exact arithmetic; here max |((u+v)-v) - u| = 0.00e+00
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py vectors --token 1 --other 203
+u = token 1 ' harbour', v = token 203 ' harbour'
+u[:5]       = [-0.935  2.59  -3.346  0.544  0.274]
+v[:5]       = [-0.194  2.795 -1.263 -0.529  0.533]
+(u+v)[:5]   = [-1.128  5.385 -4.608  0.015  0.807]
+(2u)[:5]    = [-1.869  5.18  -6.691  1.088  0.548]
+(u-v)[:5]   = [-0.741 -0.205 -2.083  1.073 -0.259]
+mean of tokens 1..301, first five coordinates: [ 0.317  0.162 -0.401  0.064  0.22 ]
+u - mean, first five: [-1.251  2.428 -2.945  0.48   0.054]
+check: (u+v)-v == u exactly in exact arithmetic; here max |((u+v)-v) - u| = 0.00e+00
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py similar
+norms: token 0 'The' 3047.1; median over all tokens 85.1; min 66.6 at token 191 '\n'
+query token 12 '42', norm 88.5
+most similar by cosine (excluding itself):
+  token  29 '71'           cos 0.857  dot     6928.7  norm 91.4
+  token 274 '42'           cos 0.799  dot     6252.8  norm 88.4
+  token  70 ' 1896'        cos 0.753  dot     6204.6  norm 93.0
+  token 111 ' 1903'        cos 0.747  dot     6544.2  norm 98.9
+  token  11 ' 18'          cos 0.733  dot     5608.2  norm 86.5
+least similar:
+  token 229 ' every'       cos 0.314  dot     2353.4  norm 84.6
+  token 207 ' working'     cos 0.302  dot     2245.8  norm 84.1
+  token 147 ' a'           cos 0.239  dot     1879.5  norm 89.0
+cosine to every other token: mean 0.460, min 0.239, max 0.857
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py similar --token 0
+norms: token 0 'The' 3047.1; median over all tokens 85.1; min 66.6 at token 191 '\n'
+query token 0 'The', norm 3047.1
+most similar by cosine (excluding itself):
+  token   9 '.'            cos 0.586  dot   149738.7  norm 83.8
+  token 106 '\n'           cos 0.580  dot   136603.5  norm 77.3
+  token 151 '\n'           cos 0.574  dot   132058.5  norm 75.5
+  token 192 '\n'           cos 0.572  dot   128793.4  norm 73.9
+  token  52 '\n'           cos 0.568  dot   138533.7  norm 80.0
+least similar:
+  token 282 ' late'        cos 0.227  dot    58124.4  norm 84.2
+  token 141 '400'          cos 0.226  dot    61428.1  norm 89.3
+  token 147 ' a'           cos 0.207  dot    56251.4  norm 89.0
+cosine to every other token: mean 0.410, min 0.207, max 0.586
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py project --label is_digit
+direction d = mean(is_digit=1) - mean(is_digit=0); |d| = 35.50
+projection coefficient x.d/|d| for every token: shape (301,)
+  mean over is_digit=1 tokens:    25.68   mean over is_digit=0 tokens:    -9.82
+highest coefficients:
+     33.70  token 123 ' 215'       label 1
+     33.25  token 100 ' 12'        label 1
+     32.33  token  36 '02'         label 1
+     32.05  token  39 ' 63'        label 1
+     31.57  token 113 ' 48'        label 1
+     31.13  token  90 ' 640'       label 1
+lowest coefficients:
+    -18.01  token 203 ' harbour'   label 0
+    -18.13  token   1 ' harbour'   label 0
+    -18.40  token 246 ' museum'    label 0
+    -18.70  token 195 ' town'      label 0
+token 12 '42': coefficient 19.71, |projection| 19.71, |residual| 86.29, |x| 88.51
+  check |proj|^2 + |resid|^2 = 7833.8 vs |x|^2 = 7833.8; resid.d = -1.99e-13
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py project --label after_period --token 100
+direction d = mean(after_period=1) - mean(after_period=0); |d| = 26.43
+projection coefficient x.d/|d| for every token: shape (301,)
+  mean over after_period=1 tokens:    17.49   mean over after_period=0 tokens:    -8.94
+highest coefficients:
+     24.88  token  42 ' The'       label 1
+     23.84  token 107 'The'        label 0
+     23.47  token  51 '\n'         label 1
+     23.35  token 105 '\n'         label 1
+     23.06  token  67 ' The'       label 1
+     22.02  token  27 ' By'        label 1
+lowest coefficients:
+    -22.10  token 208 ' boats'     label 0
+    -24.06  token 169 ' trains'    label 0
+    -24.71  token  20 ' mills'     label 0
+    -26.65  token 189 ' bushes'    label 0
+token 100 ' 12': coefficient -15.12, |projection| 15.12, |residual| 82.91, |x| 84.28
+  check |proj|^2 + |resid|^2 = 7102.7 vs |x|^2 = 7102.7; resid.d = 1.28e-13
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py shapes
+x = token 12 '42': shape (768,)
+W_Q shape (768, 64): maps a 768-vector to a 64-vector
+q = x @ W_Q: shape (64,); first five [  3.636  -9.206   6.943 -14.039  19.925]
+q is a linear map of x: check (2x) @ W_Q == 2 (x @ W_Q): True
+and (x + x2) @ W_Q == x @ W_Q + x2 @ W_Q: True
+column 0 of W_Q, first five entries [ 0.095 -0.082 -0.038 -0.112  0.025]: q[0] = x . column 0 = 3.636
+W_O shape (64, 768): maps a 64-vector back to 768. (x @ W_V) @ W_O has shape (768,)
+x @ W_O fails: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 64 is different from 768)
+W_O @ x runs, shape (64,): shapes happen to match, but it dots x with the rows of W_O, which is not the map the head applies
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py shapes --token 0
+x = token 0 'The': shape (768,)
+W_Q shape (768, 64): maps a 768-vector to a 64-vector
+q = x @ W_Q: shape (64,); first five [ -47.422 -458.867  294.558   43.001  373.406]
+q is a linear map of x: check (2x) @ W_Q == 2 (x @ W_Q): True
+and (x + x2) @ W_Q == x @ W_Q + x2 @ W_Q: True
+column 0 of W_Q, first five entries [ 0.095 -0.082 -0.038 -0.112  0.025]: q[0] = x . column 0 = -47.422
+W_O shape (64, 768): maps a 64-vector back to 768. (x @ W_V) @ W_O has shape (768,)
+x @ W_O fails: matmul: Input operand 1 has a mismatch in its core dimension 0, with gufunc signature (n?,k),(k,m?)->(n?,m?) (size 64 is different from 768)
+W_O @ x runs, shape (64,): shapes happen to match, but it dots x with the rows of W_O, which is not the map the head applies
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py matmul
+X (302, 768) @ W_Q (768, 64) = Q (302, 64); row 12 of Q equals X[12] @ W_Q: True
+scores = Q @ K.T: shape (302, 302); entry [i, j] = q_i . k_j
+W_QK = W_Q @ W_K.T: shape (768, 768); X @ W_QK @ X.T equals Q @ K.T (composition): True
+einsum nd,dh->nh matches X @ W_Q: True ; einsum nh,mh->nm matches Q @ K.T: True
+token 12 '42' scaled scores against earlier tokens (q.k/sqrt(64)); three largest:
+  score 23652.47 against token   0 'The'
+  score  139.25 against token  11 ' 18'
+  score  117.35 against token  10 ' In'
+(scores only; real attention adds biases, layer norm, masking and softmax, covered in the transformers course)
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py matmul --token 60
+X (302, 768) @ W_Q (768, 64) = Q (302, 64); row 60 of Q equals X[60] @ W_Q: True
+scores = Q @ K.T: shape (302, 302); entry [i, j] = q_i . k_j
+W_QK = W_Q @ W_K.T: shape (768, 768); X @ W_QK @ X.T equals Q @ K.T (composition): True
+einsum nd,dh->nh matches X @ W_Q: True ; einsum nh,mh->nm matches Q @ K.T: True
+token 60 ' metres' scaled scores against earlier tokens (q.k/sqrt(64)); three largest:
+  score 21888.27 against token   0 'The'
+  score  366.40 against token  59 ' 2'
+  score  235.48 against token  60 ' metres'
+(scores only; real attention adds biases, layer norm, masking and softmax, covered in the transformers course)
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py basis
+token 12 '42'
+neuron-basis coordinates, first five: [-2.182 -2.564  1.455  1.724 -1.904]
+PCA-basis coordinates, first five:    [ 17.301 -24.111  17.668 -23.132 -38.11 ]
+same vector: B @ c reproduces x, max error 9.10e-14
+norm in neuron basis 88.509; norm of PCA coordinates 88.509 (equal: the basis is orthonormal)
+coordinate with largest magnitude: neuron basis index 447 (41.8); PCA basis index 4 (38.1)
+a 2-D non-orthogonal basis with columns (1,0) and (1,1): coordinates of (3,2) are [1. 2.]
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py basis --token 29
+token 29 '71'
+neuron-basis coordinates, first five: [-3.73  -0.319  0.647  2.576 -0.4  ]
+PCA-basis coordinates, first five:    [ 22.993 -21.958  18.446 -19.504 -44.248]
+same vector: B @ c reproduces x, max error 1.14e-13
+norm in neuron basis 91.359; norm of PCA coordinates 91.359 (equal: the basis is orthonormal)
+coordinate with largest magnitude: neuron basis index 447 (38.0); PCA basis index 4 (44.2)
+a 2-D non-orthogonal basis with columns (1,0) and (1,1): coordinates of (3,2) are [1. 2.]
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py rank
+rank of the activation matrix X (302, 768): 302  (at most min(302, 768))
+rank of W_QK = W_Q @ W_K.T (768, 768): 64;  rank of W_OV = W_V @ W_O (768, 768): 64  (a product through 64 dimensions has rank at most 64)
+768 random unit vectors in 768 dims: rank 768; max |cosine| between any two 0.169
+2000 random unit vectors in 768 dims: rank 768; max |cosine| between any two 0.196
+5000 random unit vectors in 768 dims: rank 768; max |cosine| between any two 0.189
+three 4-D vectors where the third is v0 + 2 v1: rank 2
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py remove --label is_digit
+direction d from the 211 training tokens; before: held-out correlation of projection on d with is_digit: 0.935
+after removing d from every token: max |projection on d| = 2.13e-14; norms shrink from median 85.00 to 83.88
+refit the mean-difference direction on the edited training tokens: |d2| = 1.89e-14 (was 36.45); the class means now coincide
+ridge least-squares probe refitted on the edited activations: held-out correlation -0.053  (compare the probe on the unedited activations: 0.986)
+gram_schmidt on [d, d_after_period, d + 0.5 d_after_period]: kept 2 orthonormal vectors; Q @ Q.T =
+[[1. 0.]
+ [0. 1.]]
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py remove --label after_period
+direction d from the 211 training tokens; before: held-out correlation of projection on d with after_period: 0.466
+after removing d from every token: max |projection on d| = 1.55e-14; norms shrink from median 85.00 to 84.44
+refit the mean-difference direction on the edited training tokens: |d2| = 4.83e-14 (was 27.18); the class means now coincide
+ridge least-squares probe refitted on the edited activations: held-out correlation 0.112  (compare the probe on the unedited activations: 0.740)
+gram_schmidt on [d, d_after_period, d + 0.5 d_after_period]: kept 2 orthonormal vectors; Q @ Q.T =
+[[ 1. -0.]
+ [-0.  1.]]
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py probe --label is_digit
+label is_digit: 45 ones of 301; train 211 tokens, held out 90; ridge 0.0
+least-squares direction w: shape (768,), |w| = 0.0374, intercept b = 0.034
+train: correlation(pred, y) = 1.000; mean squared error 0.0000
+held out: correlation(pred, y) = 0.986; mean squared error 0.0045
+normal equations check on train: max |Xc.T @ residual| = 6.43e-13 (residual is orthogonal to every column)
+cos(w, mean-difference direction) = 0.734; held-out correlation using the mean-difference direction instead: 0.935
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py probe --label capitalised --ridge 100
+label capitalised: 28 ones of 301; train 211 tokens, held out 90; ridge 100.0
+least-squares direction w: shape (768,), |w| = 0.0677, intercept b = -0.013
+train: correlation(pred, y) = 0.999; mean squared error 0.0003
+held out: correlation(pred, y) = 0.679; mean squared error 0.0306
+ridge normal equations check on train: max |Xc.T @ residual - ridge * w| = 4.90e-08 (with a penalty the residual is no longer orthogonal to the columns)
+cos(w, mean-difference direction) = 0.581; held-out correlation using the mean-difference direction instead: 0.309
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py covariance
+covariance of X (301, 768): shape (768, 768); symmetric: True
+eigenvalues (eigh, reordered largest first), top five: [289.399 219.702 208.869 160.376 125.692]
+smallest five: [-0. -0. -0. -0. -0.]  (n - 1 = 300 < 768, so at least 768 - 300 are zero up to rounding)
+eigenvectors orthonormal: max |V.T V - I| = 2.89e-15
+C v = lambda v for the top eigenvector: max |C v - lambda v| = 1.12e-13
+sum of eigenvalues 3822.7 = total variance = sum of per-dimension variances 3822.7
+singular values^2 / (n-1), top three: [289.399 219.702 208.869]  (same numbers as the eigenvalues)
+variance along the top eigenvector 289.4; along neuron 447 55.7; along neuron 0 5.71
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py pca
+PCA on tokens 1..301 (position 0 excluded): 10 components
+variance explained: 0.076 0.057 0.055 0.042 0.033 0.030 0.027 0.024 0.021 0.019
+cumulative:         0.076 0.133 0.188 0.230 0.263 0.293 0.320 0.345 0.365 0.384
+  first   1 components:   7.6% of variance
+  first   2 components:  13.3% of variance
+  first   5 components:  26.3% of variance
+  first  10 components:  38.4% of variance
+  first  20 components:  51.8% of variance
+  first  50 components:  72.6% of variance
+  first 100 components:  88.1% of variance
+components orthonormal: max |V V.T - I| = 3.11e-15
+component 1, largest-magnitude neuron index 87 with weight -0.809
+tokens at the two ends of component 1:
+  low: ' tide' (-28), ' cargo' (-27), ' crossing' (-27), ' late' (-27), ' calm' (-27)
+  high: '02' (27), ' households' (28), ' metres' (28), ' 2' (28), ' metres' (29)
+  correlation of component-1 score with position: -0.923; component 2: 0.123
+  correlation of component-1 score with is_digit: 0.200; component 2: 0.528
+  correlation of component-1 score with after_period: 0.016; component 2: -0.098
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py pca --keep-first --k 5
+PCA on all 302 tokens: 5 components
+variance explained: 0.889 0.009 0.006 0.006 0.005
+cumulative:         0.889 0.898 0.904 0.909 0.914
+  first   1 components:  88.9% of variance
+  first   2 components:  89.8% of variance
+  first   5 components:  91.4% of variance
+  first  10 components:  92.9% of variance
+  first  20 components:  94.5% of variance
+  first  50 components:  96.9% of variance
+  first 100 components:  98.6% of variance
+components orthonormal: max |V V.T - I| = 2.66e-15
+component 1, largest-magnitude neuron index 447 with weight -0.965
+tokens at the two ends of component 1:
+  low: 'The' (-3002), ' records' (-14), ' ledger' (-11), ' harbour' (-10), ' households' (-9)
+  high: '400' (25), '4' (26), ' late' (26), ' 63' (26), ' a' (26)
+  correlation of component-1 score with position: 0.108; component 2: -0.912
+  correlation of component-1 score with is_digit: 0.037; component 2: 0.222
+  correlation of component-1 score with after_period: 0.018; component 2: 0.016
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py svd
+SVD of W_QK (768, 768): U (768, 768), S (768,), Vt (768, 768)
+singular values: top five [21.014 19.039 18.155 17.238 16.563]; number above 1e-3 * max: 64; S[64:69] = [0. 0. 0. 0. 0.]
+U @ diag(S) @ Vt reproduces W_QK: max error 3.43e-14
+  rank- 1 approximation: relative error |W_QK - A_k| / |W_QK| = 0.9742
+  rank- 8 approximation: relative error |W_QK - A_k| / |W_QK| = 0.8493
+  rank-32 approximation: relative error |W_QK - A_k| / |W_QK| = 0.5401
+  rank-64 approximation: relative error |W_QK - A_k| / |W_QK| = 0.0000
+SVD of centred activations (301, 768): 301 singular values; top three [294.652 256.731 250.321]
+  rank-  1: relative reconstruction error 0.9614; equals sqrt(sum of dropped S^2 / sum S^2) = 0.9614
+  rank- 10: relative reconstruction error 0.7846; equals sqrt(sum of dropped S^2 / sum S^2) = 0.7846
+  rank- 50: relative reconstruction error 0.5230; equals sqrt(sum of dropped S^2 / sum S^2) = 0.5230
+  rank-100: relative reconstruction error 0.3445; equals sqrt(sum of dropped S^2 / sum S^2) = 0.3445
+  rank-301: relative reconstruction error 0.0000; equals sqrt(sum of dropped S^2 / sum S^2) = 0.0000
+right singular vectors of Xc are the PCA components: |cos| with pca component 1 = 1.000000
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py gradient
+token 12 '42'; f(v) = v.d with d the digit direction
+analytic gradient of v.d is d; first five entries [0.753 0.62  2.768 0.615 1.665]
+numeric gradient (central differences) on those five coordinates [0.753 0.62  2.768 0.615 1.665]
+analytic gradient of |v| is v/|v|; first five [-0.025 -0.029  0.016  0.019 -0.022]
+numeric on those five coordinates [-0.025 -0.029  0.016  0.019 -0.022]
+gradient ascent on f(v) = v.d/|d|: coefficient 19.71 -> 24.71 after a step of length 5.0 (predicted increase exactly 5.0)
+same step length in a random direction: 19.71 -> 19.52
+norm after the step along d: 88.51 -> 89.75; cos(x, d) = 0.223
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py gradient --token 147
+token 147 ' a'; f(v) = v.d with d the digit direction
+analytic gradient of v.d is d; first five entries [0.753 0.62  2.768 0.615 1.665]
+numeric gradient (central differences) on those five coordinates [0.753 0.62  2.768 0.615 1.665]
+analytic gradient of |v| is v/|v|; first five [-0.044 -0.004  0.018 -0.027  0.012]
+numeric on those five coordinates [-0.044 -0.004  0.018 -0.027  0.012]
+gradient ascent on f(v) = v.d/|d|: coefficient -1.48 -> 3.52 after a step of length 5.0 (predicted increase exactly 5.0)
+same step length in a random direction: -1.48 -> -1.67
+norm after the step along d: 89.03 -> 89.09; cos(x, d) = -0.017
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py correlation --label is_digit
+label is_digit; direction fitted on 211 tokens; correlation train 1.000, held out 0.986
+permutation baseline on the held-out tokens (200 shuffles of the label): mean 0.002, 97.5th percentile 0.219, max 0.364
+shuffles with |r| >= observed held-out |r|: 0 of 200
+random-direction baseline (held out, 200 directions): mean 0.008, max |r| 0.620
+the same projection correlated with other labels on held-out tokens: after_period 0.000, starts_with_space -0.022, capitalised -0.067
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py correlation --label after_period --perms 100
+label after_period; direction fitted on 211 tokens; correlation train 1.000, held out 0.728
+permutation baseline on the held-out tokens (100 shuffles of the label): mean 0.003, 97.5th percentile 0.222, max 0.331
+shuffles with |r| >= observed held-out |r|: 0 of 100
+random-direction baseline (held out, 100 directions): mean -0.016, max |r| 0.315
+the same projection correlated with other labels on held-out tokens: is_digit -0.033, starts_with_space -0.114, capitalised 0.530
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py review --label is_digit
+readiness run on is_digit: 211 train, 90 held out
+1 direction by least squares: |w| 0.0374; held-out correlation 0.986
+2 permutation baseline: 97.5th percentile 0.219
+3 PCA on train: variance explained [0.075 0.061 0.055 0.041 0.036]; correlation of each component score with is_digit on held out: 0.191 0.517 -0.145 0.738 -0.124
+4 cos(w, PCA component 1) = 0.055
+5 after removing w: refit held-out correlation 0.696
+
+[exit 0]
+
+$ python3 labs/linalg_lab.py review --label after_period
+readiness run on after_period: 211 train, 90 held out
+1 direction by least squares: |w| 0.1064; held-out correlation 0.728
+2 permutation baseline: 97.5th percentile 0.213
+3 PCA on train: variance explained [0.075 0.061 0.055 0.041 0.036]; correlation of each component score with after_period on held out: 0.165 -0.116 -0.266 0.056 0.012
+4 cos(w, PCA component 1) = -0.010
+5 after removing w: refit held-out correlation 0.441
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_*.py'
+
+ssssssssssssssssss..........................
+----------------------------------------------------------------------
+Ran 44 tests in 1.222s
+
+OK (skipped=18)
+[exit 0]
+
+$ python3 research/verify/crosscheck_transformerlens.py
+transformer_lens 4.2.0 torch 2.14.1+cpu
+blocks.6.hook_resid_post shape (302, 768) fixture shape (302, 768)
+max |TL - fixture(float16)| 5.451171875
+max |TL| overall 2936.548828125
+relative error 0.0018563191406428814
+
+[exit 0]

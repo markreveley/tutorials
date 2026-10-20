@@ -1,0 +1,5 @@
+transformer_lens 4.2.0 torch 2.14.1+cpu
+blocks.6.hook_resid_post shape (302, 768) fixture shape (302, 768)
+max |TL - fixture(float16)| 5.451171875
+max |TL| overall 2936.548828125
+relative error 0.0018563191406428814
