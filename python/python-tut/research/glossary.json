@@ -1,0 +1,212 @@
+{
+  "object": {
+    "name": "Object",
+    "short": "Everything a Python program manipulates: it has an identity (address), a type, and a value.",
+    "def": "Everything a Python program manipulates: it has an identity (address), a type, and a value. Names refer to objects; they do not contain them."
+  },
+  "binding": {
+    "name": "Binding",
+    "short": "Associating a name with an object.",
+    "def": "Associating a name with an object. Assignment rebinds a name; it never copies the object."
+  },
+  "aliasing": {
+    "name": "Aliasing",
+    "short": "Two or more names referring to the same object, so a mutation through one is visible through all.",
+    "def": "Two or more names referring to the same object, so a mutation through one is visible through all."
+  },
+  "mutability": {
+    "name": "Mutability",
+    "short": "Whether an object's value can change in place.",
+    "def": "Whether an object's value can change in place. Lists, dicts, sets and tensors are mutable; ints, strings and tuples are not."
+  },
+  "shallow-copy": {
+    "name": "Shallow copy",
+    "short": "A new container whose elements are the same objects as the original's.",
+    "def": "A new container whose elements are the same objects as the original's. Nested containers remain shared."
+  },
+  "exception": {
+    "name": "Exception",
+    "short": "Python's error channel: an object raised to unwind the stack until a matching except clause catches it.",
+    "def": "Python's error channel: an object raised to unwind the stack until a matching except clause catches it."
+  },
+  "jsonl": {
+    "name": "JSONL",
+    "short": "A text file with one JSON value per line.",
+    "def": "A text file with one JSON value per line. Blank lines are skipped by convention but still count as physical lines."
+  },
+  "generator": {
+    "name": "Generator",
+    "short": "A function with yield, or an expression in parentheses, that produces values on demand and keeps nothing it has already produced.",
+    "def": "A function with yield, or an expression in parentheses, that produces values on demand and keeps nothing it has already produced."
+  },
+  "dataclass": {
+    "name": "Dataclass",
+    "short": "A class whose __init__, __repr__ and __eq__ are generated from its annotated fields by the @dataclass decorator.",
+    "def": "A class whose __init__, __repr__ and __eq__ are generated from its annotated fields by the @dataclass decorator."
+  },
+  "type-hint": {
+    "name": "Type hint",
+    "short": "An annotation such as list[str] that documents an intended type.",
+    "def": "An annotation such as list[str] that documents an intended type. Python does not enforce it at run time."
+  },
+  "shape": {
+    "name": "Shape",
+    "short": "The tuple of sizes along each axis of an array or tensor.",
+    "def": "The tuple of sizes along each axis of an array or tensor. (2, 5, 768) means 2 items, 5 positions, 768 features."
+  },
+  "axis": {
+    "name": "Axis",
+    "short": "One dimension of an array, numbered from 0.",
+    "def": "One dimension of an array, numbered from 0. Negative numbers count from the end; axis -1 is the last."
+  },
+  "dtype": {
+    "name": "dtype",
+    "short": "The element type of an array or tensor, such as float32, float16 or int64.",
+    "def": "The element type of an array or tensor, such as float32, float16 or int64. It decides precision, memory, and which operations are allowed together."
+  },
+  "view": {
+    "name": "View",
+    "short": "A tensor or array that shares storage with another.",
+    "def": "A tensor or array that shares storage with another. Writing through a view changes the base."
+  },
+  "contiguous": {
+    "name": "Contiguous",
+    "short": "Laid out in memory in row-major order with no gaps.",
+    "def": "Laid out in memory in row-major order with no gaps. Transposes and some slices are not; .view needs contiguity, .reshape copies when needed."
+  },
+  "broadcasting": {
+    "name": "Broadcasting",
+    "short": "The rule that lets arrays of different shapes combine: align shapes at the right; each pair of sizes must be equal or one of them 1.",
+    "def": "The rule that lets arrays of different shapes combine: align shapes at the right; each pair of sizes must be equal or one of them 1."
+  },
+  "keepdims": {
+    "name": "keepdims",
+    "short": "A reduction option that keeps the reduced axis with size 1 so the result still broadcasts against the input.",
+    "def": "A reduction option that keeps the reduced axis with size 1 so the result still broadcasts against the input."
+  },
+  "reduction": {
+    "name": "Reduction",
+    "short": "An operation such as sum, mean or max that removes one or more axes by combining values along them.",
+    "def": "An operation such as sum, mean or max that removes one or more axes by combining values along them."
+  },
+  "einsum": {
+    "name": "einsum",
+    "short": "Einstein-summation notation: a string names each operand's axes with letters; letters missing from the output are summed over.",
+    "def": "Einstein-summation notation: a string names each operand's axes with letters; letters missing from the output are summed over."
+  },
+  "tensor": {
+    "name": "Tensor",
+    "short": "PyTorch's n-dimensional array, with a dtype, a device, and optional autograd tracking.",
+    "def": "PyTorch's n-dimensional array, with a dtype, a device, and optional autograd tracking."
+  },
+  "device": {
+    "name": "Device",
+    "short": "Where a tensor lives: cpu, or an accelerator such as cuda.",
+    "def": "Where a tensor lives: cpu, or an accelerator such as cuda. Operations need their operands on the same device."
+  },
+  "in-place": {
+    "name": "In-place operation",
+    "short": "A PyTorch method with a trailing underscore, such as add_, that modifies its tensor's storage instead of returning a new one.",
+    "def": "A PyTorch method with a trailing underscore, such as add_, that modifies its tensor's storage instead of returning a new one."
+  },
+  "autograd": {
+    "name": "Autograd",
+    "short": "PyTorch's mechanism for recording operations on tensors that require gradients and computing derivatives with backward().",
+    "def": "PyTorch's mechanism for recording operations on tensors that require gradients and computing derivatives with backward()."
+  },
+  "gradient": {
+    "name": "Gradient",
+    "short": "For a scalar loss, the vector of partial derivatives with respect to each parameter: how much the loss changes per small change in that parameter.",
+    "def": "For a scalar loss, the vector of partial derivatives with respect to each parameter: how much the loss changes per small change in that parameter."
+  },
+  "requires-grad": {
+    "name": "requires_grad",
+    "short": "A tensor flag that asks autograd to record operations on it.",
+    "def": "A tensor flag that asks autograd to record operations on it. Model parameters have it on; cached activations should not."
+  },
+  "no-grad": {
+    "name": "no_grad",
+    "short": "A context manager under which operations are not recorded by autograd.",
+    "def": "A context manager under which operations are not recorded by autograd. Use it for every forward pass whose gradients you will not need."
+  },
+  "detach": {
+    "name": "detach",
+    "short": "Return a tensor sharing data with the original but cut off from the autograd graph.",
+    "def": "Return a tensor sharing data with the original but cut off from the autograd graph."
+  },
+  "module": {
+    "name": "nn.Module",
+    "short": "PyTorch's base class for models and layers: a tree of submodules with named parameters and a forward method.",
+    "def": "PyTorch's base class for models and layers: a tree of submodules with named parameters and a forward method."
+  },
+  "parameter": {
+    "name": "Parameter",
+    "short": "A tensor registered on a module so that it appears in parameters() and state_dict() and is trained.",
+    "def": "A tensor registered on a module so that it appears in parameters() and state_dict() and is trained."
+  },
+  "state-dict": {
+    "name": "state_dict",
+    "short": "A dictionary from parameter and buffer names to tensors: the whole learned state of a module, used to save and load weights.",
+    "def": "A dictionary from parameter and buffer names to tensors: the whole learned state of a module, used to save and load weights."
+  },
+  "tokenizer": {
+    "name": "Tokenizer",
+    "short": "Maps text to a sequence of integer token ids and back.",
+    "def": "Maps text to a sequence of integer token ids and back. GPT-2's byte-pair tokenizer attaches the leading space to the following word."
+  },
+  "logits": {
+    "name": "Logits",
+    "short": "Unnormalised scores for each vocabulary item at each position, shape (batch, seq, vocab).",
+    "def": "Unnormalised scores for each vocabulary item at each position, shape (batch, seq, vocab). A softmax over the last axis turns them into probabilities."
+  },
+  "residual-stream": {
+    "name": "Residual stream",
+    "short": "The (batch, seq, d_model) tensor that each transformer block reads from and adds to.",
+    "def": "The (batch, seq, d_model) tensor that each transformer block reads from and adds to. GPT-2 small's d_model is 768."
+  },
+  "hidden-states": {
+    "name": "hidden_states",
+    "short": "The transformers tuple returned by output_hidden_states=True: the embedding output plus one tensor per layer; 13 for GPT-2 small, and the last has the final LayerNorm applied.",
+    "def": "The transformers tuple returned by output_hidden_states=True: the embedding output plus one tensor per layer; 13 for GPT-2 small, and the last has the final LayerNorm applied."
+  },
+  "forward-hook": {
+    "name": "Forward hook",
+    "short": "A function registered on a module that runs after its forward() with (module, args, output).",
+    "def": "A function registered on a module that runs after its forward() with (module, args, output). It returns a handle you must remove."
+  },
+  "activation-cache": {
+    "name": "Activation cache",
+    "short": "A dictionary from a name such as blocks.5.hook_resid_post to the tensor captured at that point of the forward pass.",
+    "def": "A dictionary from a name such as blocks.5.hook_resid_post to the tensor captured at that point of the forward pass."
+  },
+  "attention-mask": {
+    "name": "Attention mask",
+    "short": "A (batch, seq) tensor of ones and zeros marking real tokens versus padding when prompts of different lengths share a batch.",
+    "def": "A (batch, seq) tensor of ones and zeros marking real tokens versus padding when prompts of different lengths share a batch."
+  },
+  "seed": {
+    "name": "Seed",
+    "short": "The starting state of a pseudo-random generator.",
+    "def": "The starting state of a pseudo-random generator. The same seed and code give the same draws on the same software and hardware."
+  },
+  "safetensors": {
+    "name": "safetensors",
+    "short": "A file format for tensors that stores raw bytes with a JSON header, loads without executing code, and is the Hugging Face default.",
+    "def": "A file format for tensors that stores raw bytes with a JSON header, loads without executing code, and is the Hugging Face default."
+  },
+  "manifest": {
+    "name": "Run manifest",
+    "short": "A small JSON record of what produced an artifact: model, prompts, seed, versions, and each tensor's shape, dtype and checksum.",
+    "def": "A small JSON record of what produced an artifact: model, prompts, seed, versions, and each tensor's shape, dtype and checksum."
+  },
+  "eval-pipeline": {
+    "name": "Eval pipeline",
+    "short": "The three practice functions in labs/eval_pipeline.py: score a prediction, load validated cases, and summarise a run without losing failures.",
+    "def": "The three practice functions in labs/eval_pipeline.py: score a prediction, load validated cases, and summarise a run without losing failures."
+  },
+  "spec-first": {
+    "name": "Spec first",
+    "short": "Writing the test that states the required behaviour before the implementation, then making it pass.",
+    "def": "Writing the test that states the required behaviour before the implementation, then making it pass."
+  }
+}

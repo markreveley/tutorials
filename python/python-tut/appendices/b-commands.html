@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command and lab reference · Python for Model Internals</title><meta name="description" content="Every script and test in the course, in the order you meet them, with the one line that runs each.">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<a class="skip-link" href="#main">Skip to content</a><div class="layout"><aside class="sidebar" data-nav aria-label="Course navigation"><p class="site-title"><a href="../index.html">Python for Model Internals</a></p><p class="site-sub">from syntax to shapes to cached activations</p><div class="nav-module"><span class="mod-label">Start here</span><a href="../index.html"> Course home</a></div><div class="nav-module"><span class="mod-label">0 · Orientation and setup</span><a href="../pages/00-orientation.html">00 What this course makes you able to do</a><a href="../pages/01-lab-setup.html">01 Lab setup: a CPU-only toolchain you can trust</a></div><div class="nav-module"><span class="mod-label">1 · Python for someone who writes Elixir and Rust</span><a href="../pages/02-names-and-objects.html">02 Names bind to objects; mutation is visible through every name</a><a href="../pages/03-records-and-errors.html">03 Dicts, lists, JSON and JSONL, and exceptions as the error channel</a><a href="../pages/04-spec-first-testing.html">04 Spec-first testing with unittest: the three eval-pipeline labs</a><a href="../pages/05-functions-generators-dataclasses.html">05 Functions, generators, dataclasses, and type hints as documentation</a></div><div class="nav-module"><span class="mod-label">2 · Arrays and tensors</span><a href="../pages/06-arrays-and-shapes.html">06 NumPy arrays: shape, dtype, indexing, slicing, views</a><a href="../pages/07-broadcasting.html">07 Broadcasting rules, with a shape-prediction drill</a><a href="../pages/08-reductions-and-einsum.html">08 Reductions, axes, and einsum read aloud</a><a href="../pages/09-torch-tensors.html">09 torch tensors: dtype, device, views versus copies, in-place ops, no_grad</a><a href="../pages/10-autograd.html">10 Autograd: what a gradient is operationally, backward(), and a tiny fit</a></div><div class="nav-module"><span class="mod-label">3 · Models as objects</span><a href="../pages/11-modules-and-state.html">11 nn.Module, parameters, state_dict, and reading a module tree</a><a href="../pages/12-gpt2-forward.html">12 Loading GPT-2 small: tokenizer, input ids, logits, next token, hidden states</a><a href="../pages/13-forward-hooks.html">13 Forward hooks: registering, capturing, and caching activations with shapes asserted</a><a href="../pages/14-three-toolkits.html">14 The same activation in transformers, TransformerLens 4, and nnsight</a><a href="../pages/15-reproducibility-and-artifacts.html">15 Reproducibility and artifacts: seeds, safetensors, a run manifest, memory and batching on CPU</a></div><div class="nav-module"><span class="mod-label">4 · Readiness</span><a href="../pages/16-readiness-review.html">16 Readiness review: cache the residual stream and prove it</a></div><div class="nav-module"><span class="mod-label">Reference and practice</span><a href="../appendices/a-shapes.html">A Shape reference</a><a href="../appendices/b-commands.html" class="current" aria-current="page">B Command and lab reference</a><a href="../glossary.html"> Glossary</a><a href="../bibliography.html"> Annotated bibliography</a></div></aside>
+<div class="content"><main class="page" id="main"><p class="kicker">Appendix B</p><h1>Command and lab reference</h1><p class="lede">Every script and test in the course, in the order you meet them, with the one line that runs each.</p>
+<h2 id="scripts">Example scripts</h2>
+<p>All run from the course directory, <code>tutorials/python/python-tut</code>. Scripts that load GPT-2 set <code>HF_HUB_OFFLINE=1</code> themselves; run once online first to populate the cache.</p>
+<table><tr><th>Lesson</th><th>Command</th><th>Shows</th></tr>
+<tr><td>00, 01</td><td><code>python3 labs/examples/check_setup.py</code></td><td>versions and a (2, 5, 768) tensor</td></tr>
+<tr><td>02</td><td><code>python3 labs/examples/names_and_objects.py</code></td><td>aliasing, copies, mutable defaults</td></tr>
+<tr><td>03</td><td><code>python3 labs/examples/records_and_errors.py</code></td><td>JSON traps, JSONL line numbers, exceptions</td></tr>
+<tr><td>05</td><td><code>python3 labs/examples/generators_and_dataclasses.py</code></td><td>lazy iteration, frozen records, hints</td></tr>
+<tr><td>06</td><td><code>python3 labs/examples/arrays.py</code></td><td>shape, dtype, indexing, views</td></tr>
+<tr><td>07</td><td><code>python3 labs/examples/broadcast_drill.py</code></td><td>ten shape pairs and keepdims</td></tr>
+<tr><td>08</td><td><code>python3 labs/examples/reductions_einsum.py</code></td><td>axis reductions and einsum strings</td></tr>
+<tr><td>09</td><td><code>python3 labs/examples/tensors.py</code></td><td>dtype enforcement, views, in-place, no_grad</td></tr>
+<tr><td>10</td><td><code>python3 labs/examples/autograd_fit.py</code></td><td>gradients, a fit, accumulation</td></tr>
+<tr><td>11</td><td><code>python3 labs/examples/module_tree.py</code></td><td>a tiny MLP and GPT-2's tree</td></tr>
+<tr><td>12</td><td><code>python3 labs/examples/gpt2_next_token.py</code></td><td>ids, logits, top tokens, hidden states, padding</td></tr>
+<tr><td>13</td><td><code>python3 labs/examples/hooks_cache.py</code></td><td>twelve hooks, asserts, save, a leaked hook</td></tr>
+<tr><td>14</td><td><code>python3 labs/examples/three_tools.py</code></td><td>one activation three ways</td></tr>
+<tr><td>15</td><td><code>python3 labs/examples/reproducibility.py</code></td><td>seeds, memory, safetensors, manifest</td></tr></table>
+<h2 id="labs">Labs: stubs and their tests</h2>
+<table><tr><th>Stub</th><th>Test</th><th>Needs</th><th>Lessons</th></tr>
+<tr><td><code>labs/eval_pipeline.py</code></td><td><code>dag-tests/test_python_evals.py</code> (from the repository root)</td><td>standard library</td><td>03, 04</td></tr>
+<tr><td><code>labs/shapes.py</code></td><td><code>labs/test_shapes.py</code></td><td>numpy</td><td>07, 08</td></tr>
+<tr><td><code>labs/hooks.py</code></td><td><code>labs/test_hooks.py</code></td><td>torch, transformers, cached gpt2 (skips otherwise)</td><td>13</td></tr>
+<tr><td><code>labs/manifest.py</code></td><td><code>labs/test_manifest.py</code></td><td>numpy</td><td>15</td></tr>
+<tr><td>(none)</td><td><code>labs/test_environment.py</code></td><td>passes as shipped; skips what is missing</td><td>01</td></tr></table>
+<pre class="term" data-status="verified"><code><span class="prompt">$ </span>python3 -m unittest discover -s labs -p &#x27;test_*.py&#x27; 2&gt;&amp;1 | tail -1
+FAILED (errors=95)</code></pre><span class="termnote">The shipped state: red until you implement the stubs. The environment tests are the ones already passing.</span>
+<p>Run one file with <code>-p 'test_shapes.py'</code>; see every test name with <code>-v</code>. The eval-pipeline tests run from the repository root: <code>python3 -m unittest discover -s dag-tests -p 'test_python_evals.py' -v</code>.</p>
+<h2 id="authoring">Authoring checks</h2>
+<p>For whoever maintains the course. The verifier runs every command on this site with the interpreter it is launched with, so launch it from the virtualenv.</p>
+<pre class="code" data-lang="sh"><code>python3 scripts/build.py                      # HTML from scripts/*.py
+python3 scripts/verify_commands.py            # run every shown command; write research/verify/
+python3 scripts/build.py                      # paste the recorded outputs into the pages
+python3 scripts/check_site.py                 # links, nesting, components, verified outputs
+python3 -m unittest discover -s labs -p &#x27;test_*.py&#x27; -v
+node --check assets/wiki.js</code></pre>
+<p>See <a href="../research/AUTHORING.md">the authoring guide</a>.</p>
+<nav class="pagenav" aria-label="Previous and next page"><a class="prev" href="../appendices/a-shapes.html"><span class="dir">← Previous</span>Shape reference</a><a class="next" href="../glossary.html"><span class="dir">Next →</span>Glossary</a></nav></main></div></div>
+<script src="../assets/nav-data.js"></script><script src="../assets/glossary-data.js"></script><script src="../assets/wiki.js"></script></body></html>

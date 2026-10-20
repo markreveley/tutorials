@@ -110,7 +110,7 @@ with Python 3.13 and these versions, which the transcripts record:
 | transformers | 5.20.2 | |
 | transformer_lens | 4.2.0 | `HookedTransformer` was removed in 4.0. Use `TransformerBridge.boot_transformers("gpt2")` then `enable_compatibility_mode()`; cache keys such as `blocks.5.hook_resid_post` still work |
 | nnsight | 0.8.1 | A `trace` block must run from a file or notebook cell, not from stdin |
-| numpy | 2.5.3 | |
+| numpy | 2.5.4 | (system Python has 2.5.3; transcripts record the venv) |
 
 Models cached and verified: `gpt2` (124M) via transformers, TransformerLens,
 and nnsight; InceptionV1 as `torchvision.models.googlenet` with

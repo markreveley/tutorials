@@ -1,0 +1,146 @@
+{
+ "python3 labs/examples/check_setup.py": {
+  "stdout": "python 3.13.16\nnumpy 2.5.4\ntorch 2.14.1+cpu | cuda available: False\ntransformers 5.20.2\na batch of 2 prompts, 5 tokens each, 768 numbers per token: (2, 5, 768)\nx.shape[0] is the batch: 2 | x.shape[-1] is d_model: 768\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 36.9
+ },
+ "python3 -m unittest discover -s labs -p 'test_environment.py' -v": {
+  "stdout": "",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 58.3
+ },
+ "python3 labs/examples/names_and_objects.py": {
+  "stdout": "scores after appending through `same`: [0.5, 0.7, 0.9]\nscores is same: True | id equal: True\nscores after appending to the copy:   [0.5, 0.7, 0.9]\nfresh: [0.5, 0.7, 0.9, 1.0] | scores is fresh: False\nshallow copy shares the inner list: ['a', 'b', 'c']\ndeep copy does not:                ['a', 'b', 'c']\ntuples are immutable; t + (3,) makes a new object: (1, 2, 3) | t unchanged: (1, 2)\nfirst call: ['pass']\nsecond call reuses the same default list: ['pass', 'fail']\nsafe version, two calls: ['pass'] ['fail']\na, b after b += 1: 1000000 1000001\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.0
+ },
+ "python3 labs/examples/records_and_errors.py": {
+  "stdout": "json.dumps: {\"id\": \"t-1\", \"input\": \"Refund order A-42\", \"reference\": {\"category\": \"refund\", \"urgent\": true, \"order_id\": null}}\nround trip equal: True | True became bool | None became None\nkey order is irrelevant to ==: True\nbut 1 == True in Python: True <- the trap score_ticket must avoid\ntype check catches it: False True\nduplicate keys: json.loads keeps the last one -> {'x': 2}\nwith object_pairs_hook: duplicate key 'x'\nline 1: {'id': 'a'}\nline 3: {'id': 'b'}\nline 4: invalid JSON (Expecting property name enclosed in double quotes at column 2)\nFileNotFoundError is a different error from bad data: No such file or directory\nValueError: invalid literal for int() with base 10: 'not a number'\nfinally always runs: remove hooks here\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.0
+ },
+ "python3 -m unittest discover -s dag-tests -p 'test_python_evals.py' 2>&1 | tail -3": {
+  "stdout": "Ran 22 tests in 0.083s\n\nFAILED (errors=65)\n",
+  "exit": 0,
+  "cwd": "../..",
+  "seconds": 0.3
+ },
+ "python3 -m unittest discover -s labs -p 'test_shapes.py' 2>&1 | tail -3": {
+  "stdout": "Ran 20 tests in 0.081s\n\nFAILED (errors=71)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.3
+ },
+ "python3 labs/examples/generators_and_dataclasses.py": {
+  "stdout": "a generator object, nothing read yet: generator\nfirst record on demand: (1, {'id': 't-0'})\nthe rest: ['t-1', 't-2', 't-3', 't-4']\nexhausted; list() of it now: [(1, {'id': 't-0'}), (2, {'id': 't-1'})]\ngenerator expression: [0, 1, 4, 9]\nsum without a list in memory: 333332833333500000\nResult(case_id='t-1', status='scored', passed=True, error=None)\nequality by fields: True\nfrozen: cannot assign to field 'passed'\ndefault_factory gives each instance its own list: ['x'] []\naccuracy(3, 4) = 0.75 | accuracy(0, 0) = None\nhints are not enforced: accuracy('3', '4') raises TypeError only because '/' does -> unsupported operand type(s) for /: 'str' and 'str'\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.1
+ },
+ "python3 labs/examples/arrays.py": {
+  "stdout": "[[ 0  1  2  3]\n [ 4  5  6  7]\n [ 8  9 10 11]]\nshape (3, 4) | ndim 2 | dtype int64 | size 12\na[1, 2] = 6 | a[1] row: [4 5 6 7] shape (4,)\na[:, 2] column: [ 2  6 10] shape (3,)\na[1:, ::2] shape (2, 2)\na[-1, -1] = 11\nwriting through the view changed a[0, 0]: 99\nwriting to a copy did not touch a; a[0, 0] is still 99\nfloat division of ints gives float64: float64\nfloat32 stays float32 under +1.0: float32 | promotes with float64 array: float64\ninteger overflow is silent in int8: [-126]\nboolean mask shape (3, 4) | selected values: [99  6  7  8  9 10 11]\na[[0, 2]] picks rows 0 and 2 -> shape (2, 4)\na[None].shape (new leading axis): (1, 3, 4) | a[:, None].shape: (3, 1, 4)\na.reshape(-1).shape: (12,) | a.T.shape: (4, 3) | contiguous? False\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.1
+ },
+ "python3 labs/examples/broadcast_drill.py": {
+  "stdout": "          (4, 3) + (3,)         -> (4, 3)\n          (4, 3) + (4, 1)       -> (4, 3)\n          (4, 3) + (4,)         -> ValueError: operands could not be broadcast together\n       (2, 1, 5) + (3, 1)       -> (2, 3, 5)\n    (8, 1, 6, 1) + (7, 1, 5)    -> (8, 7, 6, 5)\n        (5, 768) + (768,)       -> (5, 768)\n     (2, 5, 768) + (2, 1, 768)  -> (2, 5, 768)\n     (2, 5, 768) + (5,)         -> ValueError: operands could not be broadcast together\n      (12, 5, 5) + (5, 5)       -> (12, 5, 5)\n            (1,) + (3, 4)       -> (3, 4)\n\nmean over d without keepdims: (2, 3)\nacts - mean fails: operands could not be broadcast together\nwith keepdims: (2, 3, 1) -> (acts - mean_k).shape = (2, 3, 4)\nexplicit alternative mean[..., None]: (2, 3, 1)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.2
+ },
+ "python3 -m unittest discover -s labs -p 'test_shapes.py' -v 2>&1 | grep -c 'ERROR'": {
+  "stdout": "142\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.3
+ },
+ "python3 labs/examples/reductions_einsum.py": {
+  "stdout": "acts.sum()           -> 276.0 (a scalar: every axis reduced)\nacts.sum(axis=0)     -> (3, 4) (batch gone)\nacts.mean(axis=1)    -> (2, 4) (seq gone)\nacts.max(axis=-1)    -> (2, 3) (d gone)\nacts.argmax(axis=-1) -> (2, 3) indices into d\nacts.mean(axis=(0, 1)) -> (4,) (one vector per feature)\nnp.linalg.norm(acts, axis=-1) -> (2, 3)\n\neinsum 'sd,d->s'  : (5,) == x @ d: True\neinsum 'sd,td->st': (5, 7) == x @ y.T: True\neinsum 'bhqd,bhkd->bhqk': (2, 12, 5, 5) (batch, heads, query pos, key pos)\neinsum 'ii->i' diagonal: [5. 5. 5.]\neinsum 'ij->ji' transpose: (3, 2)\neinsum 'bsd->bd' sums over seq: (2, 4) == acts.sum(axis=1): True\nbatched matmul 'bsd,de->bse': (2, 5, 3072)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.3
+ },
+ "python3 -m unittest discover -s labs -p 'test_shapes.py' 2>&1 | tail -1": {
+  "stdout": "FAILED (errors=71)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.3
+ },
+ "python3 labs/examples/tensors.py": {
+  "stdout": "torch.Size([3, 4]) torch.int64 cpu | torch.Size is a tuple subclass: True\ndefault float dtype: torch.float32 | float16 after .half(): torch.float16 | .to(torch.float64): torch.float64\ndtype mismatch is an error, not a promotion: dot : expected both vectors to have same dtype, but found Float and Double\nview shares storage; a[0, 0] is now 7.0 | same storage: True\ntranspose is a view; contiguous? False\n.view on a non-contiguous tensor fails; use .reshape or .contiguous() torch.Size([6])\nin-place add_ changed b: tensor([2., 2., 2.])\nthrough an alias too: tensor([4., 4., 4.])\ntorch.from_numpy shares memory: n[0] = 5.0 | .numpy() back: float64\ny.requires_grad: True | grad_fn: SumBackward0\nunder no_grad: False | grad_fn: None\ndetach() shares data but leaves the graph: False True\nw.numpy() with requires_grad fails: Can't call numpy() on Tensor that requires grad. Use tenso\nw.detach().numpy() works: [1. 1. 1.]\none element to Python: 3.5 | tolist: [0, 1, 2]\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 3.5
+ },
+ "python3 labs/examples/autograd_fit.py": {
+  "stdout": "at w=0, b=0: loss 7.061, dloss/dw -3.028, dloss/db -5.005\nnegative gradient says: increase w and b\n(loss(w+eps) - loss(w)) / eps = -3.028  (close to dloss/dw)\nstep   0  loss 7.0606  w 1.514  b 2.502\nstep  50  loss 0.0031  w 2.976  b 1.016\nstep 100  loss 0.0028  w 3.027  b 0.989\nstep 150  loss 0.0028  w 3.029  b 0.988\nstep 200  loss 0.0028  w 3.029  b 0.988\nfit: y = 3.03 x + 0.99   (true 3.00 x + 1.00)\ntwo backward() calls without clearing: grad = tensor([4., 4., 4.]) (accumulated, not replaced)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 1.6
+ },
+ "python3 labs/examples/module_tree.py": {
+  "stdout": "TinyMLP(\n  (up): Linear(in_features=8, out_features=32, bias=True)\n  (act): GELU(approximate='none')\n  (down): Linear(in_features=32, out_features=8, bias=True)\n)\n  up.weight    (32, 8)  requires_grad=True\n  up.bias      (32,)  requires_grad=True\n  down.weight  (8, 32)  requires_grad=True\n  down.bias    (8,)  requires_grad=True\nstate_dict keys: ['up.weight', 'up.bias', 'down.weight', 'down.bias']\nparameter count: 552\nTinyMLP keeps the shape: (2, 5, 8)\nnn.Linear(8, 32).weight is stored as (out, in): (32, 8)\n\ntop-level children: ['transformer', 'lm_head']\ntransformer children: ['wte', 'wpe', 'drop', 'h', 'ln_f']\none block: ['ln_1', 'attn', 'ln_2', 'mlp']\nblocks: 12 | parameters: 124439808\n  transformer.wte.weight               (50257, 768)\n  transformer.wpe.weight               (1024, 768)\n  transformer.h.0.ln_1.weight          (768,)\n  transformer.h.0.ln_1.bias            (768,)\n  transformer.h.0.attn.c_attn.weight   (768, 2304)\n  transformer.h.0.attn.c_attn.bias     (2304,)\nlm_head.weight is wte.weight (tied): True\nstate_dict entries: 149 | model.training: False\nget_submodule('transformer.h.5.mlp'): GPT2MLP\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 6.9
+ },
+ "python3 labs/examples/gpt2_next_token.py": {
+  "stdout": "input_ids: [[464, 3139, 286, 4881, 318]] shape (1, 5)\ntokens:    ['The', 'Ġcapital', 'Ġof', 'ĠFrance', 'Ġis']\nnote the leading space is part of the token (Ġ shows it)\nlogits: (1, 5, 50257) = (batch, seq, vocab)\n  0.085  ' the'\n  0.048  ' now'\n  0.046  ' a'\n  0.032  ' France'\n  0.032  ' Paris'\nhidden_states: 13 tensors, each (1, 5, 768)\nhidden_states[0] is the embedding output; [12] has the final LayerNorm applied\nhidden_states[6] is the residual stream after block 5 (zero-indexed)\nnorm of the last position across layers: [4.9, 56.5, 55.2, 57.9, 64.3, 72.0, 73.4, 85.4, 99.6, 127.2, 165.6, 289.9, 255.4]\ntokenizer.pad_token before: None\nbatched input_ids:\n tensor([[  464,  3139,   286,  4881,   318],\n        [15496, 50256, 50256, 50256, 50256]])\nattention_mask:\n tensor([[1, 1, 1, 1, 1],\n        [1, 0, 0, 0, 0]])\nbatched hidden_states[6]: (2, 5, 768)\nprompt 0 unchanged by batching: True\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 5.7
+ },
+ "python3 labs/examples/hooks_cache.py": {
+  "stdout": "hooks registered: 12 | handle type: RemovableHandle\ncaptured: ['block.0', 'block.1', 'block.2'] ... block.11\nevery block output has shape (1, 5, 768)\nblock.5 equals hidden_states[6]: True\nblock.11 equals hidden_states[12]: False (ln_f applied to [12])\nsaved and reloaded: 12 tensors, 188 kB, block.5 identical: True\nforgot h.remove(): a second forward still fires the hook -> True\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 6.3
+ },
+ "python3 -m unittest discover -s labs -p 'test_hooks.py' 2>&1 | tail -1": {
+  "stdout": "FAILED (errors=14)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 5.4
+ },
+ "python3 labs/examples/three_tools.py": {
+  "stdout": "transformers hook  blocks[5] output: (1, 5, 768)\nTransformerLens      blocks.5.hook_resid_post: (1, 5, 768) | cache entries: 493\n  without compatibility mode, max |diff| vs transformers: 1.9e-05\n  with compatibility mode,    max |diff| vs transformers: 4.64\n  ... but vs transformers centered over d_model:   4.9e-04\n  logits argmax agrees: True | logits equal: False (unembed is centered too)\n  prepend_bos default adds a token: shape with default is (1, 6, 768)\nnnsight            transformer.h[5].output: (1, 5, 768) | max |diff| vs transformers: 0.0e+00 | logits equal: True\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 21.7
+ },
+ "python3 labs/examples/name_map_check.py": {
+  "stdout": "nnsight attn.output is a tuple of ['Tensor', 'NoneType'] ; [0] has shape (1, 5, 768)\ntransformer.drop.output            vs blocks.0.hook_resid_pre      shape (1, 5, 768)  max |diff| 0.0e+00\ntransformer.h[5].attn.output[0]    vs blocks.5.hook_attn_out       shape (1, 5, 768)  max |diff| 8.2e-06\ntransformer.h[5].ln_2.input        vs blocks.5.hook_resid_mid      shape (1, 5, 768)  max |diff| 2.7e-05\ntransformer.h[5].mlp.output        vs blocks.5.hook_mlp_out        shape (1, 5, 768)  max |diff| 2.4e-05\ntransformer.ln_f.output            vs ln_final.hook_normalized     shape (1, 5, 768)  max |diff| 2.1e+02\nblocks.5.attn.hook_pattern shape: (1, 12, 5, 5) (batch, heads, query, key)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 11.1
+ },
+ "python3 labs/examples/reproducibility.py": {
+  "stdout": "same seed, same draw: True [1.5409960746765137, -0.293428897857666, -2.1787893772125244]\nnumpy has its own generator: [0.126, -0.132]\nstacked hidden states: (13, 2, 5, 768) | 0.40 MB in float32\na 1024-token prompt would need 41 MB for the same stack; a batch of 32 of them 1.3 GB\nrepeat forward pass identical: True\nsafetensors round trip: 13 tensors, 0.40 MB, block.5 equal: True\nmanifest keys: ['attention_mask', 'model', 'prompts', 'seed', 'tensors', 'versions'] | block.5 entry: {'shape': [2, 5, 768], 'dtype': 'float32', 'sha256': 'b5d58813c4d9d650...'}\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 8.1
+ },
+ "python3 -m unittest discover -s labs -p 'test_manifest.py' 2>&1 | tail -1": {
+  "stdout": "FAILED (errors=10)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 0.3
+ },
+ "python3 -m unittest discover -s labs -p 'test_*.py' 2>&1 | tail -1": {
+  "stdout": "FAILED (errors=95)\n",
+  "exit": 0,
+  "cwd": "course",
+  "seconds": 7.7
+ },
+ "python3 -m unittest discover -s dag-tests -p 'test_python_evals.py' 2>&1 | tail -1": {
+  "stdout": "FAILED (errors=65)\n",
+  "exit": 0,
+  "cwd": "../..",
+  "seconds": 0.2
+ }
+}

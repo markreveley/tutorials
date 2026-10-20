@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>nn.Module, parameters, state_dict, and reading a module tree · Python for Model Internals</title><meta name="description" content="A model is a tree of modules, each with named parameters and a forward method. Learn to read the tree and the rest of the toolkit becomes navigation.">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<a class="skip-link" href="#main">Skip to content</a><div class="layout"><aside class="sidebar" data-nav aria-label="Course navigation"><p class="site-title"><a href="../index.html">Python for Model Internals</a></p><p class="site-sub">from syntax to shapes to cached activations</p><div class="nav-module"><span class="mod-label">Start here</span><a href="../index.html"> Course home</a></div><div class="nav-module"><span class="mod-label">0 · Orientation and setup</span><a href="../pages/00-orientation.html">00 What this course makes you able to do</a><a href="../pages/01-lab-setup.html">01 Lab setup: a CPU-only toolchain you can trust</a></div><div class="nav-module"><span class="mod-label">1 · Python for someone who writes Elixir and Rust</span><a href="../pages/02-names-and-objects.html">02 Names bind to objects; mutation is visible through every name</a><a href="../pages/03-records-and-errors.html">03 Dicts, lists, JSON and JSONL, and exceptions as the error channel</a><a href="../pages/04-spec-first-testing.html">04 Spec-first testing with unittest: the three eval-pipeline labs</a><a href="../pages/05-functions-generators-dataclasses.html">05 Functions, generators, dataclasses, and type hints as documentation</a></div><div class="nav-module"><span class="mod-label">2 · Arrays and tensors</span><a href="../pages/06-arrays-and-shapes.html">06 NumPy arrays: shape, dtype, indexing, slicing, views</a><a href="../pages/07-broadcasting.html">07 Broadcasting rules, with a shape-prediction drill</a><a href="../pages/08-reductions-and-einsum.html">08 Reductions, axes, and einsum read aloud</a><a href="../pages/09-torch-tensors.html">09 torch tensors: dtype, device, views versus copies, in-place ops, no_grad</a><a href="../pages/10-autograd.html">10 Autograd: what a gradient is operationally, backward(), and a tiny fit</a></div><div class="nav-module"><span class="mod-label">3 · Models as objects</span><a href="../pages/11-modules-and-state.html" class="current" aria-current="page">11 nn.Module, parameters, state_dict, and reading a module tree</a><a href="../pages/12-gpt2-forward.html">12 Loading GPT-2 small: tokenizer, input ids, logits, next token, hidden states</a><a href="../pages/13-forward-hooks.html">13 Forward hooks: registering, capturing, and caching activations with shapes asserted</a><a href="../pages/14-three-toolkits.html">14 The same activation in transformers, TransformerLens 4, and nnsight</a><a href="../pages/15-reproducibility-and-artifacts.html">15 Reproducibility and artifacts: seeds, safetensors, a run manifest, memory and batching on CPU</a></div><div class="nav-module"><span class="mod-label">4 · Readiness</span><a href="../pages/16-readiness-review.html">16 Readiness review: cache the residual stream and prove it</a></div><div class="nav-module"><span class="mod-label">Reference and practice</span><a href="../appendices/a-shapes.html">A Shape reference</a><a href="../appendices/b-commands.html">B Command and lab reference</a><a href="../glossary.html"> Glossary</a><a href="../bibliography.html"> Annotated bibliography</a></div></aside>
+<div class="content"><main class="page" id="main"><p class="kicker">Module 3 · Models as objects</p><h1>nn.Module, parameters, state_dict, and reading a module tree</h1><p class="lede">A model is a tree of modules, each with named parameters and a forward method. Learn to read the tree and the rest of the toolkit becomes navigation.</p>
+<h2 id="what-a-module-is">What a module is</h2>
+<p><code>nn.Module</code> is a class with three jobs: it owns parameters, it owns child modules, and it defines <code>forward</code>. Assigning an <code>nn.Linear</code> to <code>self.up</code> inside <code>__init__</code> registers it as a child; the parent then finds the child's parameters through <code>parameters()</code>, saves them through <code>state_dict()</code>, and moves them with <code>.to(device)</code>. Calling the module, <code>mlp(x)</code>, runs <code>forward</code> plus the bookkeeping that fires hooks, which is why you call the module and never <code>forward</code> directly.</p>
+<pre class="term" data-status="verified"><code><span class="prompt">$ </span>python3 labs/examples/module_tree.py
+TinyMLP(
+  (up): Linear(in_features=8, out_features=32, bias=True)
+  (act): GELU(approximate=&#x27;none&#x27;)
+  (down): Linear(in_features=32, out_features=8, bias=True)
+)
+  up.weight    (32, 8)  requires_grad=True
+  up.bias      (32,)  requires_grad=True
+  down.weight  (8, 32)  requires_grad=True
+  down.bias    (8,)  requires_grad=True
+state_dict keys: [&#x27;up.weight&#x27;, &#x27;up.bias&#x27;, &#x27;down.weight&#x27;, &#x27;down.bias&#x27;]
+parameter count: 552
+TinyMLP keeps the shape: (2, 5, 8)
+nn.Linear(8, 32).weight is stored as (out, in): (32, 8)
+
+top-level children: [&#x27;transformer&#x27;, &#x27;lm_head&#x27;]
+transformer children: [&#x27;wte&#x27;, &#x27;wpe&#x27;, &#x27;drop&#x27;, &#x27;h&#x27;, &#x27;ln_f&#x27;]
+one block: [&#x27;ln_1&#x27;, &#x27;attn&#x27;, &#x27;ln_2&#x27;, &#x27;mlp&#x27;]
+blocks: 12 | parameters: 124439808
+  transformer.wte.weight               (50257, 768)
+  transformer.wpe.weight               (1024, 768)
+  transformer.h.0.ln_1.weight          (768,)
+  transformer.h.0.ln_1.bias            (768,)
+  transformer.h.0.attn.c_attn.weight   (768, 2304)
+  transformer.h.0.attn.c_attn.bias     (2304,)
+lm_head.weight is wte.weight (tied): True
+state_dict entries: 149 | model.training: False
+get_submodule(&#x27;transformer.h.5.mlp&#x27;): GPT2MLP</code></pre>
+<h2 id="tiny-mlp">Read the tiny MLP</h2>
+<p>Printing a module prints its tree, with each leaf's constructor arguments. <code>named_parameters()</code> yields <code>(name, Parameter)</code> pairs <a class="cite" href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.Module.html" title="PyTorch reference: torch.nn.Module (register_forward_hook, state_dict, named_parameters)">[PyTorch: nn.Module]</a>, and the names are dotted paths through the tree: <code>up.weight</code>, <code>down.bias</code>. The shapes carry a convention worth memorising: <code>nn.Linear(8, 32).weight</code> is <code>(32, 8)</code>, stored as <code>(out_features, in_features)</code>, so the forward computes <code>x @ W.T + b</code>. GPT-2's <code>Conv1D</code> layers below use the opposite convention, <code>(in, out)</code>, which is a historical quirk you will meet when reading its weights in the transformer course.</p>
+<p><code>state_dict()</code> returns a dictionary from those same names to tensors, containing parameters and persistent buffers; the documentation notes it is a <a class="term" data-g="shallow-copy" href="../glossary.html#shallow-copy">shallow copy</a> holding references to the module's tensors <a class="cite" href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.Module.html" title="PyTorch reference: torch.nn.Module (register_forward_hook, state_dict, named_parameters)">[PyTorch: nn.Module]</a>, so editing a value in it edits the model. Saving a model is saving this dict; loading is <code>load_state_dict</code>. 552 parameters for the tiny MLP is <code>8·32 + 32 + 32·8 + 8</code>; count it once by hand so you trust <code>numel()</code>.</p>
+<h2 id="gpt2-tree">Read GPT-2 small's tree</h2>
+<p>The top level has two children: <code>transformer</code>, the stack, and <code>lm_head</code>, the unembedding. Inside <code>transformer</code>: <code>wte</code>, the token embedding of <a class="term" data-g="shape" href="../glossary.html#shape">shape</a> <code>(50257, 768)</code>; <code>wpe</code>, the position embedding, <code>(1024, 768)</code>, which is why the context limit is 1024; <code>drop</code>, a dropout that does nothing in eval mode but is a convenient place to hook the embedding output; <code>h</code>, a <code>ModuleList</code> of 12 <code>GPT2Block</code>s; and <code>ln_f</code>, the final LayerNorm. Each block is <code>ln_1</code>, <code>attn</code>, <code>ln_2</code>, <code>mlp</code>: normalise, attend, normalise, feed forward, with the residual additions in the block's <code>forward</code>.</p>
+<p>The <a class="term" data-g="parameter" href="../glossary.html#parameter">parameter</a> count, 124,439,808, is the "124M" in the model's name. The <code>lm_head.weight</code> shares storage with <code>wte.weight</code>: the same <code>data_ptr()</code>, as the output shows. Tied embeddings mean the <code>state_dict</code> has 149 entries while <code>named_parameters()</code> lists one <a class="term" data-g="tensor" href="../glossary.html#tensor">tensor</a> fewer by default, because it removes duplicates. <code>model.training</code> is <code>False</code> after <code>.eval()</code>; forgetting that call leaves dropout active and makes two forward passes disagree.</p>
+<p><code>get_submodule("transformer.h.5.mlp")</code> walks a dotted path to a module. That string is the address you give to a hook, and it is the same path that appears in <code>state_dict</code> keys with <code>.weight</code> appended. TransformerLens renames these addresses (<code>blocks.5.mlp</code>) and nnsight keeps them; lesson 14 has the table.</p>
+<h2 id="navigation">Navigating any model</h2>
+<p>Four calls answer most questions about an unfamiliar model. <code>print(model)</code> for the tree. <code>[n for n, _ in model.named_children()]</code> for one level. <code>{n: tuple(p.shape) for n, p in model.named_parameters()}</code> for every shape. <code>model.config</code> for the hyperparameters a Hugging Face model was built from; <code>n_layer</code>, <code>n_embd</code> and <code>n_head</code> for GPT-2 are 12, 768 and 12 <a class="cite" href="https://huggingface.co/docs/transformers/model_doc/gpt2" title="Transformers documentation: GPT-2 (GPT2Config, GPT2LMHeadModel.forward)">[Transformers: GPT-2]</a>. The sum of parameter sizes should match the published count, and if it does not you have the wrong checkpoint.</p>
+<div class="evals"><span class="label">In eval and interpretability work</span><p>"Layer 5" is ambiguous until you say which module: <code>transformer.h.5</code> is the block, <code>transformer.h.5.mlp</code> its MLP, and <code>transformer.h.5.attn.c_proj</code> the attention output projection. Write the dotted path in your notes, not the number.</p></div>
+<div class="pitfall"><span class="label">Pitfall</span><p>Loading a model and not calling <code>.eval()</code>. Dropout stays on, activations change between runs, and a cache you compare against a later run differs by noise you then try to explain.</p></div><div class="exercise"><span class="label">Check your understanding</span><p>Someone says GPT-2 small has "about 85M non-embedding parameters". From the tree above, how would you check that in two lines?</p><details><summary>Reveal the reasoning</summary><p>Sum <code>p.numel()</code> over <code>named_parameters()</code> whose name does not start with <code>transformer.wte</code> or <code>transformer.wpe</code>. The embeddings are 50257·768 plus 1024·768, about 39.4M, so the remainder of 124.4M is about 85M. The check is a comprehension over names, which is why names matter.</p></details></div><div class="lab"><span class="label">Practice</span><p>Write a function <code>shapes_by_block(model, i)</code> that returns a dict of every parameter name under <code>transformer.h.i</code> to its shape, and call it for block 0. Then confirm that every block has identical shapes.</p><pre class="term" data-status="verified"><code><span class="prompt">$ </span>python3 labs/examples/module_tree.py
+TinyMLP(
+  (up): Linear(in_features=8, out_features=32, bias=True)
+  (act): GELU(approximate=&#x27;none&#x27;)
+  (down): Linear(in_features=32, out_features=8, bias=True)
+)
+  up.weight    (32, 8)  requires_grad=True
+  up.bias      (32,)  requires_grad=True
+  down.weight  (8, 32)  requires_grad=True
+  down.bias    (8,)  requires_grad=True
+state_dict keys: [&#x27;up.weight&#x27;, &#x27;up.bias&#x27;, &#x27;down.weight&#x27;, &#x27;down.bias&#x27;]
+parameter count: 552
+TinyMLP keeps the shape: (2, 5, 8)
+nn.Linear(8, 32).weight is stored as (out, in): (32, 8)
+
+top-level children: [&#x27;transformer&#x27;, &#x27;lm_head&#x27;]
+transformer children: [&#x27;wte&#x27;, &#x27;wpe&#x27;, &#x27;drop&#x27;, &#x27;h&#x27;, &#x27;ln_f&#x27;]
+one block: [&#x27;ln_1&#x27;, &#x27;attn&#x27;, &#x27;ln_2&#x27;, &#x27;mlp&#x27;]
+blocks: 12 | parameters: 124439808
+  transformer.wte.weight               (50257, 768)
+  transformer.wpe.weight               (1024, 768)
+  transformer.h.0.ln_1.weight          (768,)
+  transformer.h.0.ln_1.bias            (768,)
+  transformer.h.0.attn.c_attn.weight   (768, 2304)
+  transformer.h.0.attn.c_attn.bias     (2304,)
+lm_head.weight is wte.weight (tied): True
+state_dict entries: 149 | model.training: False
+get_submodule(&#x27;transformer.h.5.mlp&#x27;): GPT2MLP</code></pre><details><summary>What to look for</summary><p>Filter <code>named_parameters()</code> by prefix <code>f"transformer.h.{i}."</code> and strip the prefix. Twelve identical dicts; <code>c_attn.weight</code> is <code>(768, 2304)</code>, three times 768 because queries, keys and values are produced by one matrix and split. That split is a reshape you will write in the transformer course.</p></details></div><div class="srcbox"><span class="label">Sources and further reading</span><ul><li><a href="https://docs.pytorch.org/docs/2.14/generated/torch.nn.Module.html">PyTorch reference: torch.nn.Module (register_forward_hook, state_dict, named_parameters)</a></li><li><a href="https://huggingface.co/docs/transformers/model_doc/gpt2">Transformers documentation: GPT-2 (GPT2Config, GPT2LMHeadModel.forward)</a></li></ul><p>Explanations on this page are original. Sources support the specific library behaviours named; terminal output is from the recorded run.</p></div>
+<nav class="pagenav" aria-label="Previous and next page"><a class="prev" href="../pages/10-autograd.html"><span class="dir">← Previous</span>Autograd: what a gradient is operationally, backward(), and a tiny fit</a><a class="next" href="../pages/12-gpt2-forward.html"><span class="dir">Next →</span>Loading GPT-2 small: tokenizer, input ids, logits, next token, hidden states</a></nav></main></div></div>
+<script src="../assets/nav-data.js"></script><script src="../assets/glossary-data.js"></script><script src="../assets/wiki.js"></script></body></html>
