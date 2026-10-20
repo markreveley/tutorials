@@ -1,7 +1,7 @@
 """First eval-focused fluency assessment. Implement from the assessment brief.
 
 Run from the repository root:
-python3 -m unittest discover -s evals/courses/dag-tests -p 'test_python_evals.py' -v
+python3 -m unittest discover -s dag-tests -p 'test_python_evals.py' -v
 """
 
 

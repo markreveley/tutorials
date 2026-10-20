@@ -1,9 +1,9 @@
 # Python: implement, debug, and explain an evaluation
 
-These are the first learner tests for the [DAG redesign](../../../../dag-tests/README.md).
+These are the first learner tests for the [test-first assessment layer](../../../dag-tests/README.md).
 They are public practice cases. There is no recorded learner attempt yet.
 Use standard-library Python and ordinary documentation. Implement the three
-functions in [eval_pipeline.py](../exercises/eval_pipeline.py); no API calls,
+functions in [eval_pipeline.py](eval_pipeline.py); no API calls,
 model account, or paid runs are needed.
 
 ## 1. Score an extracted support ticket

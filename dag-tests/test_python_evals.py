@@ -9,7 +9,7 @@ import unittest
 
 from checks import COURSES
 
-IMPLEMENTATION = COURSES / "python/python-tut/dag/exercises/eval_pipeline.py"
+IMPLEMENTATION = COURSES / "python/python-tut/labs/eval_pipeline.py"
 spec = importlib.util.spec_from_file_location("eval_pipeline", IMPLEMENTATION)
 pipeline = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pipeline)
