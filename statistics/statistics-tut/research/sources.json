@@ -134,5 +134,61 @@
     "claims": "Verified: implementations distinguish FWER and FDR procedures, including Bonferroni, Holm, Benjamini–Hochberg, and Benjamini–Yekutieli; dependence assumptions matter.",
     "checked": "2026-09-21",
     "status": "confirmed-with-stated-scope"
+  },
+  "bh1995": {
+    "tag": "Benjamini–Hochberg 1995",
+    "title": "Benjamini & Hochberg (1995), Controlling the False Discovery Rate: A Practical and Powerful Approach to Multiple Testing, JRSS-B 57(1), 289–300",
+    "url": "https://doi.org/10.1111/j.2517-6161.1995.tb02031.x",
+    "checked": "2026-10-20",
+    "claims": "Verified from Crossref metadata only: title, authors, journal, volume, issue, pages, year, and DOI. The publisher page refused the fetch and the only PDF located was a scanned image, so the full text was not read. The FDR definition and the step-up rule used in the course are taken from the SciPy and statsmodels documentation that cite this paper.",
+    "status": "confirmed-with-stated-scope"
+  },
+  "fdr-scipy": {
+    "tag": "SciPy: FDR",
+    "title": "SciPy documentation: scipy.stats.false_discovery_control",
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.false_discovery_control.html",
+    "checked": "2026-10-20",
+    "claims": "Verified: the false discovery rate is the expected proportion of rejected null hypotheses that are actually true; the Benjamini–Hochberg method is for independent tests or positive regression dependence and Benjamini–Yekutieli for arbitrary dependence; references Benjamini & Hochberg (1995) 57.1:289–300 and Benjamini & Yekutieli (2001).",
+    "status": "confirmed-with-stated-scope"
+  },
+  "pearson": {
+    "tag": "SciPy: Pearson",
+    "title": "SciPy documentation: scipy.stats.pearsonr",
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.pearsonr.html",
+    "checked": "2026-10-20",
+    "claims": "Verified: the coefficient is the summed cross-product of deviations from the means divided by the root of the product of the summed squared deviations; range −1 to +1; the default p-value assumes uncorrelated normally distributed data; method=PermutationMethod computes the p-value with permutation_test instead.",
+    "status": "confirmed-with-stated-scope"
+  },
+  "spearman": {
+    "tag": "SciPy: Spearman",
+    "title": "SciPy documentation: scipy.stats.spearmanr",
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.spearmanr.html",
+    "checked": "2026-10-20",
+    "claims": "Verified: a nonparametric measure of the monotonicity of a relationship, range −1 to +1 with ±1 an exact monotone relation; its analytic p-value is only accurate for very large samples and a permutation test is recommended otherwise; a constant input makes the coefficient undefined.",
+    "status": "confirmed-with-stated-scope"
+  },
+  "permutation": {
+    "tag": "SciPy: permutation test",
+    "title": "SciPy documentation: scipy.stats.permutation_test",
+    "url": "https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.permutation_test.html",
+    "checked": "2026-10-20",
+    "claims": "Verified: the pairings permutation type re-pairs observations within samples and is appropriate for correlation tests; for randomized tests the numerator and denominator of the p-value are both increased by one and the observed statistic is included in the null distribution; the exact null distribution is computed when the resample count is at least the number of distinct permutations.",
+    "status": "confirmed-with-stated-scope"
+  },
+  "holdout": {
+    "tag": "Held-out data",
+    "title": "scikit-learn user guide, §3.1: Cross-validation: evaluating estimator performance",
+    "url": "https://scikit-learn.org/stable/modules/cross_validation.html",
+    "checked": "2026-10-20",
+    "claims": "Verified: fitting and testing on the same data is a methodological mistake (overfitting); tuning settings against a test set lets knowledge of it leak into the evaluation, so a separate validation set is held out and the test set is used once at the end.",
+    "status": "confirmed-with-stated-scope"
+  },
+  "neuron-explainer": {
+    "tag": "Explanation scoring code",
+    "title": "OpenAI automated-interpretability repository: neuron_explainer/explanations/scoring.py",
+    "url": "https://github.com/openai/automated-interpretability/blob/main/neuron-explainer/neuron_explainer/explanations/scoring.py",
+    "checked": "2026-10-20",
+    "claims": "Verified in the released code: correlation_score returns np.corrcoef(real_activations, predicted_activations)[0, 1], and the aggregate score computes that correlation over all activations rather than averaging per-sequence correlations. The accompanying paper page rendered only its table of contents, so no claim from the paper text is reproduced here.",
+    "status": "confirmed-with-stated-scope"
   }
 }

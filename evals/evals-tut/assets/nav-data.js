@@ -98,6 +98,17 @@ window.NAV = [
     ],
   },
   {
+    module: "Module 8 · Evaluating explanations",
+    pages: [
+      { n: "27", path: "pages/27-scoring-an-explanation.html", title: "Scoring an Explanation",
+        kw: "neuron explanation simulation scoring held-out activations bills huang precision recall interpretability" },
+      { n: "28", path: "pages/28-controls-for-interpretability-claims.html", title: "Controls for Interpretability Claims",
+        kw: "control neuron shuffled labels permutation baseline explanation max-activating examples polysemanticity intervention causal" },
+      { n: "29", path: "pages/29-case-study-demonstrated-explanation.html", title: "Case Study: The Demonstrated-Explanation Standard",
+        kw: "cammarata already clean goodfire qwen3 kimi leo gao simulate neuron sparse autoencoder monosemanticity checklist" },
+    ],
+  },
+  {
     module: "Reference",
     pages: [
       { n: "G", path: "glossary.html", title: "Glossary",

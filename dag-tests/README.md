@@ -1,85 +1,68 @@
-# Python and Rust course redesign: tests first
+# Test-first assessment layer for the Python course
 
-This is the test-first specification for replacing the two LeetCode-oriented
-tutorials with function-first explanation DAGs. The lessons have not been
-rewritten yet. Missing course manifests and unimplemented Python exercises
-deliberately fail; they are not skipped or marked as expected failures.
+This directory began as the specification for replacing the LeetCode-oriented
+Python and Rust courses with function-first explanation DAGs. On 2026-10-20 the
+DAG was retired as a **delivery format** and kept as an **assessment layer**:
+the contract checker and the executable Python assessments remain; the graph
+acceptance gate does not. See [ROADMAP.md](../ROADMAP.md) for the decision.
 
-The [September 20 direction](../../direction/2026-09-20/overview.md) sets the
-Python target: implement, test, debug, adapt, and explain real evaluation work.
-The September 21 request sets the Rust target: read and explain **beatcode**.
-This does not add a Rust allocation to the direction document's 12-week plan
-or make Beatbench a dependency of the Python course.
+What remains active:
 
-The [evals course](../evals/evals-tut/index.html) supplies measurement context;
-the [networking readiness review](../networking/networking-tut/pages/23-readiness-review.html)
-models observable explanation and diagnosis assessments.
+- [CONTRACT.md](CONTRACT.md) and `test_contract.py`: the explanation-DAG
+  contract and its self-tests. The human acceptance checks in the contract
+  (start at the function, explain this code, keep descending, measure the
+  learner) still govern how lessons and assessments are reviewed.
+- `test_python_evals.py`: executable assessments for the three functions in
+  [`python/python-tut/labs/eval_pipeline.py`](../python/python-tut/labs/eval_pipeline.py),
+  specified in [`python/python-tut/labs/ASSESSMENTS.md`](../python/python-tut/labs/ASSESSMENTS.md).
+  Red on the supplied stubs; no reference solution is published.
+- `test_sources.py`, `verify_beatcode.py`, and `fixtures/`: the pinned beatcode
+  excerpts and their integrity checks, kept for the parked Rust course.
+
+What was retired or parked:
+
+- `test_courses.py` (the `dag/course.json` acceptance gate) moved to
+  `previous-courses-to-re-author/retired/`. No course manifest will be authored.
+- The LeetCode-era Python lessons and the Rust lessons, syllabus, and reading
+  assessments stay under `previous-courses-to-re-author/`. Rust is deprioritised:
+  the interpretability toolchain is Python, so Rust is not on the critical path.
 
 ## Run from the repository root
 
 ```sh
-# Test the tests: valid DAGs pass, broken DAGs fail; verify source snapshots.
-python3 -m unittest discover -s evals/courses/dag-tests -p 'test_contract.py' -v
-python3 -m unittest discover -s evals/courses/dag-tests -p 'test_sources.py' -v
+# Contract self-tests and source integrity: expected green.
+python3 -m unittest discover -s dag-tests -p 'test_contract.py' -v
+python3 -m unittest discover -s dag-tests -p 'test_sources.py' -v
 
-# Acceptance gates: RED until the courses and learner implementation exist.
-python3 -m unittest discover -s evals/courses/dag-tests -p 'test_courses.py' -v
-python3 -m unittest discover -s evals/courses/dag-tests -p 'test_python_evals.py' -v
-
-# All of the above; intentionally nonzero during this tests-first stage.
-python3 -m unittest discover -s evals/courses/dag-tests -v
+# Learner assessments: red until the learner implements the stubs.
+python3 -m unittest discover -s dag-tests -p 'test_python_evals.py' -v
 ```
 
-Only Python's standard library is needed. These commands avoid the old Python
-exercise discovery settings and the old Rust implementation drills.
+Only Python's standard library is needed.
 
-## What to revies
-
-- [DAG contract and human acceptance checks](CONTRACT.md): edge direction,
-  levels, foundational stopping rule, source fidelity, and course scope.
-- [Python assessment brief](../python/python-tut/dag/assessments/README.md):
-  executable scorer, data-loader, and reporting tests, plus independent transfer.
-- [Rust reading assessments](../rust/rust-tut/dag/assessments/reading.md):
-  source navigation, prediction, explanation, and change-impact questions.
-- [Rust assessor guide](rust-assessor-guide.md): evidence to listen for, kept
-  separate from the learner prompts.
-
-The automated checks establish structure, source identity, and specified code
-behavior. They cannot establish teaching quality, a sound evaluation design,
-or personal fluency. Those require the human checks and fresh learner attempts.
-The public exercises are practice, not a held-out measurement of readiness.
-
-## Verified baseline — 2026-09-21
+## Verified baseline — 2026-10-20
 
 - 31 contract tests and 3 source-integrity tests pass.
-- All 9 retained excerpts match the pinned clone, including full-file hashes.
-- Both course acceptance tests fail because `dag/course.json` is not authored.
-- All 22 Python learner tests reach the intended unimplemented stubs (65
-  errors including individual table cases); no import/discovery errors or skips.
-- The new Markdown links resolve locally.
-- 16 relevant upstream beatcode tests pass: `float_semantics`, `nonfinite`,
-  `hardening`, `render_determinism`, and `render_hashes`. Run in the clone with
-  `cargo test --offline --test float_semantics --test nonfinite --test hardening --test render_determinism --test render_hashes`.
+- All 22 Python learner tests reach the intended unimplemented stubs (65 errors
+  including individual table cases); no import or discovery errors, no skips.
+- The relative links in this file and in the assessment brief resolve locally.
 
-The Rust prompts and answer guide were checked against the pinned code and
-these tests. No learner has been assessed, and no full lesson DAG is claimed.
+The automated checks establish structure, source identity, and specified code
+behavior. They cannot establish teaching quality or personal fluency. Those
+require the human checks in the contract and fresh learner attempts. The public
+exercises are practice, not a held-out measurement of readiness.
 
 ## Beatcode reference
 
 Cloned `https://github.com/ob6to8/beatcode.git` at commit
-`b2042746329c21d6bb29deb0cec77ff666eac779` on 2026-09-21 into
-`/private/tmp/beatcode-course-reference-20260921`.
-The clone is a disposable reference, not part of this repository. Selected
-unaltered function excerpts and the upstream license are retained in
-`fixtures/beatcode/`; `fixtures/beatcode.lock.json` records immutable source
-URLs, line ranges, excerpt hashes, and full source-file hashes.
+`b2042746329c21d6bb29deb0cec77ff666eac779` on 2026-09-21. Selected unaltered
+function excerpts and the upstream license are retained in `fixtures/beatcode/`;
+`fixtures/beatcode.lock.json` records immutable source URLs, line ranges, excerpt
+hashes, and full source-file hashes.
 
 ```sh
-python3 evals/courses/dag-tests/verify_beatcode.py /private/tmp/beatcode-course-reference-20260921
+python3 dag-tests/verify_beatcode.py /path/to/beatcode-checkout
 ```
 
 Offline tests verify the retained excerpts. The command above additionally
-compares them with the pinned checkout. A later upstream revision requires
-reviewing the source and assessments before updating the lock. The README in
-the pinned repo still calls it a specification seed; the reference selection
-uses the actual implementation and tests present in that commit.
+compares them with a pinned checkout.

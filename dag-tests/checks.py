@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 
 HERE = Path(__file__).resolve().parent
-COURSES = HERE.parent
+COURSES = HERE.parent  # repository root
 GOALS = {"python": "implement-debug-explain-evals", "rust": "read-explain-beatcode"}
 MODES = {"implement", "debug", "adapt", "trace", "predict", "explain", "change-impact"}
 CONTEXTS = {"support-ticket-eval", "grader-validation", "eval-data", "eval-analysis",

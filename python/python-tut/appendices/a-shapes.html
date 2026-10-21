@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shape reference · Python for Model Internals</title><meta name="description" content="The shapes you will meet in GPT-2 small, the rules that combine them, and the expressions that read them. Keep it open while you work.">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<a class="skip-link" href="#main">Skip to content</a><div class="layout"><aside class="sidebar" data-nav aria-label="Course navigation"><p class="site-title"><a href="../index.html">Python for Model Internals</a></p><p class="site-sub">from syntax to shapes to cached activations</p><div class="nav-module"><span class="mod-label">Start here</span><a href="../index.html"> Course home</a></div><div class="nav-module"><span class="mod-label">0 · Orientation and setup</span><a href="../pages/00-orientation.html">00 What this course makes you able to do</a><a href="../pages/01-lab-setup.html">01 Lab setup: a CPU-only toolchain you can trust</a></div><div class="nav-module"><span class="mod-label">1 · Python for someone coming from Elixir and Rust</span><a href="../pages/02-names-and-objects.html">02 Names bind to objects; mutation is visible through every name</a><a href="../pages/03-records-and-errors.html">03 Dicts, lists, JSON and JSONL, and exceptions as the error channel</a><a href="../pages/04-spec-first-testing.html">04 Spec-first testing with unittest: the three eval-pipeline labs</a><a href="../pages/05-functions-generators-dataclasses.html">05 Functions, generators, dataclasses, and type hints as documentation</a></div><div class="nav-module"><span class="mod-label">2 · Arrays and tensors</span><a href="../pages/06-arrays-and-shapes.html">06 NumPy arrays: shape, dtype, indexing, slicing, views</a><a href="../pages/07-broadcasting.html">07 Broadcasting rules, with a shape-prediction drill</a><a href="../pages/08-reductions-and-einsum.html">08 Reductions, axes, and einsum read aloud</a><a href="../pages/09-torch-tensors.html">09 torch tensors: dtype, device, views versus copies, in-place ops, no_grad</a><a href="../pages/10-autograd.html">10 Autograd: what a gradient is operationally, backward(), and a tiny fit</a></div><div class="nav-module"><span class="mod-label">3 · Models as objects</span><a href="../pages/11-modules-and-state.html">11 nn.Module, parameters, state_dict, and reading a module tree</a><a href="../pages/12-gpt2-forward.html">12 Loading GPT-2 small: tokenizer, input ids, logits, next token, hidden states</a><a href="../pages/13-forward-hooks.html">13 Forward hooks: registering, capturing, and caching activations with shapes asserted</a><a href="../pages/14-three-toolkits.html">14 The same activation in transformers, TransformerLens 4, and nnsight</a><a href="../pages/15-reproducibility-and-artifacts.html">15 Reproducibility and artifacts: seeds, safetensors, a run manifest, memory and batching on CPU</a></div><div class="nav-module"><span class="mod-label">4 · Readiness</span><a href="../pages/16-readiness-review.html">16 Readiness review: cache the residual stream and prove it</a></div><div class="nav-module"><span class="mod-label">Reference and practice</span><a href="../appendices/a-shapes.html" class="current" aria-current="page">A Shape reference</a><a href="../appendices/b-commands.html">B Command and lab reference</a><a href="../glossary.html"> Glossary</a><a href="../bibliography.html"> Annotated bibliography</a></div></aside>
+<div class="content"><main class="page" id="main"><p class="kicker">Appendix A</p><h1>Shape reference</h1><p class="lede">The shapes you will meet in GPT-2 small, the rules that combine them, and the expressions that read them. Keep it open while you work.</p>
+<h2 id="gpt2">GPT-2 small by the numbers</h2>
+<table><tr><th>Quantity</th><th>Value</th><th>Where it appears</th></tr>
+<tr><td>vocab</td><td>50257</td><td>last axis of logits; rows of <code>wte.weight</code></td></tr>
+<tr><td>context (n_positions)</td><td>1024</td><td>rows of <code>wpe.weight</code>; maximum <code>seq</code></td></tr>
+<tr><td>d_model (n_embd, hidden_size)</td><td>768</td><td>last axis of every residual-stream tensor</td></tr>
+<tr><td>layers (n_layer)</td><td>12</td><td><code>transformer.h[0..11]</code>; 13 hidden states</td></tr>
+<tr><td>heads (n_head)</td><td>12</td><td>axis 1 of attention patterns</td></tr>
+<tr><td>d_head</td><td>64</td><td>768 / 12; the summed axis in attention scores</td></tr>
+<tr><td>d_mlp</td><td>3072</td><td>4 × 768; <code>mlp.c_fc.weight</code> is (768, 3072)</td></tr>
+<tr><td>parameters</td><td>124,439,808</td><td><code>sum(p.numel() for p in model.parameters())</code></td></tr></table>
+<h2 id="tensors">The tensors and their shapes</h2>
+<table><tr><th>Tensor</th><th>Shape</th><th>Read as</th></tr>
+<tr><td><code>input_ids</code>, <code>attention_mask</code></td><td>(batch, seq)</td><td>one id or one mask bit per position</td></tr>
+<tr><td>embedding output, residual after any block</td><td>(batch, seq, 768)</td><td>one 768-vector per position</td></tr>
+<tr><td><code>hidden_states</code></td><td>tuple of 13 × (batch, seq, 768)</td><td>[0] embeddings; [i+1] after block i; [12] after ln_f</td></tr>
+<tr><td>logits</td><td>(batch, seq, 50257)</td><td>scores for the next token at every position</td></tr>
+<tr><td>next-token logits</td><td>(batch, 50257)</td><td><code>logits[:, -1]</code> (last real position only if unpadded or left-padded)</td></tr>
+<tr><td>attention pattern</td><td>(batch, 12, seq, seq)</td><td>[b, h, q, k]: query q attends to key k; rows sum to 1</td></tr>
+<tr><td>queries, keys, values per head</td><td>(batch, 12, seq, 64)</td><td>after splitting 768 into 12 × 64</td></tr>
+<tr><td>a direction</td><td>(768,)</td><td>projects a cache with <code>bsd,d-&gt;bs</code></td></tr>
+<tr><td>a gradient</td><td>the shape of what it is with respect to</td><td><code>acts.grad</code> is (batch, seq, 768)</td></tr></table>
+<h2 id="rules">The rules</h2>
+<p><strong>Indexing:</strong> each integer index removes an axis; each slice keeps it; <code>None</code> adds one; <code>...</code> stands for all leading axes. Basic slices are views; boolean and list indexing copy.</p>
+<p><strong>Broadcasting:</strong> align shapes at the right, pad the shorter with ones on the left, and at each position the sizes must be equal or one of them 1; the result takes the larger. In place, the result may not be larger than the in-place operand. <a class="cite" href="https://numpy.org/doc/stable/user/basics.broadcasting.html" title="NumPy user guide: Broadcasting, General broadcasting rules">[NumPy: broadcasting]</a> <a class="cite" href="https://docs.pytorch.org/docs/2.14/notes/broadcasting.html" title="PyTorch notes: Broadcasting semantics">[PyTorch: broadcasting]</a></p>
+<p><strong>Reductions:</strong> the named axis disappears; <code>keepdims=True</code> keeps it as size 1; <code>argmax</code> returns indices with the same shape rule.</p>
+<p><strong>einsum:</strong> one letter per axis per operand; a letter missing from the output is summed; a letter repeated in one operand takes the diagonal; always write the <code>-&gt;</code>. <a class="cite" href="https://numpy.org/doc/stable/reference/generated/numpy.einsum.html" title="NumPy reference: numpy.einsum">[NumPy: einsum]</a></p>
+<p><strong>Views:</strong> <code>view</code>, <code>transpose</code>, <code>permute</code>, <code>squeeze</code>, slices and <code>from_numpy</code> share storage; <code>reshape</code> may or may not; <code>clone</code> and <code>copy</code> do not. <a class="cite" href="https://docs.pytorch.org/docs/2.14/tensor_view.html" title="PyTorch docs: Tensor Views">[PyTorch: views]</a></p>
+<h2 id="expressions">Expressions to recognise on sight</h2>
+<table><tr><th>Expression</th><th>Shape</th><th>Meaning</th></tr>
+<tr><td><code>acts[:, -1]</code></td><td>(batch, 768)</td><td>last position of every prompt</td></tr>
+<tr><td><code>acts[0, -1]</code></td><td>(768,)</td><td>one vector</td></tr>
+<tr><td><code>acts.mean(-1, keepdim=True)</code></td><td>(batch, seq, 1)</td><td>per-position mean, ready to subtract</td></tr>
+<tr><td><code>acts.norm(dim=-1)</code></td><td>(batch, seq)</td><td>residual norm per position</td></tr>
+<tr><td><code>torch.einsum("bsd,d-&gt;bs", acts, v)</code></td><td>(batch, seq)</td><td>projection onto a direction</td></tr>
+<tr><td><code>torch.einsum("bhqd,bhkd-&gt;bhqk", q, k) / 8</code></td><td>(batch, 12, seq, seq)</td><td>scaled attention scores (√64 = 8)</td></tr>
+<tr><td><code>pattern @ v</code></td><td>(batch, 12, seq, 64)</td><td>attention-weighted values</td></tr>
+<tr><td><code>(acts * mask[..., None]).sum(1) / mask.sum(1, keepdim=True)</code></td><td>(batch, 768)</td><td>masked mean over positions</td></tr>
+<tr><td><code>logits[:, -1].softmax(-1).topk(5)</code></td><td>values and indices (batch, 5)</td><td>top next tokens</td></tr>
+<tr><td><code>torch.stack(out.hidden_states)</code></td><td>(13, batch, seq, 768)</td><td>all layers in one tensor</td></tr></table>
+<h2 id="asserts">The asserts to copy</h2>
+<pre class="code" data-lang="python"><code>assert acts.shape == (batch, seq, 768), acts.shape
+assert acts.dtype == torch.float32, acts.dtype
+assert not acts.requires_grad
+assert torch.isfinite(acts).all()
+assert pattern.shape[-2:] == (seq, seq) and torch.allclose(pattern.sum(-1), torch.ones_like(pattern[..., 0]))</code></pre>
+<p>Write the shape comment next to every tensor assignment. A comment that says <code># (batch, seq, 768)</code> is cheaper than the hour you spend when it is not there.</p>
+<nav class="pagenav" aria-label="Previous and next page"><a class="prev" href="../pages/16-readiness-review.html"><span class="dir">← Previous</span>Readiness review: cache the residual stream and prove it</a><a class="next" href="../appendices/b-commands.html"><span class="dir">Next →</span>Command and lab reference</a></nav></main></div></div>
+<script src="../assets/nav-data.js"></script><script src="../assets/glossary-data.js"></script><script src="../assets/wiki.js"></script></body></html>

@@ -328,5 +328,60 @@
     "name": "Pareto frontier",
     "short": "Choices for which no other available choice is at least as good on every stated objective and better on at least one.",
     "def": "Choices for which no other available choice is at least as good on every stated objective and better on at least one."
+  },
+  "correlation": {
+    "name": "Correlation",
+    "short": "A number between −1 and +1 describing how two paired measurements vary together; zero means no linear or monotone association of the kind measured, not independence.",
+    "def": "A number between −1 and +1 describing how two paired measurements vary together; zero means no linear or monotone association of the kind measured, not independence."
+  },
+  "pearson-correlation": {
+    "name": "Pearson correlation",
+    "short": "The sum of products of paired deviations from the means divided by the root of the product of the summed squared deviations; it measures linear co-variation and is sensitive to extreme values.",
+    "def": "The sum of products of paired deviations from the means divided by the root of the product of the summed squared deviations; it measures linear co-variation and is sensitive to extreme values."
+  },
+  "spearman-correlation": {
+    "name": "Spearman correlation",
+    "short": "The Pearson correlation of the ranks of two variables, with tied values sharing average ranks; it measures any monotone relationship and ignores how far apart values are.",
+    "def": "The Pearson correlation of the ranks of two variables, with tied values sharing average ranks; it measures any monotone relationship and ignores how far apart values are."
+  },
+  "permutation-test": {
+    "name": "Permutation test",
+    "short": "A test that recomputes a statistic after shuffling the labels relative to the other variable; the p-value is the fraction of relabelings at least as extreme as the observed one under the exchangeable-labels null.",
+    "def": "A test that recomputes a statistic after shuffling the labels relative to the other variable; the p-value is the fraction of relabelings at least as extreme as the observed one under the exchangeable-labels null."
+  },
+  "null-distribution": {
+    "name": "Null distribution",
+    "short": "The distribution a test statistic would have if the null hypothesis held; a p-value locates the observed statistic within it.",
+    "def": "The distribution a test statistic would have if the null hypothesis held; a p-value locates the observed statistic within it."
+  },
+  "bonferroni-correction": {
+    "name": "Bonferroni",
+    "short": "Testing each of m hypotheses at alpha/m, which bounds the familywise error rate at alpha when every individual p-value is valid.",
+    "def": "Testing each of m hypotheses at alpha/m, which bounds the familywise error rate at alpha when every individual p-value is valid."
+  },
+  "benjamini-hochberg": {
+    "name": "Benjamini–Hochberg",
+    "short": "Sort m p-values, find the largest i with p(i) ≤ (i/m)q, and reject the i smallest; it controls the false discovery rate at q under independence or positive dependence.",
+    "def": "Sort m p-values, find the largest i with p(i) ≤ (i/m)q, and reject the i smallest; it controls the false discovery rate at q under independence or positive dependence."
+  },
+  "screening": {
+    "name": "Screening",
+    "short": "Testing many candidates with the same procedure in order to select a few for follow-up; the selection step changes what the surviving estimates mean.",
+    "def": "Testing many candidates with the same procedure in order to select a few for follow-up; the selection step changes what the surviving estimates mean."
+  },
+  "selection-bias": {
+    "name": "Selection bias",
+    "short": "A distortion that arises when the cases analyzed were chosen by a rule related to the outcome, such as reporting the best of many candidates as if it had been the only one tested.",
+    "def": "A distortion that arises when the cases analyzed were chosen by a rule related to the outcome, such as reporting the best of many candidates as if it had been the only one tested."
+  },
+  "winners-curse": {
+    "name": "Winner’s curse",
+    "short": "The tendency of the best-looking candidate among many to have been helped by noise, so its observed effect overstates what fresh data will show.",
+    "def": "The tendency of the best-looking candidate among many to have been helped by noise, so its observed effect overstates what fresh data will show."
+  },
+  "held-out-split": {
+    "name": "Held-out split",
+    "short": "A division of observations into a part used to choose or fit and a part reserved to score the choice; the reserved part gives an unbiased estimate only while it stays unused for selection.",
+    "def": "A division of observations into a part used to choose or fit and a part reserved to score the choice; the reserved part gives an unbiased estimate only while it stays unused for selection."
   }
 }

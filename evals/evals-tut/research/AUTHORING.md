@@ -20,7 +20,7 @@ Entry-level: a working software engineer or technical PM who has used ChatGPT/Cl
 
 - Inline: superscript link right after the claim:
   `<a class="cite" href="https://arxiv.org/abs/2306.05685" title="Zheng et al. 2023, Judging LLM-as-a-Judge">[MT-Bench]</a>`
-  Use the short tag names: [Evals Book], [Evals FAQ], [Husain, Evals], [Husain, Judge], [EvalGen], [MT-Bench], [Self-Pref], [Yan], [Agents That Matter], [SWE-bench], [SWE-bench Verified], [SWE-bench+], [GAIA], [tau-bench], [WebArena], [OSWorld], [Terminal-Bench], [AgentBench], [METR], [Inspect], [Error Bars], [HumanEval], [Eleuther], [GSM1k], [LiveBench], [LiveCodeBench], [ARC-AGI], [Leaderboard Illusion], [BIG-bench], [Anthropic]
+  Use the short tag names: [Evals Book], [Evals FAQ], [Husain, Evals], [Husain, Judge], [EvalGen], [MT-Bench], [Self-Pref], [Yan], [Agents That Matter], [SWE-bench], [SWE-bench Verified], [SWE-bench+], [GAIA], [tau-bench], [WebArena], [OSWorld], [Terminal-Bench], [AgentBench], [METR], [Inspect], [Error Bars], [HumanEval], [Eleuther], [GSM1k], [LiveBench], [LiveCodeBench], [ARC-AGI], [Leaderboard Illusion], [BIG-bench], [Anthropic], [Bills], [Huang], [Gao SAE], [Monosemanticity], [Already Clean], [Gao reply]
 - End of page: a `.srcbox` listing every source used on the page with full citation and link (see template).
 
 ## Page template
@@ -112,6 +112,8 @@ Statistics: `random-variable`, `expectation`, `variance`, `standard-deviation`, 
 Contamination & validity: `contamination`, `memorization`, `construct-validity`, `internal-validity`, `external-validity`, `data-leakage`, `solution-leakage`, `canary-string`, `private-holdout`, `live-benchmark`, `training-cutoff`, `n-gram-overlap`, `log-likelihood`, `saturation`
 
 Tooling: `tracing`, `span`, `observability`, `assertion`, `solver`, `scorer`, `epoch`, `experiment`, `faithfulness`, `answer-relevancy`, `context-precision`, `context-recall`
+
+Interpretability (Module 8): `neuron`, `activation`, `neuron-explanation`, `simulation-scoring`, `max-activating-examples`, `polysemanticity`, `control-neuron`, `permutation-test`, `intervention`, `sae-feature`, `sparse-autoencoder`
 
 ## Voice
 

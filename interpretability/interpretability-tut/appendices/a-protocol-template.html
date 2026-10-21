@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The pre-registration template · Interpretability Methods and Rigor</title><meta name="description" content="Fill this in before you look at the unit. Every field has a reason; a blank field is a hole a reviewer will find.">
+<link rel="stylesheet" href="../assets/style.css"></head><body>
+<a class="skip-link" href="#main">Skip to content</a><div class="layout"><aside class="sidebar" data-nav aria-label="Course navigation"><p class="site-title"><a href="../index.html">Interpretability Methods and Rigor</a></p><p class="site-sub">write the prediction test before you look</p><div class="nav-module"><span class="mod-label">Start here</span><a href="../index.html"> Course home</a></div><div class="nav-module"><span class="mod-label">0 · Claims and the protocol</span><a href="../pages/00-orientation.html">00 A claim about a model’s internals is a hypothesis</a><a href="../pages/01-the-protocol.html">01 The protocol: write the test before you look</a><a href="../pages/02-the-objects.html">02 The objects: neurons, directions, heads, features</a></div><div class="nav-module"><span class="mod-label">1 · Evidence that misleads and evidence that counts</span><a href="../pages/03-max-activating-examples.html">03 Max-activating examples and why they mislead</a><a href="../pages/04-scoring-by-prediction.html">04 Scoring an explanation by held-out activation prediction</a><a href="../pages/05-controls.html">05 Controls: what each one rules out, with worked numbers</a></div><div class="nav-module"><span class="mod-label">2 · Vision replication on a CPU</span><a href="../pages/06-vision-replication.html">06 Vision I: curve detectors on a CPU, with the test written first</a><a href="../pages/07-vision-controls.html">07 Vision II: controls for the vision claim, and what replication established</a></div><div class="nav-module"><span class="mod-label">3 · Language methods on GPT-2 small</span><a href="../pages/08-linear-probes.html">08 Language I: linear probes, with a threshold that failed</a><a href="../pages/09-logit-lens.html">09 Language II: the logit lens and direct logit attribution</a><a href="../pages/10-causal-interventions.html">10 Causal interventions: activation patching with a clean/corrupted pair</a><a href="../pages/11-induction-heads.html">11 Attention heads: induction heads by a pre-registered test on repeated random tokens</a></div><div class="nav-module"><span class="mod-label">4 · Features and the write-up</span><a href="../pages/12-sae-features.html">12 Features from sparse autoencoders, and how their explanations are scored</a><a href="../pages/13-writing-it-up.html">13 Writing it up: the demonstrated-explanation checklist and the Gao critique</a></div><div class="nav-module"><span class="mod-label">5 · Capstone</span><a href="../pages/14-capstone.html">14 Capstone: pick a neuron by a documented procedure, pre-register, run, report</a><a href="../pages/15-readiness-review.html">15 Readiness review</a></div><div class="nav-module"><span class="mod-label">Reference and practice</span><a href="../appendices/a-protocol-template.html" class="current" aria-current="page">A The pre-registration template</a><a href="../appendices/b-command-reference.html">B Command reference</a><a href="../appendices/c-reading-map.html">C Reading map</a><a href="../glossary.html"> Glossary</a><a href="../bibliography.html"> Annotated bibliography</a></div></aside>
+<div class="content"><main class="page" id="main"><p class="kicker">Appendix A</p><h1>The pre-registration template</h1><p class="lede">Fill this in before you look at the unit. Every field has a reason; a blank field is a hole a reviewer will find.</p>
+<h2 id="template">The template</h2>
+<p>Copy the block below into your notes (or fill a <code>Preregistration</code> from <code>labs/protocol.py</code>, whose <code>run()</code> refuses to execute while any field is a placeholder). Date it. Do not edit it after the run; append instead.</p>
+<pre><code>CLAIM        What the unit does, in one sentence a sceptic could falsify.
+UNIT         Model, layer, hook point, index. One unit, or a named family and the rule that picked it.
+HELD-OUT     Which data the score will be computed on, and why that data played no part in choosing the claim.
+SCORING      The function that turns the claim into a number on that data (correlation, F1, recovered fraction, prefix-matching score).
+PREDICTION   The number the claim predicts, as an inequality.
+THRESHOLD    The pass line. Fixed now. Justified by what the control is expected to reach, not by what you hope to see.
+CONTROLS     At least two. For each: what it would show if it passed too.
+FAILURE      What you will conclude, and write up, if the test fails.
+LOOKED?      Have you already seen the unit's activations on the held-out data? If yes, this is not a pre-registration.</code></pre>
+<h2 id="worked">A filled example from this course</h2>
+<pre><code>CLAIM        GPT-2 small MLP neuron L2/2928 fires on the first token of a sentence.
+UNIT         gpt2 (124M), blocks.2.mlp.hook_post[:, 2928], chosen by exhaustive screening on the screening split only.
+HELD-OUT     The odd 128-token chunks of labs/data/corpus.txt (12 chunks, 1,536 tokens). Screening used only the even chunks.
+SCORING      Pearson r between the rule indicator (previous token ends with "." or contains a newline) and the activation.
+PREDICTION   r >= 0.5 on the held-out chunks.
+THRESHOLD    0.5, and r must exceed the 95th percentile of 200 random same-layer neurons and of 500 label shuffles.
+CONTROLS     random neuron (same layer): shows how much of the score the rule gets from any neuron;
+             shuffled labels: shows what a meaningless rule scores on this neuron.
+FAILURE      The rule is not a demonstrated explanation of L2/2928; report the held-out r and both control percentiles anyway.
+LOOKED?      No: the held-out chunks were not decoded or inspected before scoring.</code></pre>
+<h2 id="why">Why each field exists</h2>
+<table><tr><th>Field</th><th>The mistake it prevents</th></tr>
+<tr><td>Held-out</td><td>Scoring on the examples that suggested the claim, which selection bias inflates.</td></tr>
+<tr><td>Scoring</td><td>Choosing the metric that happens to look best after the run.</td></tr>
+<tr><td>Prediction</td><td>Claims that cannot fail: “the neuron is related to punctuation.”</td></tr>
+<tr><td>Threshold</td><td>Moving the pass line to wherever the result landed.</td></tr>
+<tr><td>Controls</td><td>A score that any unit, or any rule, would have reached.</td></tr>
+<tr><td>Failure</td><td>Quietly not writing up the negative result.</td></tr>
+<tr><td>Looked?</td><td>Calling a post-hoc fit a prediction.</td></tr></table>
+<p>The same fields apply to vision stimuli (lesson 06), probes (08), patching (10), and heads (11); the <a href="../pages/01-the-protocol.html">protocol lesson</a> walks through filling them.</p>
+<nav class="pagenav" aria-label="Previous and next page"><a class="prev" href="../pages/15-readiness-review.html"><span class="dir">← Previous</span>Readiness review</a><a class="next" href="../appendices/b-command-reference.html"><span class="dir">Next →</span>Command reference</a></nav></main></div></div>
+<script src="../assets/nav-data.js"></script><script src="../assets/glossary-data.js"></script><script src="../assets/wiki.js"></script></body></html>

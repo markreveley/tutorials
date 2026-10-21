@@ -7,6 +7,10 @@ from build import LESSONS, ROOT, navigation
 from sources import SOURCES
 
 ERRORS = []
+NOTES = []
+# Sibling courses planned in ../../ROADMAP.md but not yet authored. Lessons link to
+# them by index.html only; a missing target here is reported, not treated as an error.
+FORTHCOMING = {'interpretability/interpretability-tut/index.html'}
 VOID = {'area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr'}
 
 
@@ -60,7 +64,11 @@ def check():
             u=urlsplit(link)
             if u.scheme or u.netloc: continue
             dest=(path.parent/unquote(u.path)).resolve() if u.path else path
-            if not dest.exists(): p.problem('missing target '+link); continue
+            if not dest.exists():
+                relative=dest.relative_to(ROOT.parents[1]) if ROOT.parents[1] in dest.parents else None
+                if relative is not None and str(relative) in FORTHCOMING:
+                    NOTES.append(f'{path.relative_to(ROOT)}: links to forthcoming sibling course {relative} (not yet present)'); continue
+                p.problem('missing target '+link); continue
             if u.fragment:
                 target=pages.get(dest)
                 if target is None and dest.suffix=='.html':
@@ -73,7 +81,7 @@ def check():
     nav_paths=[p['path'] for mod in navigation() for p in mod['pages']]
     if len(nav_paths)!=len(set(nav_paths)): ERRORS.append('duplicate navigation path')
     if set(nav_paths)!=set(str(p.relative_to(ROOT)) for p in pages): ERRORS.append('navigation/page coverage mismatch')
-    if [l['n'] for l in LESSONS] != [f'{i:02}' for i in range(24)]: ERRORS.append('lesson numbering mismatch')
+    if [l['n'] for l in LESSONS] != [f'{i:02}' for i in range(len(LESSONS))]: ERRORS.append('lesson numbering mismatch')
     counts=[]
     for l in LESSONS:
         p=pages.get((ROOT/l['path']).resolve())
@@ -89,6 +97,7 @@ def check():
     print(f'PASS: {len(pages)} HTML pages, {len(LESSONS)} lessons, {len(glossary)} glossary terms, {len(SOURCES)} sources.')
     print(f'PASS: local and sibling links, fragments, assets, navigation, headings, HTML nesting, and lesson components.')
     print(f'Lesson words including checks and source notes: {min(counts)}–{max(counts)}; total {sum(counts):,}.')
+    for note in sorted(set(NOTES)): print('NOTE: '+note)
 
 
 if __name__=='__main__': check()

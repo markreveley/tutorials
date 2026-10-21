@@ -185,6 +185,23 @@ window.NAV = [
     ]
   },
   {
+    "module": "6 · Screen many candidates",
+    "pages": [
+      {
+        "path": "pages/24-correlation-and-screening.html",
+        "title": "Correlation, permutation, and thousands of candidates",
+        "n": "24",
+        "kw": ""
+      },
+      {
+        "path": "pages/25-confirm-on-held-out-data.html",
+        "title": "Confirm a screened finding on held-out data",
+        "n": "25",
+        "kw": ""
+      }
+    ]
+  },
+  {
     "module": "Reference and practice",
     "pages": [
       {

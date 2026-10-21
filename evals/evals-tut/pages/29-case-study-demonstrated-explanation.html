@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Case Study: The Demonstrated-Explanation Standard · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 8 · Evaluating explanations</p>
+    <h1>Case study: the demonstrated-explanation standard</h1>
+    <p class="lede">
+      In October 2026 a long essay argued that most neurons in large language models can be
+      understood directly, and a short reply argued that an explanation you cannot simulate is not yet
+      an explanation. Both authors worked on the 2023 paper that invented simulation scoring. This page
+      reads their disagreement with the tools from pages 27 and 28, and ends with the checklist a
+      write-up must satisfy before it claims to have explained a neuron.
+    </p>
+
+    <h2 id="what-was-found">What was found, and how it was verified</h2>
+    <p>
+      The roadmap behind this module cites an essay by Nick Cammarata on auditing native neurons in
+      Qwen3-32B and a trillion-parameter Kimi model, and a critique by Leo Gao that an explanation which
+      cannot predict a neuron's activations on held-out data has not been demonstrated. Both were found.
+      The essay, "Neural Networks Are Already Clean," is published by Goodfire, calls itself "an
+      informal research essay and working hypothesis," and defers detail to a technical companion paper
+      that had not appeared when this page was
+      written.<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, front matter">[Already Clean]</a>
+      Gao's critique is a reply on X to the essay's announcement, dated 15 October 2026, retrieved
+      through two independent mirrors because x.com refused a direct fetch; its full text is quoted
+      below.<a class="cite" href="https://x.com/nabla_theta/status/2110862078844272677" title="Gao, reply on X, 15 Oct 2026">[Gao reply]</a>
+      The roadmap's sentence is a paraphrase; Gao's own wording is shorter. His reply promises a longer
+      post, which could not be located, and nothing here relies on it.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>Neither document is peer reviewed, the essay calls its numbers preliminary and
+      threshold-dependent, and the companion paper with the full methods is still to come. This page
+      does not adjudicate who is right about neurons. It uses the exchange as a worked example of
+      evaluating an interpretability claim, which is possible because both sides state their methods
+      and their numbers.</p>
+    </div>
+
+    <h2 id="the-claim">The claim</h2>
+    <p>
+      The essay's thesis is that the canonical evidence for
+      <span class="term" data-g="polysemanticity">polysemanticity</span> was misread and that
+      "we can now understand most neurons in models up to trillions of
+      parameters."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, front matter">[Already Clean]</a>
+      Its quantitative core is an audit: "In preliminary audits of Qwen3-32B, we estimate that roughly
+      90% of neuron poles have one main job, often with small related offshoots; another ~7% have two
+      related jobs; and only ~2-4% are not yet understood," based on a gallery of 1,000 "neuron papers,
+      detailed investigations into individual neurons, chosen
+      randomly."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §3 and neuron-paper gallery">[Already Clean]</a>
+      The author sets this against the 2023 baselines he helped produce: Bills et al.'s "about 1.7% of
+      neurons interpretable by our most generous measure" and Anthropic's median neuron rubric score of
+      0.<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §3 opening">[Already Clean]</a>
+      (Both figures check out against the primary sources; see pages
+      <a href="27-scoring-an-explanation.html">27</a> and <a href="28-controls-for-interpretability-claims.html">28</a>.)
+    </p>
+    <p>
+      Read as an evaluator, the first question is the estimand from page 27: 90% of <em>what</em>,
+      measured <em>how</em>? The essay answers candidly. The unit is a "neuron pole" (the positive and
+      negative directions of a neuron, assessed separately), the judgment is whether an agent's
+      investigation found "one main job," and the number moves with "how you set the threshold for
+      counting weak activations, depth, density of sub-circuits, and what you view as 'one thing'";
+      a single cleanliness score "should be taken as a broad pointer to the regime a neural network is
+      in, rather than something precise to either optimize directly or hold too
+      tightly."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §3 footnote 1">[Already Clean]</a>
+      On the trillion-parameter claim, the essay reports "similar results in models up to trillions of
+      parameters, like Kimi K3, which the companion paper will cover in more detail," shows one
+      attribution graph from that model, and adds: "We haven't begun full audits of this scale
+      yet."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §3; attribution-graph figure">[Already Clean]</a>
+      The verified claim is narrower than the roadmap's summary: a preliminary, threshold-dependent
+      audit of one 32B model, and an extrapolation to a larger one.
+    </p>
+
+    <h2 id="the-evidence">The essay's own prediction test</h2>
+    <p>
+      What makes the essay a useful case rather than a target is that it runs a held-out test of the
+      kind this module demands, under the heading "Explanations That Could Lose": "For 200 random
+      neurons from our gallery, an agent read only each neuron's explanation and wrote five new
+      examples that should drive it and five near misses that shouldn't, before we measured any of
+      them." Of the 183 neurons whose explanation described the positive pole, "the new examples fired
+      their neurons strongly 76% of the time; the near misses, 11%. The explanation won for 164, tied
+      for 15 and lost for 4," where "strong" means at least 30% of the neuron's largest activation in
+      the corpus.<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §4 'Explanations That Could Lose'">[Already Clean]</a>
+      Texts about "the most distant concept" the agent could invent fired strongly about 1% of the
+      time; "179 of the 183 neurons never fired on them at
+      all."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §4">[Already Clean]</a>
+    </p>
+    <p>
+      Run this through page 28's controls. It is held out in the sense that matters: the examples were
+      written from the explanation alone, before measurement, so the explanation could lose. It has a
+      within-neuron contrast (76% against 11%) that works as a precision test on the explanation's
+      boundary. What the fetched text does not report is the control-neuron score: the same new examples
+      scored against random other neurons. The near-miss and distant-concept rates partly stand in for
+      it; the essay says the forthcoming paper "has many more prediction metrics and positive controls"
+      and that "we're mostly not trying to claim a perfect explanation of each neuron
+      here."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §4">[Already Clean]</a>
+      On the larger audit, the author calls the attribution-graph reviews "qualitative evidence—I don't
+      trust our current tools enough to turn it into a cleanliness
+      score."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §4 'Audits of Attribution Graphs'">[Already Clean]</a>
+    </p>
+    <p>
+      The essay also takes a position on page 27's method,
+      <span class="term" data-g="simulation-scoring">simulation scoring</span>, in a note titled "On
+      Simulation Scores":
+      simulation "often end[s] up measuring where attention puts information," rewards "fine details of
+      weak activations that matter little for understanding what a neuron does," and asks language
+      models for precise numbers they "usually aren't trained for"; the author would "rather rely on
+      normal science than on any one metric," allowing that "simulation might eventually become one
+      useful score among several."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, note 'On Simulation Scores'">[Already Clean]</a>
+      Elsewhere he describes the 2023 metrics as "rewarding explanations that could simulate activations
+      rather than ones that were right, which often come apart."<a class="cite" href="https://already-clean.goodfire.com/" title="Cammarata 2026, §1">[Already Clean]</a>
+      The second half of that sentence is a validity claim whose mechanism pages 27 and 28 have already
+      documented: a recall-heavy score can be earned by a broad or single-token explanation.
+    </p>
+
+    <h2 id="the-critique">The critique</h2>
+    <p>
+      Gao's reply, in full:<a class="cite" href="https://x.com/nabla_theta/status/2110862078844272677" title="Gao, reply on X, 15 Oct 2026 (full text)">[Gao reply]</a>
+    </p>
+    <div class="card">
+      <p>"this is cool work, but i think people are overupdating on how optimistic to be about interp.</p>
+      <p>in particular, we need to more rigorously evaluate explanations, rather than just going off
+      vibes. imo if you can't simulate a neuron you haven't really explained it. my guess is simulating
+      the neurons is way harder than finding plausible explanations. I have a post on this in the
+      works.</p>
+      <p>(i know the blog talks argues simulations are bad, but i think all of the downsides described
+      are avoided by looking at KL instead of neuron correlation.)"</p>
+    </div>
+    <p>
+      Three sentences carry the argument. "If you can't simulate a neuron you haven't really explained
+      it" is the demonstrated-explanation standard in its strongest form: a hypothesis that yields no
+      predictions on new data has not been tested, whatever its plausibility. "Simulating the neurons
+      is way harder than finding plausible explanations" is page 28's selection-bias warning as a
+      prior: plausible stories are cheap, because the examples that suggest them were chosen to fit.
+      And the parenthetical concedes the essay's objections to token-level correlation while proposing
+      a different target: put the simulated values into the running model and measure the divergence
+      (KL) of its output from the original. That is the ablation score Bills et al. built and set aside
+      as expensive, and the downstream-divergence metric Gao's own 2024 paper uses; it ignores the fine
+      detail of weak activations exactly to the extent the model
+      does.<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §4.1 and §4.4">[Gao SAE]</a>
+    </p>
+    <p>
+      So the dispute is narrower than the headlines. Both sides want held-out prediction written before
+      the look; the essay's "explanations that could lose" is that. They differ on what must be
+      predicted: whether new sentences built from the explanation fire the neuron strongly (a yes/no on
+      the explanation's own terms), or whether the explanation reproduces the neuron well enough that
+      the model cannot tell the difference, which the near-miss rate does not measure and which the
+      essay's note argues is the wrong first question. In the vocabulary of page 20, they disagree
+      about the construct: "legible to an investigator" versus "sufficient to reproduce the neuron's
+      role."
+    </p>
+
+    <h2 id="how-the-standard-is-practiced">How the standard is practiced when it is practiced</h2>
+    <p>
+      Two verified papers show what meeting the stronger standard looks like, and each also reports
+      where it falls short.
+    </p>
+    <p>
+      Gao et al.'s "Scaling and evaluating sparse autoencoders" evaluates
+      <span class="term" data-g="sae-feature">features</span> by four metrics:
+      downstream loss when the model runs on the reconstruction, probe loss against 61 labeled tasks,
+      explainability ("are there simple explanations that are both necessary and sufficient for the
+      activation"), and sparsity of ablation effects.<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §4">[Gao SAE]</a>
+      Because "precision is extremely expensive to evaluate when the simulations are using GPT-4," they
+      switch to a cheap n-gram explanation format that can be simulated on every token, hold out 16
+      activating sequences per feature for recall, and then use the explanations to simulate the
+      features, decode, and measure downstream loss, a metric that "values both recall and precision in
+      a way that is principled."<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §4.3–4.4">[Gao SAE]</a>
+      That is Gao's reply as a procedure. The limitations are equally plain: the n-gram format "is only
+      able to capture very simple patterns," and "a large fraction of the random activations of features
+      we find, especially in GPT-4, are not yet adequately
+      monosemantic."<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §6">[Gao SAE]</a>
+    </p>
+    <p>
+      Anthropic's "Towards Monosemanticity" triangulates. A blinded annotator scores features and
+      neurons on a rubric across eleven activation intervals; Claude writes explanations and predicts
+      activations on unseen tokens with "no leak of information about activation patterns, except for
+      the explanation"; and a second held-out test asks whether the explanation predicts which output
+      tokens the feature promotes, where features reach 74% against 58% for neurons and 50% for
+      chance.<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, How Interpretable is the Typical Feature?; Automated Interpretability">[Monosemanticity]</a>
+      It also runs the page-28 control, features of a randomly initialized transformer, and reports the
+      awkward outcome that the automated activation score ranked those random features <em>higher</em>,
+      because single-token features are trivially simulable, while the rubric and the logit test ranked
+      them correctly.<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, Appendix: Randomized Transformer">[Monosemanticity]</a>
+      That is the standard in action: the control exposed a weakness of one instrument, and the
+      write-up kept both in.
+    </p>
+    <figure>
+    <div class="diagram">                 observational                      interventional
+                 (does it fire when E says?)        (does the model use it as E says?)
+               ┌──────────────────────────────┬──────────────────────────────────┐
+ explanation   │ new examples from E alone,   │ swap or ablate the unit; does     │
+ written       │ written before measuring:    │ behavior follow? (Huang: IIA;     │
+ BEFORE the    │ fire-rate vs near-miss rate  │ Bills: ablation score)            │
+ look          │ (Already Clean: 76% vs 11%)  │                                   │
+               ├──────────────────────────────┼──────────────────────────────────┤
+ token-level   │ simulate every token,        │ substitute simulated activations  │
+ simulation    │ correlate with real          │ into the model; measure KL of the │
+               │ (Bills: ρ; Mono: Spearman)   │ output (Gao reply; Gao SAE §4.4)  │
+               └──────────────────────────────┴──────────────────────────────────┘
+ controls for every cell: random neuron · shuffled labels · baseline explanation</div>
+    <figcaption>Where each side's evidence sits. The essay's test is top-left; Gao's standard is bottom-right; the controls apply to all four.</figcaption>
+    </figure>
+
+    <h2 id="what-the-dispute-teaches">What the dispute teaches an evaluator</h2>
+    <p>
+      First, "demonstrated" is a property of a procedure, not a person. Cammarata co-authored the
+      simulation-scoring paper and now argues against leading with it; Gao co-authored it and argues for
+      a stricter version. Both positions come with methods attached, which is what lets a reader check
+      them. Second, the fight is over the construct, as validity fights usually are: an audit that finds
+      "one main job" for 90% of poles and a standard that demands behavior-preserving simulation
+      measure different things, and a number from one does not refute a number from the other. Third,
+      the cheap controls go missing more often than the expensive metrics. The essay reports a held-out
+      test but, in the text fetched, no control-neuron comparison for it; the 2023 paper reported a
+      baseline that beat its own method and left it in a results subsection. Reading for the control is
+      the fastest way to find the soft spot in any interpretability claim, including your own.
+    </p>
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Updating on the adjective. "Clean," "interpretable," "explained," "monosemantic" are
+      conclusions, and the dispute above shows experts attaching them to different measurements. When a
+      write-up says a neuron is explained, find the sentence that says what the explanation predicted,
+      on which held-out data, with what score, against what control. If the sentence is "an agent
+      investigated it and the story held together," you have a hypothesis; the essay's own words for
+      its audit are "qualitative evidence."</p>
+    </div>
+
+    <h2 id="checklist">Checklist: before a write-up says "explained"</h2>
+    <div class="card">
+      <ol>
+        <li><strong>The estimand.</strong> Which unit (neuron, pole, feature), over which text
+          distribution, scored how. If it is "fraction of units explained," the threshold and how the
+          number moves with it.</li>
+        <li><strong>The explanation and its predictions.</strong> The exact sentence, and the
+          activations it implies on sentences it has not seen, written before those sentences were run.</li>
+        <li><strong>The held-out set and its sampling.</strong> Texts the explainer never saw: random
+          corpus text, across-the-range intervals, generated positives and near misses, or a search for
+          high real activations the explanation missed. Random text alone barely sees false positives.</li>
+        <li><strong>The score and the simulator.</strong> The number, the simulator model, the scale,
+          and whether it is activation correlation or an effect on the model's output.</li>
+        <li><strong>The control neuron.</strong> The same explanation against random units from the
+          same layer, and the gap.</li>
+        <li><strong>The baseline explanation.</strong> What a single-token or surface-statistics
+          explanation scores on the same set, and the margin over it.</li>
+        <li><strong>The shuffled-label null.</strong> How often a broken pairing scores as well, and on
+          how many tokens.</li>
+        <li><strong>Both error types.</strong> Precision and recall, or their equivalents (fire-rate on
+          generated positives and on near misses), reported separately.</li>
+        <li><strong>If the claim is causal, the intervention and its control.</strong> What changed when
+          the unit was ablated or swapped, and what changed when a random unit was.</li>
+        <li><strong>The range covered.</strong> Evidence from the middle of the activation spectrum, not
+          only the top examples, and the explanation's known failures.</li>
+        <li><strong>What would have made it lose.</strong> The falsifying result, stated in advance, and
+          whether it was observed.</li>
+      </ol>
+    </div>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>The standard this course applied to graders, benchmarks and leaderboards applies unchanged to
+      claims about what a model does inside: a claim is demonstrated when it made a prediction on data
+      it had not seen, the prediction was scored, and the score beat the controls an empty claim would
+      also pass. Everything else, from a persuasive gallery to a coauthor's intuition, is a hypothesis
+      awaiting that test. Write the test before you look.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Nick Cammarata (Goodfire), "Neural Networks Are Already Clean," informal research essay, 2026. <a href="https://already-clean.goodfire.com/">already-clean.goodfire.com</a></li>
+        <li>Leo Gao (@nabla_theta), reply to Nick Cammarata on X, 15 October 2026 (retrieved via mirror APIs; full text quoted above). <a href="https://x.com/nabla_theta/status/2110862078844272677">x.com/nabla_theta/status/2110862078844272677</a></li>
+        <li>Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, Jeffrey Wu, "Scaling and evaluating sparse autoencoders," arXiv:2406.04093 (v1, June 2024). <a href="https://arxiv.org/abs/2406.04093">arxiv.org/abs/2406.04093</a></li>
+        <li>Trenton Bricken, Adly Templeton, Joshua Batson, Brian Chen, Adam Jermyn et al. (Anthropic), "Towards Monosemanticity: Decomposing Language Models With Dictionary Learning," Transformer Circuits Thread, October 2023. <a href="https://transformer-circuits.pub/2023/monosemantic-features/index.html">transformer-circuits.pub/2023/monosemantic-features</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

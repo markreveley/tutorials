@@ -1,0 +1,99 @@
+{
+  "id": "already-clean",
+  "citation": {
+    "authors": "Nick Cammarata (Goodfire), with contributions from Curt Tigges (language neuron research) and Tarun Gogineni (editing)",
+    "title": "Neural Networks Are Already Clean",
+    "venue": "Goodfire (informal research essay, self-described 'working hypothesis')",
+    "year": "2026 (the essay's citation block says 2026; no day is given in the fetched text. Replies on X to the author's announcement, including Leo Gao's, are dated 15 Oct 2026, and secondary coverage gives the same date.)",
+    "url": "https://already-clean.goodfire.com/"
+  },
+  "fetched_urls": [
+    "https://already-clean.goodfire.com/"
+  ],
+  "access": "full",
+  "verification_method": "Fetched 2026-10-20 with curl (2.1 MB HTML). Text extracted with a stdlib Python script that strips script and style elements and collapses whitespace: 43,720 words, including figure captions and the interactive galleries' alt text. All quotes are verbatim from that text. The essay says a technical companion paper is forthcoming; it had not been located at the time of verification, so numbers below are the essay's own preliminary figures.",
+  "claims": [
+    {
+      "planned": "The essay presents itself as an informal, preliminary working hypothesis rather than a finished result",
+      "verdict": "confirmed",
+      "finding": "The front matter and the text both say so; the companion paper is repeatedly deferred to.",
+      "quote": "An informal research essay and working hypothesis about neural networks ... A working hypothesis · 65-minute read ... A technical companion paper will offer a more detailed account of language model neuron experiments",
+      "location": "Front matter; closing section"
+    },
+    {
+      "planned": "Preliminary audit of Qwen3-32B: about 90% of neuron poles have one main job, about 7% two related jobs, 2-4% not yet understood",
+      "verdict": "confirmed",
+      "finding": "Stated with an explicit caveat that the number depends on thresholds for weak activations and on what counts as 'one thing', and that in smaller closely-examined sets the figure is 'closer to 97%'. The essay frames the single number as 'a broad pointer to the regime a neural network is in, rather than something precise'.",
+      "quote": "In preliminary audits of Qwen3-32B, we estimate that roughly 90% of neuron poles have one main job, often with small related offshoots; another ~7% have two related jobs; and only ~2-4% are not yet understood ... A note on this number: the share of neurons with one job varies depending on how you set the threshold for counting weak activations, depth, density of sub-circuits, and what you view as \"one thing\". ... Overall distilling everything into one \"cleanliness\" score should be taken as a broad pointer to the regime a neural network is in, rather than something precise to either optimize directly or hold too tightly.",
+      "location": "Section 3, 'Exploring language models' (opening) and footnote 1"
+    },
+    {
+      "planned": "The essay reports auditing native neurons in a trillion-parameter Kimi model",
+      "verdict": "corrected",
+      "finding": "The essay claims similar results 'in models up to trillions of parameters, like Kimi K3', deferring detail to the companion paper, and shows one attribution graph from Kimi K3 built from neurons. It also says full audits at that scale have not begun. So: a preliminary claim plus one example, not a completed audit.",
+      "quote": "We found similar results in models up to trillions of parameters, like Kimi K3, which the companion paper will cover in more detail. ... Here's an attribution graph from Kimi K3 using only neurons. As far as we know, it's the first published attribution graph of a multiple trillion parameter model. ... We haven't begun full audits of this scale yet, and hope to soon, but so far most things have been intuitively interpretable.",
+      "location": "Section 3; attribution-graph figure ('A found wallet, in a trillion-parameter model')"
+    },
+    {
+      "planned": "The 1,000 'neuron papers' were randomly chosen, from Qwen3-32B and Qwen3.6-35B-A3B",
+      "verdict": "confirmed",
+      "finding": "As stated in the gallery caption and surrounding text.",
+      "quote": "Here are 1000 neuron papers, detailed investigations into individual neurons, chosen randomly. Neuron papers 1,000 · Qwen3-32B and Qwen3.6-35B-A3B ... What we see is about 90% of neurons having basically one job, with recursive generalization offshoots that are usually related.",
+      "location": "Section 3, neuron-paper gallery"
+    },
+    {
+      "planned": "The essay's prediction test ('Explanations That Could Lose'): for 200 random neurons, an agent wrote five new examples and five near misses from the explanation alone before measurement; new examples fired strongly 76% of the time, near misses 11%; explanation won 164, tied 15, lost 4 (of 183 with a positive-side explanation); 'strong' means at least 30% of the neuron's corpus maximum",
+      "verdict": "confirmed",
+      "finding": "All numbers confirmed. A further test used 'the most distant concept' the agent could invent: those texts fired strongly about 1% of the time and 179 of 183 neurons never fired on them. The essay calls these 'positive controls', says the forthcoming paper has 'many more prediction metrics and positive controls', and explicitly says it is 'mostly not trying to claim a perfect explanation of each neuron here'.",
+      "quote": "For 200 random neurons from our gallery, an agent read only each neuron's explanation and wrote five new examples that should drive it and five near misses that shouldn't, before we measured any of them. Among the 183 whose explanations describe their positive side, the new examples fired their neurons strongly 76% of the time; the near misses, 11%. The explanation won for 164, tied for 15 and lost for 4. ... Responses are a share of the neuron's strongest example in the corpus; a strong response is 30% or more. Positive controls are one of many tools for criticizing an explanation of a neuron, and our forthcoming paper has many more prediction metrics and positive controls. But we're mostly not trying to claim a perfect explanation of each neuron here. ... Those texts fired their neurons strongly about 1% of the time, and 179 of the 183 neurons never fired on them at all.",
+      "location": "Section 4, 'Explanations That Could Lose'"
+    },
+    {
+      "planned": "The essay reports a random-neuron comparison for the positive-control test (i.e. scoring the same new examples against unrelated neurons)",
+      "verdict": "unverifiable",
+      "finding": "Not found in the fetched text. The contrasts reported are within-neuron (near misses at 11% and distant concepts at about 1% versus new examples at 76%). No table scores the generated examples against a random other neuron. The essay points to the companion paper for more controls.",
+      "quote": "Positive controls are one of many tools for criticizing an explanation of a neuron, and our forthcoming paper has many more prediction metrics and positive controls.",
+      "location": "Section 4, 'Explanations That Could Lose'"
+    },
+    {
+      "planned": "The essay argues against simulation scoring as the primary test of an explanation",
+      "verdict": "confirmed",
+      "finding": "A dedicated note, 'On Simulation Scores', argues that simulation measures attention-placement details and weak-activation fine structure that have little to do with what a neuron does, that language models are poor at emitting precise activation values, and that simulation 'might eventually become one useful score among several'. Earlier the essay says 2023-era metrics rewarded 'explanations that could simulate activations rather than ones that were right, which often come apart'.",
+      "quote": "Simulation scores often end up measuring where attention puts information, which is a question about attention motifs rather than about the neuron. ... Simulation also rewards fine details of weak activations that matter little for understanding what a neuron does. ... Finally, language models are poor at outputting precise activation values even when they understand what's going on, and they usually aren't trained for the task. ... So I'd rather rely on normal science than on any one metric. Simulation might eventually become one useful score among several, but later, once we understand networks well, and probably with simulators trained for the job. But I don't think they're a good place to start. ... the tools and metrics were weak, rewarding explanations that could simulate activations rather than ones that were right, which often come apart",
+      "location": "Appendix note 'On Simulation Scores'; Section 1 ('Why was the gap so large?')"
+    },
+    {
+      "planned": "The author treats the attribution-graph audits as qualitative evidence and declines to turn them into a cleanliness score",
+      "verdict": "confirmed",
+      "finding": "As stated.",
+      "quote": "We had agents review 100,000 attribution graphs, and I inspected thousands of graphs across images and language. Apparent anomalies usually turned out to be motifs I hadn't recognized; I haven't found a substantial group of neurons whose joint activity remained inexplicable. I would update strongly on even one convincing example, but for now I regard this as qualitative evidence—I don't trust our current tools enough to turn it into a cleanliness score.",
+      "location": "Section 4, 'Audits of Attribution Graphs'"
+    },
+    {
+      "planned": "The essay cites the 2023 baselines it is arguing against: Bills et al.'s 1.7% and Towards Monosemanticity's median neuron score of 0",
+      "verdict": "confirmed",
+      "finding": "Both figures are cited in the essay and match the primary sources verified in bills-neuron-explainer.json and monosemanticity.json.",
+      "quote": "Anthropic's Towards Monosemanticity (2023), studying a small one-layer model, gave the median neuron a 0 on its rubric out of a possible 14, meaning the rater couldn't form any hypothesis. The automated interpretability project I started at OpenAI (also 2023) found about 1.7% of neurons interpretable by our most generous measure.",
+      "location": "Section 3 (opening)"
+    },
+    {
+      "planned": "Peer-review status",
+      "verdict": "unverifiable",
+      "finding": "The essay does not state whether it was reviewed; its self-description ('informal research essay', 'working hypothesis') and the deferral to a companion paper are the only evidence. Treat as an unreviewed preprint-style essay.",
+      "quote": "An informal research essay and working hypothesis about neural networks",
+      "location": "Front matter"
+    }
+  ],
+  "teachable_points": [
+    {
+      "point": "The essay's own prediction test is the right shape (write the predictions before you measure), and the essay is candid that it is a partial test and that the headline percentage is threshold-dependent.",
+      "quote": "a good explanation is specific enough to lose",
+      "numbers": "200 random neurons; 183 scored; 76% strong on new examples vs 11% on near misses; won 164 / tied 15 / lost 4; distant concepts ~1%."
+    },
+    {
+      "point": "A rejection of one metric is not a rejection of measurement: the essay keeps held-out prediction (new examples written blind) while rejecting token-level simulation correlation.",
+      "quote": "Simulation might eventually become one useful score among several",
+      "numbers": "n/a"
+    }
+  ]
+}

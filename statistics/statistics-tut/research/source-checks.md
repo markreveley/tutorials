@@ -27,6 +27,54 @@ course itself and its labs do not.
 - Chen et al., *Evaluating Large Language Models Trained on Code*, v2 HTML,
   section 2.1: the pass@k event and combinatorial estimator.
 
+## Module 6 additions, checked 2026-10-20
+
+Fetched with the WebFetch tool; each entry records what was read and what was not.
+
+- Benjamini & Hochberg (1995), *Controlling the False Discovery Rate*, JRSS-B
+  57(1):289–300, DOI 10.1111/j.2517-6161.1995.tb02031.x. The Wiley page returned
+  HTTP 403 and JSTOR returned an error page; a PDF found on a university site was a
+  scanned image with no extractable text. Bibliographic data (title, authors,
+  journal, volume, issue, pages, year) were verified from the Crossref record for
+  the DOI. No sentence from the paper is quoted or paraphrased as the paper's own
+  wording; the FDR definition and the step-up rule are taken from the SciPy and
+  statsmodels documentation below, which cite the paper.
+- SciPy `false_discovery_control`: FDR defined as the expected proportion of
+  rejected null hypotheses that are actually true; `bh` for independent tests or
+  positive regression dependence, `by` for arbitrary dependence; references to
+  Benjamini & Hochberg 1995 and Benjamini & Yekutieli 2001 confirmed.
+- SciPy `pearsonr`: the deviation cross-product formula, range −1 to +1, the
+  normality assumption behind the default p-value, and the `PermutationMethod`
+  option that routes to `permutation_test`.
+- SciPy `spearmanr`: a nonparametric measure of monotonicity, range, p-value only
+  accurate for very large samples with a permutation test recommended otherwise,
+  and the undefined-for-constant-input behavior. The page does not state its tie
+  handling; the lab's average-rank convention is documented in `stats.py`.
+- SciPy `permutation_test`: the `pairings` type for correlation tests, the
+  (count+1)/(resamples+1) convention with the observed statistic included, and
+  exact enumeration when the resample count reaches the number of distinct
+  permutations. The lab's `permutation_pvalue` follows the same conventions.
+- scikit-learn cross-validation guide §3.1: testing on training data is a
+  methodological mistake, and tuning against a test set leaks knowledge into the
+  evaluation, motivating a held-out validation set.
+- OpenAI automated-interpretability repository, `scoring.py`: `correlation_score`
+  returns `np.corrcoef(real_activations, predicted_activations)[0, 1]`, and the
+  aggregate score computes the correlation over all activations rather than
+  averaging per-sequence correlations. The paper page for *Language models can
+  explain neurons in language models* rendered only its table of contents, so the
+  course makes no claim about the paper's text, its held-out protocol, or results.
+- NIST e-Handbook: the scatter-plot and linear-correlation-plot pages were fetched
+  but neither defines the correlation coefficient, so the SciPy pages are cited for
+  the coefficients instead. The existing NIST Bonferroni citation is reused.
+
+The eight-pair pencil example, the sixty-candidate fixture, and all screening
+counts are original. The exact permutation p-values (0.0030 and 0.0046 over 40,320
+orderings), the normal-theory comparison (0.0231), and every screening count in
+lessons 24–25 were produced by the lab and are recorded in the transcript. The
+Pearson value 0.7776 was cross-checked against `numpy.corrcoef` in a separate
+environment. The normal-theory tail used only in the simulation was checked
+against closed forms at n = 3, 4, and 6 in `labs/test_stats.py`.
+
 ## Original material
 
 All fictional agents, task counts, confusion matrices, arithmetic examples,
@@ -35,7 +83,7 @@ summaries of real provider performance or production measurements. General
 mathematical explanations are written independently; sources are cited where a
 method or attributed principle is introduced. No long quotations are reproduced.
 
-The two fixture files are constructed, not random samples from a real population.
+The three fixture files are constructed, not random samples from a real population.
 Their inferential interpretation is explicitly hypothetical. They illustrate how
 an analysis changes when its assumptions change; they do not validate interval
 coverage. Separate binomial simulation and exact-enumeration checks study the

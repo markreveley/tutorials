@@ -1,0 +1,122 @@
+{
+  "cammarata2026": {
+    "tag": "Cammarata 2026",
+    "title": "Nick Cammarata (Goodfire, 2026), Neural Networks Are Already Clean: an informal research essay and working hypothesis",
+    "url": "https://already-clean.goodfire.com/",
+    "claims": "Verified from the fetched essay: the thesis sentences; the Qwen3-32B preliminary audit figures (roughly 90% of neuron poles with one main job, ~7% with two related jobs, ~2–4% not yet understood, with the author’s own caveat about thresholds); the 1.7% figure attributed to the 2023 OpenAI project; the reading of InceptionV1 4e:55 as a V-shape neuron; the “On Simulation Scores” section; the ten mixed3b curve-detector unit numbers and the author’s table of their preferred orientations; the agent-written positive-control and distant-concept tests. The essay states a companion technical paper is forthcoming; its results are not reproduced here.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "gao2026": {
+    "tag": "Gao 2026",
+    "title": "Leo Gao (LessWrong, 17 October 2026), Neural networks are not already clean",
+    "url": "https://www.lesswrong.com/posts/Dkh7pXKjoNWkkxQDz/neural-networks-are-not-already-clean",
+    "claims": "Verified from the full post text fetched through the LessWrong API: the simulation-score argument, the two failure modes of judging by activating examples (the pattern need not be sufficient; magnitudes may matter), the recommendation of downstream KL on a large dataset over correlation scoring, and the closing remarks on rigor. No numbers are claimed from this post.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "zoomin": {
+    "tag": "Zoom In",
+    "title": "Olah, Cammarata, Schubert, Goh, Petrov & Carter (Distill, 2020), Zoom In: An Introduction to Circuits",
+    "url": "https://distill.pub/2020/circuits/zoom-in/",
+    "claims": "Verified: the three claims (features, circuits, universality); the seven arguments offered for curve detectors; the description of 4e:55 as responding to cat faces, fronts of cars, and cat legs; the “cars in superposition” circuit and the definition of superposition; the remark that feature visualization establishes a causal link while dataset examples test use in practice.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "curves": {
+    "tag": "Curve Detectors",
+    "title": "Cammarata, Goh, Carter, Schubert, Petrov & Olah (Distill, 2020), Curve Detectors",
+    "url": "https://distill.pub/2020/circuits/curve-detectors/",
+    "claims": "Verified: the ten mixed3b units listed as the 3b curve family; each detector prefers one orientation and fires less as orientation changes; invariance to brightness, texture, and colour; 3b:379 fires on 11% of dataset crops with a pre-activation mean near −200; the hand-labelled 800-image dataset analysis with its four categories; joint tuning curves on rotated dataset examples; synthetic curve, angle, and line stimuli; sensitivity to orientation and tolerance of radius; the “wisps” showing fragility; and the claims of causality, generality, purity, and family. Note: the article studies the original TensorFlow InceptionV1 weights, not torchvision’s.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "bills2023": {
+    "tag": "Bills et al. 2023",
+    "title": "Bills, Cammarata, Mossing, Tillman, Gao, Goh, Sutskever, Leike, Wu & Saunders (OpenAI, 2023), Language models can explain neurons in language models",
+    "url": "https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html",
+    "claims": "Verified from the fetched page and its bundled text: the three-step explain–simulate–score pipeline; the explanation score as a correlation-based measure scaled so that explained variance is ρ²; “top-and-random” versus “random-only” scoring; over 1,000 GPT-2 XL neurons with explanations scoring at least 0.8; the observation that correlation scores of 0.9 still gave relatively low ablation scores (0.3 random-only, 0.6 top-and-random on average).",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "huang2023": {
+    "tag": "Huang et al. 2023",
+    "title": "Huang, Geiger, D’Oosterlinck, Wu & Potts (2023), Rigorously Assessing Natural Language Explanations of Neurons, arXiv:2309.10312",
+    "url": "https://arxiv.org/abs/2309.10312",
+    "claims": "Verified from the arXiv HTML: the observational and intervention modes; precision/recall definitions against the set of strings an explanation denotes; the audit of 300 of the 1.7k GPT-2 XL explanations scoring ≥ 0.8; mean F1 0.56 (precision 0.64, recall 0.50) against a random-pairing baseline of zero; the worked argument that a 10-excerpt top-and-random score can be perfect for an unfaithful explanation; and the finding of little to no causal efficacy in the intervention mode.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "gao2024": {
+    "tag": "Gao et al. 2024",
+    "title": "Gao, Dupré la Tour, Tillman, Goh, Troll, Radford, Sutskever, Leike & Wu (2024), Scaling and evaluating sparse autoencoders, arXiv:2406.04093",
+    "url": "https://arxiv.org/abs/2406.04093",
+    "claims": "Verified from the arXiv HTML: k-sparse (TopK) autoencoders; a 16 million latent autoencoder trained on GPT-4 activations for 40 billion tokens; quality metrics beyond reconstruction (downstream loss, probe loss, explainability with precision and recall, ablation sparsity); dead-latent mitigations; the observation that substituting the 16M autoencoder into GPT-4 gives loss corresponding to about 10% of pretraining compute.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "olsson2022": {
+    "tag": "Induction heads",
+    "title": "Olsson, Elhage, Nanda, Joseph, et al. (Anthropic, 2022), In-context Learning and Induction Heads",
+    "url": "https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html",
+    "claims": "Verified: the behavioural definition of an induction head on repeated random sequences (prefix matching and copying), the [A][B]…[A]→[B] rule, the in-context learning score, the six arguments, and the phase-change claim. The article gives a continuum of scores, not a numeric threshold; the threshold used in this course is our own.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "monosemantic": {
+    "tag": "Towards Monosemanticity",
+    "title": "Bricken, Templeton, Batson, et al. (Anthropic, 2023), Towards Monosemanticity: Decomposing Language Models With Dictionary Learning",
+    "url": "https://transformer-circuits.pub/2023/monosemantic-features/index.html",
+    "claims": "Verified: a one-layer transformer with a 512-neuron MLP decomposed by sparse autoencoders; the summary of results (features invisible in the neuron basis, steering, universality, feature splitting); the blinded human rubric on which the median neuron scored 0 and the median feature 12; the Pearson correlation of 0.74 between the Arabic-script feature and its proxy over 40 million tokens; and the remark distinguishing their evaluation sampling from the Bills et al. top-and-random mixture.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "logitlens": {
+    "tag": "Logit lens",
+    "title": "nostalgebraist (LessWrong, 2020), interpreting GPT: the logit lens",
+    "url": "https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens",
+    "claims": "Verified from the full post text: the observation that applying the final unembedding to intermediate layers gives distributions that make intuitive sense, the “pretty good guess” remark, the caveat that the lens shows some of what is going on but not all, and the later note that KL divergence is not a metric.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "nanda": {
+    "tag": "Nanda 2025",
+    "title": "Neel Nanda (2025), How To Become A Mechanistic Interpretability Researcher",
+    "url": "https://www.alignmentforum.org/posts/jP9KDyMkchuv6tHwm/how-to-become-a-mechanistic-interpretability-researcher",
+    "claims": "Verified from the full post text: “Mech interp is a fundamentally empirical science”; the recommendation to code core techniques on GPT-2 Small; TransformerLens for models up to about 9B; ARENA Chapter 1.2 as the essential tutorial; “The default state of the world is that your research is false”; and “Excitement is evidence of bullshit.”",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "arena": {
+    "tag": "ARENA",
+    "title": "ARENA (Alignment Research Engineer Accelerator) materials, README",
+    "url": "https://github.com/callummcdougall/ARENA_3.0",
+    "claims": "Verified from the repository README: Chapter 1 covers building a transformer, locating induction heads in a 2-layer model with TransformerLens, the indirect object identification circuit in GPT-2 small, toy-model superposition and training sparse autoencoders, and steering vectors.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "neuronpedia": {
+    "tag": "Neuronpedia",
+    "title": "Neuronpedia: open source interpretability platform",
+    "url": "https://www.neuronpedia.org/",
+    "claims": "Verified from the front page on 2026-10-20: describes itself as an open source interpretability platform for exploring, visualising, and steering model internals; lists sparse-autoencoder releases including residual-stream SAEs for GPT2-Small, and a search over latents by explanation text or by running custom text. Feature-level claims are not reproduced here.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "gorton2024": {
+    "tag": "Gorton 2024",
+    "title": "Liv Gorton (2024), The Missing Curve Detectors of InceptionV1: Applying Sparse Autoencoders to InceptionV1 Early Vision, arXiv:2406.03662",
+    "url": "https://arxiv.org/abs/2406.03662",
+    "claims": "Verified: title and author from the arXiv abstract page. Cited only as the SAE-on-InceptionV1 study that the 2026 essay discusses; no result from it is asserted here.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  },
+  "torchvision": {
+    "tag": "torchvision",
+    "title": "torchvision.models.googlenet and GoogLeNet_Weights.IMAGENET1K_V1 (torchvision 0.29.1 installed source)",
+    "url": "https://pytorch.org/vision/stable/models/generated/torchvision.models.googlenet.html",
+    "claims": "Verified from the installed package: the IMAGENET1K_V1 weights are the file googlenet-1378be20.pth whose recipe link points to torchvision’s own classification reference training; the model sets transform_input when pretrained weights are loaded; inception3b outputs 480 channels at 28×28 for a 224×224 input. These weights are a separate training run from the InceptionV1 studied by Distill, so unit numbers do not transfer.",
+    "checked": "2026-10-20",
+    "status": "confirmed-with-stated-scope"
+  }
+}

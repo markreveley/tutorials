@@ -1,0 +1,39 @@
+{
+  "model": "gpt2",
+  "layer": 6,
+  "hook": "blocks.6.hook_resid_post (TransformerLens name) == hidden_states[7] (transformers)",
+  "n_tokens": 302,
+  "d_model": 768,
+  "dtype": "float16",
+  "python": "3.13.16",
+  "torch": "2.14.1+cpu",
+  "transformers": "5.20.2",
+  "numpy": "2.5.4",
+  "passage_chars": 1345,
+  "fp16_max_abs_error": 0.7275390625,
+  "head": {
+    "layer": 7,
+    "head": 0,
+    "d_head": 64,
+    "shapes": {
+      "W_Q": [
+        768,
+        64
+      ],
+      "W_K": [
+        768,
+        64
+      ],
+      "W_V": [
+        768,
+        64
+      ],
+      "W_O": [
+        64,
+        768
+      ]
+    }
+  },
+  "first_token_norm": 3046.45947265625,
+  "median_token_norm": 85.0795669555664
+}

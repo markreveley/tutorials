@@ -66,5 +66,16 @@ TERMS = [
  ('pass-at-k','Pass@k','The probability at least one of k attempts succeeds on a task, averaged over tasks under a specified sampling policy.'),
  ('all-k-success','All-k success','The probability every one of k attempts succeeds on a task, averaged over tasks; sometimes written pass^k.'),
  ('pareto-frontier','Pareto frontier','Choices for which no other available choice is at least as good on every stated objective and better on at least one.'),
+ ('correlation','Correlation','A number between −1 and +1 describing how two paired measurements vary together; zero means no linear or monotone association of the kind measured, not independence.'),
+ ('pearson-correlation','Pearson correlation','The sum of products of paired deviations from the means divided by the root of the product of the summed squared deviations; it measures linear co-variation and is sensitive to extreme values.'),
+ ('spearman-correlation','Spearman correlation','The Pearson correlation of the ranks of two variables, with tied values sharing average ranks; it measures any monotone relationship and ignores how far apart values are.'),
+ ('permutation-test','Permutation test','A test that recomputes a statistic after shuffling the labels relative to the other variable; the p-value is the fraction of relabelings at least as extreme as the observed one under the exchangeable-labels null.'),
+ ('null-distribution','Null distribution','The distribution a test statistic would have if the null hypothesis held; a p-value locates the observed statistic within it.'),
+ ('bonferroni-correction','Bonferroni','Testing each of m hypotheses at alpha/m, which bounds the familywise error rate at alpha when every individual p-value is valid.'),
+ ('benjamini-hochberg','Benjamini–Hochberg','Sort m p-values, find the largest i with p(i) ≤ (i/m)q, and reject the i smallest; it controls the false discovery rate at q under independence or positive dependence.'),
+ ('screening','Screening','Testing many candidates with the same procedure in order to select a few for follow-up; the selection step changes what the surviving estimates mean.'),
+ ('selection-bias','Selection bias','A distortion that arises when the cases analyzed were chosen by a rule related to the outcome, such as reporting the best of many candidates as if it had been the only one tested.'),
+ ('winners-curse','Winner’s curse','The tendency of the best-looking candidate among many to have been helped by noise, so its observed effect overstates what fresh data will show.'),
+ ('held-out-split','Held-out split','A division of observations into a part used to choose or fit and a part reserved to score the choice; the reserved part gives an unbiased estimate only while it stays unused for selection.'),
 ]
 GLOSSARY = {slug:dict(name=name, short=definition, defn=definition) for slug,name,definition in TERMS}

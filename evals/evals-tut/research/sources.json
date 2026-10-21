@@ -472,6 +472,92 @@
         "Braintrust: experiments comparing eval runs, datasets, scorers (autoevals library), playground — confirm core concepts",
         "The general concept both teach: offline experiments vs online monitoring on the same scoring infrastructure"
       ]
+    },
+    {
+      "id": "bills-neuron-explainer",
+      "tier": "interpretability",
+      "title": "Language models can explain neurons in language models",
+      "authors": "Steven Bills, Nick Cammarata, Dan Mossing, Henk Tillman, Leo Gao, Gabriel Goh, Ilya Sutskever, Jan Leike, Jeff Wu, William Saunders",
+      "venue": "OpenAI, May 2023",
+      "urls": ["https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html"],
+      "planned_claims": [
+        "Three-step explain/simulate/score method; the simulator sees only the explanation",
+        "Score is the correlation between simulated and real activations",
+        "Top-and-random vs random-only scoring sets",
+        "GPT-2 XL numbers: 307,200 neurons, average 0.151 / 0.037, 1.7% above 0.7, over 1,000 at 0.8 or above",
+        "Human explanations only modestly better and low in absolute terms",
+        "The authors' own caveats: recall-biased scoring, token-lookup baseline, correlational not causal, simulator cue-picking"
+      ]
+    },
+    {
+      "id": "huang-neuron-explanations",
+      "tier": "interpretability",
+      "title": "Rigorously Assessing Natural Language Explanations of Neurons",
+      "authors": "Jing Huang, Atticus Geiger, Karel D'Oosterlinck, Zhengxuan Wu, Christopher Potts",
+      "venue": "arXiv:2309.10312, September 2023",
+      "urls": ["https://arxiv.org/abs/2309.10312"],
+      "planned_claims": [
+        "Observational mode (all and only) vs intervention mode (causal mediator)",
+        "300 of the top-scoring Bills explanations: precision 0.64, recall 0.50, F1 0.56; random pairing F1 0",
+        "F1 correlates -0.1 with the simulation score; the 5n% insensitivity argument",
+        "Intervention: GPT-4 explanations about equal to a random baseline; no single-neuron causal task found"
+      ]
+    },
+    {
+      "id": "gao-sae",
+      "tier": "interpretability",
+      "title": "Scaling and evaluating sparse autoencoders",
+      "authors": "Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, Jeffrey Wu",
+      "venue": "arXiv:2406.04093, June 2024",
+      "urls": ["https://arxiv.org/abs/2406.04093"],
+      "planned_claims": [
+        "Four quality metrics: downstream loss, probe loss, explainability (precision/recall), ablation sparsity",
+        "Bills score 'disproportionately depends on recall', with the don't-stop example",
+        "Zero-ablation baseline makes poor explanations look good (98.2%)",
+        "16M-latent autoencoder on GPT-4; explanation-reconstruction metric"
+      ]
+    },
+    {
+      "id": "monosemanticity",
+      "tier": "interpretability",
+      "title": "Towards Monosemanticity: Decomposing Language Models With Dictionary Learning",
+      "authors": "Trenton Bricken, Adly Templeton, Joshua Batson, Brian Chen, Adam Jermyn et al. (Anthropic)",
+      "venue": "Transformer Circuits Thread, October 2023",
+      "urls": ["https://transformer-circuits.pub/2023/monosemantic-features/index.html"],
+      "planned_claims": [
+        "Blinded human rubric across 11 activation intervals; median neuron 0, median feature interval 12",
+        "Automated interpretability follows Bills with Claude; no leak; Spearman over 540 predictions per feature",
+        "Logit-weight prediction 74% features vs 58% neurons; randomized-transformer control",
+        "Top examples hide polysemanticity"
+      ]
+    },
+    {
+      "id": "already-clean",
+      "tier": "interpretability",
+      "title": "Neural Networks Are Already Clean",
+      "authors": "Nick Cammarata (Goodfire)",
+      "venue": "Goodfire, 2026 (informal essay, self-described working hypothesis)",
+      "urls": ["https://already-clean.goodfire.com/"],
+      "planned_claims": [
+        "Preliminary Qwen3-32B audit: ~90% of neuron poles one main job, ~7% two, ~2-4% not understood",
+        "Claims similar results up to Kimi K3; full audits at that scale not begun",
+        "Prediction test on 200 random neurons: 76% strong on new examples vs 11% on near misses; won 164 / tied 15 / lost 4",
+        "Argues against simulation scores as the primary test",
+        "Reports no random-neuron comparison for the prediction test"
+      ]
+    },
+    {
+      "id": "gao-reply",
+      "tier": "interpretability",
+      "title": "Reply to Nick Cammarata on X (15 Oct 2026)",
+      "authors": "Leo Gao (@nabla_theta)",
+      "venue": "X, 15 October 2026",
+      "urls": ["https://x.com/nabla_theta/status/2110862078844272677"],
+      "planned_claims": [
+        "'imo if you can't simulate a neuron you haven't really explained it' (verbatim)",
+        "Proposes KL divergence rather than activation correlation",
+        "Announces a longer post; not located as of 2026-10-20"
+      ]
     }
   ]
 }

@@ -105,7 +105,6 @@
     "def": "<strong>Overfitting</strong> is fitting the quirks of your data rather than the pattern it samples: a model, prompt, or agent scaffold tuned until it aces a particular set of test cases may have learned those cases, not the task. In eval work this bites twice — models can overfit public benchmarks (everyone optimizes toward the same famous test sets), and <em>you</em> can overfit your own eval by iterating against it until the score is meaningless. The standard defense in both cases is the same: keep a <a href='pages/05-from-failures-to-evals.html'>holdout</a> you don't iterate against, and refresh test data periodically. See <a href='pages/21-contamination.html'>Data Contamination</a> for the training-data version of this problem.",
     "see": ["holdout-set", "contamination", "saturation", "train-test-split"]
   },
-
   "random-variable": {
     "name": "Random variable",
     "short": "A quantity whose value depends on chance — like 'whether this eval sample passes' or 'this run's score.' The basic object probability theory works with.",
@@ -309,7 +308,6 @@
     "also": "statistical independence, i.i.d. assumption",
     "see": ["clustered-standard-errors", "binomial-distribution", "central-limit-theorem"]
   },
-
   "contamination": {
     "name": "Contamination",
     "short": "When a benchmark's test data ended up in a model's training data, so the model may have memorized answers — and the score measures memory, not ability.",
@@ -403,7 +401,6 @@
     "also": "benchmark saturation",
     "see": ["contamination", "live-benchmark", "external-validity", "overfitting"]
   },
-
   "tracing": {
     "name": "Tracing",
     "short": "Recording the full execution of an LLM application — every model call, tool call, and intermediate step with inputs, outputs, timing, and cost — for inspection and evaluation.",
@@ -479,5 +476,80 @@
     "short": "A RAG metric for the retrieval step: did the retrieved documents contain all the information needed to answer correctly, or did retrieval miss something essential?",
     "def": "<strong>Context recall</strong> asks whether retrieval found <em>everything needed</em>: taking a reference answer as the standard, it checks how much of that answer's content is actually supported by the retrieved chunks. It is <a href='appendices/e-agreement-metrics.html'>recall</a> applied to retrieval, and it catches the silent RAG failure that generation-side metrics can't see: if the key document was never fetched, even a perfectly <a href='pages/25-tooling-survey.html'>faithful</a> generator must answer incompletely or refuse — and the trace looks fine unless you check what retrieval missed. Unlike its partner context precision, it typically needs a <a href='pages/03-types-of-evaluators.html'>ground-truth</a> reference answer to grade against. Part of the Ragas family of RAG metrics.",
     "see": ["context-precision", "recall", "faithfulness", "answer-relevancy", "rag"]
+  },
+  "neuron": {
+    "name": "Neuron",
+    "short": "A single unit inside one layer of a neural network; for every input token it produces one number, its activation.",
+    "def": "In a transformer language model, a <strong>neuron</strong> is one unit of an MLP (feed-forward) layer. For every token the model processes, the neuron outputs a single number, its <a href='glossary.html#activation'>activation</a>; most neurons sit near zero most of the time and rise on particular tokens or contexts. GPT-2 XL has 307,200 of them. Interpretability work tries to say in words when a neuron fires (a <a href='glossary.html#neuron-explanation'>neuron explanation</a>), and <a href='pages/27-scoring-an-explanation.html'>Module 8</a> is about how such a statement is tested. Many neurons respond to several unrelated things at once (<a href='glossary.html#polysemanticity'>polysemanticity</a>), which is why some work explains learned directions called features instead.",
+    "see": ["activation", "neuron-explanation", "polysemanticity", "sae-feature"]
+  },
+  "activation": {
+    "name": "Activation",
+    "short": "The number a neuron (or feature) outputs for one token; the quantity an explanation of that neuron is supposed to predict.",
+    "def": "An <strong>activation</strong> is the value a <a href='glossary.html#neuron'>neuron</a> or feature produces on one token of one text. A neuron's activations across a text are the raw data of interpretability: an explanation such as 'fires on legal citations' is a prediction that activations will be high on citation tokens and near zero elsewhere. In <a href='pages/27-scoring-an-explanation.html'>simulation scoring</a>, activations are normalized to a 0–10 integer scale (the neuron's largest value ever observed maps to 10, negatives to 0) so that a language model can read and predict them.",
+    "see": ["neuron", "simulation-scoring", "max-activating-examples"]
+  },
+  "neuron-explanation": {
+    "name": "Neuron explanation",
+    "short": "A natural-language description of when a neuron or feature fires; treated in this course as a hypothesis that predicts activations on unseen text.",
+    "def": "A <strong>neuron explanation</strong> is a sentence like 'fires on four-digit years' that claims to describe a <a href='glossary.html#neuron'>neuron</a>'s behavior. Usually it is written from the neuron's <a href='glossary.html#max-activating-examples'>max-activating examples</a>, which makes it a description of a handful of texts. Read as a claim about the neuron it is a hypothesis: it predicts an <a href='glossary.html#activation'>activation</a> for every token of every text, and it is validated the way a <a href='pages/06-validating-the-grader.html'>grader</a> is, on held-out data against ground truth. The two tests the course covers are <a href='glossary.html#simulation-scoring'>simulation scoring</a> (observational) and <a href='glossary.html#intervention'>intervention</a> (causal); see <a href='pages/27-scoring-an-explanation.html'>page 27</a>.",
+    "also": "feature explanation",
+    "see": ["simulation-scoring", "max-activating-examples", "control-neuron", "intervention"]
+  },
+  "simulation-scoring": {
+    "name": "Simulation scoring",
+    "short": "Testing a neuron explanation by having a model predict the neuron's activations on held-out text from the explanation alone, then correlating the predictions with the real activations.",
+    "def": "<strong>Simulation scoring</strong> (Bills et al. 2023) is the standard held-out test for a <a href='glossary.html#neuron-explanation'>neuron explanation</a>. An explainer model writes the explanation from example activations; a separate simulator model, shown only the explanation and new text excerpts, predicts an <a href='glossary.html#activation'>activation</a> for every token; the score is the correlation between the simulated and real activations across those tokens, 1 for a perfect match and about 0 for an unrelated explanation. The score depends on the scoring set: 'top-and-random' mixes top-activating and random excerpts and is nearly blind to false positives, so a broad explanation can score well. <a href='pages/27-scoring-an-explanation.html'>Page 27</a> gives the method and its numbers; <a href='pages/28-controls-for-interpretability-claims.html'>page 28</a> the controls it needs.",
+    "also": "explanation score, automated interpretability score",
+    "see": ["neuron-explanation", "control-neuron", "spearman-correlation", "precision", "recall"]
+  },
+  "max-activating-examples": {
+    "name": "Max-activating examples",
+    "short": "The texts on which a neuron fires hardest; the usual raw material for writing an explanation, and a biased sample of what the neuron does.",
+    "def": "A neuron's <strong>max-activating examples</strong> (top examples, top dataset examples) are the excerpts, out of a large corpus, that produce its largest <a href='glossary.html#activation'>activations</a>. Explanations are usually written by reading them, which is why they are a hazard: they show the neuron at its most certain and hide the long middle of its range, where a unit that looks single-purpose at the top may respond to other things. Scoring an explanation on the same examples that produced it is a training-set score. Anthropic's 'Towards Monosemanticity' sampled across eleven activation intervals instead; see <a href='pages/28-controls-for-interpretability-claims.html'>page 28</a>.",
+    "also": "top examples, top dataset examples",
+    "see": ["neuron-explanation", "polysemanticity", "holdout-set", "overfitting"]
+  },
+  "polysemanticity": {
+    "name": "Polysemanticity",
+    "short": "A neuron or unit responding to several unrelated things; the main reason one-sentence explanations of neurons score poorly, and something top examples alone cannot reveal.",
+    "def": "A unit is <strong>polysemantic</strong> when it fires on several unrelated kinds of input (the classic example is a vision neuron for both cat faces and car fronts). Bills et al. 2023 found the typical GPT-2 XL neuron 'appeared quite polysemantic', and Huang et al. 2023 measured the same thing as recall failures, neurons firing on strings their explanation did not cover. Because the secondary jobs rarely produce a neuron's very largest activations, an explanation written from <a href='glossary.html#max-activating-examples'>max-activating examples</a> cannot detect them; you have to sample across the activation range. Whether polysemanticity is pervasive in modern models is the subject of the 2026 dispute in <a href='pages/29-case-study-demonstrated-explanation.html'>page 29</a>. <a href='glossary.html#sparse-autoencoder'>Sparse autoencoders</a> are one proposed remedy.",
+    "also": "polysemantic neuron, superposition (related)",
+    "see": ["neuron", "max-activating-examples", "sae-feature", "sparse-autoencoder"]
+  },
+  "control-neuron": {
+    "name": "Control neuron",
+    "short": "A randomly chosen neuron the explanation is not about, scored with the same explanation on the same held-out text; the baseline that gives an explanation score its scale.",
+    "def": "A <strong>control neuron</strong> is the interpretability version of the control check from <a href='pages/20-validity.html'>page 20</a>: take the explanation and its simulated activations, but correlate them with the real activations of a random unit from the same layer. If the score barely drops, the score was measuring the text, not the neuron. Huang et al. 2023 used exactly this baseline (random pairings scored an F1 of zero against 0.56 for the real pairings). The same control applies to causal claims: ablate a random neuron and compare the behavioral effect. <a href='pages/28-controls-for-interpretability-claims.html'>Page 28</a> works one by hand, alongside the shuffled-label control and a baseline explanation.",
+    "also": "random-neuron baseline",
+    "see": ["simulation-scoring", "permutation-test", "intervention", "construct-validity"]
+  },
+  "permutation-test": {
+    "name": "Permutation test",
+    "short": "A hypothesis test that builds the null distribution by shuffling the labels (here, the real activations) and recomputing the statistic many times; the p-value is the fraction of shuffles that match or beat the observed value.",
+    "def": "A <strong>permutation test</strong> asks how often a statistic would be as large as observed if the pairing between two lists carried no information. Shuffle one list (for an explanation score, the real activations across tokens), recompute the correlation, repeat thousands of times, and the fraction of shuffles at or above the observed score is a <a href='glossary.html#p-value'>p-value</a> under the <a href='glossary.html#null-hypothesis'>null hypothesis</a> of no relationship. It needs no distributional assumptions and is the shuffled-label control on <a href='pages/28-controls-for-interpretability-claims.html'>page 28</a>. It is the cousin of the <a href='glossary.html#bootstrap'>bootstrap</a> (<a href='appendices/f-resampling.html'>Appendix F</a>): the bootstrap resamples to estimate uncertainty, the permutation test reshuffles to test a null.",
+    "also": "shuffled-label control, randomization test",
+    "see": ["p-value", "null-hypothesis", "hypothesis-test", "bootstrap"]
+  },
+  "intervention": {
+    "name": "Intervention",
+    "short": "Changing a unit's activation inside the running model (ablating it, or swapping in its value from another input) and measuring whether behavior changes; the test that separates a causal explanation from a correlational description.",
+    "def": "An <strong>intervention</strong> edits the model's internal state and watches the output. Ablation sets a unit to zero or to its mean; an interchange intervention replaces its value with the value it took on a different input. Huang et al. 2023 read a neuron explanation as the causal claim that the neuron mediates the concept, and tested it with interchange interventions on tasks the model solves perfectly: GPT-4's explanations selected neurons with about the same causal effect as random selection. Bills et al. 2023 defined an 'ablation score' that substitutes simulated activations into the model and measures output divergence. A correlational score can be high while an interventional one is low; see <a href='pages/28-controls-for-interpretability-claims.html'>page 28</a>. It is the ablation probe of <a href='pages/20-validity.html'>page 20</a> pointed inward.",
+    "also": "ablation, interchange intervention, causal mediation",
+    "see": ["neuron-explanation", "control-neuron", "simulation-scoring"]
+  },
+  "sae-feature": {
+    "name": "Feature (SAE feature)",
+    "short": "A learned direction in a model's activation space, found by a sparse autoencoder, intended to be more single-purpose than a raw neuron; explained and scored exactly as a neuron is.",
+    "def": "A <strong>feature</strong>, in the sparse-autoencoder sense, is one of a large set of directions learned so that each activation vector is approximately a sparse sum of them. The hope is that features are monosemantic where neurons are <a href='glossary.html#polysemanticity'>polysemantic</a>; Anthropic's 'Towards Monosemanticity' reported a median rubric score of 12 for feature intervals against 0 for neurons. For evaluation purposes a feature is a hypothesis like any other: it gets a <a href='glossary.html#neuron-explanation'>explanation</a>, a held-out <a href='glossary.html#simulation-scoring'>simulation score</a>, precision and recall, and the controls on <a href='pages/28-controls-for-interpretability-claims.html'>page 28</a>. Gao et al. 2024 add downstream loss, probe loss and ablation sparsity as feature-quality metrics.",
+    "also": "latent, dictionary feature",
+    "see": ["sparse-autoencoder", "polysemanticity", "neuron-explanation"]
+  },
+  "sparse-autoencoder": {
+    "name": "Sparse autoencoder",
+    "short": "A model trained to rewrite a layer's activations as a sparse combination of many learned directions (features), used to find more interpretable units than raw neurons.",
+    "def": "A <strong>sparse autoencoder</strong> (SAE) is trained on a model's activations to reconstruct them through a wide bottleneck in which only a few units are active at a time; the units are the <a href='glossary.html#sae-feature'>features</a>. Anthropic's 'Towards Monosemanticity' (2023) applied one to a one-layer transformer; Gao et al. (2024) trained one with 16 million features on GPT-4 activations and introduced metrics for judging whether the features are any good, including explanation precision and recall. Reconstruction quality alone is not the goal, and Gao et al. warn that a baseline of zeroing the layer makes almost any reconstruction look excellent (98.2%). See <a href='pages/28-controls-for-interpretability-claims.html'>page 28</a> and <a href='pages/29-case-study-demonstrated-explanation.html'>page 29</a>.",
+    "also": "SAE, dictionary learning",
+    "see": ["sae-feature", "polysemanticity", "neuron"]
   }
 }

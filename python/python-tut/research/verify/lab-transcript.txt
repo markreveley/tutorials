@@ -1,0 +1,342 @@
+Python for Model Internals: actual local command transcript
+Authoring date: 2026-10-20
+Interpreter: /home/user/.venv-ml/bin/python
+Python: 3.13.16 (main, Oct  1 2026, 15:40:24) [GCC 13.3.0]
+Versions: numpy 2.5.4, torch 2.14.1+cpu, transformers 5.20.2, transformer_lens 4.2.0, nnsight 0.8.1, safetensors 0.8.0
+Environment: HF_HUB_OFFLINE=1 (GPT-2 small read from the local Hugging Face cache); CPU only.
+Commands run through the shell with the virtualenv bin directory first on PATH, so `python3` is the interpreter above.
+
+$ python3 labs/examples/check_setup.py
+[cwd python/python-tut; 36.9s]
+python 3.13.16
+numpy 2.5.4
+torch 2.14.1+cpu | cuda available: False
+transformers 5.20.2
+a batch of 2 prompts, 5 tokens each, 768 numbers per token: (2, 5, 768)
+x.shape[0] is the batch: 2 | x.shape[-1] is d_model: 768
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_environment.py' -v
+[cwd python/python-tut; 58.3s]
+
+[stderr]
+test_config_matches_gpt2_small (test_environment.GPT2Tests.test_config_matches_gpt2_small) ... ok
+test_thirteen_hidden_states_of_batch_seq_768 (test_environment.GPT2Tests.test_thirteen_hidden_states_of_batch_seq_768) ... ok
+test_numpy_broadcasts_a_row_against_a_matrix (test_environment.PythonAndNumpyTests.test_numpy_broadcasts_a_row_against_a_matrix) ... ok
+test_python_is_recent_enough (test_environment.PythonAndNumpyTests.test_python_is_recent_enough) ... ok
+test_matmul_shape_and_no_grad (test_environment.TorchTests.test_matmul_shape_and_no_grad) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 57.405s
+
+OK
+[exit 0]
+
+$ python3 labs/examples/names_and_objects.py
+[cwd python/python-tut; 0.0s]
+scores after appending through `same`: [0.5, 0.7, 0.9]
+scores is same: True | id equal: True
+scores after appending to the copy:   [0.5, 0.7, 0.9]
+fresh: [0.5, 0.7, 0.9, 1.0] | scores is fresh: False
+shallow copy shares the inner list: ['a', 'b', 'c']
+deep copy does not:                ['a', 'b', 'c']
+tuples are immutable; t + (3,) makes a new object: (1, 2, 3) | t unchanged: (1, 2)
+first call: ['pass']
+second call reuses the same default list: ['pass', 'fail']
+safe version, two calls: ['pass'] ['fail']
+a, b after b += 1: 1000000 1000001
+
+[exit 0]
+
+$ python3 labs/examples/records_and_errors.py
+[cwd python/python-tut; 0.0s]
+json.dumps: {"id": "t-1", "input": "Refund order A-42", "reference": {"category": "refund", "urgent": true, "order_id": null}}
+round trip equal: True | True became bool | None became None
+key order is irrelevant to ==: True
+but 1 == True in Python: True <- the trap score_ticket must avoid
+type check catches it: False True
+duplicate keys: json.loads keeps the last one -> {'x': 2}
+with object_pairs_hook: duplicate key 'x'
+line 1: {'id': 'a'}
+line 3: {'id': 'b'}
+line 4: invalid JSON (Expecting property name enclosed in double quotes at column 2)
+FileNotFoundError is a different error from bad data: No such file or directory
+ValueError: invalid literal for int() with base 10: 'not a number'
+finally always runs: remove hooks here
+
+[exit 0]
+
+$ cd ../.. && python3 -m unittest discover -s dag-tests -p 'test_python_evals.py' 2>&1 | tail -3
+[cwd .; 0.3s]
+Ran 22 tests in 0.083s
+
+FAILED (errors=65)
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_shapes.py' 2>&1 | tail -3
+[cwd python/python-tut; 0.3s]
+Ran 20 tests in 0.081s
+
+FAILED (errors=71)
+
+[exit 0]
+
+$ python3 labs/examples/generators_and_dataclasses.py
+[cwd python/python-tut; 0.1s]
+a generator object, nothing read yet: generator
+first record on demand: (1, {'id': 't-0'})
+the rest: ['t-1', 't-2', 't-3', 't-4']
+exhausted; list() of it now: [(1, {'id': 't-0'}), (2, {'id': 't-1'})]
+generator expression: [0, 1, 4, 9]
+sum without a list in memory: 333332833333500000
+Result(case_id='t-1', status='scored', passed=True, error=None)
+equality by fields: True
+frozen: cannot assign to field 'passed'
+default_factory gives each instance its own list: ['x'] []
+accuracy(3, 4) = 0.75 | accuracy(0, 0) = None
+hints are not enforced: accuracy('3', '4') raises TypeError only because '/' does -> unsupported operand type(s) for /: 'str' and 'str'
+
+[exit 0]
+
+$ python3 labs/examples/arrays.py
+[cwd python/python-tut; 0.1s]
+[[ 0  1  2  3]
+ [ 4  5  6  7]
+ [ 8  9 10 11]]
+shape (3, 4) | ndim 2 | dtype int64 | size 12
+a[1, 2] = 6 | a[1] row: [4 5 6 7] shape (4,)
+a[:, 2] column: [ 2  6 10] shape (3,)
+a[1:, ::2] shape (2, 2)
+a[-1, -1] = 11
+writing through the view changed a[0, 0]: 99
+writing to a copy did not touch a; a[0, 0] is still 99
+float division of ints gives float64: float64
+float32 stays float32 under +1.0: float32 | promotes with float64 array: float64
+integer overflow is silent in int8: [-126]
+boolean mask shape (3, 4) | selected values: [99  6  7  8  9 10 11]
+a[[0, 2]] picks rows 0 and 2 -> shape (2, 4)
+a[None].shape (new leading axis): (1, 3, 4) | a[:, None].shape: (3, 1, 4)
+a.reshape(-1).shape: (12,) | a.T.shape: (4, 3) | contiguous? False
+
+[exit 0]
+
+$ python3 labs/examples/broadcast_drill.py
+[cwd python/python-tut; 0.2s]
+          (4, 3) + (3,)         -> (4, 3)
+          (4, 3) + (4, 1)       -> (4, 3)
+          (4, 3) + (4,)         -> ValueError: operands could not be broadcast together
+       (2, 1, 5) + (3, 1)       -> (2, 3, 5)
+    (8, 1, 6, 1) + (7, 1, 5)    -> (8, 7, 6, 5)
+        (5, 768) + (768,)       -> (5, 768)
+     (2, 5, 768) + (2, 1, 768)  -> (2, 5, 768)
+     (2, 5, 768) + (5,)         -> ValueError: operands could not be broadcast together
+      (12, 5, 5) + (5, 5)       -> (12, 5, 5)
+            (1,) + (3, 4)       -> (3, 4)
+
+mean over d without keepdims: (2, 3)
+acts - mean fails: operands could not be broadcast together
+with keepdims: (2, 3, 1) -> (acts - mean_k).shape = (2, 3, 4)
+explicit alternative mean[..., None]: (2, 3, 1)
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_shapes.py' -v 2>&1 | grep -c 'ERROR'
+[cwd python/python-tut; 0.3s]
+142
+
+[exit 0]
+
+$ python3 labs/examples/reductions_einsum.py
+[cwd python/python-tut; 0.3s]
+acts.sum()           -> 276.0 (a scalar: every axis reduced)
+acts.sum(axis=0)     -> (3, 4) (batch gone)
+acts.mean(axis=1)    -> (2, 4) (seq gone)
+acts.max(axis=-1)    -> (2, 3) (d gone)
+acts.argmax(axis=-1) -> (2, 3) indices into d
+acts.mean(axis=(0, 1)) -> (4,) (one vector per feature)
+np.linalg.norm(acts, axis=-1) -> (2, 3)
+
+einsum 'sd,d->s'  : (5,) == x @ d: True
+einsum 'sd,td->st': (5, 7) == x @ y.T: True
+einsum 'bhqd,bhkd->bhqk': (2, 12, 5, 5) (batch, heads, query pos, key pos)
+einsum 'ii->i' diagonal: [5. 5. 5.]
+einsum 'ij->ji' transpose: (3, 2)
+einsum 'bsd->bd' sums over seq: (2, 4) == acts.sum(axis=1): True
+batched matmul 'bsd,de->bse': (2, 5, 3072)
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_shapes.py' 2>&1 | tail -1
+[cwd python/python-tut; 0.3s]
+FAILED (errors=71)
+
+[exit 0]
+
+$ python3 labs/examples/tensors.py
+[cwd python/python-tut; 3.5s]
+torch.Size([3, 4]) torch.int64 cpu | torch.Size is a tuple subclass: True
+default float dtype: torch.float32 | float16 after .half(): torch.float16 | .to(torch.float64): torch.float64
+dtype mismatch is an error, not a promotion: dot : expected both vectors to have same dtype, but found Float and Double
+view shares storage; a[0, 0] is now 7.0 | same storage: True
+transpose is a view; contiguous? False
+.view on a non-contiguous tensor fails; use .reshape or .contiguous() torch.Size([6])
+in-place add_ changed b: tensor([2., 2., 2.])
+through an alias too: tensor([4., 4., 4.])
+torch.from_numpy shares memory: n[0] = 5.0 | .numpy() back: float64
+y.requires_grad: True | grad_fn: SumBackward0
+under no_grad: False | grad_fn: None
+detach() shares data but leaves the graph: False True
+w.numpy() with requires_grad fails: Can't call numpy() on Tensor that requires grad. Use tenso
+w.detach().numpy() works: [1. 1. 1.]
+one element to Python: 3.5 | tolist: [0, 1, 2]
+
+[exit 0]
+
+$ python3 labs/examples/autograd_fit.py
+[cwd python/python-tut; 1.6s]
+at w=0, b=0: loss 7.061, dloss/dw -3.028, dloss/db -5.005
+negative gradient says: increase w and b
+(loss(w+eps) - loss(w)) / eps = -3.028  (close to dloss/dw)
+step   0  loss 7.0606  w 1.514  b 2.502
+step  50  loss 0.0031  w 2.976  b 1.016
+step 100  loss 0.0028  w 3.027  b 0.989
+step 150  loss 0.0028  w 3.029  b 0.988
+step 200  loss 0.0028  w 3.029  b 0.988
+fit: y = 3.03 x + 0.99   (true 3.00 x + 1.00)
+two backward() calls without clearing: grad = tensor([4., 4., 4.]) (accumulated, not replaced)
+
+[exit 0]
+
+$ python3 labs/examples/module_tree.py
+[cwd python/python-tut; 6.9s]
+TinyMLP(
+  (up): Linear(in_features=8, out_features=32, bias=True)
+  (act): GELU(approximate='none')
+  (down): Linear(in_features=32, out_features=8, bias=True)
+)
+  up.weight    (32, 8)  requires_grad=True
+  up.bias      (32,)  requires_grad=True
+  down.weight  (8, 32)  requires_grad=True
+  down.bias    (8,)  requires_grad=True
+state_dict keys: ['up.weight', 'up.bias', 'down.weight', 'down.bias']
+parameter count: 552
+TinyMLP keeps the shape: (2, 5, 8)
+nn.Linear(8, 32).weight is stored as (out, in): (32, 8)
+
+top-level children: ['transformer', 'lm_head']
+transformer children: ['wte', 'wpe', 'drop', 'h', 'ln_f']
+one block: ['ln_1', 'attn', 'ln_2', 'mlp']
+blocks: 12 | parameters: 124439808
+  transformer.wte.weight               (50257, 768)
+  transformer.wpe.weight               (1024, 768)
+  transformer.h.0.ln_1.weight          (768,)
+  transformer.h.0.ln_1.bias            (768,)
+  transformer.h.0.attn.c_attn.weight   (768, 2304)
+  transformer.h.0.attn.c_attn.bias     (2304,)
+lm_head.weight is wte.weight (tied): True
+state_dict entries: 149 | model.training: False
+get_submodule('transformer.h.5.mlp'): GPT2MLP
+
+[exit 0]
+
+$ python3 labs/examples/gpt2_next_token.py
+[cwd python/python-tut; 5.7s]
+input_ids: [[464, 3139, 286, 4881, 318]] shape (1, 5)
+tokens:    ['The', 'Ġcapital', 'Ġof', 'ĠFrance', 'Ġis']
+note the leading space is part of the token (Ġ shows it)
+logits: (1, 5, 50257) = (batch, seq, vocab)
+  0.085  ' the'
+  0.048  ' now'
+  0.046  ' a'
+  0.032  ' France'
+  0.032  ' Paris'
+hidden_states: 13 tensors, each (1, 5, 768)
+hidden_states[0] is the embedding output; [12] has the final LayerNorm applied
+hidden_states[6] is the residual stream after block 5 (zero-indexed)
+norm of the last position across layers: [4.9, 56.5, 55.2, 57.9, 64.3, 72.0, 73.4, 85.4, 99.6, 127.2, 165.6, 289.9, 255.4]
+tokenizer.pad_token before: None
+batched input_ids:
+ tensor([[  464,  3139,   286,  4881,   318],
+        [15496, 50256, 50256, 50256, 50256]])
+attention_mask:
+ tensor([[1, 1, 1, 1, 1],
+        [1, 0, 0, 0, 0]])
+batched hidden_states[6]: (2, 5, 768)
+prompt 0 unchanged by batching: True
+
+[exit 0]
+
+$ python3 labs/examples/hooks_cache.py
+[cwd python/python-tut; 6.3s]
+hooks registered: 12 | handle type: RemovableHandle
+captured: ['block.0', 'block.1', 'block.2'] ... block.11
+every block output has shape (1, 5, 768)
+block.5 equals hidden_states[6]: True
+block.11 equals hidden_states[12]: False (ln_f applied to [12])
+saved and reloaded: 12 tensors, 188 kB, block.5 identical: True
+forgot h.remove(): a second forward still fires the hook -> True
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_hooks.py' 2>&1 | tail -1
+[cwd python/python-tut; 5.4s]
+FAILED (errors=14)
+
+[exit 0]
+
+$ python3 labs/examples/three_tools.py
+[cwd python/python-tut; 21.7s]
+transformers hook  blocks[5] output: (1, 5, 768)
+TransformerLens      blocks.5.hook_resid_post: (1, 5, 768) | cache entries: 493
+  without compatibility mode, max |diff| vs transformers: 1.9e-05
+  with compatibility mode,    max |diff| vs transformers: 4.64
+  ... but vs transformers centered over d_model:   4.9e-04
+  logits argmax agrees: True | logits equal: False (unembed is centered too)
+  prepend_bos default adds a token: shape with default is (1, 6, 768)
+nnsight            transformer.h[5].output: (1, 5, 768) | max |diff| vs transformers: 0.0e+00 | logits equal: True
+
+[exit 0]
+
+$ python3 labs/examples/name_map_check.py
+[cwd python/python-tut; 11.1s]
+nnsight attn.output is a tuple of ['Tensor', 'NoneType'] ; [0] has shape (1, 5, 768)
+transformer.drop.output            vs blocks.0.hook_resid_pre      shape (1, 5, 768)  max |diff| 0.0e+00
+transformer.h[5].attn.output[0]    vs blocks.5.hook_attn_out       shape (1, 5, 768)  max |diff| 8.2e-06
+transformer.h[5].ln_2.input        vs blocks.5.hook_resid_mid      shape (1, 5, 768)  max |diff| 2.7e-05
+transformer.h[5].mlp.output        vs blocks.5.hook_mlp_out        shape (1, 5, 768)  max |diff| 2.4e-05
+transformer.ln_f.output            vs ln_final.hook_normalized     shape (1, 5, 768)  max |diff| 2.1e+02
+blocks.5.attn.hook_pattern shape: (1, 12, 5, 5) (batch, heads, query, key)
+
+[exit 0]
+
+$ python3 labs/examples/reproducibility.py
+[cwd python/python-tut; 8.1s]
+same seed, same draw: True [1.5409960746765137, -0.293428897857666, -2.1787893772125244]
+numpy has its own generator: [0.126, -0.132]
+stacked hidden states: (13, 2, 5, 768) | 0.40 MB in float32
+a 1024-token prompt would need 41 MB for the same stack; a batch of 32 of them 1.3 GB
+repeat forward pass identical: True
+safetensors round trip: 13 tensors, 0.40 MB, block.5 equal: True
+manifest keys: ['attention_mask', 'model', 'prompts', 'seed', 'tensors', 'versions'] | block.5 entry: {'shape': [2, 5, 768], 'dtype': 'float32', 'sha256': 'b5d58813c4d9d650...'}
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_manifest.py' 2>&1 | tail -1
+[cwd python/python-tut; 0.3s]
+FAILED (errors=10)
+
+[exit 0]
+
+$ python3 -m unittest discover -s labs -p 'test_*.py' 2>&1 | tail -1
+[cwd python/python-tut; 7.7s]
+FAILED (errors=95)
+
+[exit 0]
+
+$ cd ../.. && python3 -m unittest discover -s dag-tests -p 'test_python_evals.py' 2>&1 | tail -1
+[cwd .; 0.2s]
+FAILED (errors=65)
+
+[exit 0]

@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scoring an Explanation · Understanding LLM Evals</title>
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" data-nav></aside>
+  <div class="content">
+  <main class="page">
+
+    <p class="kicker">Module 8 · Evaluating explanations</p>
+    <h1>Scoring an explanation</h1>
+    <p class="lede">
+      Interpretability research produces sentences like "this neuron fires on legal citations." This
+      page treats such a sentence the way the rest of the course treats a grader: as an instrument
+      whose validity has to be measured on data it never saw. You will learn the simulation-scoring
+      method that made the question quantitative, the numbers it actually produced, and why its own
+      authors warn you not to over-read them.
+    </p>
+
+    <h2 id="explanation-as-prediction">An explanation is a prediction</h2>
+    <p>
+      A <span class="term" data-g="neuron">neuron</span> in a language model is a single unit inside
+      one of the model's layers. For every token the model reads, the neuron produces a number, its
+      <span class="term" data-g="activation">activation</span>; most neurons produce something near
+      zero most of the time and spike on particular tokens. A
+      <span class="term" data-g="neuron-explanation">neuron explanation</span> is a short natural-language
+      description of when it spikes. The usual way to write one is to pull the texts on which the neuron
+      fired hardest, its <span class="term" data-g="max-activating-examples">max-activating examples</span>,
+      stare at them, and summarize what they have in common.
+    </p>
+    <p>
+      Written that way, the explanation describes a few dozen examples. Treated as a claim about the
+      neuron, it is a hypothesis that predicts a number for every token of every text: on text the
+      author never looked at, the activation should be high on citation tokens and near zero elsewhere.
+      Until that prediction is checked, the sentence has the standing of an unvalidated grader on
+      <a href="06-validating-the-grader.html">page 6</a>: a plausible second opinion, not a measurement.
+    </p>
+    <p>
+      So, before scoring anything, name the estimand, the one quantity the test is supposed to
+      estimate (the <a href="../../../statistics/statistics-tut/index.html">statistics course</a> makes
+      this its first rule). For an explanation it has three parts: <em>which</em> neuron, over
+      <em>what distribution of text</em>, measured by <em>what agreement</em> between predicted and
+      real activations. Change any part and the number means something else; the disputes on the next
+      two pages are mostly about the second and third.
+    </p>
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>An explanation is validated exactly as a grader is: on a
+      <span class="term" data-g="holdout-set">held-out set</span> it played no part in producing,
+      against the <span class="term" data-g="ground-truth">ground truth</span> it claims to describe.
+      For a grader, ground truth is a human's label; for an explanation, it is the neuron's real
+      activation. Everything else on this page is the mechanics of that one sentence.</p>
+    </div>
+
+    <h2 id="the-loop">The simulation-scoring loop</h2>
+    <p>
+      The method that made this a routine measurement is
+      <span class="term" data-g="simulation-scoring">simulation scoring</span>, introduced by Bills and
+      colleagues at OpenAI in 2023 in "Language models can explain neurons in language models." It
+      has three roles and three steps.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Step 1 Explanation, Step 2 Simulation, Step 3 Scoring">[Bills]</a>
+    </p>
+    <figure>
+    <div class="diagram">subject model            explainer model             simulator model
+(the neuron lives here)  (writes the hypothesis)     (tests the hypothesis)
+        │                        │                           │
+ 5 top-activating  ───►  reads (token, 0–10)  ───►  reads ONLY the explanation
+ 64-token excerpts       pairs, writes one           plus NEW excerpts; predicts
+                         sentence                    0–10 for every token
+        │                                                    │
+        └──── real activations on those SAME new excerpts ───┘
+                                   │
+                                   ▼
+                score = correlation(simulated, real) across all tokens</div>
+    <figcaption>The explainer sees activations; the simulator sees only the sentence. The score measures how much of the neuron's behavior survived the trip through one sentence of English.</figcaption>
+    </figure>
+    <p>
+      <strong>Step 1, explain.</strong> The explainer model (GPT-4 in the paper) is shown text excerpts
+      with each token's activation beside it, normalized so the neuron's largest activation ever seen
+      is 10 and anything negative is 0, and asked to write one sentence. The excerpts are 64-token
+      windows from the subject model's training data; the ones shown are the top five by activation,
+      drawn from the 20 highest among 50,000.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Step 1; Text excerpts">[Bills]</a>
+    </p>
+    <p>
+      <strong>Step 2, simulate.</strong> A second prompt gives the simulator the sentence and fresh
+      excerpts and asks the counterfactual: "supposing a proposed explanation accurately and
+      comprehensively explains a neuron's behavior, how would that neuron activate for each token in
+      a particular sequence?"<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Step 2 Simulation">[Bills]</a>
+      The simulator never sees a real activation of the neuron it is simulating, which is what makes
+      this a held-out test rather than a re-description of the examples.
+    </p>
+    <p>
+      <strong>Step 3, score.</strong> Line up the simulated activations and the real ones on the same
+      excerpts and compute their correlation:
+    </p>
+    <div class="math">ρ = Σ (s<sub>t</sub> − s̄)(a<sub>t</sub> − ā) / √( Σ (s<sub>t</sub> − s̄)<sup>2</sup> · Σ (a<sub>t</sub> − ā)<sup>2</sup> )</div>
+    <p>
+      where <i>s<sub>t</sub></i> is the simulated activation on token <i>t</i>, <i>a<sub>t</sub></i>
+      is the real one, and the sums run over every token in the scoring excerpts. In words: ρ is 1 when
+      the simulated neuron rises and falls exactly with the real one, and "if the explanation has
+      nothing to do with the neuron behavior, the score will tend to be around 0."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Step 3 Scoring (correlation scoring)">[Bills]</a>
+      (Correlation coefficients, and when to prefer the rank-based Spearman version, are taught in
+      <a href="../appendices/e-agreement-metrics.html#correlation">Appendix E</a>.)
+      <a href="28-controls-for-interpretability-claims.html">Page 28</a> carries a 20-token example
+      through this formula by hand.
+    </p>
+    <p>
+      Which excerpts you score on is a design decision with two options in the paper.
+      <em>Random-only</em> scores on random excerpts, "conceptually easy to interpret" as fit to the
+      whole pre-training distribution but high-variance, because most neurons are quiet on most text.
+      <em>Top-and-random</em>, the default, scores on five top-activating excerpts plus five random
+      ones; the random five add "a penalty for overly broad
+      explanations."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: top-and-random vs random-only scoring">[Bills]</a>
+      Hold on to that word <em>penalty</em>; the next section is about how small it is.
+    </p>
+
+    <h2 id="the-numbers">What the scores were</h2>
+    <p>
+      Applied to all 307,200 MLP neurons of GPT-2 XL, with GPT-4 as both explainer and simulator, the
+      method produced these numbers.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Results: overall scores">[Bills]</a>
+    </p>
+    <table>
+      <tr><th>Quantity</th><th>Top-and-random</th><th>Random-only</th></tr>
+      <tr><td>Average score over all neurons</td><td>0.151</td><td>0.037</td></tr>
+      <tr><td>Neurons scoring above 0.7 ("roughly half the variance")</td><td>5,203 (1.7%)</td><td>732 (0.2%)</td></tr>
+      <tr><td>Neurons scoring above 0.9</td><td>189 (0.06%)</td><td>86 (0.03%)</td></tr>
+    </table>
+    <p>
+      The headline the paper leads with, "over 1,000 neurons with explanations that scored at least
+      0.8," is true, and it is a third of one percent of the
+      neurons.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Overview">[Bills]</a>
+      The typical neuron's explanation predicts its activations with a correlation of 0.15, scores fall
+      in later layers, and the authors say so: "both GPT-4-based and human contractor explanations
+      still score poorly in absolute terms," and the typical neuron "appeared quite polysemantic,"
+      responding to several unrelated things at once.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Overview">[Bills]</a>
+    </p>
+    <p>
+      The human comparison sets the ceiling. Non-expert labelers wrote explanations from the same five
+      excerpts and beat GPT-4 "but not by a huge margin. Human performance is also low in absolute
+      terms, suggesting that the main barrier to improved explanations may not simply be explainer
+      model capabilities."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Results: human baseline">[Bills]</a>
+      One sentence about five excerpts is a weak hypothesis about a neuron that does several things,
+      whoever writes it.
+    </p>
+    <div class="warn">
+      <span class="label">Caveat</span>
+      <p>A score is a property of an explanation, a simulator and a scoring set together. "With a poor
+      simulator, even a very good explanation will get low
+      scores,"<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Results: simulator capability">[Bills]</a>
+      and Anthropic's version of the method used a different simulator (Claude), Spearman correlation,
+      and scoring examples drawn from across the activation
+      range.<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, Automated Interpretability – Activations">[Monosemanticity]</a>
+      A 0.6 from one setup and a 0.6 from another are not the same measurement; report the setup with
+      the score, as <a href="19-reproducibility.html">page 19</a> asked for benchmarks.</p>
+    </div>
+
+    <h2 id="cheap-scores">Why a high score can be cheap</h2>
+    <p>
+      The paper's limitations section is the most useful part of it for an evaluator, because the
+      authors catalogued the ways their own number can be gamed by accident. Four of them recur
+      throughout this module.
+    </p>
+    <p>
+      <strong>The scoring set is nearly blind to false positives.</strong> Top-and-random includes the
+      excerpts where the neuron fires, so an explanation that covers those gets credit; but an
+      explanation that is too broad only loses credit if one of the five random excerpts happens to
+      contain the extra thing it wrongly predicts. The authors state the consequence plainly: "an
+      explanation with good recall (high true positive and low false negative rate) will receive a
+      high score, even if it has mediocre precision (i.e. a false positive rate that is high, but not
+      high enough to be measured with five random text
+      excerpts)."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Discussion: Limitations (scoring)">[Bills]</a>
+      When they asked GPT-4 to write ten sentences matching each explanation and ran them through the
+      real neuron, roughly 42% of the sentences were false positives and 86% of neurons had at least
+      one, "an independent signal that our explanations are often too
+      inclusive."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Revising explanations">[Bills]</a>
+      A scoring scheme that measures one error type and not the other is half a validation.
+    </p>
+    <p>
+      <strong>A baseline with no language model in it did better on average.</strong> The authors built
+      a lookup table: for each token in the vocabulary, the neuron's mean activation on that token over
+      held-out text, with no context and no explanation. "The token lookup table baseline is much
+      stronger than the token-based linear prediction baseline, substantially outperforming
+      activation-based explanation and simulation on
+      average."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Results: Unigram baselines">[Bills]</a>
+      That is the control check from <a href="20-validity.html">page 20</a> applied to explanations:
+      if a dumb baseline scores as well as your sentence, your sentence has not added understanding, it
+      has restated token statistics in English.
+    </p>
+    <p>
+      <strong>The score is correlational.</strong> "We currently explain correlations between the
+      network input and the neuron being interpreted on a fixed distribution. Past work has suggested
+      that this may not reflect the causal behavior between the
+      two."<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Discussion: Limitations">[Bills]</a>
+      They also built a more expensive <em>ablation score</em>: replace the real neuron's activations
+      with the simulated ones inside the running model and measure how far the model's output
+      distribution moves. Correlation scores of 0.9 still produced ablation scores of only 0.3
+      (random-only) and 0.6 (top-and-random) on
+      average.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Methods: Ablation scoring">[Bills]</a>
+      Predicting a neuron's number is not the same as predicting what the number does.
+    </p>
+    <p>
+      <strong>The simulator may read cues a human would not.</strong> The scheme assumes the simulator
+      reads the sentence as an idealized human would; if explainer and simulator share a quirk, the
+      neuron can respond to X, the explanation say Y, and the simulation come out high on X
+      anyway.<a class="cite" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html" title="Bills et al. 2023, Discussion: Limitations (simulator)">[Bills]</a>
+      It is the self-preference problem of <a href="09-judge-biases.html">page 9</a>: judge and judged
+      are the same kind of system.
+    </p>
+    <p>
+      A year later, with Leo Gao as first author, the same group wrote the first point into the record
+      as a design flaw: the Bills score "disproportionately depends on recall," and for a feature that
+      fires at the end of "don't stop" or "can't stop," "an explanation activating on all instances of
+      'stop' achieves a high interpretability score," a failure that worsens as features get sparser
+      and more specific.<a class="cite" href="https://arxiv.org/abs/2406.04093" title="Gao et al. 2024, §4.3">[Gao SAE]</a>
+    </p>
+
+    <h2 id="huang">Two modes of test: observational and interventional</h2>
+    <p>
+      Huang, Geiger, D'Oosterlinck, Wu and Potts (Stanford, 2023) took the Bills explanations and asked
+      what a rigorous test of one would look like. Their answer splits the claim "neuron <i>a</i>
+      represents concept <i>E</i>" into two modes.<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, Abstract; §3.1; §4.1">[Huang]</a>
+    </p>
+    <p>
+      In the <em>observational</em> mode, the explanation is a claim "that a neuron <i>a</i> activates
+      on all and only input strings that refer to a concept picked out by the proposed explanation
+      <i>E</i>." The two halves are two error types: a <em>Type I</em> error when the neuron fails to
+      fire on a string the explanation covers (a <span class="term" data-g="precision">precision</span>
+      failure), a <em>Type II</em> error when it fires on a string the explanation does not cover (a
+      <span class="term" data-g="recall">recall</span> failure). Testing both needs both kinds of
+      sentence, so they generated phrases inside the concept and collected corpus sentences on which
+      the neuron fires, hand-checking the result.<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, §3.1–3.2">[Huang]</a>
+    </p>
+    <p>
+      They evaluated 300 explanations sampled from the roughly 1,700 neurons that Bills et al. scored at
+      0.8 or above, the ones GPT-4 was most confident in. Result: mean precision 0.64, recall 0.50,
+      <span class="term" data-g="f1-score">F1</span> 0.56; pairing the same explanations with random
+      neurons gave an F1 of zero. And the number that should change how you read every simulation score:
+      "The F1-score has a correlation coefficient of −0.1 with the GPT-4
+      score."<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, §3.3, Table 1">[Huang]</a>
+      Among explanations that all scored at least 0.8, the simulation score said nothing about which
+      would survive a precision-and-recall test.
+    </p>
+    <p>
+      Their explanation of why is worth memorizing. Take an unfaithful explanation "year 2000 and 2001"
+      for a neuron that only fires on "2000." Its precision is 0.50. The Bills scoring set has five
+      random excerpts; if "2001" appears in a fraction <i>n</i> of excerpts, the chance that at least
+      one of the five contains it is 1 − (1 − <i>n</i>)<sup>5</sup>, roughly 5<i>n</i>. "For any large
+      corpus, n% could be extremely small due to a long tail distribution, which means the GPT-4 score
+      is insensitive to Type I errors."<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, §3.4">[Huang]</a>
+      Random text is a weak place to find where a hypothesis is wrong; you have to go looking.
+    </p>
+    <p>
+      In the <em>intervention</em> mode, the explanation is a causal claim: the neuron mediates the
+      concept, so swapping its activation between two inputs should swap the model's behavior on a task
+      that depends on the concept. Across their tasks the ranking was "token-activation correlation
+      baseline ≫ GPT-4 explanation ≈ random baseline," so "if we were using GPT-4 generated explanation
+      to inform us which weights to modify in a model editing task, we would have similar performance as
+      randomly selecting neurons to edit."<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, §4.3–4.4">[Huang]</a>
+      No task was found where a single neuron's intervention changed behavior. The abstract's summary:
+      "even the most confident explanations have high error rates and little to no causal
+      efficacy."<a class="cite" href="https://arxiv.org/abs/2309.10312" title="Huang et al. 2023, Abstract">[Huang]</a>
+    </p>
+    <div class="callout">
+      <span class="label">Why this is the page-6 argument again</span>
+      <p>EvalGen's alignment score keeps coverage and the false-failure rate separate so that neither
+      can hide the other. Huang et al.'s observational mode is the same two-sidedness applied to a
+      neuron: recall over the strings the neuron fires on, precision over the strings the explanation
+      names. One correlation on a recall-heavy sample collapses the two, and the −0.1 is the cost.</p>
+    </div>
+
+    <div class="pitfall">
+      <span class="label">Pitfall</span>
+      <p>Scoring the explanation on the examples that produced it. If the excerpts the explainer saw
+      are also in the scoring set, the score measures whether the explainer can paraphrase its own
+      input. Bills et al. simulate on excerpts the explainer did not see; Anthropic's pipeline states
+      that there is "no leak of information about activation patterns, except for the
+      explanation."<a class="cite" href="https://transformer-circuits.pub/2023/monosemantic-features/index.html" title="Bricken et al. 2023, Automated Interpretability – Activations">[Monosemanticity]</a>
+      Find the sentence in a write-up that says which texts were held out. If it is missing, the score
+      is a training-set score, and <a href="21-contamination.html">Module 6</a> taught you what those
+      are worth.</p>
+    </div>
+
+    <div class="keyidea">
+      <span class="label">Key idea</span>
+      <p>None of this makes simulation scoring useless; it made a vague practice quantitative and
+      scales to every neuron in a model. But it is not a certificate. Ask three questions of any
+      explanation score. <em>Held out from what?</em> (the explainer must not have seen the scoring
+      text). <em>Sampled how?</em> (random text almost never contains the false positives that break a
+      broad explanation). <em>Correlation with what?</em> (the neuron's activation, or the model's
+      behavior when that activation is replaced). Bills et al. answered the first well, the second
+      weakly by their own account, and the third only in an appendix; Huang et al. built the tests for
+      the second and third; the <a href="28-controls-for-interpretability-claims.html">next page</a>
+      adds the controls, and the <a href="29-case-study-demonstrated-explanation.html">case study</a>
+      shows a 2026 dispute that turns on all three.</p>
+    </div>
+
+    <div class="srcbox">
+      <span class="label">Sources for this page</span>
+      <ul>
+        <li>Steven Bills, Nick Cammarata, Dan Mossing, Henk Tillman, Leo Gao, Gabriel Goh, Ilya Sutskever, Jan Leike, Jeff Wu, William Saunders, "Language models can explain neurons in language models," OpenAI, May 2023. <a href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html">openaipublic.blob.core.windows.net/neuron-explainer/paper</a></li>
+        <li>Jing Huang, Atticus Geiger, Karel D'Oosterlinck, Zhengxuan Wu, Christopher Potts, "Rigorously Assessing Natural Language Explanations of Neurons," arXiv:2309.10312 (v1, September 2023). <a href="https://arxiv.org/abs/2309.10312">arxiv.org/abs/2309.10312</a></li>
+        <li>Leo Gao, Tom Dupré la Tour, Henk Tillman, Gabriel Goh, Rajan Troll, Alec Radford, Ilya Sutskever, Jan Leike, Jeffrey Wu, "Scaling and evaluating sparse autoencoders," arXiv:2406.04093 (v1, June 2024). <a href="https://arxiv.org/abs/2406.04093">arxiv.org/abs/2406.04093</a></li>
+        <li>Trenton Bricken, Adly Templeton, Joshua Batson, Brian Chen, Adam Jermyn et al. (Anthropic), "Towards Monosemanticity: Decomposing Language Models With Dictionary Learning," Transformer Circuits Thread, October 2023. <a href="https://transformer-circuits.pub/2023/monosemantic-features/index.html">transformer-circuits.pub/2023/monosemantic-features</a></li>
+      </ul>
+    </div>
+
+  </main>
+  </div>
+</div>
+<script src="../assets/nav-data.js"></script>
+<script src="../assets/glossary-data.js"></script>
+<script src="../assets/wiki.js"></script>
+</body>
+</html>

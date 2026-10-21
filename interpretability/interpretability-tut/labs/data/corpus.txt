@@ -1,0 +1,131 @@
+THE HARBOUR LEDGER
+
+On the morning of 14 March 1911 the harbourmaster at Kellowen recorded eleven vessels at anchor, four of them coal barges from Dunmere and one a steam yacht whose owner refused to give a name. The ledger survives. Its pages are foxed and the ink has gone the colour of weak tea, but the hand is steady and the columns are ruled with a care that suggests the clerk expected to be audited. Each entry gives the vessel, the tonnage, the cargo, the fee paid, and a remark. The remarks are the interesting part. "Refused inspection." "Cargo declared as salt; smelled of tar." "Paid in coin of 1888, worn smooth."
+
+Nobody has established who the clerk was. The town's wage book for that year lists a J. Pellant as "harbour clerk, 22 shillings," and a later entry, dated 3 October 1911, strikes the name through and writes "left for Halford" in a different hand. That is the whole of the evidence. A local historian in 1962 proposed that Pellant was the same man who later ran a chandlery in Halford under the name Pellance, but the chandler's own daughter, interviewed in 1974, said her father had never been to sea and could not abide the smell of fish. The identification has been repeated in three guidebooks since and is now treated as settled. It is not settled. It is a guess that was written down, and then copied.
+
+This is the pattern to watch for in any archive. A plausible story is told once, with hedges. The hedges are dropped in the retelling. Three retellings later the story is a fact, and the original hedges are lost. The only defence is to go back to the ledger and ask what it actually says, and then to ask what it would have said if the story were false. If the chandler and the clerk were different men, the ledger would look exactly as it does. The ledger therefore does not support the identification. It merely fails to contradict it.
+
+
+MEMO: BUILD TIMES ON THE RENDER FARM
+
+To: platform team
+From: Ines Varga
+Date: 2 July
+
+Summary. Median build time on the render farm rose from 6.1 minutes to 9.4 minutes between the April and June releases. I was asked whether the new dependency cache is responsible. I do not think it is, and I want to explain why before anyone reverts it.
+
+What I measured. I pulled the timing logs for every build between 1 April and 30 June, which is 4,812 builds. I split them by whether the cache was enabled (it was switched on for all builds from 19 May). I also split them by the size of the change, measured as lines touched, because large changes take longer regardless of caching.
+
+What I found. Builds with the cache enabled are slower on average, 9.2 minutes against 7.0. But the builds after 19 May are also much larger. The median change grew from 140 lines to 410 lines, because the June release merged the texture pipeline rewrite in a small number of enormous commits. When I compare builds of similar size, the cache makes them faster, not slower: for changes under 200 lines, 5.3 minutes with the cache against 6.0 without. The overall slowdown is a composition effect. We are not building the same things we were building in April.
+
+What I would do. Keep the cache. Ask the texture team to split their commits. Add the change size to the build dashboard so this question answers itself next time. And, since I know someone will ask: no, I did not look at the dashboard first and then go looking for an explanation. I wrote down the three explanations I could think of before opening the logs, and the composition effect was the second one on the list. The first was a slow disk, which the logs ruled out in about ten minutes.
+
+One caution. There are only 61 builds in the under-200-lines group after 19 May. The difference of 0.7 minutes could be noise. I would not bet the release on it. I would bet lunch on it.
+
+
+A CONVERSATION ABOUT THE KETTLE
+
+"It's doing it again," said Oren.
+
+"Doing what?"
+
+"The clicking. Listen." He held the kettle up. It clicked, twice, then was quiet.
+
+Dafna did not look up from her book. "It's the element cooling. Metal contracts. It has done that since we bought it."
+
+"It never clicked before Tuesday."
+
+"It clicked on Sunday. You were on the phone and didn't notice. I noticed because I was sitting here, where I am sitting now, with nothing to do but notice things."
+
+Oren put the kettle down. "So you're saying it's always clicked."
+
+"I'm saying you started listening on Tuesday. Those are different claims." She turned a page. "If you want to know whether the clicking is new, you'd need to know how often it clicked before, and you don't, because you weren't counting. What you have is one week of attention and a feeling."
+
+"A feeling is data."
+
+"A feeling is a hypothesis. Put a notebook by the kettle. Make a mark every time it clicks. In a month we'll know something. Until then it's a kettle."
+
+He found a notebook. The first mark went in at 7:42 that evening. By the end of the month there were ninety-one marks, which was, Dafna pointed out, almost exactly three a day, which was almost exactly the number of times Oren boiled the kettle.
+
+
+HOW TO SEASON A CARBON STEEL PAN
+
+You will need a carbon steel pan, a neutral oil with a high smoke point, a lint-free cloth, and about forty minutes. Do not use olive oil; it polymerises unevenly and leaves a sticky film.
+
+1. Wash the pan in hot water with a little soap to remove the factory coating. Dry it completely. Any water left on the surface will steam and spoil the finish.
+2. Put the pan on a burner over medium heat until a drop of water skitters across the surface. This takes two to four minutes.
+3. Add half a teaspoon of oil. With the cloth, wipe it over every surface, inside and out, then wipe again as if you were trying to remove it all. You want a film so thin it is barely visible. Too much oil is the most common mistake and the hardest to fix.
+4. Raise the heat to high. The pan will smoke. Let it smoke until it stops, which takes five to eight minutes. The surface will turn from silver to gold to brown.
+5. Let it cool for a few minutes, then repeat steps 3 and 4. Four to six coats is enough for a start. The colour will be uneven; that is normal and does not affect performance.
+6. After each use, rinse with hot water, dry on the burner, and wipe with a drop of oil. Never leave it to soak.
+
+The seasoning is a layer of polymerised oil bonded to the iron. It is not a coating in the sense that a non-stick pan has a coating; it is thinner, harder, and repairable. If it ever becomes patchy, scrub it back to bare metal and start again. It takes forty minutes and costs a teaspoon of oil.
+
+
+FROM THE ANNUAL REPORT OF THE MERIDIAN ALLOTMENT SOCIETY
+
+The society ended the year with 212 members, up from 198, and a waiting list of 57. Plot rents were held at 38 pounds for a full plot and 20 pounds for a half plot. Water charges rose by 4 pounds following the installation of the second standpipe on the north field, which was completed in August at a cost of 1,140 pounds, somewhat under the estimate of 1,300.
+
+The committee received 14 complaints during the year. Nine concerned uncultivated plots, three concerned bonfires, one concerned a shed exceeding the permitted height, and one concerned a goose. The goose has been rehomed. Two plots were repossessed after the second warning letter and reallocated from the waiting list in September.
+
+The harvest show in October attracted 340 visitors. The prize for heaviest marrow went to plot 41 at 19.6 kilograms, a society record; the previous record, 18.2 kilograms, had stood since 2007. The judges wish to record that the marrow was weighed twice on two different scales, at the request of the holder of plot 40, and that both scales agreed to within a hundred grams.
+
+The treasurer reports a surplus of 2,260 pounds, of which 2,000 pounds has been placed in the reserve for the replacement of the perimeter fence, now estimated at 11,500 pounds and expected to be needed within three years.
+
+
+NOTES TOWARDS A TALK ON MEASUREMENT
+
+I want to start with a confession. The first instrument I ever built was a thermometer, and it was wrong, and I did not find out for two years. It read high by about a degree and a half across its whole range. Every measurement I made with it was shifted by the same amount. None of my conclusions depended on absolute temperature, so none of them were wrong, but I did not know that at the time; I was lucky, not careful.
+
+The lesson I took from this was not "calibrate your instruments," although you should. The lesson was that an instrument can be consistently wrong, and consistent wrongness is invisible from inside. You cannot detect a constant offset by taking more readings. You can only detect it by comparing against something else: a second instrument, a known reference, a prediction that would come out differently if the offset were there.
+
+This generalises. Any method of looking at a system has a characteristic way of being wrong, and the way of being wrong is usually invisible to the method itself. A microscope cannot see its own aberrations. A survey cannot see the people who did not answer it. A set of examples chosen because they are striking cannot tell you how typical they are. The fix is always the same in shape: find a second route to the same quantity, and see whether the two routes agree.
+
+When they disagree, you have learned something, although not yet what. When they agree, you have learned less than you think, because they might share the same flaw. Two thermometers from the same factory can both read high. The strongest check is one that would fail for a specific reason if your belief were false, and you should be able to say what that reason is before you run it.
+
+
+LETTER TO A FORMER STUDENT
+
+Dear Tam,
+
+Thank you for sending the draft. I read it twice, once quickly for the argument and once slowly for the evidence, and I have a few comments, most of them about the second reading.
+
+Your central claim, that the device responds to pressure and not to temperature, is well motivated and I think probably true. But section 3 does not yet establish it. You show twelve trials in which pressure was raised and the device responded. You do not show any trials in which temperature was raised and pressure held constant, and until you do, a reader can say that every trial also warmed the chamber slightly and that the device might be responding to that. You need the control that would fail if your explanation were right and succeed if the alternative were right. At present you have only the trials that both explanations predict.
+
+Second, the twelve trials were selected from a larger set. You say so in a footnote, which is honest, but the footnote should say how many trials there were and how the twelve were chosen. If they were the twelve clearest, the reader needs to know that the unclear ones exist and what they looked like. A result that holds in the clearest cases and fails in the rest is a different result from one that holds throughout.
+
+Third, and this is a small thing: on page 7 you write that the response was "exactly proportional." Your own table shows a ratio that varies between 0.91 and 1.08. Say that. "Proportional to within about ten percent over this range" is a weaker sentence and a stronger paper.
+
+None of this is fatal. It is the normal distance between a draft and a result. I look forward to the next version.
+
+With warm regards,
+H.
+
+
+GLOSSARY OF TERMS USED ON THE SITE
+
+Berm: a raised bank of earth, usually along the edge of a path or ditch, built to control drainage.
+Catchpit: a chamber in a drainage run where silt settles out before the water continues downstream. Catchpits must be emptied; a full catchpit is worse than none.
+Headwall: the masonry or concrete face at the end of a culvert.
+Invert: the lowest point of the inside of a pipe or channel. Levels are measured to the invert, not to the top of the pipe.
+Soakaway: a pit filled with rubble into which surface water is directed so that it can percolate into the ground. Soakaways fail in clay.
+Swale: a shallow, broad, vegetated channel that slows and filters runoff. Not a ditch; a ditch is for conveyance, a swale is for delay.
+
+
+SHIPPING MANIFEST, VESSEL "CORRADINE," DEPARTED 9 NOVEMBER
+
+Crate 1 of 6: ceramic insulators, 400 units, 212 kg.
+Crate 2 of 6: ceramic insulators, 400 units, 214 kg.
+Crate 3 of 6: copper wire, 2.5 mm, 1,800 m on four drums, 96 kg.
+Crate 4 of 6: assorted brass fittings, see attached list, 61 kg.
+Crate 5 of 6: instruments, fragile, this side up, 38 kg.
+Crate 6 of 6: documents and spares, 12 kg.
+Total declared mass: 633 kg. Consignee: R. Oyelaran, Port Ashby. Insured value: 4,900. Remarks: crate 5 was repacked at the dock after a drop from the cart; the consignor was informed by telegram and declined to delay the sailing.
+
+
+A SHORT NOTE ON WHAT COUNTS
+
+A friend who repairs clocks told me once that the hardest part of her job is not fixing the fault but believing the customer. A customer will say the clock "loses time," and she has learned to ask: how much, over how long, measured against what? Sometimes the answer is "four minutes a week against the radio," which is a fault. Sometimes the answer is "it felt slow," which is a feeling about a clock. Both customers are sincere. Only one of them has brought her a measurement.
+
+She does not dismiss the second customer. She sets the clock running beside a reference and writes down the reading every morning for a fortnight. Usually the clock is fine and the customer was comparing it against a phone that had changed time zones. Occasionally the clock really is losing time, and the feeling was right. The point is not that feelings are wrong. The point is that she cannot tell, from the feeling alone, which case she is in, and neither can the customer, and the only way out is the fortnight with the notebook.
