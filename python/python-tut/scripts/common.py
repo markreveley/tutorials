@@ -8,7 +8,7 @@ OUTPUTS = ROOT / 'research/verify/outputs.json'
 
 MODULES = [
  ('Orientation and setup', 'What the course makes you able to do, and a working CPU-only toolchain.'),
- ('Python for someone who writes Elixir and Rust', 'Names, mutation, records, exceptions, tests, and the idioms you will read every day.'),
+ ('Python for someone coming from Elixir and Rust', 'Names, mutation, records, exceptions, tests, and the idioms you will read every day.'),
  ('Arrays and tensors', 'Shape, dtype, broadcasting, reductions, einsum, views, and autograd: the spine of the course.'),
  ('Models as objects', 'Modules, GPT-2 small, hooks, three interpretability toolkits, and reproducible artifacts.'),
  ('Readiness', 'Cache the residual stream with hooks, assert every shape, and ship a manifest.'),

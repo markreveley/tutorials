@@ -1,8 +1,9 @@
 # Tutorials: a path from software engineering to evals and interpretability
 
 This repository is a self-authored curriculum with one objective: a career in
-AI evaluation and mechanistic interpretability, starting from professional
-Elixir and Rust experience and no machine-learning background.
+AI evaluation and mechanistic interpretability, starting from a software
+background (the earlier work in this repository is in Elixir and Rust) and no
+machine-learning background.
 
 Every course here is an offline wiki: open its `index.html` in a browser. No
 server, build step, account, or network is needed to read. Each lesson has a

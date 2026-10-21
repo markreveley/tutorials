@@ -2,7 +2,7 @@
 
 ## Audience and outcome
 
-Write for a professional programmer whose languages are Elixir and Rust, who
+Write for a programmer whose prior code, generated and read as much as authored, is in Elixir and Rust, who
 has spec-and-test habits, and who has never had to be fluent in Python. Do not
 explain what a function or a loop is. Do explain, by contrast with what they
 know, where Python's semantics differ: names bind to mutable objects, errors

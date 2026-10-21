@@ -28,7 +28,7 @@ window.NAV = [
     ]
   },
   {
-    "module": "1 · Python for someone who writes Elixir and Rust",
+    "module": "1 · Python for someone coming from Elixir and Rust",
     "pages": [
       {
         "path": "pages/02-names-and-objects.html",
