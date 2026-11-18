@@ -1,11 +1,11 @@
 # Interpretability Methods and Rigor
 
 The capstone of the evals-and-interpretability path, in the same offline wiki
-format as [Statistics for Evals](../../statistics/statistics-tut/index.html) and
+format as [Statistics for Evals](../../evals/statistics-tut/index.html) and
 [Understanding LLM Evals](../../evals/evals-tut/index.html). It assumes the
-[Python](../../python/python-tut/index.html),
-[linear algebra](../../linear-algebra/linear-algebra-tut/index.html), and
-[transformer anatomy](../../transformers/transformers-tut/index.html) courses.
+[Python](../../interpretability/python-tut/index.html),
+[linear algebra](../../interpretability/linear-algebra-tut/index.html), and
+[transformer anatomy](../../interpretability/transformers-tut/index.html) courses.
 
 Open **[index.html](index.html)** directly in a browser. No server, build step,
 account, or packages are needed to read it. The labs need a Python environment

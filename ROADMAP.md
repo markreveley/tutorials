@@ -4,6 +4,12 @@ State as of 2026-10-20. This file records the plan, the decisions behind it,
 and the conventions every new course follows. It lives with the courses so a
 future session can pick up without the conversation that produced it.
 
+> **Paths (2026-11-17):** courses were later regrouped by track. Paths below
+> are as of 2026-10-20: `statistics/`, `linux/` and `networking/` courses are
+> now under `evals/`; `python/`, `linear-algebra/` and `transformers/` under
+> `interpretability/`; `elixir/` is `beam/elixir-tut/` and the former `beam/`
+> is `beam/beam-memory-model/`. See README.md for the current layout.
+
 ## The goal
 
 A career in evals and interpretability. The advice this plan follows ranks the

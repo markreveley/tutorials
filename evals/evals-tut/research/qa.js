@@ -3,7 +3,7 @@
    data-g slugs exist and are marked once per page, every h2/h3 has an id, template invariants hold,
    <pre> blocks have no unescaped '<' or '&', cite links have a title, course pages have a srcbox
    and a pitfall/warn box, glossary defs use single-quoted hrefs that resolve.
-   Usage: node research/qa.js   (adapted from linux/linux-tut/research/qa.js) */
+   Usage: node research/qa.js   (adapted from evals/linux-tut/research/qa.js) */
 const fs = require("fs"), path = require("path");
 const root = path.join(__dirname, "..");
 global.window = {};

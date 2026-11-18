@@ -13,8 +13,8 @@ What remains active:
   (start at the function, explain this code, keep descending, measure the
   learner) still govern how lessons and assessments are reviewed.
 - `test_python_evals.py`: executable assessments for the three functions in
-  [`python/python-tut/labs/eval_pipeline.py`](../python/python-tut/labs/eval_pipeline.py),
-  specified in [`python/python-tut/labs/ASSESSMENTS.md`](../python/python-tut/labs/ASSESSMENTS.md).
+  [`interpretability/python-tut/labs/eval_pipeline.py`](../interpretability/python-tut/labs/eval_pipeline.py),
+  specified in [`interpretability/python-tut/labs/ASSESSMENTS.md`](../interpretability/python-tut/labs/ASSESSMENTS.md).
   Red on the supplied stubs; no reference solution is published.
 - `test_sources.py`, `verify_beatcode.py`, and `fixtures/`: the pinned beatcode
   excerpts and their integrity checks, kept for the parked Rust course.

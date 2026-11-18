@@ -14,6 +14,30 @@ each course's `research/verify/`. Every empirical claim traces to a fetched
 source note under `research/`. [ROADMAP.md](ROADMAP.md) records the plan,
 the decisions behind it, and the pinned toolchain.
 
+## Layout
+
+Courses are grouped by the track they serve. A subject such as Linux or
+statistics sits under `evals/` because that course was written for eval work,
+not as a general introduction.
+
+```text
+evals/                     Evals track
+  evals-tut/                 Understanding LLM Evals (start here)
+  statistics-tut/            Statistics for Evals
+  linux-tut/                 Linux for Evals Engineers
+  networking-tut/            Networking for LLM Evals
+interpretability/          Interpretability track
+  python-tut/                Python for Model Internals
+  linear-algebra-tut/        Linear Algebra for Interpretability
+  transformers-tut/          Transformer Anatomy
+  interpretability-tut/      Interpretability Methods and Rigor
+beam/                      Off the path, kept
+  elixir-tut/                Elixir (markdown lessons + exercises)
+  beam-memory-model/         Elixir → BEAM memory-model wiki
+dag-tests/                 Test-first assessment layer (shared); parked
+                           Python/Rust LeetCode courses live inside it
+```
+
 ## The objective, and what gets in the way
 
 The advice this curriculum follows names five barriers, ranked by how much
@@ -41,7 +65,7 @@ about a model's internals: scoring an explanation on held-out data, the
 controls that would also pass if the claim were empty, and the standard a
 write-up must meet before it says a neuron has been explained.
 
-**Statistics for Evals** (`statistics/statistics-tut`, 26 lessons). Enables
+**Statistics for Evals** (`evals/statistics-tut`, 26 lessons). Enables
 the ten-minute result review: given an eval report, say what it measures,
 whether the uncertainty calculation fits the data, and what decision the
 evidence supports. Covers intervals, bootstrap, paired comparisons, clustered
@@ -50,14 +74,14 @@ rules. Its final module teaches correlation, permutation tests, and
 false-discovery control when screening thousands of candidate neurons, which
 is the statistics interpretability actually uses.
 
-**Linux for Evals Engineers** (`linux/linux-tut`, 29 lessons). Enables the
+**Linux for Evals Engineers** (`evals/linux-tut`, 29 lessons). Enables the
 ten-minute audit: dropped onto an unfamiliar box as root, say what is
 running, what is mounted and whether it is read-only, who owns what, what
 the box can reach, and where the logs are, and why each answer matters for
 whether a score can be trusted. Built for agentic evals, where the thing
 under test acts inside a Linux sandbox.
 
-**Networking for LLM Evals** (`networking/networking-tut`, 24 lessons).
+**Networking for LLM Evals** (`evals/networking-tut`, 24 lessons).
 Enables you to follow one eval request from a worker to a model and back,
 make runs reliable under latency, rate limits, timeouts, and retries,
 diagnose infrastructure failures with evidence, and design and defend an
@@ -65,7 +89,7 @@ eval architecture with its trust boundaries.
 
 ### Interpretability track
 
-**Python for Model Internals** (`python/python-tut`, 17 lessons). Enables
+**Python for Model Internals** (`interpretability/python-tut`, 17 lessons). Enables
 you to read and write everyday Python without translating from Elixir or
 Rust, write the test first with unittest, predict the shape of any array
 expression before running it, use torch tensors and autograd correctly, load
@@ -74,7 +98,7 @@ nnsight, and save artifacts another person can check. Readiness test: cache
 the residual stream for a set of prompts with every shape asserted, and have
 the eval-pipeline labs green.
 
-**Linear Algebra for Interpretability** (`linear-algebra/linear-algebra-tut`,
+**Linear Algebra for Interpretability** (`interpretability/linear-algebra-tut`,
 16 lessons). Enables the central interpretability move: project activations
 onto a direction and say what the scalar per token measures. Also linear
 maps as shapes, why a direction need not be a neuron, removing a direction,
@@ -83,7 +107,7 @@ SVD on real activation matrices, gradients as directions, and testing whether
 a correlation is real. Every lesson computes on a real GPT-2 activation
 fixture.
 
-**Transformer Anatomy** (`transformers/transformers-tut`, 16 lessons).
+**Transformer Anatomy** (`interpretability/transformers-tut`, 16 lessons).
 Enables you to trace one residual-stream vector from embedding to logits and
 name every write to it, compute an attention head by hand and describe a real
 one as QK and OV circuits, locate a neuron in an MLP, compute GELU and SwiGLU
@@ -104,7 +128,8 @@ failed or did not transfer, and the course teaches them as written.
 
 ### Off the path, kept
 
-**Elixir** (`elixir/`) and the **BEAM memory model** (`beam/`) predate the
+**Elixir** (`beam/elixir-tut/`) and the **BEAM memory model**
+(`beam/beam-memory-model/`) predate the
 objective. They are complete and are the origin of the spec-first,
 proof-minded habits the rest of the curriculum relies on, but they are not
 part of the recommended order. The parked Python and Rust LeetCode courses and
