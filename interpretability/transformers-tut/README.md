@@ -3,7 +3,7 @@
 Course 3 of the path from evals to mechanistic interpretability, in the same offline
 wiki format as [Statistics for Evals](../../evals/statistics-tut/index.html),
 [Understanding LLM Evals](../../evals/evals-tut/index.html), and the other courses in
-this repository. It follows [Python for Model Internals](../../interpretability/python-tut/index.html)
+this repository. It follows [Python for Model Internals](../../interpretability/python-interp-tut/index.html)
 and [Linear Algebra for Interpretability](../../interpretability/linear-algebra-tut/index.html)
 and leads into [Interpretability Methods and Rigor](../../interpretability/interpretability-tut/index.html).
 

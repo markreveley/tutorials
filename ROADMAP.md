@@ -7,8 +7,12 @@ future session can pick up without the conversation that produced it.
 > **Paths (2026-11-17):** courses were later regrouped by track. Paths below
 > are as of 2026-10-20: `statistics/`, `linux/` and `networking/` courses are
 > now under `evals/`; `python/`, `linear-algebra/` and `transformers/` under
-> `interpretability/`; `elixir/` is `beam/elixir-tut/` and the former `beam/`
-> is `beam/beam-memory-model/`. See README.md for the current layout.
+> `interpretability/` (`python/python-tut` is now
+> `interpretability/python-interp-tut`); `elixir/` is `languages/elixir-tut/`
+> and the former `beam/` is `beam/beam-memory-model/`. The parked courses in
+> `dag-tests/previous-courses-to-re-author/` moved to `languages/`
+> (`python-basics-tut/`, `rust-tut/`, `rust-syllabus/`). See README.md for the
+> current layout.
 
 ## The goal
 

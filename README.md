@@ -27,16 +27,22 @@ evals/                     Evals track
   linux-tut/                 Linux for Evals Engineers
   networking-tut/            Networking for LLM Evals
 interpretability/          Interpretability track
-  python-tut/                Python for Model Internals
+  python-interp-tut/         Python for Model Internals
   linear-algebra-tut/        Linear Algebra for Interpretability
   transformers-tut/          Transformer Anatomy
   interpretability-tut/      Interpretability Methods and Rigor
-beam/                      Off the path, kept
+languages/                 Language courses, off the main path
   elixir-tut/                Elixir (markdown lessons + exercises)
+  python-basics-tut/         General Python, LeetCode-oriented (parked)
+  rust-tut/                  Rust lessons + beatcode reading assessments (parked)
+  rust-syllabus/             Rust month-by-month syllabus and labs (parked)
+beam/                      Off the path, kept
   beam-memory-model/         Elixir → BEAM memory-model wiki
-dag-tests/                 Test-first assessment layer (shared); parked
-                           Python/Rust LeetCode courses live inside it
+dag-tests/                 Test-first assessment layer for the Python labs
 ```
+
+"Parked" means kept but not being developed: the Python and Rust courses wait
+to be re-authored around the assessments in `dag-tests/`.
 
 ## The objective, and what gets in the way
 
@@ -89,7 +95,7 @@ eval architecture with its trust boundaries.
 
 ### Interpretability track
 
-**Python for Model Internals** (`interpretability/python-tut`, 17 lessons). Enables
+**Python for Model Internals** (`interpretability/python-interp-tut`, 17 lessons). Enables
 you to read and write everyday Python without translating from Elixir or
 Rust, write the test first with unittest, predict the shape of any array
 expression before running it, use torch tensors and autograd correctly, load
@@ -128,13 +134,14 @@ failed or did not transfer, and the course teaches them as written.
 
 ### Off the path, kept
 
-**Elixir** (`beam/elixir-tut/`) and the **BEAM memory model**
+**Elixir** (`languages/elixir-tut/`) and the **BEAM memory model**
 (`beam/beam-memory-model/`) predate the
 objective. They are complete and are the origin of the spec-first,
 proof-minded habits the rest of the curriculum relies on, but they are not
-part of the recommended order. The parked Python and Rust LeetCode courses and
-the Rust reading assessments live under `dag-tests/previous-courses-to-re-author/`;
-`dag-tests/` itself is now the test-first assessment layer for the Python labs.
+part of the recommended order. The parked Python and Rust courses and the
+Rust reading assessments live in `languages/` (`python-basics-tut/`,
+`rust-tut/`, `rust-syllabus/`); `dag-tests/` itself is the test-first
+assessment layer for the Python labs.
 
 ## Recommended order
 

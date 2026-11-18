@@ -3,7 +3,7 @@
 The capstone of the evals-and-interpretability path, in the same offline wiki
 format as [Statistics for Evals](../../evals/statistics-tut/index.html) and
 [Understanding LLM Evals](../../evals/evals-tut/index.html). It assumes the
-[Python](../../interpretability/python-tut/index.html),
+[Python](../../interpretability/python-interp-tut/index.html),
 [linear algebra](../../interpretability/linear-algebra-tut/index.html), and
 [transformer anatomy](../../interpretability/transformers-tut/index.html) courses.
 

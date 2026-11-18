@@ -2,7 +2,7 @@
 
 An introductory linear algebra course for interpretability work, in the same
 offline wiki format as [Statistics for Evals](../../evals/statistics-tut/index.html),
-[Python for Model Internals](../../interpretability/python-tut/index.html), and the other
+[Python for Model Internals](../../interpretability/python-interp-tut/index.html), and the other
 courses in this repository.
 
 Open **[index.html](index.html)** directly in a browser. No server, build step,

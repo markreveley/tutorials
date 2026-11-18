@@ -53,7 +53,7 @@ assert pattern.shape[-2:] == (seq, seq) and torch.allclose(pattern.sum(-1), torc
  dict(path='appendices/b-commands.html',title='Command and lab reference',kicker='Appendix B',n='B',kw='commands scripts tests labs unittest verify',
  lede='Every script and test in the course, in the order you meet them, with the one line that runs each.',
  body='''<h2 id="scripts">Example scripts</h2>
-<p>All run from the course directory, <code>tutorials/interpretability/python-tut</code>. Scripts that load GPT-2 set <code>HF_HUB_OFFLINE=1</code> themselves; run once online first to populate the cache.</p>
+<p>All run from the course directory, <code>tutorials/interpretability/python-interp-tut</code>. Scripts that load GPT-2 set <code>HF_HUB_OFFLINE=1</code> themselves; run once online first to populate the cache.</p>
 <table><tr><th>Lesson</th><th>Command</th><th>Shows</th></tr>
 <tr><td>00, 01</td><td><code>python3 labs/examples/check_setup.py</code></td><td>versions and a (2, 5, 768) tensor</td></tr>
 <tr><td>02</td><td><code>python3 labs/examples/names_and_objects.py</code></td><td>aliasing, copies, mutable defaults</td></tr>

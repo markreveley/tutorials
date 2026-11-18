@@ -13,8 +13,8 @@ What remains active:
   (start at the function, explain this code, keep descending, measure the
   learner) still govern how lessons and assessments are reviewed.
 - `test_python_evals.py`: executable assessments for the three functions in
-  [`interpretability/python-tut/labs/eval_pipeline.py`](../interpretability/python-tut/labs/eval_pipeline.py),
-  specified in [`interpretability/python-tut/labs/ASSESSMENTS.md`](../interpretability/python-tut/labs/ASSESSMENTS.md).
+  [`interpretability/python-interp-tut/labs/eval_pipeline.py`](../interpretability/python-interp-tut/labs/eval_pipeline.py),
+  specified in [`interpretability/python-interp-tut/labs/ASSESSMENTS.md`](../interpretability/python-interp-tut/labs/ASSESSMENTS.md).
   Red on the supplied stubs; no reference solution is published.
 - `test_sources.py`, `verify_beatcode.py`, and `fixtures/`: the pinned beatcode
   excerpts and their integrity checks, kept for the parked Rust course.
@@ -24,7 +24,9 @@ What was retired or parked:
 - `test_courses.py` (the `dag/course.json` acceptance gate) moved to
   `previous-courses-to-re-author/retired/`. No course manifest will be authored.
 - The LeetCode-era Python lessons and the Rust lessons, syllabus, and reading
-  assessments stay under `previous-courses-to-re-author/`. Rust is deprioritised:
+  assessments are parked in [`../languages/`](../languages/) (`python-basics-tut/`,
+  `rust-tut/`, `rust-syllabus/`; until 2026-11-17 they lived under
+  `previous-courses-to-re-author/`). Rust is deprioritised:
   the interpretability toolchain is Python, so Rust is not on the critical path.
 
 ## Run from the repository root
